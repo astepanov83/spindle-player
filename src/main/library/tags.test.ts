@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cleanText,
+  discFolderNumber,
   frontCover,
   isAudioFile,
   isDiscFolder,
@@ -69,7 +70,8 @@ describe('file name rules', () => {
 
   it('picks the folder image by name', () => {
     expect(pickFolderImage(['front.png', 'Folder.JPG', 'x.jpg'])).toBe('Folder.JPG')
-    expect(pickFolderImage(['back.jpg', 'cover.webp'])).toBeUndefined()
+    expect(pickFolderImage(['back.jpg', 'cover.gif'])).toBeUndefined()
+    expect(pickFolderImage(['cover.webp'])).toBe('cover.webp')
     expect(pickFolderImage(['album.jpeg', 'cover.jpg'])).toBe('cover.jpg')
   })
 
@@ -79,6 +81,8 @@ describe('file name rules', () => {
     expect(isDiscFolder('disk_03')).toBe(true)
     expect(isDiscFolder('CD Singles')).toBe(false)
     expect(isDiscFolder('Discography')).toBe(false)
+    expect(discFolderNumber('CD 12')).toBe(12)
+    expect(discFolderNumber('Bonus')).toBeUndefined()
   })
 
   it('makes a title and track number from a file name', () => {

@@ -1,3 +1,4 @@
+import { join } from 'path'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { LibraryChannel, SettingsChannel, WinChannel } from '../shared/ipc'
@@ -15,7 +16,11 @@ registerScheme()
 
 function createWindow(): void {
   main = new MainWindow(store)
-  main.win.on('closed', () => (main = null))
+  main.win.on('closed', () => {
+    main = null
+    // the hidden cover window would keep the app running
+    library.covers.close()
+  })
 }
 
 function senderWindow(
@@ -55,9 +60,13 @@ app.whenReady().then(() => {
   nativeTheme.themeSource = store.get().theme
 
   // Starts reading the index now, while the window loads.
-  library = new LibraryService(store, (channel, data) => {
-    if (main && !main.win.isDestroyed()) main.win.webContents.send(channel, data)
-  })
+  library = new LibraryService(
+    store,
+    (channel, data) => {
+      if (main && !main.win.isDestroyed()) main.win.webContents.send(channel, data)
+    },
+    join(__dirname, '../preload/covers.js')
+  )
   handleProtocol(library)
 
   // F12 opens DevTools in dev, and Ctrl+R reload is blocked in production.
@@ -79,10 +88,7 @@ app.whenReady().then(() => {
 })
 
 // Last chance to write a change still waiting for its delay.
-app.on('will-quit', () => {
-  store?.flushSync()
-  library?.flushSync()
-})
+app.on('will-quit', () => store?.flushSync())
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

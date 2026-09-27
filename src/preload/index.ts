@@ -7,7 +7,7 @@ import {
   type SettingsApi,
   type WinApi
 } from '../shared/ipc'
-import type { LibraryData, ScanStatus } from '../shared/library'
+import type { ScanStatus } from '../shared/library'
 
 // The window is sandboxed, so this file may only use contextBridge and ipcRenderer.
 const win: WinApi = {
@@ -52,7 +52,7 @@ function latest<T>(channel: string): (listener: (value: T) => void) => () => voi
   }
 }
 
-const onLibraryChanged = latest<LibraryData>(LibraryChannel.changed)
+const onLibraryChanged = latest<Uint8Array>(LibraryChannel.changed)
 const onScanStatus = latest<ScanStatus>(LibraryChannel.status)
 
 const libraryApi: LibraryApi = {

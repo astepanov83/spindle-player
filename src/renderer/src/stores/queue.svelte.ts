@@ -76,9 +76,10 @@ class QueueStore {
 
   // After the library changed: songs that are gone leave the queue.
   prune(): void {
-    const before = this.current?.id
+    // the id, not this.current: after the load that already points at the new data
+    const before = this.items[this.index]
     this.#set(prune(this.#state(), (id) => library.has(id)))
-    if (this.current?.id !== before) {
+    if (this.items[this.index] !== before) {
       player.pos = 0
       if (!this.current) player.playing = false
     }

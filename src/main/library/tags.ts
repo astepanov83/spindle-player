@@ -80,8 +80,8 @@ export function isAudioFile(name: string): boolean {
   return !name.startsWith('.') && audioExt.has(extOf(name))
 }
 
-// Only formats Electron's nativeImage can read.
-const imageExt = new Set(['jpg', 'jpeg', 'png'])
+// Folder images Chromium decodes (covers are resized in a hidden window).
+const imageExt = new Set(['jpg', 'jpeg', 'png', 'webp'])
 const coverNames = ['cover', 'folder', 'front', 'album']
 
 // The folder's cover image, by name: cover, then folder, front, album.
@@ -102,7 +102,13 @@ export function pickFolderImage(names: string[]): string | undefined {
 
 // "CD1", "Disc 2", "disk_3": a folder that holds one disc of an album.
 export function isDiscFolder(name: string): boolean {
-  return /^(cd|dis[ck])[\s._-]*\d+$/i.test(name.trim())
+  return discFolderNumber(name) !== undefined
+}
+
+// "CD2" gives 2; a name that is not a disc folder gives undefined.
+export function discFolderNumber(name: string): number | undefined {
+  const m = /^(?:cd|dis[ck])[\s._-]*(\d+)$/i.exec(name.trim())
+  return m ? Number(m[1]) : undefined
 }
 
 // For a file with no tags: "03 - Night Bus.mp3" gives track 3, "Night Bus".

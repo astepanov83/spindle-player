@@ -69,17 +69,25 @@ export function isUnder(path: string, dir: string): boolean {
   return path === dir || path.startsWith(dir.endsWith(sep) ? dir : dir + sep)
 }
 
-// The files a scan has to read: new ones, changed ones, and ones whose cover
-// is gone from the cache. `known` is path -> [mtime, size, cover].
+// The files a scan has to read: new ones, changed ones, ones whose cover is
+// gone from the cache, and ones that failed last time (a fixed permission
+// doesn't change mtime).
 export function planReads(
-  known: Map<string, [number, number, string]>,
+  known: Map<string, FileEntry>,
   found: { path: string; mtime: number; size: number }[],
   cached: (hash: string) => boolean
 ): string[] {
   const out: string[] = []
   for (const f of found) {
     const k = known.get(f.path)
-    if (!k || k[0] !== f.mtime || k[1] !== f.size || (k[2] && !cached(k[2]))) out.push(f.path)
+    if (
+      !k ||
+      k.mtime !== f.mtime ||
+      k.size !== f.size ||
+      k.error !== undefined ||
+      (k.cover && !cached(k.cover))
+    )
+      out.push(f.path)
   }
   return out
 }

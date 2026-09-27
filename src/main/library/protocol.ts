@@ -38,7 +38,7 @@ function notFound(): Response {
 async function cover(lib: LibraryService, size: string, hash: string): Promise<Response> {
   if (!isCoverHash(hash)) return notFound()
   let path: string | undefined
-  if (size === 'small' && lib.covers.has(hash)) path = lib.covers.smallPath(hash)
+  if (size === 'small') path = lib.covers.smallPath(hash)
   else if (size === 'large') path = await lib.covers.large(hash, () => lib.coverSource(hash))
   if (!path) return notFound()
   try {
@@ -56,7 +56,7 @@ async function cover(lib: LibraryService, size: string, hash: string): Promise<R
 }
 
 async function media(lib: LibraryService, id: string, req: Request): Promise<Response> {
-  const path = lib.trackPath(id)
+  const path = await lib.trackPath(id)
   if (!path) return notFound()
   let size: number
   try {

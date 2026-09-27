@@ -7,7 +7,7 @@ import '@fontsource/jetbrains-mono/600.css'
 import './assets/theme.css'
 
 import App from './App.svelte'
-import { library } from './stores/library.svelte'
+import { decodeLibrary, library } from './stores/library.svelte'
 import { queue } from './stores/queue.svelte'
 import { loadSettings } from './stores/settings.svelte'
 
@@ -15,11 +15,11 @@ import { loadSettings } from './stores/settings.svelte'
 // template and the albums. The window stays hidden until then, so the wait doesn't show.
 const [saved, lib] = await Promise.all([window.settingsApi.load(), window.libraryApi.load()])
 loadSettings(saved)
-library.load(lib.library)
+library.load(decodeLibrary(lib.library))
 library.status = lib.status
 
-window.libraryApi.onChanged((data) => {
-  library.load(data)
+window.libraryApi.onChanged((bytes) => {
+  library.load(decodeLibrary(bytes))
   queue.prune()
 })
 window.libraryApi.onStatus((s) => (library.status = s))

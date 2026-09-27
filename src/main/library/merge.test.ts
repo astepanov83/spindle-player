@@ -53,12 +53,14 @@ describe('parseIndex', () => {
 })
 
 describe('planReads', () => {
-  const known = new Map<string, [number, number, string]>([
-    ['/m/same.mp3', [1, 10, '']],
-    ['/m/touched.mp3', [1, 10, '']],
-    ['/m/lost-cover.mp3', [1, 10, 'gone']],
-    ['/m/has-cover.mp3', [1, 10, 'here']]
-  ])
+  const known = new Map<string, FileEntry>(
+    [
+      entry('/m/same.mp3', { mtime: 1, size: 10 }),
+      entry('/m/touched.mp3', { mtime: 1, size: 10 }),
+      entry('/m/lost-cover.mp3', { mtime: 1, size: 10, cover: 'gone' }),
+      entry('/m/has-cover.mp3', { mtime: 1, size: 10, cover: 'here' })
+    ].map((e) => [e.path, e])
+  )
   it('reads new files, changed files and files whose cover left the cache', () => {
     const found = [
       { path: '/m/same.mp3', mtime: 1, size: 10 },
@@ -72,6 +74,19 @@ describe('planReads', () => {
       '/m/lost-cover.mp3',
       '/m/new.mp3'
     ])
+  })
+})
+
+describe('planReads for failed files', () => {
+  it('reads a file that failed last time again, even if it did not change', () => {
+    const failed = entry('/m/locked.mp3', { mtime: 1, size: 10, error: 'EACCES' })
+    const fine = entry('/m/fine.mp3', { mtime: 1, size: 10 })
+    const known = new Map([failed, fine].map((e) => [e.path, e]))
+    const found = [
+      { path: '/m/locked.mp3', mtime: 1, size: 10 },
+      { path: '/m/fine.mp3', mtime: 1, size: 10 }
+    ]
+    expect(planReads(known, found, () => true)).toEqual(['/m/locked.mp3'])
   })
 })
 

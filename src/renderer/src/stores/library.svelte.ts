@@ -16,6 +16,9 @@ class LibraryStore {
   #tracks = new Map<string, Track>()
   #order = new Map<string, number>()
   #albumIndex = new Map<string, number>()
+  // The maps above are plain, so Svelte can't see them change. Every reader
+  // touches this, so a $derived that looked up a track runs again after a load.
+  #version = $state(0)
 
   status: ScanStatus = $state.raw({
     folders: [],
@@ -40,24 +43,29 @@ class LibraryStore {
     this.#order = new Map(data.tracks.map((t, i) => [t.id, i]))
     this.#albumIndex = new Map(data.albums.map((a, i) => [a.id, i]))
     this.albums = data.albums
+    this.#version++
     // the open album may be gone after a rescan
     if (this.open && !this.#albumIndex.has(this.open)) this.open = null
   }
 
   has(id: string): boolean {
+    void this.#version
     return this.#tracks.has(id)
   }
 
   track(id: string): Track {
+    void this.#version
     return this.#tracks.get(id)!
   }
 
   album(id: string): Album {
+    void this.#version
     return this.albums[this.#albumIndex.get(id)!]
   }
 
   // position in the library, for stable sorting
   order(t: Track): number {
+    void this.#version
     return this.#order.get(t.id) ?? 0
   }
 
@@ -69,3 +77,8 @@ class LibraryStore {
 }
 
 export const library = new LibraryStore()
+
+// Main sends the library as UTF-8 JSON bytes (see LibraryApi).
+export function decodeLibrary(bytes: Uint8Array): LibraryData {
+  return JSON.parse(new TextDecoder().decode(bytes)) as LibraryData
+}

@@ -154,3 +154,40 @@ describe('albumFolder', () => {
     expect(albumFolder('/m/Album')).toBe('/m/Album')
   })
 })
+
+describe('disc folders without disc tags', () => {
+  it('orders tracks by the disc folder, then the track number', () => {
+    const { data } = build([
+      entry('/m/Album/CD2/01.mp3', { album: 'Album', title: 'B1', track: 1 }),
+      entry('/m/Album/CD1/02.mp3', { album: 'Album', title: 'A2', track: 2 }),
+      entry('/m/Album/CD2/02.mp3', { album: 'Album', title: 'B2', track: 2 }),
+      entry('/m/Album/CD1/01.mp3', { album: 'Album', title: 'A1', track: 1 })
+    ])
+    expect(data.albums).toHaveLength(1)
+    expect(data.tracks.map((t) => [t.disc, t.no, t.title])).toEqual([
+      [1, 1, 'A1'],
+      [1, 2, 'A2'],
+      [2, 1, 'B1'],
+      [2, 2, 'B2']
+    ])
+  })
+
+  it('does the same for files with no tags at all', () => {
+    const { data } = build([
+      entry('/m/Tapes/Disc 2/01 - Night.mp3'),
+      entry('/m/Tapes/Disc 1/02 - Noon.mp3'),
+      entry('/m/Tapes/Disc 1/01 - Dawn.mp3')
+    ])
+    expect(data.albums).toMatchObject([{ title: 'Tapes' }])
+    expect(data.tracks.map((t) => [t.disc, t.no, t.title])).toEqual([
+      [1, 1, 'Dawn'],
+      [1, 2, 'Noon'],
+      [2, 1, 'Night']
+    ])
+  })
+
+  it('prefers the disc tag over the folder name', () => {
+    const { data } = build([entry('/m/Album/CD1/01.mp3', { album: 'Album', disc: 3 })])
+    expect(data.tracks[0].disc).toBe(3)
+  })
+})

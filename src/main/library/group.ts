@@ -3,7 +3,7 @@ import { hash } from 'crypto'
 import { basename } from 'path'
 import { defaultPalette, type Album, type LibraryData, type Track } from '../../shared/library'
 import { dirOf } from './merge'
-import { isDiscFolder, titleFromFileName } from './tags'
+import { discFolderNumber, isDiscFolder, titleFromFileName } from './tags'
 import type { FileEntry, LibraryIndex } from './types'
 
 export interface BuiltLibrary {
@@ -46,6 +46,7 @@ interface Item {
   e: FileEntry
   id: string
   name: string
+  disc: number
   no: number
   fromName: string
 }
@@ -55,11 +56,14 @@ interface Group {
   items: Item[]
 }
 
+// The disc tag, else the "CD2" folder the file is in, else 1.
+export function discOf(e: FileEntry): number {
+  return e.disc ?? discFolderNumber(basename(dirOf(e.path))) ?? 1
+}
+
 function byDiscAndNumber(a: Item, b: Item): number {
   return (
-    (a.e.disc ?? 1) - (b.e.disc ?? 1) ||
-    a.no - b.no ||
-    (a.name === b.name ? 0 : collator.compare(a.name, b.name))
+    a.disc - b.disc || a.no - b.no || (a.name === b.name ? 0 : collator.compare(a.name, b.name))
   )
 }
 
@@ -122,6 +126,7 @@ export function buildLibrary(ix: LibraryIndex, hasCover: (hash: string) => boole
       e,
       id,
       name,
+      disc: discOf(e),
       no: e.track ?? fromName?.no ?? 0,
       fromName: fromName?.title ?? ''
     })
@@ -137,7 +142,7 @@ export function buildLibrary(ix: LibraryIndex, hasCover: (hash: string) => boole
     const artist = albumArtistOf(entries)
     const cover = coverOf(entries, ix, hasCover)
     const fallbackArtist = artist === variousArtists ? unknownArtist : artist
-    const tracks = g.items.map(({ e, id: trackId, no, fromName }): Track => ({
+    const tracks = g.items.map(({ e, id: trackId, disc, no, fromName }): Track => ({
       id: trackId,
       title: e.title ?? fromName,
       duration: e.duration,
@@ -145,7 +150,7 @@ export function buildLibrary(ix: LibraryIndex, hasCover: (hash: string) => boole
       artist: e.artist ?? e.albumArtist ?? fallbackArtist,
       album: title,
       no,
-      disc: e.disc ?? 1,
+      disc,
       codec: e.codec ?? ''
     }))
     albums.push({

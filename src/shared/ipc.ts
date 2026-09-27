@@ -1,4 +1,4 @@
-import type { LibraryData, ScanStatus } from './library'
+import type { ScanStatus } from './library'
 import type { Settings } from './settings'
 
 // Channel names used by both main and preload, so a typo is a type error.
@@ -47,12 +47,14 @@ export const LibraryChannel = {
 // What the preload exposes to the page as `window.libraryApi`.
 // Main owns the folder list and the index; the page only asks.
 export interface LibraryApi {
-  // the library as it was when the page loaded (from the index on disk)
-  load(): Promise<{ library: LibraryData; status: ScanStatus }>
+  // The library as it was when the page loaded (from the index on disk).
+  // Libraries come as UTF-8 JSON of LibraryData: main passes the bytes on without
+  // reading them, and copying bytes is much cheaper than copying 50k objects.
+  load(): Promise<{ library: Uint8Array; status: ScanStatus }>
   // opens the folder picker; resolves once the choice is saved
   addFolder(): Promise<void>
   removeFolder(path: string): void
   rescan(): void
-  onChanged(listener: (library: LibraryData) => void): () => void
+  onChanged(listener: (library: Uint8Array) => void): () => void
   onStatus(listener: (status: ScanStatus) => void): () => void
 }

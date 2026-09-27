@@ -1,8 +1,13 @@
-<!-- The settings sheet under the gear. Ticket 005 saves the choices and adds Theme. -->
+<!-- The settings sheet under the gear. Main saves every choice (see App.svelte). -->
 <script lang="ts">
   import Seg from '../ui/Seg.svelte'
   import type { QueueMode, TemplateId } from '../../../shared/layout'
-  import { visualizerStyles, type VisualizerStyle } from '../../../shared/settings'
+  import {
+    themeChoices,
+    visualizerStyles,
+    type ThemeChoice,
+    type VisualizerStyle
+  } from '../../../shared/settings'
   import { templateIds, templates } from '../../../shared/templates'
   import { layout } from '../stores/layout.svelte'
   import { settings } from '../stores/settings.svelte'
@@ -20,6 +25,7 @@
     wave: 'Wave',
     off: 'Off'
   }
+  const themeNames: Record<ThemeChoice, string> = { dark: 'Dark', light: 'Light', system: 'System' }
 </script>
 
 <div class="settings" role="dialog" aria-label="Settings">
@@ -47,6 +53,14 @@
       options={visualizerStyles.map((v) => ({ value: v, label: vzNames[v] }))}
       value={settings.visualizer}
       onchange={(v: VisualizerStyle) => layout.chooseVisualizer(v)}
+    />
+  </div>
+  <div class="set">
+    <span class="label">Theme</span>
+    <Seg
+      options={themeChoices.map((t) => ({ value: t, label: themeNames[t] }))}
+      value={settings.theme}
+      onchange={(t: ThemeChoice) => (settings.theme = t)}
     />
   </div>
 </div>

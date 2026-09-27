@@ -12,6 +12,9 @@
 
   $effect(() => startFakeClock())
 
+  // Every change goes to main, which saves it and applies the window size and theme.
+  $effect(() => window.settingsApi.save($state.snapshot(settings)))
+
   // Keys from the prototype: Space play, V visualizer, Q queue, Escape closes.
   function onkeydown(e: KeyboardEvent): void {
     const t = e.target as HTMLElement

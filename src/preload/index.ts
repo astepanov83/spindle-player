@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { WinChannel, type WinApi } from '../shared/ipc'
+import { SettingsChannel, WinChannel, type SettingsApi, type WinApi } from '../shared/ipc'
 
 // The window is sandboxed, so this file may only use contextBridge and ipcRenderer.
 const win: WinApi = {
@@ -14,4 +14,14 @@ const win: WinApi = {
   }
 }
 
+// Asked for now, while the page scripts are still loading, so the answer is
+// there when main.ts waits for it and the first paint has the saved template.
+const saved = ipcRenderer.invoke(SettingsChannel.load)
+
+const settingsApi: SettingsApi = {
+  load: () => saved,
+  save: (settings) => ipcRenderer.send(SettingsChannel.save, settings)
+}
+
 contextBridge.exposeInMainWorld('win', win)
+contextBridge.exposeInMainWorld('settingsApi', settingsApi)

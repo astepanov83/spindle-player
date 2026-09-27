@@ -6,7 +6,7 @@ The window takes its colors from the album cover, a visualizer plays around the 
 
 ## Status
 
-Early. The app shows the three layout templates (Studio, Classic, Focus) with made-up albums. It doesn't read or play real files yet, and settings aren't saved.
+Early. The app shows the three layout templates (Studio, Classic, Focus) with made-up albums. It doesn't read or play real files yet. Settings are saved, and each template remembers its window size.
 
 ## Run it
 

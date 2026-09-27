@@ -3,7 +3,12 @@ import { copyFileSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 import type { TemplateId } from '../shared/layout'
-import { parseStoredSettings, type Size, type StoredSettings } from '../shared/settings'
+import {
+  parseFolders,
+  parseStoredSettings,
+  type Size,
+  type StoredSettings
+} from '../shared/settings'
 import { JsonFileWriter, readJsonFile } from './json-file'
 
 export class SettingsStore {
@@ -30,10 +35,11 @@ export class SettingsStore {
   }
 
   // Checks the value like a file read, so a bad message can't store junk.
-  // Window sizes stay main's own.
+  // Window sizes and folders stay main's own.
   setFromPage(raw: unknown): StoredSettings {
     const next = parseStoredSettings(raw)
     next.windowSizes = this.#data.windowSizes
+    next.folders = this.#data.folders
     this.#replace(next)
     return next
   }
@@ -42,6 +48,10 @@ export class SettingsStore {
     const old = this.#data.windowSizes[id]
     if (old && old.width === size.width && old.height === size.height) return
     this.#replace({ ...this.#data, windowSizes: { ...this.#data.windowSizes, [id]: size } })
+  }
+
+  setFolders(folders: string[]): void {
+    this.#replace({ ...this.#data, folders: parseFolders(folders) })
   }
 
   #replace(next: StoredSettings): void {

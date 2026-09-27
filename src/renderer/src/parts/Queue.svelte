@@ -21,7 +21,7 @@
   // Keep the current song in view when the track changes, not on other redraws.
   let seen = ''
   $effect(() => {
-    const key = queue.index + ':' + queue.current.id
+    const key = queue.index + ':' + queue.current?.id
     if (key === seen || !body) return
     seen = key
     // one row above the current song, as in the prototype; wait for the list to get its height
@@ -33,13 +33,18 @@
 <div class="qpart">
   {#if header}
     <div class="head">
-      <div><b>Queue</b><small>From {queue.from}</small></div>
+      <div>
+        <b>Queue</b>{#if queue.from}<small>From {queue.from}</small>{/if}
+      </div>
       {#if close}
         <IconButton icon="close" label="Close queue" onclick={() => (layout.showQueue = false)} />
       {/if}
     </div>
   {/if}
   <div class="body" bind:this={body}>
+    {#if !queue.items.length}
+      <p class="empty">The queue is empty. Songs you play show up here.</p>
+    {/if}
     <div class="rows" bind:this={list} style:height="{v.total}px">
       {#each v.items as item (item.key)}
         {@const id = queue.items[item.index]}
@@ -94,6 +99,12 @@
   }
   .rows {
     position: relative;
+  }
+  .empty {
+    margin: 12px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--ink-3);
   }
   .qrow {
     position: absolute;

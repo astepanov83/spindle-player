@@ -1,4 +1,4 @@
-// Library types. Ticket 006 fills them from a real scan.
+// Library types, as the page sees them. Main builds them from the index (ticket 006).
 
 export interface Track {
   id: string
@@ -8,19 +8,26 @@ export interface Track {
   albumId: string
   artist: string
   album: string
-  // track number, 1-based
+  // track number, 1-based; 0 when unknown
   no: number
+  // disc number, 1-based
+  disc: number
+  // e.g. "MPEG 1 Layer 3", "FLAC", "ALAC"; empty when unknown
+  codec: string
 }
 
 export interface Album {
   id: string
   title: string
   artist: string
+  // 0 when unknown
   year: number
   // [--c1, --c2, --c3]: main, accent, dark
   palette: [string, string, string]
-  // image URL
+  // small cover URL for grids and lists, or '' when there is none
   cover: string
+  // big cover URL for the stage, or ''
+  coverLarge: string
   trackIds: string[]
 }
 
@@ -28,4 +35,30 @@ export interface Playlist {
   id: string
   name: string
   trackIds: string[]
+}
+
+// What main sends the page. Albums and tracks are in library order.
+export interface LibraryData {
+  albums: Album[]
+  tracks: Track[]
+}
+
+// Until 009 picks colors from covers, every album gets this neutral set.
+export const defaultPalette: [string, string, string] = ['#6f7787', '#a3adc2', '#232733']
+
+export type ScanPhase = 'idle' | 'walk' | 'read'
+
+export interface ScanStatus {
+  folders: string[]
+  phase: ScanPhase
+  // files found so far (walk) or files read so far (read)
+  done: number
+  // files to read; 0 while walking
+  total: number
+  tracks: number
+  albums: number
+  // files whose tags could not be read in the last scan
+  failed: number
+  // folders that could not be read in the last scan, e.g. an unplugged drive
+  missing: string[]
 }

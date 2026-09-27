@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultSettings, pageSettings, parseStoredSettings } from './settings'
 
-const defaults = { ...defaultSettings(), windowSizes: {} }
+const defaults = { ...defaultSettings(), windowSizes: {}, folders: [] }
 
 describe('parseStoredSettings', () => {
   it('gives the defaults for no file or a file that is not an object', () => {
@@ -16,7 +16,8 @@ describe('parseStoredSettings', () => {
       queue: { studio: 'col', classic: 'col', focus: 'drawer' },
       visualizer: 'wave',
       theme: 'light',
-      windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } }
+      windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
+      folders: ['/home/me/Music', '/mnt/nas/music']
     }
     expect(parseStoredSettings(good)).toEqual(good)
   })
@@ -64,11 +65,25 @@ describe('parseStoredSettings', () => {
   it('treats a windowSizes that is not an object as empty', () => {
     expect(parseStoredSettings({ windowSizes: [1, 2] }).windowSizes).toEqual({})
   })
+
+  it('keeps only absolute folder paths, each once, without a trailing slash', () => {
+    const s = parseStoredSettings({
+      folders: ['/music/', 'relative/path', '', 7, '/music', 'C:\\Music\\', '/', '/a//']
+    })
+    expect(s.folders).toEqual(['/music', 'C:\\Music', '/', '/a'])
+  })
+
+  it('treats folders that are not a list as none', () => {
+    expect(parseStoredSettings({ folders: '/music' }).folders).toEqual([])
+  })
 })
 
 describe('pageSettings', () => {
-  it('leaves out window sizes and copies the queue', () => {
-    const stored = parseStoredSettings({ windowSizes: { focus: { width: 500, height: 700 } } })
+  it('leaves out window sizes and folders, and copies the queue', () => {
+    const stored = parseStoredSettings({
+      windowSizes: { focus: { width: 500, height: 700 } },
+      folders: ['/music']
+    })
     const page = pageSettings(stored)
     expect(page).toEqual(defaultSettings())
     page.queue.studio = 'col'

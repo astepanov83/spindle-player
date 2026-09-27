@@ -1,7 +1,7 @@
 // Library data plus view state. The view state lives here, not in the part,
 // so a layout rebuild keeps the open album, search, sort and section.
-import type { Album, Playlist, Track } from '../../../shared/library'
-import { makeFakeLibrary } from '../library/fake-data'
+// Main sends the data (from the index, then after each scan that changed something).
+import type { Album, LibraryData, Playlist, ScanStatus, Track } from '../../../shared/library'
 import type { Sort } from '../library/views'
 
 export type Chip = 'albums' | 'artists' | 'folders' | 'playlists'
@@ -11,10 +11,22 @@ export type Section = 'songs' | 'albums' | 'artists' | 'folders' | `pl:${string}
 class LibraryStore {
   // plain arrays, not deep proxies: they can hold 50k+ songs
   albums: Album[] = $state.raw([])
+  // ticket 007 adds playlists
   playlists: Playlist[] = $state.raw([])
   #tracks = new Map<string, Track>()
   #order = new Map<string, number>()
   #albumIndex = new Map<string, number>()
+
+  status: ScanStatus = $state.raw({
+    folders: [],
+    phase: 'idle',
+    done: 0,
+    total: 0,
+    tracks: 0,
+    albums: 0,
+    failed: 0,
+    missing: []
+  })
 
   chip: Chip = $state('albums')
   section: Section = $state('songs')
@@ -23,12 +35,17 @@ class LibraryStore {
   query = $state('')
   sort: Sort = $state({ k: 'a', dir: 1 })
 
-  load(data: { albums: Album[]; tracks: Track[]; playlists: Playlist[] }): void {
+  load(data: LibraryData): void {
     this.#tracks = new Map(data.tracks.map((t) => [t.id, t]))
     this.#order = new Map(data.tracks.map((t, i) => [t.id, i]))
     this.#albumIndex = new Map(data.albums.map((a, i) => [a.id, i]))
     this.albums = data.albums
-    this.playlists = data.playlists
+    // the open album may be gone after a rescan
+    if (this.open && !this.#albumIndex.has(this.open)) this.open = null
+  }
+
+  has(id: string): boolean {
+    return this.#tracks.has(id)
   }
 
   track(id: string): Track {
@@ -52,4 +69,3 @@ class LibraryStore {
 }
 
 export const library = new LibraryStore()
-library.load(makeFakeLibrary())

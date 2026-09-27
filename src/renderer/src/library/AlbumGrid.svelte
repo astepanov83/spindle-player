@@ -1,6 +1,7 @@
 <!-- Cover grid, drawn a row at a time so a big library stays fast. -->
 <script lang="ts">
   import Empty from './Empty.svelte'
+  import Cover from '../ui/Cover.svelte'
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
   import { chunk, filterAlbums, gridColumns } from './views'
@@ -46,12 +47,9 @@
       {#each rows[item.index] as al (al.id)}
         <div class="card">
           <div class="cvwrap">
-            <button
-              class="cv"
-              style:background-image="url({al.cover})"
-              aria-label="Open {al.title}"
-              onclick={() => (library.open = al.id)}
-            ></button>
+            <button class="cv" aria-label="Open {al.title}" onclick={() => (library.open = al.id)}
+              ><Cover src={al.cover} /></button
+            >
             <button
               class="qp"
               aria-label="Play {al.title}"
@@ -61,7 +59,7 @@
             </button>
           </div>
           <div class="t">
-            {#if al.id === queue.currentAlbum.id}<Eq />{/if}<span>{al.title}</span>
+            {#if al.id === queue.currentAlbum?.id}<Eq />{/if}<span>{al.title}</span>
           </div>
           <div class="a">{al.artist}</div>
         </div>
@@ -99,7 +97,7 @@
     position: relative;
     aspect-ratio: 1;
     border-radius: 8px;
-    background-size: cover;
+    overflow: hidden;
     box-shadow: 0 8px 20px -10px var(--shadow);
     transition: transform 0.2s;
   }

@@ -34,3 +34,18 @@ export function back(q: QueueState, pos: number): { state: QueueState; restart: 
   if (pos > 3 || q.index === 0) return { state: q, restart: true }
   return { state: { ...q, index: q.index - 1 }, restart: false }
 }
+
+// After a rescan: drops songs that left the library. The current song stays
+// current; if it is gone, the next song still there takes its place.
+export function prune(q: QueueState, has: (id: string) => boolean): QueueState {
+  const items: string[] = []
+  let index = -1
+  q.items.forEach((id, i) => {
+    if (!has(id)) return
+    if (index < 0 && i >= q.index) index = items.length
+    items.push(id)
+  })
+  if (items.length === q.items.length) return q
+  if (index < 0) index = Math.max(0, items.length - 1)
+  return { ...q, items, index }
+}

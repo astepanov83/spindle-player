@@ -13,7 +13,9 @@ function lib(): { albums: Album[]; tracks: Map<string, Track> } {
         albumId: id,
         artist,
         album: title,
-        no: i + 1
+        no: i + 1,
+        disc: 1,
+        codec: ''
       }
       tracks.set(t.id, t)
       return t.id
@@ -25,6 +27,7 @@ function lib(): { albums: Album[]; tracks: Map<string, Track> } {
       year: 2020,
       palette: ['#000000', '#000000', '#000000'],
       cover: '',
+      coverLarge: '',
       trackIds: ids
     }
   }

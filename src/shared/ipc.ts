@@ -1,3 +1,4 @@
+import type { LibraryData, ScanStatus } from './library'
 import type { Settings } from './settings'
 
 // Channel names used by both main and preload, so a typo is a type error.
@@ -30,4 +31,28 @@ export interface SettingsApi {
   // the settings as they were when the page loaded
   load(): Promise<Settings>
   save(settings: Settings): void
+}
+
+export const LibraryChannel = {
+  load: 'library:load',
+  addFolder: 'library:add-folder',
+  removeFolder: 'library:remove-folder',
+  rescan: 'library:rescan',
+  // main to page: a new library after a scan changed something
+  changed: 'library:changed',
+  // main to page: scan progress and the folder list
+  status: 'library:status'
+} as const
+
+// What the preload exposes to the page as `window.libraryApi`.
+// Main owns the folder list and the index; the page only asks.
+export interface LibraryApi {
+  // the library as it was when the page loaded (from the index on disk)
+  load(): Promise<{ library: LibraryData; status: ScanStatus }>
+  // opens the folder picker; resolves once the choice is saved
+  addFolder(): Promise<void>
+  removeFolder(path: string): void
+  rescan(): void
+  onChanged(listener: (library: LibraryData) => void): () => void
+  onStatus(listener: (status: ScanStatus) => void): () => void
 }

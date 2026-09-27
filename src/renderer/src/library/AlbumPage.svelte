@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Cover from '../ui/Cover.svelte'
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
   import { fmtTime } from '../format'
@@ -22,9 +23,9 @@
   ><Icon name="back" size={16} />All albums</button
 >
 <div class="albhead">
-  <div class="cv" style:background-image="url({al.cover})"></div>
+  <div class="cv"><Cover src={al.coverLarge} /></div>
   <div>
-    <div class="m">Album · {al.year}</div>
+    <div class="m">Album{al.year ? ` · ${al.year}` : ''}</div>
     <h2>{al.title}</h2>
     <div class="m">{al.artist} · {tracks.length} songs · {minutes} min</div>
     <div class="acts">
@@ -69,7 +70,7 @@
     width: 160px;
     aspect-ratio: 1;
     border-radius: 8px;
-    background-size: cover;
+    overflow: hidden;
     box-shadow: 0 14px 30px -12px var(--shadow);
     flex: none;
   }

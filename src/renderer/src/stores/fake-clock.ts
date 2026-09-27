@@ -4,7 +4,7 @@ import { queue } from './queue.svelte'
 
 export function startFakeClock(): () => void {
   const id = setInterval(() => {
-    if (!player.playing) return
+    if (!player.playing || !queue.current) return
     player.pos += 0.25
     if (player.pos >= queue.current.duration) queue.next(true)
   }, 250)

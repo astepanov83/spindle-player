@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Cover from '../ui/Cover.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Slot from '../layout/Slot.svelte'
   import Stage from '../visualizer/Stage.svelte'
@@ -26,16 +27,22 @@
 {#if style === 'bar'}
   <div class="ctl bar">
     <div class="bl">
-      <div class="minicv" style:background-image="url({queue.currentAlbum.cover})"></div>
+      <div class="minicv"><Cover src={queue.currentAlbum?.cover} /></div>
       <div class="meta">
-        <div class="title">{queue.current.title}</div>
-        <div class="sub">{queue.current.artist} · {queue.current.album}</div>
+        {#if queue.current}
+          <div class="title">{queue.current.title}</div>
+          <div class="sub">{queue.current.artist} · {queue.current.album}</div>
+        {:else}
+          <div class="title">Nothing playing</div>
+        {/if}
       </div>
     </div>
     <div class="bc">
       <Transport />
       <div class="seekrow">
-        <span>{fmtTime(player.pos)}</span><Seek /><span>{fmtTime(queue.current.duration)}</span>
+        <span>{fmtTime(player.pos)}</span><Seek /><span
+          >{fmtTime(queue.current?.duration ?? 0)}</span
+        >
       </div>
     </div>
     <div class="br">
@@ -50,7 +57,7 @@
     <div>
       <Seek />
       <div class="times">
-        <span>{fmtTime(player.pos)}</span><span>{fmtTime(queue.current.duration)}</span>
+        <span>{fmtTime(player.pos)}</span><span>{fmtTime(queue.current?.duration ?? 0)}</span>
       </div>
     </div>
     <Transport />
@@ -118,7 +125,7 @@
     width: 60px;
     height: 60px;
     border-radius: 6px;
-    background-size: cover;
+    overflow: hidden;
     flex: none;
     box-shadow: 0 6px 16px var(--shadow);
   }

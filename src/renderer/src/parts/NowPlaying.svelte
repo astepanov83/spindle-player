@@ -8,8 +8,13 @@
 <div class="np {style}">
   <Stage />
   <div class="meta">
-    <div class="title">{queue.current.title}</div>
-    <div class="sub">{queue.current.artist} · {queue.current.album}</div>
+    {#if queue.current}
+      <div class="title">{queue.current.title}</div>
+      <div class="sub">{queue.current.artist} · {queue.current.album}</div>
+    {:else}
+      <div class="title">Nothing playing</div>
+      <div class="sub">Pick an album or a song to start</div>
+    {/if}
   </div>
 </div>
 

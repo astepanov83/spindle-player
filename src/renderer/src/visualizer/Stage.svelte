@@ -4,6 +4,8 @@
   the requestAnimationFrame loop that calls drawStage every frame.
 -->
 <script lang="ts">
+  import { defaultPalette } from '../../../shared/library'
+  import Cover from '../ui/Cover.svelte'
   import { layout } from '../stores/layout.svelte'
   import { queue } from '../stores/queue.svelte'
   import { settings } from '../stores/settings.svelte'
@@ -31,7 +33,11 @@
   })
 
   function redraw(): void {
-    drawStage(stage, settings.visualizer, barColors(queue.currentAlbum.palette, light))
+    drawStage(
+      stage,
+      settings.visualizer,
+      barColors(queue.currentAlbum?.palette ?? defaultPalette, light)
+    )
   }
 
   $effect(() => {
@@ -45,7 +51,7 @@
   {#if cover}
     <!-- the cover changes size with the style, so draw again when it settles -->
     <div class="cover" ontransitionend={redraw}>
-      <div class="img" style:background-image="url({queue.currentAlbum.cover})"></div>
+      <div class="img"><Cover src={queue.currentAlbum?.coverLarge} /></div>
     </div>
   {/if}
   <div class="vz-label" class:show={layout.vzLabel}>{names[settings.visualizer]}</div>
@@ -85,8 +91,7 @@
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background-size: cover;
-    background-position: center;
+    overflow: hidden;
   }
   :global(.vz-ring) .cover {
     border-radius: 50%;

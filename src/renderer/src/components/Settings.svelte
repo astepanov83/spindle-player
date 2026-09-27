@@ -1,5 +1,6 @@
 <!-- The settings sheet under the gear. Main saves every choice (see App.svelte). -->
 <script lang="ts">
+  import MusicFolders from './MusicFolders.svelte'
   import Seg from '../ui/Seg.svelte'
   import type { QueueMode, TemplateId } from '../../../shared/layout'
   import {
@@ -63,6 +64,7 @@
       onchange={(t: ThemeChoice) => (settings.theme = t)}
     />
   </div>
+  <MusicFolders />
 </div>
 
 <style>
@@ -72,6 +74,8 @@
     right: 12px;
     z-index: 20;
     width: min(340px, calc(100% - 24px));
+    max-height: calc(100% - 52px);
+    overflow: auto;
     padding: 16px 18px 18px;
     border-radius: 14px;
     background: var(--panel);

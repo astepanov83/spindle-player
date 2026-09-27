@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advance, back, type QueueState } from './logic'
+import { advance, back, prune, type QueueState } from './logic'
 
 const q = (index: number, items = ['a/0', 'a/1', 'a/2']): QueueState => ({
   items,
@@ -49,5 +49,30 @@ describe('back', () => {
   })
   it('restarts the first song', () => {
     expect(back(q(0), 0).restart).toBe(true)
+  })
+})
+
+describe('prune', () => {
+  const has = (gone: string[]) => (id: string) => !gone.includes(id)
+
+  it('keeps the queue as it is when nothing is gone', () => {
+    const s = q(1)
+    expect(prune(s, has([]))).toBe(s)
+  })
+
+  it('keeps the current song current when others go', () => {
+    expect(prune(q(2), has(['a/0']))).toEqual({ items: ['a/1', 'a/2'], index: 1, from: 'A' })
+  })
+
+  it('moves to the next song left when the current one is gone', () => {
+    expect(prune(q(1), has(['a/1']))).toEqual({ items: ['a/0', 'a/2'], index: 1, from: 'A' })
+  })
+
+  it('moves to the last song when the current one and all after it are gone', () => {
+    expect(prune(q(1), has(['a/1', 'a/2']))).toEqual({ items: ['a/0'], index: 0, from: 'A' })
+  })
+
+  it('empties the queue when every song is gone', () => {
+    expect(prune(q(1), () => false)).toEqual({ items: [], index: 0, from: 'A' })
   })
 })

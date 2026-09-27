@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { defaultPalette } from '../../shared/library'
   import TitleBar from './components/TitleBar.svelte'
   import Settings from './components/Settings.svelte'
   import Node from './layout/Node.svelte'
@@ -8,7 +9,7 @@
   import { queue } from './stores/queue.svelte'
   import { settings } from './stores/settings.svelte'
 
-  const palette = $derived(queue.currentAlbum.palette)
+  const palette = $derived(queue.currentAlbum?.palette ?? defaultPalette)
 
   $effect(() => startFakeClock())
 

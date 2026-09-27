@@ -2,7 +2,7 @@
 export const player = $state({
   playing: false,
   // seconds into the current song
-  pos: 64,
+  pos: 0,
   // 0..100
   vol: 70,
   shuffle: false,

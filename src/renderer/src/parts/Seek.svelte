@@ -3,13 +3,12 @@
   import { queue } from '../stores/queue.svelte'
 
   let el: HTMLDivElement
-  const pct = $derived(
-    (queue.current.duration ? (player.pos / queue.current.duration) * 100 : 0) + '%'
-  )
+  const duration = $derived(queue.current?.duration ?? 0)
+  const pct = $derived((duration ? (player.pos / duration) * 100 : 0) + '%')
 
   function seekTo(e: PointerEvent): void {
     const r = el.getBoundingClientRect()
-    player.pos = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * queue.current.duration
+    player.pos = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * duration
   }
 
   function onpointerdown(e: PointerEvent): void {

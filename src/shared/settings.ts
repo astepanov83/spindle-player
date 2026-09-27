@@ -21,6 +21,8 @@ export interface Size {
 export interface StoredSettings extends Settings {
   // the last size the user chose per template; missing means the template's own size
   windowSizes: Partial<Record<TemplateId, Size>>
+  // music folders, absolute paths. Only main changes them (through the folder picker).
+  folders: string[]
 }
 
 export const visualizerStyles: VisualizerStyle[] = ['ring', 'spectrum', 'wave', 'off']
@@ -63,6 +65,23 @@ function parseSize(v: unknown, template: Template): Size | undefined {
   }
 }
 
+// Absolute on Linux and macOS, or with a drive letter on Windows.
+function isAbsolutePath(p: string): boolean {
+  return p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\')
+}
+
+// Keeps absolute paths only, without a trailing slash, each once.
+export function parseFolders(v: unknown): string[] {
+  if (!Array.isArray(v)) return []
+  const out: string[] = []
+  for (const f of v) {
+    if (typeof f !== 'string' || !isAbsolutePath(f)) continue
+    const p = f.length > 1 ? f.replace(/[\\/]+$/, '') || f.slice(0, 1) : f
+    if (!out.includes(p)) out.push(p)
+  }
+  return out
+}
+
 // The file may be old, hand-edited or half written. Every field that is wrong
 // falls back to its default on its own, so one bad value doesn't reset the rest.
 export function parseStoredSettings(raw: unknown): StoredSettings {
@@ -85,7 +104,8 @@ export function parseStoredSettings(raw: unknown): StoredSettings {
     queue,
     visualizer: oneOf(r.visualizer, visualizerStyles, d.visualizer),
     theme: oneOf(r.theme, themeChoices, d.theme),
-    windowSizes
+    windowSizes,
+    folders: parseFolders(r.folders)
   }
 }
 

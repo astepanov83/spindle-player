@@ -1,0 +1,926 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Player Prototypes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#eceef2; --ink:#15171c; --muted:#5b616d; --line:#d3d7df; --tab:#ffffff; --accent:#0f7f86; --code:#e3e6ec;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --ui:"Onest", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#101216; --ink:#e9ebef; --muted:#9097a3; --line:#262a31; --tab:#1b1e24; --accent:#4cc3c9; --code:#171a1f;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101216; --ink:#e9ebef; --muted:#9097a3; --line:#262a31; --tab:#1b1e24; --accent:#4cc3c9; --code:#171a1f;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg); color:var(--ink); font-family:var(--ui); padding:28px 16px 48px; margin:0}
+.page{max-width:1100px; margin:0 auto; display:flex; flex-direction:column; gap:20px}
+header{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:16px}
+h1{font-family:var(--display); font-weight:700; font-size:clamp(26px,4vw,36px); letter-spacing:-.02em; margin:0; text-wrap:balance}
+header p{margin:6px 0 0; color:var(--muted); max-width:62ch; line-height:1.5}
+.seg{display:flex; gap:3px; background:var(--line); padding:3px; border-radius:10px}
+.seg button{font:500 13.5px var(--ui); border:0; background:transparent; color:var(--muted); padding:7px 13px; border-radius:8px; cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--tab); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tpls.seg{padding:4px; border-radius:12px}
+.tpls.seg button{font-size:14px; padding:9px 16px; border-radius:9px}
+.opts{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+.pbtn{font:500 13.5px var(--ui); color:var(--ink); background:transparent; border:1px solid var(--line); padding:8px 14px; border-radius:10px; cursor:pointer; display:inline-flex; gap:8px; align-items:center}
+.pbtn:hover{border-color:var(--accent)}
+.pbtn[aria-pressed="true"]{border-color:var(--accent); color:var(--accent)}
+.pbtn .sw{width:10px; height:10px; border-radius:2px; border:1.5px dashed currentColor}
+.opts .hint{color:var(--muted); font-size:13px; margin-left:auto}
+.seg button:focus-visible, .pbtn:focus-visible, .app button:focus-visible, .app input:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.stage-wrap{display:flex; justify-content:center}
+.notes{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; color:var(--muted); font-size:13.5px; line-height:1.55}
+.notes b{display:block; color:var(--ink); font-weight:600; margin-bottom:2px}
+details.tpl{border:1px solid var(--line); border-radius:12px; padding:12px 16px}
+details.tpl summary{cursor:pointer; font-weight:600; font-size:14px}
+details.tpl p{color:var(--muted); font-size:13.5px; line-height:1.55; max-width:70ch}
+details.tpl pre{margin:10px 0 0; background:var(--code); border-radius:8px; padding:14px 16px; overflow-x:auto; font:12.5px/1.55 var(--mono); color:var(--ink)}
+
+/* ---------- app window ---------- */
+.app{--c1:#335; --c2:#557; --c3:#223; --bass:0; --edge:#1e2026; font-family:var(--ui); color:#f3f4f7; position:relative; overflow:hidden;
+  width:min(100%,var(--w)); height:680px; background:#111216; display:flex; flex-direction:column;
+  border-radius:12px; box-shadow:0 30px 60px -20px rgba(10,12,20,.45), 0 0 0 1px rgba(0,0,0,.25); user-select:none; transition:width .35s}
+.app button{font-family:inherit; color:inherit; background:none; border:0; cursor:pointer; padding:0}
+.titlebar{height:34px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 6px 0 14px; font-size:12px; font-weight:500;
+  position:relative; z-index:8; color:rgba(255,255,255,.6); background:#0c0d10; border-bottom:1px solid var(--edge)}
+.tb-right{display:flex; align-items:center; gap:2px}
+.tbbtn{width:30px; height:26px; display:grid; place-items:center; border-radius:6px; color:rgba(255,255,255,.6)}
+.tbbtn:hover, .tbbtn.on{background:rgba(255,255,255,.1); color:#fff}
+.tbbtn .ico{width:16px; height:16px}
+.winbtns{display:flex}
+.winbtns span{width:34px; height:26px; display:grid; place-items:center; border-radius:6px}
+.winbtns svg{width:11px; height:11px; stroke:currentColor; stroke-width:1.4; fill:none}
+.winbody{flex:1; display:flex; min-height:0; position:relative}
+
+/* layout boxes built from the template */
+.box{display:flex; min-width:0; min-height:0; position:relative}
+.box.row{flex-direction:row} .box.col{flex-direction:column}
+.box.row > * + *{border-left:1px solid var(--edge)}
+.box.col > * + *{border-top:1px solid var(--edge)}
+.look-tint > *, .look-ambient > *{border:0!important}
+.part{position:relative; min-width:0; min-height:0; display:flex; flex-direction:column}
+.dhost{position:relative}
+.look-tint{background:linear-gradient(170deg, color-mix(in srgb, var(--c1) 70%, #0c0d10) 0%, color-mix(in srgb, var(--c3) 35%, #0c0d10) 55%, #0c0d10 100%)}
+.look-ambient{background:#0b0c10; overflow:hidden}
+.look-ambient > :not(.amb-bg):not(.amb-shade){position:relative; z-index:1}
+.amb-bg{position:absolute; inset:-20%; filter:blur(60px) saturate(1.3); opacity:.95}
+.amb-bg i{position:absolute; width:60%; height:60%; border-radius:50%; transition:background 1.2s}
+.amb-bg i:nth-child(1){background:var(--c1); left:5%; top:5%; animation:driftA 18s ease-in-out infinite alternate}
+.amb-bg i:nth-child(2){background:var(--c2); right:0; top:30%; animation:driftB 22s ease-in-out infinite alternate}
+.amb-bg i:nth-child(3){background:var(--c3); left:20%; bottom:0; animation:driftC 26s ease-in-out infinite alternate}
+@keyframes driftA{to{transform:translate(25%,20%) scale(1.2)}}
+@keyframes driftB{to{transform:translate(-30%,-15%) scale(.9)}}
+@keyframes driftC{to{transform:translate(15%,-25%) scale(1.15)}}
+.amb-shade{position:absolute; inset:0; background:linear-gradient(180deg,rgba(0,0,0,.2),rgba(0,0,0,.5))}
+
+/* containers: tabs and drawer */
+.tabsbox{display:flex; flex-direction:column; min-height:0; position:relative}
+.tabstrip{display:flex; gap:3px; margin:14px 20px 4px; background:rgba(0,0,0,.25); border-radius:10px; padding:3px; flex:none}
+.tabstrip button{flex:1; font-size:13px; font-weight:500; padding:7px 0; border-radius:8px; color:rgba(255,255,255,.65)}
+.tabstrip button[aria-pressed="true"]{background:rgba(255,255,255,.14); color:#fff}
+.tabpane{flex:1; display:flex; flex-direction:column; min-height:0}
+.drawer{position:absolute; top:0; right:0; bottom:0; width:min(360px,92%); z-index:6; background:rgba(18,19,24,.95); backdrop-filter:blur(20px);
+  box-shadow:-24px 0 48px rgba(0,0,0,.45); border-left:1px solid #262830!important; transform:translateX(24px); opacity:0; pointer-events:none; transition:.25s; display:flex; flex-direction:column}
+.drawer.open{transform:none; opacity:1; pointer-events:auto}
+
+/* shared controls */
+.ico{width:20px; height:20px; fill:currentColor; display:block}
+.icobtn{position:relative; width:38px; height:38px; display:grid; place-items:center; border-radius:50%; opacity:.8; transition:opacity .15s, background .15s}
+.icobtn:hover{opacity:1; background:rgba(255,255,255,.1)}
+.icobtn.on{opacity:1; color:#fff}
+.icobtn.on::after{content:""; position:absolute; bottom:1px; left:50%; margin-left:-2px; width:4px; height:4px; border-radius:50%; background:currentColor}
+.playbtn{width:54px; height:54px; border-radius:50%; background:#fff; color:#111; display:grid; place-items:center; transition:transform .15s; flex:none}
+.playbtn:hover{transform:scale(1.06)}
+.playbtn .ico{width:26px; height:26px}
+.seek{height:18px; display:flex; align-items:center; cursor:pointer; touch-action:none; flex:1}
+.seek .track{flex:1; height:4px; border-radius:2px; background:rgba(255,255,255,.2); position:relative}
+.seek .fill{position:absolute; inset:0 auto 0 0; background:#fff; border-radius:2px}
+.seek .knob{position:absolute; top:50%; width:12px; height:12px; margin:-6px 0 0 -6px; border-radius:50%; background:#fff; opacity:0; transition:opacity .15s}
+.seek:hover .knob{opacity:1}
+.seek:hover .track{height:6px}
+.times{display:flex; justify-content:space-between; font-size:12px; color:rgba(255,255,255,.6); font-variant-numeric:tabular-nums; margin-top:2px}
+.vol{display:flex; align-items:center; gap:8px; color:rgba(255,255,255,.7)}
+.vol input{width:90px; accent-color:#fff}
+.transport{display:flex; align-items:center; justify-content:space-between}
+.btnrow{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.btnrow .right, [data-slot]{display:flex; gap:2px; align-items:center}
+.eq{display:inline-flex; gap:2px; align-items:flex-end; height:12px}
+.eq i{width:3px; background:currentColor; border-radius:1px; height:40%}
+.playing .eq i{animation:eq .9s ease-in-out infinite alternate}
+.eq i:nth-child(2){animation-delay:-.3s!important; height:80%}
+.eq i:nth-child(3){animation-delay:-.6s!important; height:60%}
+@keyframes eq{from{height:20%} to{height:100%}}
+
+/* part: nowplaying */
+.np{flex:1; display:flex; flex-direction:column; gap:10px; padding:6px 22px 0; min-height:0}
+.vstage{position:relative; min-height:0; container-type:size}
+.np .vstage{flex:1; margin:0 -22px; min-height:160px}
+.vstage canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
+.cover{position:absolute; left:50%; top:50%; width:52cqmin; height:52cqmin; transform:translate(-50%,-50%); border-radius:10px;
+  transition:width .45s cubic-bezier(.3,1.2,.5,1), height .45s cubic-bezier(.3,1.2,.5,1), border-radius .45s, top .45s;
+  box-shadow:0 0 0 calc(var(--bass) * 9px) color-mix(in srgb, var(--c2) 22%, transparent),
+             0 22px calc(40px + var(--bass) * 40px) -12px color-mix(in srgb, var(--c2) 55%, rgba(0,0,0,.6))}
+.cover .img{position:absolute; inset:0; border-radius:inherit; background-size:cover; background-position:center}
+.vz-ring .cover{border-radius:50%}
+.vz-spectrum .cover{width:56cqmin; height:56cqmin; top:40%}
+.vz-wave .cover{width:60cqmin; height:60cqmin}
+.vz-off .cover{width:78cqmin; height:78cqmin}
+.vz-ring .cover .img{animation:spin 40s linear infinite; animation-play-state:paused}
+.playing.vz-ring .cover .img{animation-play-state:running}
+@keyframes spin{to{transform:rotate(360deg)}}
+.vz-label{position:absolute; left:50%; top:8px; transform:translateX(-50%); font-size:12px; font-weight:600; padding:5px 11px; border-radius:99px;
+  background:rgba(0,0,0,.45); backdrop-filter:blur(8px); opacity:0; transition:opacity .3s; pointer-events:none; z-index:2; white-space:nowrap}
+.vz-label.show{opacity:1}
+.np-meta{flex:none}
+.np-title{font-family:var(--display); font-weight:700; font-size:21px; letter-spacing:-.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.np-sub{font-size:13.5px; color:rgba(255,255,255,.7); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.np.full .np-meta{text-align:center}
+.np.full .np-title{font-size:24px}
+
+/* part: controls */
+.ctl.stack{flex:none; display:flex; flex-direction:column; gap:10px; padding:10px 22px 18px}
+.ctl.bar{flex:1; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr); align-items:center; gap:20px; padding:0 18px;
+  background:linear-gradient(90deg, color-mix(in srgb, var(--c1) 35%, #0c0d10), #0c0d10 55%)}
+.bar .bl{display:flex; align-items:center; gap:14px; min-width:0}
+.bar .minicv{width:60px; height:60px; border-radius:6px; background-size:cover; flex:none; box-shadow:0 6px 16px rgba(0,0,0,.5)}
+.bar .bl > div:last-child{min-width:0}
+.bar .np-title{font-size:16px}
+.bar .bc{display:flex; flex-direction:column; gap:4px; align-items:center}
+.bar .transport{gap:14px; justify-content:center}
+.bar .playbtn{width:40px; height:40px}
+.bar .playbtn .ico{width:22px; height:22px}
+.bar .icobtn{width:34px; height:34px}
+.bar .seekrow{display:flex; align-items:center; gap:10px; width:100%; font-size:12px; color:rgba(255,255,255,.6); font-variant-numeric:tabular-nums}
+.bar .br{display:flex; align-items:center; justify-content:flex-end; gap:8px}
+.bar .vstage{width:120px; height:48px; flex:none}
+.bar .vol input{width:80px}
+
+/* part: queue */
+.qpart{flex:1; display:flex; flex-direction:column; min-height:0}
+.sq-head{display:flex; align-items:center; justify-content:space-between; padding:14px 10px 6px 20px; flex:none}
+.sq-head b{display:block; font-size:15px}
+.sq-head small{font-size:12px; color:rgba(255,255,255,.5)}
+.sq-body{flex:1; overflow:auto; padding:4px 8px 12px; min-height:0}
+.box.row > .qpart{background:#0e0f13}
+.qrow{display:grid; grid-template-columns:44px 1fr auto; gap:14px; align-items:center; width:100%; text-align:left; padding:8px 12px; border-radius:10px; min-height:60px}
+.qrow:hover{background:rgba(255,255,255,.07)}
+.mini{position:relative; width:44px; height:44px; border-radius:6px; background-size:cover; display:grid; place-items:center; flex:none}
+.mini .eq{color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.8))}
+.qrow .qt{display:flex; flex-direction:column; gap:3px; min-width:0}
+.qrow .nm{font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.qrow .ar{font-size:13px; color:rgba(255,255,255,.55); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.qrow .d{color:rgba(255,255,255,.5); font-variant-numeric:tabular-nums; font-size:13px}
+.qrow.cur, .tr.cur{background:color-mix(in srgb, var(--c2) 26%, rgba(255,255,255,.04)); box-shadow:inset 3px 0 0 var(--c2)}
+.qrow.cur .nm{font-weight:600; color:#fff}
+.qrow.past{opacity:.45}
+.qrow.past:hover{opacity:.8}
+
+/* part: library (both navigation styles) */
+.lib{flex:1; display:flex; flex-direction:column; min-height:0}
+.libtop{display:flex; flex-direction:column; gap:12px; padding:16px 22px 12px}
+.search{display:flex; align-items:center; gap:8px; background:#1b1d23; border-radius:9px; padding:0 12px; color:#8a909b}
+.search input{flex:1; min-width:0; height:38px; background:none; border:0; color:#f1f2f5; font:14px var(--ui); outline:none}
+.search:focus-within{box-shadow:0 0 0 2px #3a3e48}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.chip{font-size:13px!important; padding:6px 12px!important; border-radius:99px; background:#1b1d23!important; color:#aeb3bc!important}
+.chip[aria-pressed="true"]{background:#f1f2f5!important; color:#111!important}
+.libscroll{flex:1; overflow:auto; padding:4px 22px 22px; min-height:0}
+.lib2{flex:1; display:flex; min-height:0}
+.part.lib2{flex-direction:row}
+.side{width:210px; flex:none; display:flex; flex-direction:column; gap:4px; padding:16px 12px; background:#0d0e11; border-right:1px solid var(--edge); overflow:auto}
+.side .search{margin:0 4px 10px}
+.sidehead{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.45); font-weight:600; padding:14px 10px 6px}
+.sidebtn{display:flex!important; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 10px!important; border-radius:8px; font-size:14px; color:rgba(255,255,255,.75)!important}
+.sidebtn:hover{background:rgba(255,255,255,.06)!important}
+.sidebtn[aria-current="true"]{background:rgba(255,255,255,.1)!important; color:#fff!important; font-weight:600}
+.sidebtn .ico{width:18px; height:18px; opacity:.8}
+.libmain{flex:1; overflow:auto; padding:20px 24px 24px; min-width:0}
+.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:22px 16px}
+.card{display:flex; flex-direction:column; gap:8px; text-align:left}
+.card .cv{display:block; width:100%; position:relative; aspect-ratio:1; border-radius:8px; background-size:cover; box-shadow:0 8px 20px -10px rgba(0,0,0,.7); transition:transform .2s}
+.card:hover .cv{transform:translateY(-3px)}
+.card .qp{position:absolute; right:8px; bottom:8px; width:40px; height:40px; border-radius:50%; background:#fff; color:#111; display:grid; place-items:center;
+  opacity:0; transform:translateY(6px); transition:.2s; box-shadow:0 6px 14px rgba(0,0,0,.4)}
+.card:hover .qp, .card:focus-within .qp{opacity:1; transform:none}
+.card .t{font-size:14px; font-weight:600; display:flex; gap:6px; align-items:center; min-width:0}
+.card .t span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.card .a{font-size:13px; color:#8a909b; margin-top:-5px}
+.empty{color:#8a909b; font-size:14px; line-height:1.6; padding:30px 0; max-width:44ch}
+.empty b{color:#f1f2f5; display:block; font-size:16px; margin-bottom:4px}
+.albhead{display:flex; gap:22px; align-items:flex-end; padding:8px 0 22px; flex-wrap:wrap}
+.albhead .cv{width:160px; aspect-ratio:1; border-radius:8px; background-size:cover; box-shadow:0 14px 30px -12px rgba(0,0,0,.8); flex:none}
+.albhead h2, .tblhead h2{font-family:var(--display); font-size:32px; margin:4px 0 8px; letter-spacing:-.02em; line-height:1.05; text-wrap:balance}
+.albhead .m, .tblhead .m{color:#8a909b; font-size:13px}
+.albhead .acts{display:flex; gap:8px; margin-top:16px}
+.pill{padding:9px 18px!important; border-radius:99px; font-size:14px!important; font-weight:600; background:#f1f2f5!important; color:#111!important}
+.pill.ghost{background:#1f2127!important; color:#f1f2f5!important}
+.back{font-size:13px!important; color:#8a909b!important; display:inline-flex; gap:4px; align-items:center; margin-top:4px}
+.back:hover{color:#fff!important}
+.srow{display:grid; grid-template-columns:32px 1fr auto; gap:16px; align-items:center; width:100%; text-align:left; padding:14px; border-radius:10px; font-size:15px; min-height:54px}
+.srow + .srow{box-shadow:0 -1px 0 #1c1e24}
+.srow:hover{background:rgba(255,255,255,.06); box-shadow:none}
+.srow .n, .tr .n{color:rgba(255,255,255,.45); font-variant-numeric:tabular-nums; font-size:14px; text-align:right}
+.srow .d, .tr .d{color:rgba(255,255,255,.5); font-variant-numeric:tabular-nums; font-size:14px; text-align:right}
+.srow.cur{font-weight:600}
+.srow .nm{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tblhead{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; padding-bottom:16px}
+.tbl{--cols:36px minmax(0,2fr) minmax(0,1.3fr) minmax(0,1.3fr) 56px}
+.th, .tr{display:grid; grid-template-columns:var(--cols); gap:16px; align-items:center; padding:0 12px}
+.th{position:sticky; top:-20px; background:#111216; z-index:1; height:38px; border-bottom:1px solid #22252c}
+.th button{font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.5); text-align:left; font-weight:600}
+.th button:hover, .th button[aria-sort]{color:#fff}
+.th button:last-child{text-align:right}
+.tr{width:100%; text-align:left; min-height:54px; font-size:14.5px; border-radius:8px}
+.tr + .tr{box-shadow:0 -1px 0 #1a1c22}
+.tr:hover{background:rgba(255,255,255,.05)}
+.tr > span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tr .tt{display:flex; align-items:center; gap:12px; color:#fff}
+.tr .tt .mini{width:36px; height:36px; border-radius:4px}
+.tr .o{color:rgba(255,255,255,.62)}
+.tr.cur .tt{font-weight:600}
+
+/* settings sheet */
+.settings{position:absolute; top:40px; right:12px; z-index:20; width:min(340px, calc(100% - 24px)); padding:16px 18px 18px; border-radius:14px;
+  background:rgba(22,23,29,.97); backdrop-filter:blur(20px); box-shadow:0 20px 50px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08);
+  display:flex; flex-direction:column; gap:16px; animation:fadeup .2s}
+@keyframes fadeup{from{opacity:0; transform:translateY(8px)}}
+.settings h3{margin:0; font:600 15px var(--ui)}
+.set{display:flex; flex-direction:column; gap:8px}
+.set > label{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.5); font-weight:600}
+.set .hint{margin:0; font-size:12.5px; line-height:1.45; color:rgba(255,255,255,.6)}
+.app .seg{background:rgba(255,255,255,.07)}
+.app .seg button{flex:1; color:rgba(255,255,255,.7); padding:7px 8px; font-size:13px}
+.app .seg button[aria-pressed="true"]{background:rgba(255,255,255,.18); color:#fff; box-shadow:none}
+
+/* "show parts" overlay */
+.showparts .part{outline:1.5px dashed rgba(255,204,0,.8); outline-offset:-3px}
+.showparts .part::before, .showparts .ctr::before, .showparts [data-slot]::before{position:absolute; z-index:30; font:600 10.5px var(--mono); padding:2px 6px; border-radius:4px; pointer-events:none; white-space:nowrap}
+.showparts .part::before{content:attr(data-label); top:5px; left:5px; background:#ffcc00; color:#111}
+.showparts .ctr{outline:1.5px dashed rgba(76,195,201,.9); outline-offset:-7px}
+.showparts .ctr::before{content:attr(data-label); top:5px; right:7px; background:#4cc3c9; color:#081315}
+.showparts [data-slot]{position:relative; outline:1.5px dashed #ff6fb5; outline-offset:2px; border-radius:6px; min-width:20px; min-height:20px}
+.showparts [data-slot]::before{content:"slot: " attr(data-slot); bottom:calc(100% + 6px); right:0; background:#ff6fb5; color:#1a0610}
+
+@media (max-width:760px){
+  .app{height:auto; min-height:680px}
+  .box.row{flex-direction:column}
+  .box.row > *{flex:0 0 auto!important; border-left:0!important}
+  .box.row > * + *{border-top:1px solid var(--edge)}
+  .libscroll, .libmain{max-height:460px}
+  .np .vstage{min-height:300px}
+  .side{width:150px}
+  .ctl.bar{grid-template-columns:1fr; padding:12px 16px; gap:10px}
+  .bar .br{justify-content:space-between}
+}
+@media (prefers-reduced-motion:reduce){
+  .amb-bg i, .playing .eq i, .vz-ring .cover .img{animation:none!important}
+  .cover, .drawer, .app{transition:none}
+}
+</style>
+
+<div class="page">
+  <header>
+    <div>
+      <h1>Player Prototypes</h1>
+      <p>One set of parts, three layout templates. Each template is plain data that places the same Library, Player and Queue parts. Switch templates here or in the window's settings.</p>
+    </div>
+    <div class="tpls seg" id="tplseg"></div>
+  </header>
+
+  <div class="opts">
+    <button class="pbtn" id="partsbtn" aria-pressed="false"><span class="sw"></span>Show parts</button>
+    <button class="pbtn" id="filebtn">Play a song from your computer</button>
+    <input id="file" type="file" accept="audio/*" hidden>
+    <span class="hint">Keys: Space play, V visualizer, Q queue</span>
+  </div>
+
+  <div class="stage-wrap">
+    <section class="app" id="win" aria-label="Music player">
+      <div class="titlebar"><span id="wintitle">Music</span><div class="tb-right">
+        <button class="tbbtn" data-act="settings" aria-label="Settings"><svg class="ico" viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
+        <div class="winbtns" aria-hidden="true">
+          <span><svg viewBox="0 0 10 10"><path d="M1 5h8"/></svg></span>
+          <span><svg viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8"/></svg></span>
+          <span><svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8"/></svg></span></div></div></div>
+      <div class="winbody" id="winbody"></div>
+      <div class="settings" id="settings" hidden></div>
+    </section>
+  </div>
+
+  <div class="notes" id="notes"></div>
+
+  <details class="tpl">
+    <summary>Template data for <span id="tplname"></span></summary>
+    <p>This is the whole template. One small function reads it and places the parts. <code>queue</code> marks the spot that becomes Tabs when the queue setting is Tab. <code>queueColumn</code> only appears when it is Column. <code>drawerHost</code> is where the Drawer slides in, and the Drawer puts its button into the player's <code>player.buttons</code> slot.</p>
+    <pre id="tpljson"></pre>
+  </details>
+</div>
+
+<script>
+// ================= data =================
+const ALBUMS = [
+  {t:"Low Tide Radio", a:"Marisol Vey", y:2023, p:["#1f8a8a","#e3b66b","#0d3b4a"], s:"sun",
+   tr:[["Harbour Lights",214],["Low Tide Radio",251],["Salt in the Wires",198],["Pier 9",232],["Swimmers",187],["Last Ferry Home",276]]},
+  {t:"Night Bus", a:"The Quiet Hours", y:2021, p:["#3b2f8f","#e0457b","#101a3a"], s:"stripes",
+   tr:[["Route 38",203],["Fogged Glass",241],["Sodium Lamps",229],["Terminus",264],["Seat by the Window",195]]},
+  {t:"Paper Suns", a:"Oda Linde", y:2024, p:["#f2a541","#c8553d","#2d3047"], s:"orbs",
+   tr:[["Origami",182],["Paper Suns",238],["Kite String",201],["Folded Light",255],["August Again",217],["Crease",190],["Unfold",268]]},
+  {t:"Glasshouse", a:"Kinetic Ferns", y:2022, p:["#3e8e41","#b5e48c","#16302b"], s:"grid",
+   tr:[["Condensation",244],["Glasshouse",209],["Monstera",231],["Grow Lamp",197],["Humid",286]]},
+  {t:"Salt & Static", a:"Juno Park", y:2020, p:["#d64545","#f5e1a4","#2a1b1b"], s:"waves",
+   tr:[["Static",176],["White Noise Lullaby",248],["Brine",213],["Antenna",226],["Salt",239],["Signal Lost",301]]},
+  {t:"Northbound", a:"Elk & Ember", y:2019, p:["#577590","#f3722c","#1b263b"], s:"sun",
+   tr:[["Northbound",262],["Pines",219],["Ember Light",247],["Snowline",233],["Cabin Radio",205]]},
+  {t:"Soft Machinery", a:"Ravi Tan", y:2024, p:["#8d99ae","#ef233c","#2b2d42"], s:"grid",
+   tr:[["Servo",188],["Soft Machinery",256],["Hydraulics",222],["Idle Loop",240],["Cooling Fan",199],["Reboot",274]]},
+  {t:"Afterimage", a:"Lumen Club", y:2023, p:["#9b5de5","#00bbf9","#1a1033"], s:"orbs",
+   tr:[["Afterimage",234],["Strobe Memory",207],["Neon Sleep",259],["Retina",215],["Dim the Room",281]]},
+  {t:"Cardamom", a:"Nadia Serrat", y:2021, p:["#bc6c25","#dda15e","#283618"], s:"waves",
+   tr:[["Cardamom",228],["Copper Pot",196],["Rooftop Tea",243],["Spice Market",211],["Slow Boil",267]]},
+  {t:"Weather Report Vol. 2", a:"Hollow Coast", y:2022, p:["#48cae4","#caf0f8","#03045e"], s:"stripes",
+   tr:[["Pressure Front",237],["Light Drizzle",204],["Isobars",249],["Clearing Later",226],["High Tide Warning",258],["Forecast",193]]},
+  {t:"Minor Planets", a:"Sato Ensemble", y:2020, p:["#ffb703","#fb8500","#023047"], s:"orbs",
+   tr:[["Ceres",272],["Vesta",231],["Pallas",248],["Hygiea",219],["Kuiper",305]]},
+  {t:"Home Tapes", a:"Wren", y:2025, p:["#e76f51","#f4a261","#264653"], s:"stripes",
+   tr:[["Side A",184],["Kitchen Demo",206],["Hiss",178],["Porch Song",233],["Side B",241],["Rewind",197]]},
+];
+const PLAYLISTS=[
+  {n:"Late Night", items:[[1,0],[1,2],[7,2],[4,1],[5,3],[2,3],[7,4]]},
+  {n:"Focus Mix", items:[[10,0],[3,4],[8,2],[0,1],[6,3],[10,2],[11,3]]},
+  {n:"Road Trip", items:[[5,0],[9,0],[0,5],[2,1],[11,0],[6,1]]}];
+
+// ================= templates (plain data) =================
+const TEMPLATES={
+  studio:{
+    name:"Studio", window:{width:"1100px"},
+    queueOptions:["tab","drawer","col"],
+    layout:{row:[
+      {part:"library", opts:{nav:"chips"}, size:"1fr", drawerHost:true},
+      {col:[
+        {queue:{with:{part:"nowplaying", opts:{style:"panel"}}, label:"Now playing"}, size:"1fr"},
+        {part:"controls", opts:{style:"stack"}}
+      ], size:"380px", look:"tint"},
+      {queueColumn:"310px"}
+    ]}
+  },
+  classic:{
+    name:"Classic", window:{width:"1100px"},
+    queueOptions:["drawer","col"],
+    layout:{col:[
+      {row:[
+        {part:"library", opts:{nav:"sidebar"}, size:"1fr"},
+        {queueColumn:"330px"}
+      ], size:"1fr", drawerHost:true},
+      {part:"controls", opts:{style:"bar"}, size:"96px"}
+    ]}
+  },
+  focus:{
+    name:"Focus", window:{width:"440px"},
+    queueOptions:["tab","drawer"],
+    layout:{col:[
+      {queue:{with:{part:"nowplaying", opts:{style:"full"}}, label:"Now playing"}, size:"1fr", drawerHost:true},
+      {part:"controls", opts:{style:"stack"}}
+    ], look:"ambient"}
+  }
+};
+
+// ================= covers =================
+function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function makeCover(al,i){
+  const c=document.createElement("canvas"); c.width=c.height=400; const x=c.getContext("2d"); const r=rng(i*977+13); const [a,b,d]=al.p;
+  x.fillStyle=d; x.fillRect(0,0,400,400);
+  if(al.s==="sun"){
+    const g=x.createLinearGradient(0,0,0,400); g.addColorStop(0,d); g.addColorStop(1,a); x.fillStyle=g; x.fillRect(0,0,400,400);
+    x.fillStyle=b; x.beginPath(); x.arc(200,250,110,Math.PI,0); x.fill();
+    x.fillStyle=d; for(let k=0;k<7;k++){x.fillRect(0,250+k*k*3+k*6,400,3+k*1.6)}
+  } else if(al.s==="stripes"){
+    x.save(); x.translate(200,200); x.rotate(-Math.PI/4+r()*.3);
+    for(let k=-12;k<12;k++){x.fillStyle=[a,b,d][(k+12)%3]; x.globalAlpha=.55+r()*.45; x.fillRect(k*34,-400,20+r()*16,800)}
+    x.restore(); x.globalAlpha=1;
+  } else if(al.s==="orbs"){
+    for(let k=0;k<7;k++){x.globalAlpha=.75; x.fillStyle=[a,b][k%2]; x.beginPath(); x.arc(40+r()*320,40+r()*320,30+r()*110,0,7); x.fill()}
+    x.globalAlpha=1;
+  } else if(al.s==="grid"){
+    x.fillStyle=a; x.fillRect(0,0,400,400);
+    for(let gx=0;gx<5;gx++)for(let gy=0;gy<5;gy++){const v=r(); x.fillStyle=v<.35?b:v<.7?d:a; const s=80;
+      if(v<.5){x.fillRect(gx*s,gy*s,s,s)} else {x.beginPath(); x.arc(gx*s+40,gy*s+40,34,0,7); x.fill()}}
+  } else if(al.s==="waves"){
+    x.fillStyle=b; x.fillRect(0,0,400,400); x.lineWidth=14;
+    for(let k=0;k<11;k++){x.strokeStyle=k%2?a:d; x.beginPath(); const ph=r()*6, amp=10+r()*22;
+      for(let px=0;px<=400;px+=8){const py=30+k*36+Math.sin(px/45+ph)*amp; px?x.lineTo(px,py):x.moveTo(px,py)} x.stroke()}
+  }
+  const img=x.getImageData(0,0,400,400); for(let p=0;p<img.data.length;p+=4){const n=(r()-.5)*18; img.data[p]+=n; img.data[p+1]+=n; img.data[p+2]+=n} x.putImageData(img,0,0);
+  return c.toDataURL("image/jpeg",.85);
+}
+ALBUMS.forEach((al,i)=>al.cover=makeCover(al,i));
+
+// ================= state =================
+const S={queue:ALBUMS[2].tr.map((_,i)=>[2,i]), qi:1, from:"Paper Suns", pos:64, playing:false, vol:70, shuffle:false, repeat:false,
+  tpl:"studio", qm:{studio:"tab",classic:"drawer",focus:"tab"}, vz:"ring", showq:false, tabSel:0, settings:false, parts:false,
+  chip:"albums", open:null, q:"", sec:"songs", sort:{k:"a",dir:1}};
+try{Object.assign(S, JSON.parse(localStorage.getItem("pp-opts3")||"{}"))}catch(e){}
+const saveOpts=()=>{try{localStorage.setItem("pp-opts3",JSON.stringify({tpl:S.tpl,qm:S.qm,vz:S.vz}))}catch(e){}};
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const fmt=s=>Math.floor(s/60)+":"+String(Math.floor(s%60)).padStart(2,"0");
+const curRef=()=>S.queue[S.qi], curAl=()=>ALBUMS[curRef()[0]], cur=()=>curAl().tr[curRef()[1]];
+const isCur=(a,t)=>{const [ca,ct]=curRef();return ca===a&&ct===t};
+const T=()=>TEMPLATES[S.tpl];
+const Q=()=>{const o=T().queueOptions;return o.includes(S.qm[S.tpl])?S.qm[S.tpl]:o[0]};
+const PLAY='<path d="M8 5v14l11-7z"/>', PAUSE='<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>';
+const eq='<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>';
+const VZ_NAMES={ring:"Ring",spectrum:"Spectrum",wave:"Wave",off:"Visualizer off"};
+const VZ_ORDER=["ring","spectrum","wave","off"];
+const QM_NAMES={tab:"Tab",drawer:"Drawer",col:"Column"};
+const QM_HINT={tab:"The queue shares a spot with Now playing. Switch with the tabs.",
+  drawer:"The queue slides in from the right. Open it with the queue button next to the visualizer button.",
+  col:"The queue is always visible in its own column."};
+const I={
+  shuffle:'<path d="M17 3l4 4-4 4V8h-2.6l-3 3.5-1.3-1.5 3.2-3.9c.2-.2.5-.4.8-.4H17V3zM3 7h4c.3 0 .6.2.8.4l8.2 9.6H17v-3l4 4-4 4v-3h-1.5c-.3 0-.6-.1-.8-.4L6.5 9H3V7zm0 10h3.5l2.2-2.6 1.3 1.5-2.5 3c-.2.2-.5.4-.8.4H3v-2.3z"/>',
+  prev:'<path d="M6 5h2v14H6zM20 5v14L9.5 12z"/>', next:'<path d="M16 5h2v14h-2zM4 5v14l10.5-7z"/>',
+  repeat:'<path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>',
+  vol:'<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/>',
+  viz:'<path d="M3 13h2v7H3zm4-5h2v12H7zm4-4h2v16h-2zm4 7h2v9h-2zm4-3h2v12h-2z"/>',
+  queue:'<path d="M3 6h13v2H3zm0 5h13v2H3zm0 5h9v2H3zm14-1V9l5 4z"/>',
+  close:'<path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/>',
+  search:'<path d="M10 3a7 7 0 0 1 5.6 11.2l5.1 5.1-1.4 1.4-5.1-5.1A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/>',
+  back:'<path d="M15.4 6 9.4 12l6 6-1.4 1.4L6.6 12 14 4.6z"/>',
+  note:'<path d="M9 3v10.6A4 4 0 1 0 11 17V7h8V3H9z"/>',
+  disc:'<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 7a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/>',
+  person:'<path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2c-4 0-8 2-8 5v2h16v-2c0-3-4-5-8-5z"/>',
+  folder:'<path d="M3 5h7l2 2h9v12H3z"/>',
+  list:'<path d="M3 5h14v2H3zm0 6h14v2H3zm0 6h10v2H3zm16-4v6.5a2.5 2.5 0 1 1-2-2.45V11h4v2z"/>'};
+const ib=(act,label,extra="")=>`<button class="icobtn" data-act="${act}" aria-label="${label}"${extra}><svg class="ico" viewBox="0 0 24 24">${I[act]}</svg></button>`;
+const el=(html)=>{const d=document.createElement("div");d.innerHTML=html.trim();return d.firstElementChild};
+
+// ================= parts =================
+// A part never knows where it sits. It renders its own markup and marks
+// live fields with data-np, so update() can find it wherever it ended up.
+const seekHTML=`<div class="seek" data-seek><div class="track"><div class="fill" data-np="fill"></div><div class="knob" data-np="knob"></div></div></div>`;
+const stageHTML=(cover=true)=>`<div class="vstage"><canvas></canvas>${cover?`<div class="cover"><div class="img" data-np="cover"></div></div>`:""}<div class="vz-label"></div></div>`;
+const transportHTML=ib("shuffle","Shuffle")+ib("prev","Previous")+
+  `<button class="playbtn" data-act="play" aria-label="Play"><svg class="ico" viewBox="0 0 24 24" data-np="playicon"></svg></button>`+ib("next","Next")+ib("repeat","Repeat");
+// every player style must render this slot; containers drop their buttons into it
+const slotHTML=`<span data-slot="player.buttons"></span>`;
+
+const PARTS={
+  library(o){
+    if(o.nav==="chips") return el(`<div class="lib" data-nav="chips">
+      <div class="libtop">
+        <label class="search"><svg class="ico" viewBox="0 0 24 24" style="width:18px;height:18px">${I.search}</svg><input id="search-chips" type="search" data-search placeholder="Search albums and artists" autocomplete="off"></label>
+        <div class="chips">${["albums","artists","folders","playlists"].map(c=>`<button class="chip" data-chip="${c}" aria-pressed="false">${c[0].toUpperCase()+c.slice(1)}</button>`).join("")}</div>
+      </div>
+      <div class="libscroll" data-libscroll></div></div>`);
+    const sb=(sec,icon,label)=>`<button class="sidebtn" data-sec="${sec}"><svg class="ico" viewBox="0 0 24 24">${I[icon]}</svg>${label}</button>`;
+    return el(`<div class="lib2" data-nav="sidebar">
+      <aside class="side">
+        <label class="search"><svg class="ico" viewBox="0 0 24 24" style="width:18px;height:18px">${I.search}</svg><input id="search-side" type="search" data-search placeholder="Search" autocomplete="off"></label>
+        <div class="sidehead">Library</div>
+        ${sb("songs","note","Songs")}${sb("albums","disc","Albums")}${sb("artists","person","Artists")}${sb("folders","folder","Folders")}
+        <div class="sidehead">Playlists</div>
+        ${PLAYLISTS.map((p,i)=>sb("pl:"+i,"list",p.n)).join("")}
+      </aside>
+      <div class="libmain" data-libscroll></div></div>`);
+  },
+  nowplaying(o){
+    return el(`<div class="np ${o.style}">${stageHTML()}<div class="np-meta"><div class="np-title" data-np="title"></div><div class="np-sub" data-np="sub"></div></div></div>`);
+  },
+  controls(o){
+    if(o.style==="bar") return el(`<div class="ctl bar">
+      <div class="bl"><div class="minicv" data-np="cover"></div><div><div class="np-title" data-np="title"></div><div class="np-sub" data-np="sub"></div></div></div>
+      <div class="bc"><div class="transport">${transportHTML}</div>
+        <div class="seekrow"><span data-np="pos"></span>${seekHTML}<span data-np="dur"></span></div></div>
+      <div class="br">${stageHTML(false)}<div class="vol"><svg class="ico" viewBox="0 0 24 24">${I.vol}</svg><input id="vol-bar" type="range" min="0" max="100" data-vol aria-label="Volume"></div>
+        ${ib("viz","Change visualizer")}${slotHTML}</div></div>`);
+    return el(`<div class="ctl stack">
+      <div>${seekHTML}<div class="times"><span data-np="pos"></span><span data-np="dur"></span></div></div>
+      <div class="transport">${transportHTML}</div>
+      <div class="btnrow"><div class="vol"><svg class="ico" viewBox="0 0 24 24">${I.vol}</svg><input id="vol-stack" type="range" min="0" max="100" data-vol aria-label="Volume"></div>
+        <div class="right">${ib("viz","Change visualizer")}${slotHTML}</div></div></div>`);
+  },
+  queue(o){
+    return el(`<div class="qpart">${o.header?`<div class="sq-head"><div><b>Queue</b><small data-np="from"></small></div>${o.close?ib("close","Close queue",' data-close="queue"'):""}</div>`:""}
+      <div class="sq-body" data-queue></div></div>`);
+  }
+};
+
+// ================= layout: turns template data into boxes =================
+let ctx;
+function build(n){
+  let node;
+  if(n.row||n.col){
+    node=document.createElement("div"); node.className="box "+(n.row?"row":"col")+(n.look?" look-"+n.look:"");
+    if(n.look==="ambient") node.innerHTML='<div class="amb-bg" aria-hidden="true"><i></i><i></i><i></i></div><div class="amb-shade" aria-hidden="true"></div>';
+    (n.row||n.col).map(build).filter(Boolean).forEach(c=>node.append(c));
+  } else if(n.part){
+    node=PARTS[n.part](n.opts||{}); node.classList.add("part");
+    node.dataset.label=n.part+(n.opts&&!n.opts.header?" · "+Object.values(n.opts).join(", "):"");
+  } else if(n.queue){
+    if(Q()==="tab"){
+      node=el(`<div class="tabsbox ctr" data-label="tabs"><div class="tabstrip">
+        <button data-tabsel="0">${n.queue.label}</button><button data-tabsel="1">Queue</button></div></div>`);
+      [build(n.queue.with), build({part:"queue"})].forEach(c=>{const p=document.createElement("div");p.className="tabpane";p.append(c);node.append(p)});
+    } else node=build(n.queue.with);
+  } else if(n.queueColumn){
+    if(Q()!=="col") return null;
+    node=build({part:"queue", opts:{header:true}, size:n.queueColumn});
+  }
+  const size=n.size;
+  if(size) node.style.flex=size==="1fr"?"1 1 0":"0 0 "+size;
+  if(n.drawerHost){node.classList.add("dhost"); ctx.host=node}
+  return node;
+}
+function buildLayout(){
+  const t=T(); ctx={host:null, buttons:[]}; S.showq=false; S.tabSel=0;
+  const body=$("#winbody"); body.innerHTML="";
+  const root=build(t.layout); root.style.flex="1 1 0"; body.append(root);
+  if(Q()==="drawer"){
+    const d=el(`<div class="drawer ctr" data-label="drawer"></div>`);
+    d.append(build({part:"queue", opts:{header:true, close:true}}));
+    (ctx.host||root).append(d);
+    // the drawer owns its toggle and asks for a place in the player's slot
+    ctx.buttons.push({slot:"player.buttons", act:"queue", label:"Show queue"});
+  }
+  $$("[data-slot]").forEach(s=>s.innerHTML=ctx.buttons.filter(b=>b.slot===s.dataset.slot).map(b=>ib(b.act,b.label)).join(""));
+  $("#win").style.setProperty("--w",t.window.width);
+  $("#wintitle").textContent="Music · "+t.name;
+  $("#tplname").textContent=t.name;
+  $("#tpljson").textContent=JSON.stringify(t,null,2);
+  $$("[data-search]").forEach(i=>i.value=S.q);
+  renderNotes(); update();
+}
+
+// ================= updates =================
+function setAll(k,fn){$$('[data-np="'+k+'"]').forEach(fn)}
+function mix(hex,to,t){const h=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16));const a=h(hex),b=h(to);return"#"+a.map((v,i)=>Math.round(v+(b[i]-v)*t).toString(16).padStart(2,"0")).join("")}
+let COL={c1:"#fff",c2:"#fff"};
+function update(){
+  const al=curAl(), [name,dur]=cur(), w=$("#win");
+  COL={c1:al.p[1], c2:mix(al.p[0],"#ffffff",.3)};
+  w.style.setProperty("--c1",al.p[0]); w.style.setProperty("--c2",al.p[1]); w.style.setProperty("--c3",al.p[2]);
+  w.classList.toggle("playing",S.playing); w.classList.toggle("showparts",S.parts);
+  VZ_ORDER.forEach(v=>w.classList.toggle("vz-"+v,S.vz===v));
+  setAll("cover",e=>e.style.backgroundImage=`url(${al.cover})`);
+  setAll("title",e=>e.textContent=name);
+  setAll("sub",e=>e.textContent=`${al.a} · ${al.t}`);
+  setAll("dur",e=>e.textContent=fmt(dur));
+  setAll("from",e=>e.textContent="From "+S.from);
+  setAll("playicon",e=>e.innerHTML=S.playing?PAUSE:PLAY);
+  $$('[data-act="play"]').forEach(b=>b.setAttribute("aria-label",S.playing?"Pause":"Play"));
+  $$('[data-act="shuffle"]').forEach(b=>b.classList.toggle("on",S.shuffle));
+  $$('[data-act="repeat"]').forEach(b=>b.classList.toggle("on",S.repeat));
+  $$('[data-slot] [data-act="queue"]').forEach(b=>b.classList.toggle("on",S.showq));
+  $$('[data-act="viz"]').forEach(b=>b.classList.toggle("on",S.vz!=="off"));
+  $$(".drawer").forEach(d=>d.classList.toggle("open",S.showq));
+  $$(".tabsbox").forEach(tb=>{
+    tb.querySelectorAll("[data-tabsel]").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.tabsel===S.tabSel));
+    tb.querySelectorAll(":scope > .tabpane").forEach((p,i)=>p.hidden=i!==S.tabSel);
+  });
+  $$("[data-vol]").forEach(v=>v.value=S.vol);
+  $$("[data-tpl]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.tpl===S.tpl));
+  $("#partsbtn").setAttribute("aria-pressed",S.parts);
+  renderPos(); renderQueue(); renderLib(); renderSettings();
+}
+function renderPos(){
+  const d=cur()[1], pct=(d?S.pos/d*100:0)+"%";
+  setAll("fill",e=>e.style.width=pct); setAll("knob",e=>e.style.left=pct); setAll("pos",e=>e.textContent=fmt(S.pos));
+}
+function renderQueue(){
+  const h=S.queue.map(([a,t],i)=>{const al=ALBUMS[a],[n,d]=al.tr[t], c=i===S.qi;
+    return `<button class="qrow${c?" cur":i<S.qi?" past":""}" data-qi="${i}"><span class="mini" style="background-image:url(${al.cover})">${c&&S.playing?eq:""}</span>
+      <span class="qt"><span class="nm">${n}</span><span class="ar">${al.a}</span></span><span class="d">${fmt(d)}</span></button>`}).join("");
+  const key=S.qi+":"+curRef().join(",");
+  $$("[data-queue]").forEach(e=>{
+    e.innerHTML=h;
+    // keep the current song in view when the track changes, not on every redraw
+    if(e.dataset.key!==key){e.dataset.key=key; const c=e.querySelector(".cur"); if(c) e.scrollTop=Math.max(0,c.offsetTop-e.offsetTop-60)}
+  });
+}
+function renderSettings(){
+  const s=$("#settings"); s.hidden=!S.settings;
+  $('[data-act="settings"]').classList.toggle("on",S.settings);
+  if(!S.settings)return;
+  const t=T();
+  s.innerHTML=`<h3>Settings</h3>
+    <div class="set"><label>Layout</label><div class="seg">${Object.entries(TEMPLATES).map(([k,v])=>`<button data-tpl="${k}" aria-pressed="${k===S.tpl}">${v.name}</button>`).join("")}</div></div>
+    <div class="set"><label>Queue</label><div class="seg">${t.queueOptions.map(q=>`<button data-qm="${q}" aria-pressed="${q===Q()}">${QM_NAMES[q]}</button>`).join("")}</div>
+      <p class="hint">${QM_HINT[Q()]}</p></div>
+    <div class="set"><label>Visualizer</label><div class="seg">${VZ_ORDER.map(v=>`<button data-vz="${v}" aria-pressed="${S.vz===v}">${v==="off"?"Off":VZ_NAMES[v]}</button>`).join("")}</div></div>`;
+}
+
+// ---------- library views ----------
+const PLACEHOLDER={
+  artists:["Artists","A list of artists with their albums. Not designed yet. It would fill this area, and nothing else in the window needs to change."],
+  folders:["Folders","Browse music by the folders on disk. Useful if your files are not tagged well. Not designed yet."],
+  playlists:["Playlists","Your own playlists, maybe smart ones too. Not designed yet in this template. Classic shows one way to do them."]};
+const matches=al=>{const q=S.q.trim().toLowerCase();return !q||(al.t+" "+al.a).toLowerCase().includes(q)};
+function gridHTML(){
+  const list=ALBUMS.map((al,i)=>[al,i]).filter(([al])=>matches(al));
+  if(!list.length) return `<div class="empty"><b>No matches</b>Nothing found for this search. Try an album or artist name.</div>`;
+  return `<div class="grid">${list.map(([al,i])=>`<div class="card">
+    <div style="position:relative"><button class="cv" style="background-image:url(${al.cover})" data-open="${i}" aria-label="Open ${al.t}"></button>
+    <button class="qp" data-palbum="${i}:0" aria-label="Play ${al.t}"><svg class="ico" viewBox="0 0 24 24">${PLAY}</svg></button></div>
+    <div class="t">${i===curRef()[0]?eq:""}<span>${al.t}</span></div><div class="a">${al.a}</div></div>`).join("")}</div>`;
+}
+function albumHTML(ai){
+  const al=ALBUMS[ai], total=al.tr.reduce((s,t)=>s+t[1],0);
+  return `<button class="back" data-act="back"><svg class="ico" viewBox="0 0 24 24" style="width:16px;height:16px">${I.back}</svg>All albums</button>
+    <div class="albhead"><div class="cv" style="background-image:url(${al.cover})"></div><div>
+    <div class="m">Album · ${al.y}</div><h2>${al.t}</h2><div class="m">${al.a} · ${al.tr.length} songs · ${Math.round(total/60)} min</div>
+    <div class="acts"><button class="pill" data-palbum="${ai}:0">Play</button><button class="pill ghost" data-act="shuffleplay" data-al="${ai}">Shuffle</button></div></div></div>
+    <div>${al.tr.map(([n,d],i)=>{const c=isCur(ai,i);return `<button class="srow${c?" cur":""}" data-palbum="${ai}:${i}"><span class="n">${c&&S.playing?eq:i+1}</span><span class="nm">${n}</span><span class="d">${fmt(d)}</span></button>`}).join("")}</div>`;
+}
+let TABLE=[], TABLE_FROM="";
+function tableHTML(title,meta,items){
+  const k=S.sort.k, dir=S.sort.dir, key={t:([a,t])=>ALBUMS[a].tr[t][0], a:([a])=>ALBUMS[a].a, al:([a])=>ALBUMS[a].t, d:([a,t])=>ALBUMS[a].tr[t][1]};
+  if(k) items=[...items].sort((x,y)=>{const u=key[k](x),v=key[k](y);return (u>v?1:u<v?-1:0)*dir || x[0]-y[0] || x[1]-y[1]});
+  TABLE=items; TABLE_FROM=title;
+  const th=(id,label)=>`<button data-sort="${id}"${k===id?` aria-sort="${dir>0?"ascending":"descending"}"`:""}>${label}${k===id?(dir>0?" ↑":" ↓"):""}</button>`;
+  return `<div class="tblhead"><div><div class="m">${meta}</div><h2>${title}</h2></div><div class="m">${items.length} songs</div></div>
+    <div class="tbl"><div class="th"><span></span>${th("t","Title")}${th("a","Artist")}${th("al","Album")}${th("d","Time")}</div>
+    ${items.map(([a,t],i)=>{const al=ALBUMS[a],[n,d]=al.tr[t],c=isCur(a,t);
+      return `<button class="tr${c?" cur":""}" data-trow="${i}"><span class="n">${c&&S.playing?eq:i+1}</span><span class="tt"><span class="mini" style="background-image:url(${al.cover})"></span><span class="nm">${n}</span></span><span class="o">${al.a}</span><span class="o">${al.t}</span><span class="d">${fmt(d)}</span></button>`}).join("")}</div>`;
+}
+function renderLib(){
+  $$("[data-libscroll]").forEach(box=>{
+    const nav=box.closest("[data-nav]").dataset.nav;
+    if(nav==="chips"){
+      box.closest("[data-nav]").querySelectorAll("[data-chip]").forEach(c=>c.setAttribute("aria-pressed",c.dataset.chip===S.chip));
+      if(S.chip!=="albums"){const [h,t]=PLACEHOLDER[S.chip]; box.innerHTML=`<div class="empty"><b>${h}</b>${t}</div>`; return}
+      box.innerHTML=S.open!==null?albumHTML(S.open):gridHTML(); return;
+    }
+    box.closest("[data-nav]").querySelectorAll("[data-sec]").forEach(b=>b.setAttribute("aria-current",b.dataset.sec===S.sec));
+    if(S.sec==="songs"){
+      const all=[]; ALBUMS.forEach((al,a)=>{if(matches(al)||al.tr.some(t=>t[0].toLowerCase().includes(S.q.trim().toLowerCase())))al.tr.forEach((_,t)=>{
+        const q=S.q.trim().toLowerCase(); if(!q||matches(al)||al.tr[t][0].toLowerCase().includes(q)) all.push([a,t])})});
+      box.innerHTML=tableHTML("Songs","Library",all);
+    } else if(S.sec==="albums") box.innerHTML=S.open!==null?albumHTML(S.open):gridHTML();
+    else if(S.sec.startsWith("pl:")){const p=PLAYLISTS[+S.sec.slice(3)]; box.innerHTML=tableHTML(p.n,"Playlist",p.items)}
+    else {const [h,t]=PLACEHOLDER[S.sec]; box.innerHTML=`<div class="empty"><b>${h}</b>${t}</div>`}
+  });
+}
+
+// ================= playback =================
+const audio=new Audio(); let actx=null, analyser=null;
+function syncAudio(){
+  if(!curAl().real){audio.pause();return}
+  audio.volume=S.vol/100;
+  if(S.playing){actx&&actx.resume(); audio.play().catch(()=>{S.playing=false;update()})} else audio.pause();
+}
+function start(){S.pos=0; S.playing=true; if(curAl().real) audio.currentTime=0; syncAudio(); update()}
+function playList(list,idx,from){S.queue=list.map(x=>[...x]); S.qi=idx; S.from=from; start()}
+function playAlbum(ai,ti){playList(ALBUMS[ai].tr.map((_,i)=>[ai,i]),ti,ALBUMS[ai].t)}
+function togglePlay(){S.playing=!S.playing; syncAudio(); update()}
+function next(auto){
+  if(auto&&S.repeat){S.pos=0; if(curAl().real)audio.currentTime=0; syncAudio(); return update()}
+  if(S.shuffle&&S.queue.length>1){let i;do{i=Math.floor(Math.random()*S.queue.length)}while(i===S.qi);S.qi=i;return start()}
+  if(S.qi+1>=S.queue.length){ // queue ran out: carry on with the next album
+    const na=(S.queue[S.queue.length-1][0]+1)%ALBUMS.length; ALBUMS[na].tr.forEach((_,t)=>S.queue.push([na,t]));
+  }
+  S.qi++; start();
+}
+function prev(){
+  if(S.pos>3||S.qi===0){S.pos=0; if(curAl().real)audio.currentTime=0; return renderPos()}
+  S.qi--; start();
+}
+$("#filebtn").addEventListener("click",()=>$("#file").click());
+$("#file").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f)return;
+  if(!actx){
+    actx=new (window.AudioContext||window.webkitAudioContext)();
+    analyser=actx.createAnalyser(); analyser.fftSize=4096; analyser.smoothingTimeConstant=.5;
+    const src=actx.createMediaElementSource(audio); src.connect(analyser); analyser.connect(actx.destination);
+  }
+  audio.src=URL.createObjectURL(f);
+  let al=ALBUMS.find(a=>a.real);
+  if(!al){al={t:"Local file",a:"Your computer",y:new Date().getFullYear(),p:["#2ec4b6","#ff9f1c","#11151c"],s:"waves",real:true,tr:[["",0]]};
+    al.cover=makeCover(al,99); ALBUMS.push(al)}
+  al.tr=[[f.name.replace(/\.[^.]+$/,""),0]];
+  audio.onloadedmetadata=()=>{al.tr[0][1]=audio.duration||0; update()};
+  bandEdges=null; e.target.value="";
+  playList([[ALBUMS.indexOf(al),0]],0,"your computer");
+});
+audio.addEventListener("ended",()=>next(true));
+setInterval(()=>{
+  if(!S.playing)return;
+  if(curAl().real){S.pos=audio.currentTime||0; return renderPos()}
+  S.pos+=.25; if(S.pos>=cur()[1])next(true); else renderPos();
+},250);
+
+// ================= events =================
+let labelT;
+function setViz(v){
+  S.vz=v; saveOpts(); update();
+  $$(".vz-label").forEach(l=>{l.textContent=VZ_NAMES[v]; l.classList.add("show")});
+  clearTimeout(labelT); labelT=setTimeout(()=>$$(".vz-label").forEach(l=>l.classList.remove("show")),1200);
+}
+function toggleQueue(){
+  if(Q()==="tab"){S.tabSel=S.tabSel?0:1; update()}
+  else if(Q()==="drawer"){S.showq=!S.showq; update()}
+}
+function setTpl(k){S.tpl=k; S.open=null; saveOpts(); buildLayout()}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-act],[data-palbum],[data-trow],[data-qi],[data-open],[data-chip],[data-sec],[data-sort],[data-tpl],[data-vz],[data-qm],[data-tabsel],[data-close]"); if(!t)return;
+  const d=t.dataset;
+  if(d.tpl) return setTpl(d.tpl);
+  if(d.vz) return setViz(d.vz);
+  if(d.qm){S.qm[S.tpl]=d.qm; saveOpts(); return buildLayout()}
+  if(d.tabsel!==undefined){S.tabSel=+d.tabsel; return update()}
+  if(d.close){S.showq=false; return update()}
+  if(d.chip){S.chip=d.chip; S.open=null; return renderLib()}
+  if(d.sec){S.sec=d.sec; S.open=null; t.closest("[data-nav]").querySelector("[data-libscroll]").scrollTop=0; return renderLib()}
+  if(d.sort){S.sort=S.sort.k===d.sort?{k:d.sort,dir:-S.sort.dir}:{k:d.sort,dir:1}; return renderLib()}
+  if(d.open){S.open=+d.open; renderLib(); $$("[data-libscroll]").forEach(b=>b.scrollTop=0); return}
+  if(d.palbum){const [a,i]=d.palbum.split(":").map(Number); return playAlbum(a,i)}
+  if(d.trow) return playList(TABLE,+d.trow,TABLE_FROM);
+  if(d.qi){S.qi=+d.qi; return start()}
+  switch(d.act){
+    case "play": togglePlay(); break;
+    case "next": next(); break;
+    case "prev": prev(); break;
+    case "shuffle": S.shuffle=!S.shuffle; update(); break;
+    case "repeat": S.repeat=!S.repeat; update(); break;
+    case "queue": toggleQueue(); break;
+    case "viz": setViz(VZ_ORDER[(VZ_ORDER.indexOf(S.vz)+1)%VZ_ORDER.length]); break;
+    case "settings": S.settings=!S.settings; renderSettings(); break;
+    case "back": S.open=null; renderLib(); break;
+    case "shuffleplay": S.shuffle=true; {const a=+d.al; playAlbum(a,Math.floor(Math.random()*ALBUMS[a].tr.length))} break;
+  }
+});
+$("#partsbtn").addEventListener("click",()=>{S.parts=!S.parts; update()});
+document.addEventListener("input",e=>{
+  if(e.target.matches("[data-vol]")){S.vol=+e.target.value; audio.volume=S.vol/100; $$("[data-vol]").forEach(o=>o!==e.target&&(o.value=S.vol))}
+  if(e.target.matches("[data-search]")){S.q=e.target.value; S.open=null; if(S.sec.startsWith("pl:")||S.sec==="artists"||S.sec==="folders")S.sec="songs"; renderLib()}
+});
+document.addEventListener("keydown",e=>{
+  if(/INPUT|TEXTAREA/.test(e.target.tagName))return;
+  if(e.code==="Space"&&e.target.tagName!=="BUTTON"){e.preventDefault();togglePlay()}
+  if(e.key==="v")setViz(VZ_ORDER[(VZ_ORDER.indexOf(S.vz)+1)%VZ_ORDER.length]);
+  if(e.key==="q")toggleQueue();
+  if(e.key==="Escape"){if(S.settings){S.settings=false;renderSettings()} else if(S.showq){S.showq=false;update()}}
+});
+document.addEventListener("pointerdown",e=>{
+  const s=e.target.closest("[data-seek]"); if(!s)return;
+  const go=ev=>{const r=s.getBoundingClientRect();S.pos=Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width))*cur()[1];
+    if(curAl().real)audio.currentTime=S.pos; renderPos()};
+  s.setPointerCapture(e.pointerId); go(e); s.onpointermove=go; s.onpointerup=()=>s.onpointermove=null;
+});
+
+// ================= visualizer =================
+// Same analysis as webmusicmo: log-spaced bands, instant attack, slow release, peak caps.
+const BANDS=56, F_LO=45, F_HI=14500, RELEASE=.86, DB_LO=-70, DB_HI=-24, TILT_DB=8, PEAK_HOLD=18, PEAK_FALL=.012;
+const levels=new Float32Array(BANDS), peaks=new Float32Array(BANDS), hold=new Uint8Array(BANDS), target=new Float32Array(BANDS);
+const WAVE_N=256, wave=new Float32Array(WAVE_N), noise=new Float32Array(BANDS);
+let bandEdges=null, fdata=null, tdata=null;
+const gauss=(x,m,s)=>Math.exp(-((x-m)**2)/(2*s*s));
+function realTargets(){
+  if(!bandEdges){const ny=actx.sampleRate/2,bins=analyser.frequencyBinCount;
+    bandEdges=Array.from({length:BANDS+1},(_,i)=>Math.min(bins-1,Math.round(F_LO*(F_HI/F_LO)**(i/BANDS)/ny*bins)));
+    fdata=new Float32Array(bins); tdata=new Float32Array(analyser.fftSize)}
+  analyser.getFloatFrequencyData(fdata);
+  for(let i=0;i<BANDS;i++){const from=bandEdges[i],to=Math.max(from+1,bandEdges[i+1]);let p=0;
+    for(let b=from;b<to;b++)p+=10**(fdata[b]/10);
+    const db=10*Math.log10(p+1e-12)+(i/BANDS)*TILT_DB;
+    target[i]=Math.min(1,Math.max(0,(db-DB_LO)/(DB_HI-DB_LO)))**1.3}
+  analyser.getFloatTimeDomainData(tdata);
+  const step=Math.floor(tdata.length/WAVE_N); for(let k=0;k<WAVE_N;k++)wave[k]=tdata[k*step]*2.2;
+}
+// Made-up levels: a kick, a snare and hi-hats on a tempo that differs per album.
+function fakeTargets(t){
+  const ai=curRef()[0], bpm=86+(ai*17)%50, bt=t*bpm/60, ph=bt%1;
+  const kick=Math.exp(-ph*7), snare=Math.floor(bt)%2?Math.exp(-ph*9):0, hat=Math.exp(-((bt*4)%1)*12);
+  const energy=.78+.22*Math.sin(t/6+ai);
+  let avg=0;
+  for(let i=0;i<BANDS;i++){
+    const x=i/(BANDS-1);
+    noise[i]=Math.max(-.3,Math.min(.3,(noise[i]+(Math.random()-.5)*.09)*.95));
+    const v=(.52-.2*x+kick*Math.max(0,1-x*3)*.55+snare*gauss(x,.45,.13)*.4+hat*gauss(x,.84,.09)*.3+noise[i])*energy;
+    target[i]=Math.min(1,Math.max(0,v)); avg+=target[i];
+  }
+  avg/=BANDS;
+  for(let k=0;k<WAVE_N;k++){const s=k/(WAVE_N-1);
+    wave[k]=(Math.sin(s*6.28*2+t*5)*(.35+kick*.5)+Math.sin(s*6.28*9+t*13)*.18+Math.sin(s*6.28*27-t*29)*.08*(1+hat))*avg*1.4}
+}
+function analyse(t){
+  const live=S.playing&&(curAl().real?analyser:true);
+  if(live){ if(curAl().real) realTargets(); else fakeTargets(t) }
+  else { target.fill(0); for(let k=0;k<WAVE_N;k++)wave[k]*=.85 }
+  for(let i=0;i<BANDS;i++){
+    const v=target[i]; levels[i]=v>levels[i]?v:levels[i]*RELEASE;
+    if(levels[i]>=peaks[i]){peaks[i]=levels[i];hold[i]=PEAK_HOLD}
+    else if(hold[i]>0)hold[i]--; else peaks[i]=Math.max(levels[i],peaks[i]-PEAK_FALL);
+  }
+  let bass=0; for(let i=0;i<6;i++)bass+=levels[i]; return bass/6;
+}
+// Each style is one draw function over the same levels. A stage with no cover
+// (the small one in the bar) gets a compact version of the same drawing.
+function drawRing(x,W,H,cx,cy,inner,pad,dpr){
+  const maxLen=Math.min(cx,W-cx,cy,H-cy)-inner-pad; if(maxLen<4*dpr)return;
+  const step=Math.PI/BANDS, bw=Math.max(1.2*dpr,inner*step*.62);
+  x.save(); x.translate(cx,cy); x.lineCap="round"; x.lineWidth=bw;
+  for(let i=0;i<BANDS;i++){
+    const v=levels[i], len=Math.max(1.5*dpr,v*maxLen), a=Math.PI/2-(i+.5)*step;
+    const g=x.createLinearGradient(0,inner,0,inner+len); g.addColorStop(0,COL.c2); g.addColorStop(1,COL.c1);
+    const cap=inner+Math.max(len,peaks[i]*maxLen)+Math.min(5*dpr,pad);
+    for(const side of [1,-1]){
+      x.save(); x.rotate(side*a);
+      x.strokeStyle=g; x.globalAlpha=.4+v*.6; x.beginPath(); x.moveTo(0,inner); x.lineTo(0,inner+len); x.stroke();
+      if(pad>4*dpr){x.strokeStyle=COL.c1; x.globalAlpha=.55+peaks[i]*.45; x.beginPath(); x.moveTo(0,cap); x.lineTo(0,cap+2.5*dpr); x.stroke()}
+      x.restore();
+    }
+  }
+  x.restore(); x.globalAlpha=1;
+}
+function drawSpectrum(x,W,H,compact,dpr){
+  const n=compact?28:BANDS, m=(compact?2:14)*dpr, slot=(W-2*m)/n, bw=slot*.62, base=H-(compact?2:6)*dpr, maxH=compact?H*.85:H*.4;
+  const g=x.createLinearGradient(0,base,0,base-maxH); g.addColorStop(0,COL.c2); g.addColorStop(1,COL.c1);
+  for(let j=0;j<n;j++){
+    const i=compact?j*2:j, v=compact?Math.max(levels[i],levels[i+1]):levels[i], pk=compact?Math.max(peaks[i],peaks[i+1]):peaks[i];
+    const h=Math.max(2*dpr,v*maxH), bx=m+j*slot+(slot-bw)/2;
+    x.globalAlpha=.45+v*.55; x.fillStyle=g; x.fillRect(bx,base-h,bw,h);
+    x.globalAlpha=.55+pk*.45; x.fillStyle=COL.c1; x.fillRect(bx,base-Math.max(h,pk*maxH)-(compact?3:5)*dpr,bw,(compact?1.5:2)*dpr);
+  }
+  x.globalAlpha=1;
+}
+// Too small for a ring: same bars, mirrored around the middle line
+function drawMirror(x,W,H,dpr){
+  const n=28, slot=W/n, bw=slot*.55, mid=H/2;
+  x.lineCap="round"; x.lineWidth=bw;
+  for(let j=0;j<n;j++){
+    const i=Math.abs(j-n/2+.5)*2|0, v=levels[Math.min(BANDS-1,i*2)], h=Math.max(1.5*dpr,v*(mid-2*dpr));
+    const g=x.createLinearGradient(0,mid-h,0,mid+h); g.addColorStop(0,COL.c1); g.addColorStop(.5,COL.c2); g.addColorStop(1,COL.c1);
+    x.strokeStyle=g; x.globalAlpha=.45+v*.55; x.beginPath(); x.moveTo(slot*(j+.5),mid-h); x.lineTo(slot*(j+.5),mid+h); x.stroke();
+  }
+  x.globalAlpha=1;
+}
+function drawWave(x,W,H,cy,compact,dpr){
+  const amp=H*(compact?.45:.3), g=x.createLinearGradient(0,0,W,0);
+  g.addColorStop(0,COL.c2); g.addColorStop(.5,COL.c1); g.addColorStop(1,COL.c2);
+  const line=(sc,alpha,lw,rev)=>{
+    x.beginPath();
+    for(let k=0;k<WAVE_N;k++){const s=k/(WAVE_N-1), taper=Math.sin(s*Math.PI), v=wave[rev?WAVE_N-1-k:k];
+      const px=s*W, py=cy+v*amp*sc*taper; k?x.lineTo(px,py):x.moveTo(px,py)}
+    x.globalAlpha=alpha; x.lineWidth=lw; x.stroke();
+  };
+  x.save(); x.strokeStyle=g; x.lineJoin="round"; x.shadowColor=COL.c1; x.shadowBlur=(compact?6:14)*dpr;
+  line(.6,.35,1.5*dpr,true); line(1,.95,(compact?1.8:2.5)*dpr,false);
+  x.restore(); x.globalAlpha=1;
+}
+function frame(now){
+  requestAnimationFrame(frame);
+  const bass=analyse(now/1000);
+  $("#win").style.setProperty("--bass",bass.toFixed(3));
+  $$(".vstage").forEach(st=>{
+    if(!st.offsetParent)return;
+    const cv=st.querySelector("canvas"), dpr=window.devicePixelRatio||1;
+    const w=Math.round(st.clientWidth*dpr), h=Math.round(st.clientHeight*dpr);
+    if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h}
+    const x=cv.getContext("2d"); x.clearRect(0,0,w,h);
+    if(S.vz==="off")return;
+    const cover=st.querySelector(".cover"), compact=!cover;
+    let cx=w/2, cy=h/2, inner=Math.min(w,h)*.16;
+    if(cover){const cr=cover.getBoundingClientRect(), sr=st.getBoundingClientRect();
+      cx=(cr.left+cr.width/2-sr.left)*dpr; cy=(cr.top+cr.height/2-sr.top)*dpr; inner=(cr.width/2+10)*dpr}
+    if(S.vz==="ring"&&compact)drawMirror(x,w,h,dpr);
+    else if(S.vz==="ring")drawRing(x,w,h,cx,cy,inner,8*dpr,dpr);
+    else if(S.vz==="spectrum")drawSpectrum(x,w,h,compact,dpr);
+    else drawWave(x,w,h,cy,compact,dpr);
+  });
+}
+requestAnimationFrame(frame);
+
+// ================= page chrome =================
+$("#tplseg").innerHTML=Object.entries(TEMPLATES).map(([k,v])=>`<button data-tpl="${k}" aria-pressed="false">${v.name}</button>`).join("");
+const NOTES={
+  studio:[["Library with chips, player column","Cover grid with chips on top. The player column holds Now playing plus the controls, tinted with the album colors."],
+          ["Queue: Tab, Drawer or Column","Change it with the gear. Tab and Column need no extra button. Drawer adds one to the player's button slot."],
+          ["Try Show parts","It outlines every part, container and slot, so you can see what moves when you switch templates."]],
+  classic:[["Sidebar and table","A sidebar with Songs, Albums and playlists. Songs and playlists use a sortable table. Click a column title to sort."],
+           ["Player as a bottom bar","The same controls part in its bar style, with a small visualizer next to the volume. The Drawer button lands in the same slot."],
+           ["Queue: Drawer or Column","Tab is not offered here, because the bar has no column to share. The template lists what it allows."]],
+  focus:[["The old Ambient view","Now it is just a template: the nowplaying part in its full style, the controls part, and the ambient background."],
+         ["Queue: Tab or Drawer","Tab swaps the cover for the queue. Drawer slides the queue over the cover and leaves the controls visible."],
+         ["No library","Focus has no library part at all. The same queue and controls still work."]]};
+function renderNotes(){ $("#notes").innerHTML=NOTES[S.tpl].map(([h,t])=>`<div><b>${h}</b>${t}</div>`).join("") }
+if(!TEMPLATES[S.tpl])S.tpl="studio";
+buildLayout();
+</script>
+
+</body>
+</html>

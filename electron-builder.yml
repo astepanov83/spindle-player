@@ -1,0 +1,31 @@
+appId: io.github.astepanov83.spindle
+productName: Spindle
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!prototype/*'
+  - '!docs/*'
+  - '!work/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!svelte.config.mjs'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md,CLAUDE.local.md}'
+  - '!{.env,.env.*,.npmrc}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+asarUnpack:
+  - resources/**
+linux:
+  target:
+    - AppImage
+    - deb
+  executableName: spindle
+  syncDesktopName: true
+  maintainer: Alexander Stepanov <alexander.stepanov.v@gmail.com>
+  category: AudioVideo
+  synopsis: A desktop music player for local files
+appImage:
+  artifactName: ${name}-${version}.${ext}
+deb:
+  artifactName: ${name}_${version}_${arch}.${ext}
+npmRebuild: false

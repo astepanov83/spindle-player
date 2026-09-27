@@ -1,0 +1,72 @@
+/*
+  Color names for each theme. Components use only these, never raw colors.
+  The OS (or later the Dark / Light / System setting, via nativeTheme.themeSource)
+  picks the theme through prefers-color-scheme.
+  Light values are placeholders until ticket 010.
+*/
+:root {
+  color-scheme: dark;
+  --bg: #111216; /* same as windowBackground.dark in src/shared/theme.ts */
+  --ink: #f3f4f7;
+  --muted: rgb(255 255 255 / 0.6);
+  --hover: rgb(255 255 255 / 0.1);
+  --titlebar: #0c0d10;
+  --edge: #1e2026;
+  --close-hover: #c42b1c;
+  --mix-toward: #000; /* album colors fade toward this */
+
+  /* Album colors. Real ones come from covers in ticket 009. */
+  --c1: #335;
+  --c2: #557;
+  --c3: #223;
+
+  --display: 'Bricolage Grotesque Variable', 'Segoe UI', system-ui, sans-serif;
+  --ui: 'Onest Variable', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #f4f4f6; /* same as windowBackground.light in src/shared/theme.ts */
+    --ink: #15161a;
+    --muted: rgb(0 0 0 / 0.55);
+    --hover: rgb(0 0 0 / 0.07);
+    --titlebar: #e9e9ed;
+    --edge: #d8d9de;
+    --mix-toward: #fff;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--ui);
+  overflow: hidden;
+  user-select: none;
+}
+
+#app {
+  height: 100%;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+}

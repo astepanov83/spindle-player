@@ -2,11 +2,37 @@
 
 A desktop music player for local files, built with Electron.
 
-The window takes its colors from the album cover, a visualizer plays around the cover, and the layout comes from a template you choose in settings.
+The window takes its colors from the album cover, a visualizer plays around the cover, and the layout comes from a template you choose in settings. Dark and light themes, following the system by default.
 
 ## Status
 
-Design stage. There is no app code yet, only a clickable prototype.
+Early. The app opens a window with its title bar. The player and library are still only in the prototype.
+
+## Run it
+
+Needs Node 22 or newer.
+
+```bash
+npm install
+npm run dev        # the app with hot reload
+npm run typecheck  # TypeScript and Svelte checks
+npm run lint
+npm run package    # AppImage and .deb in dist/
+```
+
+### Ubuntu 24.04 and newer
+
+`npm run dev` may stop with `The SUID sandbox helper binary was found, but is not configured correctly`. Ubuntu blocks the user namespaces that Chromium's sandbox needs. Pick one:
+
+```bash
+# Allow them for this repo's Electron only (once per machine, keeps the sandbox)
+sudo ./scripts/setup-apparmor-dev.sh
+
+# Or run without Chromium's sandbox, dev only
+npx electron-vite dev --noSandbox
+```
+
+The installed .deb sets this up by itself. The AppImage turns the sandbox off when it can't use it.
 
 ## Prototype
 

@@ -8,4 +8,5 @@ tsconfig.*.json
 prototype
 docs
 work
+.superpowers
 CLAUDE.local.md

@@ -23,3 +23,7 @@ The albums are made up and the covers are generated.
 ## Design notes
 
 See [docs/design.md](docs/design.md) for how templates, parts and slots fit together.
+
+## License
+
+[MIT](LICENSE)

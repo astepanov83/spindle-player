@@ -6,7 +6,7 @@ The window takes its colors from the album cover, a visualizer plays around the 
 
 ## Status
 
-Early. The app opens a window with its title bar. The player and library are still only in the prototype.
+Early. The app shows the three layout templates (Studio, Classic, Focus) with made-up albums. It doesn't read or play real files yet, and settings aren't saved.
 
 ## Run it
 
@@ -17,6 +17,7 @@ npm install
 npm run dev        # the app with hot reload
 npm run typecheck  # TypeScript and Svelte checks
 npm run lint
+npm test           # unit tests (Vitest)
 npm run package    # AppImage and .deb in dist/
 ```
 

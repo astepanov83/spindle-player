@@ -1,5 +1,9 @@
 <script lang="ts">
-  let { title }: { title: string } = $props()
+  let {
+    title,
+    settingsOpen = false,
+    onSettings
+  }: { title: string; settingsOpen?: boolean; onSettings: () => void } = $props()
 
   let maximized = $state(false)
 
@@ -13,8 +17,7 @@
 <header class="titlebar">
   <span class="title">{title}</span>
   <div class="right">
-    <!-- Opens settings once ticket 005 adds them. -->
-    <button class="tbbtn" aria-label="Settings">
+    <button class="tbbtn" class:on={settingsOpen} aria-label="Settings" onclick={onSettings}>
       <svg class="ico" viewBox="0 0 24 24"
         ><path
           d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"
@@ -56,8 +59,8 @@
     font-weight: 500;
     position: relative;
     z-index: 8;
-    color: var(--muted);
-    background: var(--titlebar);
+    color: var(--ink-2);
+    background: var(--bg-title);
     border-bottom: 1px solid var(--edge);
     -webkit-app-region: drag;
   }
@@ -72,10 +75,11 @@
     display: grid;
     place-items: center;
     border-radius: 6px;
-    color: var(--muted);
+    color: var(--ink-2);
   }
-  button:hover {
-    background: var(--hover);
+  button:hover,
+  .tbbtn.on {
+    background: var(--active);
     color: var(--ink);
   }
   .tbbtn {

@@ -1,44 +1,69 @@
 <script lang="ts">
   import TitleBar from './components/TitleBar.svelte'
+  import Settings from './components/Settings.svelte'
+  import Node from './layout/Node.svelte'
+  import { startFakeClock } from './stores/fake-clock'
+  import { layout } from './stores/layout.svelte'
+  import { togglePlay, player } from './stores/player.svelte'
+  import { queue } from './stores/queue.svelte'
+  import { settings } from './stores/settings.svelte'
+
+  const palette = $derived(queue.currentAlbum.palette)
+
+  $effect(() => startFakeClock())
+
+  // Keys from the prototype: Space play, V visualizer, Q queue, Escape closes.
+  function onkeydown(e: KeyboardEvent): void {
+    const t = e.target as HTMLElement
+    if (/INPUT|TEXTAREA/.test(t.tagName)) return
+    if (e.code === 'Space' && t.tagName !== 'BUTTON') {
+      e.preventDefault()
+      togglePlay()
+    }
+    if (e.key === 'v') layout.cycleVisualizer()
+    if (e.key === 'q') layout.toggleQueue()
+    if (e.key === 'Escape') {
+      if (layout.settingsOpen) layout.settingsOpen = false
+      else if (layout.showQueue) layout.showQueue = false
+    }
+  }
 </script>
 
-<div class="app">
-  <TitleBar title="Spindle" />
-  <!-- Placeholder until ticket 004 ports the Studio template. -->
+<svelte:window {onkeydown} />
+
+<div
+  class="app vz-{settings.visualizer}"
+  class:playing={player.playing}
+  style:--c1={palette[0]}
+  style:--c2={palette[1]}
+  style:--c3={palette[2]}
+>
+  <TitleBar
+    title="Spindle · {layout.template.name}"
+    settingsOpen={layout.settingsOpen}
+    onSettings={() => (layout.settingsOpen = !layout.settingsOpen)}
+  />
   <main class="winbody">
-    <h1>Spindle</h1>
+    <Node node={layout.built.root} />
   </main>
+  {#if layout.settingsOpen}<Settings />{/if}
 </div>
 
 <style>
   .app {
+    /* --c2 with lightness capped and chroma raised in light, so pale covers still show as a bar or highlight */
+    --c2-mark: oklch(from var(--c2) min(l, var(--mark-l)) max(c, var(--mark-c)) h);
     height: 100%;
     display: flex;
     flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
   }
   .winbody {
     flex: 1;
+    display: flex;
     min-height: 0;
-    display: grid;
-    place-items: center;
-    background:
-      radial-gradient(
-        120% 90% at 20% 0%,
-        color-mix(in oklch, var(--c2) 45%, transparent),
-        transparent 60%
-      ),
-      linear-gradient(
-        160deg,
-        color-mix(in oklch, var(--c1) 55%, var(--mix-toward)),
-        color-mix(in oklch, var(--c3) 30%, var(--bg))
-      );
-  }
-  h1 {
-    font-family: var(--display);
-    font-weight: 700;
-    font-size: 44px;
-    letter-spacing: -0.02em;
-    margin: 0;
-    opacity: 0.85;
+    position: relative;
   }
 </style>

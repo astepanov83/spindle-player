@@ -1,24 +1,39 @@
 /*
   Color names for each theme. Components use only these, never raw colors.
   The OS (or later the Dark / Light / System setting, via nativeTheme.themeSource)
-  picks the theme through prefers-color-scheme.
-  Light values are placeholders until ticket 010.
+  picks the theme through prefers-color-scheme. Values from specs/themes.md.
 */
 :root {
   color-scheme: dark;
   --bg: #111216; /* same as windowBackground.dark in src/shared/theme.ts */
+  --bg-side: #0d0e11;
+  --bg-title: #0c0d10;
+  --field: #1b1d23;
+  --panel: rgba(20, 21, 26, 0.96);
   --ink: #f3f4f7;
-  --muted: rgb(255 255 255 / 0.6);
-  --hover: rgb(255 255 255 / 0.1);
-  --titlebar: #0c0d10;
+  --ink-2: rgba(255, 255, 255, 0.68);
+  --ink-3: rgba(255, 255, 255, 0.5);
   --edge: #1e2026;
+  --ring: #3a3e48;
+  --hover: rgba(255, 255, 255, 0.06);
+  --active: rgba(255, 255, 255, 0.1);
+  --well: rgba(0, 0, 0, 0.25);
+  --raised: rgba(255, 255, 255, 0.14);
+  --glass: rgba(0, 0, 0, 0.45);
+  --shadow: rgba(0, 0, 0, 0.6);
   --close-hover: #c42b1c;
-  --mix-toward: #000; /* album colors fade toward this */
+  /* album color strength: tint areas, Focus wash, lightness cap and chroma floor of --c2-mark */
+  --tint: 70%;
+  --wash-top: 20%;
+  --wash-bottom: 50%;
+  --mark-l: 1;
+  --mark-c: 0;
 
-  /* Album colors. Real ones come from covers in ticket 009. */
+  /* Album colors, set on .app from the current album. Real ones come from covers in ticket 009. */
   --c1: #335;
   --c2: #557;
   --c3: #223;
+  --bass: 0;
 
   --display: 'Bricolage Grotesque Variable', 'Segoe UI', system-ui, sans-serif;
   --ui: 'Onest Variable', 'Segoe UI', system-ui, sans-serif;
@@ -29,12 +44,26 @@
   :root {
     color-scheme: light;
     --bg: #f4f4f6; /* same as windowBackground.light in src/shared/theme.ts */
+    --bg-side: #ebecef;
+    --bg-title: #e6e7eb;
+    --field: #e3e4e9;
+    --panel: rgba(252, 252, 253, 0.97);
     --ink: #15161a;
-    --muted: rgb(0 0 0 / 0.55);
-    --hover: rgb(0 0 0 / 0.07);
-    --titlebar: #e9e9ed;
-    --edge: #d8d9de;
-    --mix-toward: #fff;
+    --ink-2: rgba(21, 22, 26, 0.7);
+    --ink-3: rgba(21, 22, 26, 0.56);
+    --edge: #d9dadf;
+    --ring: #b4b7c0;
+    --hover: rgba(0, 0, 0, 0.045);
+    --active: rgba(0, 0, 0, 0.08);
+    --well: rgba(0, 0, 0, 0.07);
+    --raised: #ffffff;
+    --glass: rgba(255, 255, 255, 0.7);
+    --shadow: rgba(30, 32, 40, 0.25);
+    --tint: 35%;
+    --wash-top: 45%;
+    --wash-bottom: 70%;
+    --mark-l: 0.6;
+    --mark-c: 0.1;
   }
 }
 
@@ -42,6 +71,10 @@
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 html,
@@ -69,4 +102,10 @@ button {
   border: 0;
   cursor: pointer;
   padding: 0;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }

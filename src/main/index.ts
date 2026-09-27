@@ -88,7 +88,10 @@ app.whenReady().then(() => {
 })
 
 // Last chance to write a change still waiting for its delay.
-app.on('will-quit', () => store?.flushSync())
+app.on('will-quit', () => {
+  store?.flushSync()
+  library?.flushSync()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

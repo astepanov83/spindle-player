@@ -7,16 +7,30 @@ import { LibraryChannel } from '../../shared/ipc'
 import type { ScanStatus } from '../../shared/library'
 import type { SettingsStore } from '../settings-store'
 import { CoverCache } from './cover-cache'
+import { RestartBudget } from './restart'
 import createLibraryWorker from './library-worker?nodeWorker'
 import type { WorkerIn, WorkerOut, WorkerStart } from './types'
 
 type Reply = Extract<WorkerOut, { type: 'reply' }>
+type Ask =
+  | { type: 'find-track'; id: string }
+  | { type: 'cover-source'; hash: string }
+  | { type: 'get-library' }
+
+// What the page gets when the worker can't give it a library.
+const emptyLibrary = (): Uint8Array =>
+  new TextEncoder().encode(JSON.stringify({ albums: [], tracks: [] }))
+
+// At quit, main waits this long at most for the worker to save the index.
+const flushWaitMs = 2000
 
 export class LibraryService {
   readonly covers: CoverCache
-  readonly #worker: Worker
-  // the first library the worker sends, from the index on disk
-  readonly #first: Promise<Uint8Array>
+  #worker: Worker | undefined
+  #flushFlag = new Int32Array(new SharedArrayBuffer(4))
+  // a worker that dies is started again a few times, then left dead
+  #restarts = new RestartBudget(3, 60000)
+  #quitting = false
   #status: ScanStatus
   #scannedOnStart = false
   #nextReq = 0
@@ -26,12 +40,11 @@ export class LibraryService {
     readonly store: SettingsStore,
     readonly send: (channel: string, data: unknown) => void,
     coverPreload: string,
-    dir = app.getPath('userData')
+    readonly dir = app.getPath('userData')
   ) {
     this.covers = new CoverCache(join(dir, 'covers'), coverPreload)
-    const folders = store.get().folders
     this.#status = {
-      folders,
+      folders: store.get().folders,
       phase: 'idle',
       done: 0,
       total: 0,
@@ -40,28 +53,50 @@ export class LibraryService {
       failed: 0,
       missing: []
     }
-    const start: WorkerStart = {
-      indexPath: join(dir, 'library.json'),
-      coversDir: this.covers.dir,
-      folders
-    }
-    this.#worker = createLibraryWorker({ workerData: start })
-    let gotFirst: (bytes: Uint8Array) => void
-    this.#first = new Promise((r) => (gotFirst = r))
-    let first = true
-    this.#worker.on('message', (m: WorkerOut) => {
-      if (m.type === 'library' && first) {
-        first = false
-        gotFirst(m.bytes)
-        return
-      }
-      this.#onMessage(m)
-    })
-    this.#worker.on('error', (e) => console.error('Library worker failed', e))
+    this.#start()
   }
 
-  #post(m: WorkerIn): void {
+  #start(): void {
+    const shared = new SharedArrayBuffer(4)
+    this.#flushFlag = new Int32Array(shared)
+    const start: WorkerStart = {
+      indexPath: join(this.dir, 'library.json'),
+      coversDir: this.covers.dir,
+      folders: this.store.get().folders,
+      flushFlag: shared
+    }
+    const worker = createLibraryWorker({ workerData: start })
+    this.#worker = worker
+    worker.on('message', (m: WorkerOut) => {
+      if (this.#worker === worker) this.#onMessage(m)
+    })
+    worker.on('error', (e) => console.error('Library worker failed', e))
+    worker.on('exit', (code) => {
+      if (this.#worker !== worker) return
+      this.#worker = undefined
+      // requests to the dead worker get an empty answer (a 404 for the page)
+      for (const [req, done] of this.#replies) done({ type: 'reply', req })
+      this.#replies.clear()
+      if (this.#quitting) return
+      this.#setStatus({ phase: 'idle', done: 0, total: 0 })
+      if (this.#restarts.take(Date.now())) {
+        console.error(`Library worker stopped (code ${code}), starting it again`)
+        this.#start()
+      } else {
+        console.error(`Library worker stopped (code ${code}) too often; the library stays empty`)
+      }
+    })
+  }
+
+  #post(m: WorkerIn): boolean {
+    if (!this.#worker) return false
     this.#worker.postMessage(m)
+    return true
+  }
+
+  #setStatus(change: Partial<ScanStatus>): void {
+    this.#status = { ...this.#status, ...change }
+    this.send(LibraryChannel.status, this.#status)
   }
 
   #onMessage(m: WorkerOut): void {
@@ -77,7 +112,7 @@ export class LibraryService {
       case 'cover':
         void this.covers
           .add(m.hash, m.data)
-          .then((ok) => this.#post({ type: 'cover-done', hash: m.hash, ok }))
+          .then((result) => this.#post({ type: 'cover-done', hash: m.hash, result }))
         break
       case 'reply':
         this.#replies.get(m.req)?.(m)
@@ -89,25 +124,30 @@ export class LibraryService {
     }
   }
 
-  #ask(
-    m: { type: 'find-track'; id: string } | { type: 'cover-source'; hash: string }
-  ): Promise<Reply> {
+  // An answer from the worker; an empty one if there is no worker or it dies first.
+  #ask(m: Ask): Promise<Reply> {
     const req = ++this.#nextReq
     return new Promise<Reply>((r) => {
       this.#replies.set(req, r)
-      this.#post({ ...m, req })
+      if (!this.#post({ ...m, req })) {
+        this.#replies.delete(req)
+        r({ type: 'reply', req })
+      }
     })
   }
 
-  // The library for the page's first paint. Starts the scan on start.
+  // The library as it is now, for the page's first paint or a reload.
+  // Tries again after a worker restart; gives an empty library if there is no worker.
   async load(): Promise<{ library: Uint8Array; status: ScanStatus }> {
-    const library = await this.#first
+    let library: Uint8Array | undefined
+    for (let i = 0; i < 4 && !library; i++)
+      library = (await this.#ask({ type: 'get-library' })).data
     // after the reply is on its way, so the scan doesn't delay the first paint
     if (!this.#scannedOnStart) {
       this.#scannedOnStart = true
       setTimeout(() => this.scan(), 0)
     }
-    return { library, status: this.#status }
+    return { library: library ?? emptyLibrary(), status: this.#status }
   }
 
   // A scan already running stops; what it read stays.
@@ -142,5 +182,15 @@ export class LibraryService {
   // The picture a cover hash was made from, to make the large size.
   async coverSource(hash: string): Promise<Uint8Array | undefined> {
     return (await this.#ask({ type: 'cover-source', hash })).data
+  }
+
+  // Quitting: lets the worker write the index, waiting a short while at most.
+  flushSync(): void {
+    this.#quitting = true
+    const flag = this.#flushFlag
+    Atomics.store(flag, 0, 0)
+    if (!this.#post({ type: 'flush' })) return
+    if (Atomics.wait(flag, 0, 0, flushWaitMs) === 'timed-out')
+      console.error('Library index: the worker did not save in time')
   }
 }

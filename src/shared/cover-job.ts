@@ -14,6 +14,8 @@ export interface CoverJob {
 
 export interface CoverResult {
   id: number
-  // JPEG bytes, or undefined if the picture could not be decoded
+  // JPEG bytes
   jpg?: Uint8Array
+  // set when the picture itself could not be decoded
+  bad?: boolean
 }

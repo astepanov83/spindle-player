@@ -4,7 +4,7 @@
 import { ipcRenderer } from 'electron'
 import { CoverChannel, type CoverJob, type CoverResult } from '../shared/cover-job'
 
-async function resize(data: Uint8Array, side: number): Promise<Uint8Array | undefined> {
+async function resize(data: Uint8Array, side: number): Promise<Uint8Array> {
   // decoded off this window's main thread
   const full = await createImageBitmap(new Blob([data as Uint8Array<ArrayBuffer>]))
   const scale = Math.min(1, side / Math.min(full.width, full.height))
@@ -27,12 +27,12 @@ async function resize(data: Uint8Array, side: number): Promise<Uint8Array | unde
 }
 
 ipcRenderer.on(CoverChannel.job, async (_, job: CoverJob) => {
-  let jpg: Uint8Array | undefined
+  let result: CoverResult
   try {
-    jpg = await resize(job.data, job.side)
+    result = { id: job.id, jpg: await resize(job.data, job.side) }
   } catch {
     // not a picture Chromium can read
+    result = { id: job.id, bad: true }
   }
-  const result: CoverResult = { id: job.id, jpg }
   ipcRenderer.send(CoverChannel.done, result)
 })

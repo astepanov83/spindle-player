@@ -12,6 +12,7 @@ import { rename, stat, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { BrowserWindow, ipcMain } from 'electron'
 import { CoverChannel, type CoverJob, type CoverResult } from '../../shared/cover-job'
+import { outcomeOf, PendingJobs, type Outcome } from './cover-jobs'
 
 export const smallSide = 320
 export const largeSide = 1000
@@ -19,13 +20,18 @@ export const largeSide = 1000
 const jobsAtOnce = 4
 // The hidden window closes after this long with nothing to do.
 const idleMs = 30000
+// A job with no answer after this long ends as "retry", and the window is dropped.
+// A 3000px picture takes well under a second.
+const jobTimeoutMs = 20000
 
 export function isCoverHash(s: string): boolean {
   return /^[0-9a-f]{40}$/.test(s)
 }
 
+let tmpCount = 0
 async function writeAtomic(path: string, data: Uint8Array | string): Promise<void> {
-  const tmp = `${path}.${process.pid}.tmp`
+  // unique per write, so two writes of one file never share a temp file
+  const tmp = `${path}.${process.pid}.${++tmpCount}.tmp`
   await writeFile(tmp, data)
   await rename(tmp, path)
 }
@@ -33,7 +39,7 @@ async function writeAtomic(path: string, data: Uint8Array | string): Promise<voi
 export class CoverCache {
   #win: BrowserWindow | undefined
   #loaded: Promise<void> | undefined
-  #waiting = new Map<number, (jpg: Uint8Array | undefined) => void>()
+  #jobs = new PendingJobs(jobTimeoutMs, () => this.#drop('a cover job got no answer'))
   #queue: (() => void)[] = []
   #running = 0
   #nextId = 0
@@ -47,8 +53,7 @@ export class CoverCache {
     mkdirSync(dir, { recursive: true })
     ipcMain.on(CoverChannel.done, (e, r: CoverResult) => {
       if (!this.#win || e.sender !== this.#win.webContents) return
-      this.#waiting.get(r.id)?.(r.jpg)
-      this.#waiting.delete(r.id)
+      this.#jobs.settle(r.id, outcomeOf(r))
     })
   }
 
@@ -56,8 +61,10 @@ export class CoverCache {
     return join(this.dir, `${hash}.jpg`)
   }
 
-  #window(): Promise<void> {
-    if (this.#win && !this.#win.isDestroyed() && this.#loaded) return this.#loaded
+  // The hidden window, made on first use and again after it closed, crashed or failed to load.
+  #window(): Promise<BrowserWindow> {
+    const win0 = this.#win
+    if (win0 && !win0.isDestroyed() && this.#loaded) return this.#loaded.then(() => win0)
     const win = new BrowserWindow({
       show: false,
       width: 64,
@@ -72,30 +79,49 @@ export class CoverCache {
     })
     this.#win = win
     win.on('closed', () => {
-      if (this.#win === win) this.#win = undefined
-      // anything still waiting gets no picture
-      for (const done of this.#waiting.values()) done(undefined)
-      this.#waiting.clear()
+      if (this.#win !== win) return
+      this.#win = undefined
+      this.#loaded = undefined
+      this.#jobs.failAll()
     })
-    this.#loaded = win.loadURL('about:blank')
-    return this.#loaded
+    win.webContents.on('render-process-gone', (_, d) => {
+      if (this.#win === win) this.#drop(`the cover window stopped (${d.reason})`)
+    })
+    const loaded = win.loadURL('about:blank')
+    this.#loaded = loaded
+    // a failed load is not kept: the next job makes a new window
+    loaded.catch(() => {
+      if (this.#win === win) this.#drop('the cover window did not load')
+    })
+    return loaded.then(() => win)
   }
 
-  // Scales so the shorter side is `side`, never up, as JPEG. undefined if it can't be decoded.
-  async resize(data: Uint8Array, side: number): Promise<Uint8Array | undefined> {
+  // Closes the window; jobs still waiting end as "retry", not as bad pictures.
+  #drop(why: string): void {
+    console.error(`Covers: ${why}; the pictures are tried again on the next scan`)
+    const win = this.#win
+    this.#win = undefined
+    this.#loaded = undefined
+    this.#jobs.failAll()
+    if (win && !win.isDestroyed()) win.destroy()
+  }
+
+  // Scales so the shorter side is `side`, never up, as JPEG.
+  async resize(data: Uint8Array, side: number): Promise<Outcome> {
     if (this.#running >= jobsAtOnce) await new Promise<void>((r) => this.#queue.push(r))
     this.#running++
     clearTimeout(this.#idle)
     try {
-      await this.#window()
+      const win = await this.#window()
       const id = ++this.#nextId
-      const result = new Promise<Uint8Array | undefined>((r) => this.#waiting.set(id, r))
+      const result = this.#jobs.wait(id)
       const job: CoverJob = { id, data, side }
-      this.#win!.webContents.send(CoverChannel.job, job)
+      win.webContents.send(CoverChannel.job, job)
       return await result
     } catch (e) {
+      // the window went away or never loaded: nothing is known about the picture
       console.error('Could not resize a cover', e)
-      return undefined
+      return { kind: 'retry' }
     } finally {
       this.#running--
       this.#queue.shift()?.()
@@ -103,16 +129,16 @@ export class CoverCache {
     }
   }
 
-  // Makes the small cover. true if it was written, false if the picture is bad.
-  async add(hash: string, data: Uint8Array): Promise<boolean> {
+  // Makes the small cover. A "bad" marker is written only when the picture itself can't be decoded.
+  async add(hash: string, data: Uint8Array): Promise<Outcome['kind']> {
     try {
-      const jpg = await this.resize(data, smallSide)
-      if (jpg) await writeAtomic(this.smallPath(hash), jpg)
-      else await writeAtomic(join(this.dir, `${hash}.bad`), '')
-      return !!jpg
+      const o = await this.resize(data, smallSide)
+      if (o.kind === 'ok') await writeAtomic(this.smallPath(hash), o.jpg)
+      else if (o.kind === 'bad') await writeAtomic(join(this.dir, `${hash}.bad`), '')
+      return o.kind
     } catch (e) {
       console.error('Could not save a cover', e)
-      return false
+      return 'retry'
     }
   }
 
@@ -141,9 +167,9 @@ export class CoverCache {
     }
     try {
       const data = await source()
-      const jpg = data && (await this.resize(data, largeSide))
-      if (!jpg) return undefined
-      await writeAtomic(path, jpg)
+      const o = data && (await this.resize(data, largeSide))
+      if (!o || o.kind !== 'ok') return undefined
+      await writeAtomic(path, o.jpg)
       return path
     } catch (e) {
       console.error('Could not make a large cover', e)
@@ -156,6 +182,7 @@ export class CoverCache {
     const win = this.#win
     this.#win = undefined
     this.#loaded = undefined
+    this.#jobs.failAll()
     if (win && !win.isDestroyed()) win.destroy()
   }
 }

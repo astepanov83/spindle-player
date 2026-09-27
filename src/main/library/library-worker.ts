@@ -3,11 +3,11 @@
 // ready JSON bytes. Main only forwards, so a 50k library never blocks it.
 import { hash } from 'crypto'
 import { readdir, readFile, realpath, rm, stat } from 'fs/promises'
-import { join } from 'path'
+import { basename, dirname, join } from 'path'
 import { parentPort, workerData } from 'worker_threads'
 import { parseFile } from 'music-metadata'
 import type { ScanStatus } from '../../shared/library'
-import { readJsonFile, writeJsonFile } from '../json-file'
+import { JsonFileWriter, readJsonFile } from '../json-file'
 import { buildLibrary, type BuiltLibrary } from './group'
 import {
   applyBatch,
@@ -89,32 +89,58 @@ function progress(phase: 'walk' | 'read', done: number, total: number, force = f
   setStatus({ phase, done, total })
 }
 
-// Groups albums and sends them to the page as JSON bytes.
-function publish(): void {
+// the index changed since it was last handed to the writer
+let unsaved = false
+
+function markChanged(): void {
+  dirty = true
+  unsaved = true
+}
+
+// Groups albums, for the page and the lookups.
+function build(): void {
   dirty = false
   built = buildLibrary(ix, (h) => cached.has(h))
   let failed = 0
   for (const e of ix.files.values()) if (e.error) failed++
-  const bytes = new TextEncoder().encode(JSON.stringify(built.data))
-  post({ type: 'library', bytes }, [bytes.buffer as ArrayBuffer])
   setStatus({ tracks: built.data.tracks.length, albums: built.data.albums.length, failed })
 }
 
-// One write at a time; a newer index waits for the one being written.
-let writing: Promise<void> = Promise.resolve()
+function encodeLibrary(): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify(built.data))
+}
+
+// Groups albums and sends them to the page as JSON bytes.
+function publish(): void {
+  build()
+  const bytes = encodeLibrary()
+  post({ type: 'library', bytes }, [bytes.buffer as ArrayBuffer])
+}
+
+// One line, since the index can be tens of MB. The writer keeps one write at a
+// time and drops a write that a newer one replaced; flushSync is for quitting.
+const writer = new JsonFileWriter<unknown>(
+  start.indexPath,
+  1000,
+  (e) => log(`Could not save the library index: ${e}`),
+  0
+)
+
 function saveIndex(): void {
-  const data = serializeIndex(ix)
-  writing = writing
-    .then(() => writeJsonFile(start.indexPath, data, 0))
-    .catch((e) => log(`Could not save the library index: ${e}`))
+  if (!unsaved) return
+  unsaved = false
+  writer.schedule(serializeIndex(ix))
 }
 
 // --- cover cache ---
 
-// "<hash>.jpg" made, "<hash>.bad" could not be decoded, sent: waiting for main
+// "<hash>.jpg" made, "<hash>.bad" could not be decoded, sent: waiting for main.
+// claimed: sent, or waiting for a free slot. It is taken before any wait, so two
+// files with the same picture never send it twice (two writes to one file).
 const cached = new Set<string>()
 const bad = new Set<string>()
 const sent = new Set<string>()
+const claimed = new Set<string>()
 let coverWaiters: (() => void)[] = []
 
 function wakeCoverWaiters(): void {
@@ -127,10 +153,16 @@ const known = (h: string): boolean => cached.has(h) || bad.has(h)
 
 async function sendCover(data: Uint8Array, gen: number): Promise<string> {
   const h = hash('sha1', data)
-  if (known(h) || sent.has(h)) return h
-  while (sent.size >= coversAtOnce) {
-    await new Promise<void>((r) => coverWaiters.push(r))
-    checkGen(gen)
+  if (known(h) || claimed.has(h)) return h
+  claimed.add(h)
+  try {
+    while (sent.size >= coversAtOnce) {
+      await new Promise<void>((r) => coverWaiters.push(r))
+      checkGen(gen)
+    }
+  } catch (e) {
+    claimed.delete(h)
+    throw e
   }
   sent.add(h)
   // a copy of its own, so the buffer can move to main without a second copy
@@ -161,7 +193,7 @@ async function pruneCovers(): Promise<void> {
   }
   for (const name of names) {
     const h = name.slice(0, 40)
-    if (!/^[0-9a-f]{40}$/.test(h) || used.has(h) || sent.has(h)) continue
+    if (!/^[0-9a-f]{40}$/.test(h) || used.has(h) || claimed.has(h)) continue
     cached.delete(h)
     bad.delete(h)
     await rm(join(start.coversDir, name), { force: true })
@@ -282,11 +314,12 @@ async function readImage(
 async function scan(folders: string[], gen: number): Promise<void> {
   const t0 = performance.now()
   const firstFill = ix.files.size === 0
-  const interim = firstFill
-    ? setInterval(() => {
-        if (dirty) publish()
-      }, interimMs)
-    : undefined
+  // While scanning: save what was read so far, so a quit or crash keeps it.
+  // A first scan also shows it, so an empty library fills in as it goes.
+  const interim = setInterval(() => {
+    if (firstFill && dirty) publish()
+    saveIndex()
+  }, interimMs)
   let read = 0
   try {
     setStatus({ folders, phase: 'walk', done: 0, total: 0, missing: [] })
@@ -320,7 +353,7 @@ async function scan(folders: string[], gen: number): Promise<void> {
         skipped: listing.skipped
       })
     )
-      dirty = true
+      markChanged()
     setStatus({ missing: folders.filter((f) => listing.skipped.some((s) => isUnder(f, s))) })
 
     const byPath = new Map(found.map((f) => [f.path, f]))
@@ -330,7 +363,7 @@ async function scan(folders: string[], gen: number): Promise<void> {
       const f = byPath.get(path)!
       const entry = await readFileEntry(path, f.mtime, f.size, gen)
       checkGen(gen)
-      if (applyBatch(ix, [entry])) dirty = true
+      if (applyBatch(ix, [entry])) markChanged()
       read++
       progress('read', read, toRead.length)
     })
@@ -343,14 +376,15 @@ async function scan(folders: string[], gen: number): Promise<void> {
   } catch (error) {
     if (!(error instanceof Stopped)) log(`Library scan failed: ${error}`)
     // a stopped scan keeps what it read; the next one carries on from there
-    if (error instanceof Stopped) return
+    if (error instanceof Stopped) {
+      saveIndex()
+      return
+    }
   } finally {
     clearInterval(interim)
   }
-  if (dirty) {
-    publish()
-    saveIndex()
-  }
+  if (dirty) publish()
+  saveIndex()
   setStatus({ phase: 'idle', done: 0, total: 0 })
   log(
     `Library scan: ${Math.round(performance.now() - t0)} ms, ${read} files read, ` +
@@ -382,12 +416,36 @@ port.on('message', (m: WorkerIn) => {
     }
     case 'cover-done':
       sent.delete(m.hash)
-      ;(m.ok ? cached : bad).add(m.hash)
+      claimed.delete(m.hash)
+      // "retry" stays unknown, so the next scan reads that file again
+      if (m.result === 'ok') cached.add(m.hash)
+      else if (m.result === 'bad') bad.add(m.hash)
       wakeCoverWaiters()
       break
     case 'find-track':
-      ready.then(() => post({ type: 'reply', req: m.req, path: built.paths.get(m.id) }))
+      ready.then(
+        () => post({ type: 'reply', req: m.req, path: built.paths.get(m.id) }),
+        () => post({ type: 'reply', req: m.req })
+      )
       break
+    case 'get-library':
+      ready.then(
+        () => {
+          const data = encodeLibrary()
+          post({ type: 'reply', req: m.req, data }, [data.buffer as ArrayBuffer])
+        },
+        () => post({ type: 'reply', req: m.req })
+      )
+      break
+    case 'flush': {
+      // quitting: main waits on the flag for a short while, so write now
+      saveIndex()
+      writer.flushSync()
+      const flag = new Int32Array(start.flushFlag)
+      Atomics.store(flag, 0, 1)
+      Atomics.notify(flag, 0)
+      break
+    }
     case 'cover-source':
       ready
         .then(() => coverSource(m.hash))
@@ -402,11 +460,28 @@ port.on('message', (m: WorkerIn) => {
   }
 })
 
-// Reads the index and sends the first library, before any scan.
+// Temp files left by a quit or crash in the middle of a write.
+async function removeStrayTemp(): Promise<void> {
+  const dir = dirname(start.indexPath)
+  const index = basename(start.indexPath)
+  for (const [d, match] of [
+    [dir, (n: string) => n.startsWith(index + '.') && n.endsWith('.tmp')],
+    [start.coversDir, (n: string) => n.endsWith('.tmp')]
+  ] as const) {
+    try {
+      for (const n of await readdir(d)) if (match(n)) await rm(join(d, n), { force: true })
+    } catch {
+      // no folder yet
+    }
+  }
+}
+
+// Reads the index and groups it; main asks for the library with 'get-library'.
 const ready = (async () => {
+  await removeStrayTemp()
   await loadCached()
   const r = readJsonFile(start.indexPath)
   if (r.kind === 'broken') log(`Library index is broken, scanning again: ${start.indexPath}`)
   ix = parseIndex(r.kind === 'ok' ? r.value : undefined)
-  publish()
+  build()
 })()

@@ -49,20 +49,27 @@ export interface WorkerStart {
   coversDir: string
   // for the status before the first scan
   folders: string[]
+  // one Int32 main waits on with Atomics while the worker saves at quit
+  flushFlag: SharedArrayBuffer
 }
 
 // main to the library worker
 export type WorkerIn =
   | { type: 'scan'; folders: string[] }
-  // a picture sent with 'cover' is resized and written (ok) or could not be decoded
-  | { type: 'cover-done'; hash: string; ok: boolean }
+  // a picture sent with 'cover' is written (ok), can't be decoded (bad),
+  // or went unanswered (retry: try again on a later scan)
+  | { type: 'cover-done'; hash: string; result: 'ok' | 'bad' | 'retry' }
+  // the page's library as it is now, as JSON bytes in the reply
+  | { type: 'get-library'; req: number }
+  // quitting: save the index now, then set the flush flag
+  | { type: 'flush' }
   | { type: 'find-track'; req: number; id: string }
   // the source picture of a cover, to make the large size
   | { type: 'cover-source'; req: number; hash: string }
 
 // the library worker to main
 export type WorkerOut =
-  // the page's library as JSON bytes: main passes them on without reading them
+  // a changed library as JSON bytes: main passes them on without reading them
   | { type: 'library'; bytes: Uint8Array }
   | { type: 'status'; status: ScanStatus }
   // a picture main should resize into the cover cache

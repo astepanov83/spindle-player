@@ -1,11 +1,10 @@
 <!-- Sortable song table. Only the rows on screen are drawn. -->
 <script lang="ts">
-  import { createVirtualizer } from '@tanstack/svelte-virtual'
-  import { untrack } from 'svelte'
   import type { Track } from '../../../shared/library'
   import Eq from '../ui/Eq.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import { fmtTime } from '../format'
+  import { virtualList } from '../ui/virtual-list.svelte'
   import { nextSort, sortRows, type SortKey } from './views'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
@@ -29,20 +28,7 @@
   const rows = $derived(sortRows(items, library.sort, (t) => library.order(t)))
   let list: HTMLDivElement | undefined = $state()
 
-  const v = createVirtualizer<HTMLElement, HTMLButtonElement>({
-    count: 0,
-    getScrollElement: () => scrollEl ?? null,
-    estimateSize: () => ROW,
-    overscan: 10
-  })
-
-  $effect(() => {
-    const count = rows.length
-    const margin = list?.offsetTop ?? 0
-    // the parent binds its scroll box after this mounts, so track it
-    const el = scrollEl ?? null
-    untrack(() => $v.setOptions({ count, scrollMargin: margin, getScrollElement: () => el }))
-  })
+  const v = virtualList(() => ({ count: rows.length, scrollEl, list, size: ROW }), 10)
 
   // playing from the table makes the sorted list the queue
   function play(i: number): void {
@@ -77,8 +63,8 @@
       </span>
     {/each}
   </div>
-  <div class="rows" bind:this={list} style:height="{$v.getTotalSize()}px">
-    {#each $v.getVirtualItems() as item (item.key)}
+  <div class="rows" bind:this={list} style:height="{v.total}px">
+    {#each v.items as item (item.key)}
       {@const t = rows[item.index]}
       {@const cur = queue.isCurrent(t.id)}
       <button
@@ -86,7 +72,7 @@
         class:cur-row={cur}
         class:cur
         class:first={item.index === 0}
-        style:transform="translateY({item.start - $v.options.scrollMargin}px)"
+        style:transform="translateY({v.offset(item)}px)"
         onclick={() => play(item.index)}
       >
         <span class="n"

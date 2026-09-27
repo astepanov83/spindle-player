@@ -1,11 +1,10 @@
 <!-- Cover grid, drawn a row at a time so a big library stays fast. -->
 <script lang="ts">
-  import { createVirtualizer } from '@tanstack/svelte-virtual'
-  import { untrack } from 'svelte'
   import Empty from './Empty.svelte'
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
   import { chunk, filterAlbums, gridColumns } from './views'
+  import { virtualList } from '../ui/virtual-list.svelte'
   import { library } from '../stores/library.svelte'
   import { queue } from '../stores/queue.svelte'
 
@@ -22,48 +21,29 @@
   // cover + title + artist, measured for real once drawn
   const estimate = $derived((width - GAP * (cols - 1)) / cols + 44 + ROW_GAP)
 
-  const v = createVirtualizer<HTMLElement, HTMLDivElement>({
-    count: 0,
-    getScrollElement: () => scrollEl ?? null,
-    estimateSize: () => 200,
-    overscan: 3
-  })
-
-  $effect(() => {
-    const count = rows.length
-    const size = estimate
-    const margin = list?.offsetTop ?? 0
-    // the parent binds its scroll box after this mounts, so track it
-    const el = scrollEl ?? null
-    untrack(() => {
-      $v.setOptions({
-        count,
-        estimateSize: () => size,
-        scrollMargin: margin,
-        getScrollElement: () => el
-      })
-      $v.measure()
-    })
-  })
+  const v = virtualList(
+    () => ({ count: rows.length, scrollEl, list, size: estimate, remeasure: true }),
+    3
+  )
 
   function measure(node: HTMLDivElement): void {
-    $v.measureElement(node)
+    v.measure(node)
   }
 </script>
 
 {#if !albums.length}
   <Empty title="No matches" text="Nothing found for this search. Try an album or artist name." />
 {/if}
-<div class="grid" bind:this={list} bind:clientWidth={width} style:height="{$v.getTotalSize()}px">
-  {#each $v.getVirtualItems() as item (item.key)}
+<div class="grid" bind:this={list} bind:clientWidth={width} style:height="{v.total}px">
+  {#each v.items as item (item.key)}
     <div
       class="row"
       data-index={item.index}
       use:measure
       style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
-      style:transform="translateY({item.start - $v.options.scrollMargin}px)"
+      style:transform="translateY({v.offset(item)}px)"
     >
-      {#each rows[item.index] ?? [] as al (al.id)}
+      {#each rows[item.index] as al (al.id)}
         <div class="card">
           <div class="cvwrap">
             <button

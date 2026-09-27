@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { createVirtualizer } from '@tanstack/svelte-virtual'
-  import { tick, untrack } from 'svelte'
+  import { tick } from 'svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import { fmtTime } from '../format'
+  import { virtualList } from '../ui/virtual-list.svelte'
   import { layout } from '../stores/layout.svelte'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
@@ -16,20 +16,7 @@
   let body: HTMLDivElement | undefined = $state()
   let list: HTMLDivElement | undefined = $state()
 
-  const v = createVirtualizer<HTMLDivElement, HTMLButtonElement>({
-    count: 0,
-    getScrollElement: () => body ?? null,
-    estimateSize: () => ROW,
-    overscan: 8
-  })
-
-  $effect(() => {
-    const count = queue.items.length
-    const margin = list?.offsetTop ?? 0
-    untrack(() =>
-      $v.setOptions({ count, scrollMargin: margin, getScrollElement: () => body ?? null })
-    )
-  })
+  const v = virtualList(() => ({ count: queue.items.length, scrollEl: body, list, size: ROW }))
 
   // Keep the current song in view when the track changes, not on other redraws.
   let seen = ''
@@ -37,9 +24,9 @@
     const key = queue.index + ':' + queue.current.id
     if (key === seen || !body) return
     seen = key
-    const top = Math.max(0, (queue.index - 1) * ROW)
-    // wait for the list to get its height
-    tick().then(() => body && (body.scrollTop = top))
+    // one row above the current song, as in the prototype; wait for the list to get its height
+    const index = Math.max(0, queue.index - 1)
+    tick().then(() => v.scrollToIndex(index))
   })
 </script>
 
@@ -53,8 +40,8 @@
     </div>
   {/if}
   <div class="body" bind:this={body}>
-    <div class="rows" bind:this={list} style:height="{$v.getTotalSize()}px">
-      {#each $v.getVirtualItems() as item (item.key)}
+    <div class="rows" bind:this={list} style:height="{v.total}px">
+      {#each v.items as item (item.key)}
         {@const id = queue.items[item.index]}
         {@const t = library.track(id)}
         {@const cur = item.index === queue.index}
@@ -63,7 +50,7 @@
           class:cur-row={cur}
           class:cur
           class:past={item.index < queue.index}
-          style:transform="translateY({item.start - $v.options.scrollMargin}px)"
+          style:transform="translateY({v.offset(item)}px)"
           onclick={() => queue.jump(item.index)}
         >
           <Thumb src={library.album(t.albumId).cover} eq={cur && player.playing} />

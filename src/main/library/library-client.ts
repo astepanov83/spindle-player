@@ -30,7 +30,8 @@ export interface ClientOptions {
   canScan: boolean
   // Track ids changed: rename them in playlists.json and queue.json and write
   // both before returning, since the library process is told right after.
-  idsMoved?(moves: IdMoves): void
+  // False when a write failed: the process keeps the map and sends it again.
+  idsMoved?(moves: IdMoves): boolean
   log?(text: string): void
 }
 
@@ -127,8 +128,11 @@ export class LibraryClient {
       case 'ids-moved':
         this.#aliases = mergeMoves(this.#aliases, m.moves)
         // the files first; then the process may drop the map from its index
-        this.o.idsMoved?.(m.moves)
-        this.o.post({ type: 'ids-saved', moves: m.moves })
+        if (this.o.idsMoved?.(m.moves) ?? true) this.o.post({ type: 'ids-saved', moves: m.moves })
+        else
+          this.#log(
+            'Library: playlists or queue could not be saved with the new ids; kept for the next start'
+          )
         return true
       default:
         return false

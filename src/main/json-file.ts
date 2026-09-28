@@ -215,18 +215,21 @@ export class JsonFileWriter<T> {
     await this.#running
   }
 
-  flushSync(): void {
+  // False when the write failed (a full or read-only disk); the error goes to onError.
+  flushSync(): boolean {
     clearTimeout(this.#timer)
     this.#timer = undefined
     const pending = this.#pending ?? this.#inFlight
-    if (!pending) return
+    if (!pending) return true
     this.#pending = undefined
     this.#inFlight = undefined
     ++this.#version
     try {
       writeJsonFileSync(this.path, pending.data, this.space)
+      return true
     } catch (error) {
       this.onError(error)
+      return false
     }
   }
 }

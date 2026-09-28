@@ -56,12 +56,14 @@ export class PlaylistFile {
 
   // Songs whose ids changed (see id-moves.ts), checked like a file read and
   // written at once: the library process drops the map once it hears back.
-  moveIds(moves: IdMoves): void {
+  // False when the new ids are not on disk: no writer this session, or the write failed.
+  moveIds(moves: IdMoves): boolean {
     const moved = movePlaylists(this.#data, moves)
-    if (moved === this.#data) return
+    if (moved === this.#data) return true
     this.#data = parsePlaylists(playlistsFile(moved))
-    this.#writer?.schedule(playlistsFile(this.#data))
-    this.#writer?.flushSync()
+    if (!this.#writer) return false
+    this.#writer.schedule(playlistsFile(this.#data))
+    return this.#writer.flushSync()
   }
 
   flushSync(): void {
@@ -89,12 +91,14 @@ export class QueueFile {
     this.#writer?.schedule(this.#data)
   }
 
-  moveIds(moves: IdMoves): void {
+  // False when the new ids are not on disk (see PlaylistFile.moveIds).
+  moveIds(moves: IdMoves): boolean {
     const moved = moveQueue(this.#data, moves)
-    if (moved === this.#data) return
+    if (moved === this.#data) return true
     this.#data = parseSavedQueue(moved)
-    this.#writer?.schedule(this.#data)
-    this.#writer?.flushSync()
+    if (!this.#writer) return false
+    this.#writer.schedule(this.#data)
+    return this.#writer.flushSync()
   }
 
   // The current song and position come on their own and more often, without the whole list.

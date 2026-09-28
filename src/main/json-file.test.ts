@@ -182,6 +182,14 @@ describe('JsonFileWriter', () => {
     expect(onDisk()).toEqual({ n: 2 })
   })
 
+  it('flushSync says a write worked, or that there was nothing to write', () => {
+    const w = new JsonFileWriter(file, 60_000)
+    expect(w.flushSync()).toBe(true)
+    w.schedule({ n: 1 })
+    expect(w.flushSync()).toBe(true)
+    expect(onDisk()).toEqual({ n: 1 })
+  })
+
   it('flush writes what is waiting right away', async () => {
     const w = new JsonFileWriter(file, 60_000)
     w.schedule({ n: 1 })
@@ -228,7 +236,7 @@ describe('JsonFileWriter', () => {
     w.schedule({ n: 1 })
     await w.flush()
     w.schedule({ n: 2 })
-    w.flushSync()
+    expect(w.flushSync()).toBe(false)
     expect(errors).toHaveLength(2)
   })
 })

@@ -134,8 +134,10 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
       if (main && !main.win.isDestroyed()) main.win.webContents.send(channel, data)
     },
     (moves) => {
-      playlists.moveIds(moves)
-      savedQueue.moveIds(moves)
+      // both, even when the first fails
+      const lists = playlists.moveIds(moves)
+      const queue = savedQueue.moveIds(moves)
+      return lists && queue
     },
     join(__dirname, '../preload/covers.js')
   )

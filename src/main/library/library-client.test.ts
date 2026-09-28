@@ -25,7 +25,10 @@ function setup(canScan = true): {
       events.push(`post ${m.type}`)
       return true
     },
-    idsMoved: (moves) => events.push(`files ${JSON.stringify(moves)}`),
+    idsMoved: (moves) => {
+      events.push(`files ${JSON.stringify(moves)}`)
+      return !moves.fail
+    },
     send: (s) => statuses.push(s),
     folders: () => ['/m'],
     canScan,
@@ -214,6 +217,13 @@ describe('LibraryClient id moves', () => {
     expect(client.onMessage({ type: 'ids-moved', moves: { a: 'b' } })).toBe(true)
     expect(events).toEqual(['files {"a":"b"}', 'post ids-saved'])
     expect(sent.at(-1)).toEqual({ type: 'ids-saved', moves: { a: 'b' } })
+  })
+
+  it('does not say saved when a file could not be written', () => {
+    const { client, events, logs } = setup()
+    client.onMessage({ type: 'ids-moved', moves: { fail: 'x' } })
+    expect(events).toEqual(['files {"fail":"x"}'])
+    expect(logs).toHaveLength(1)
   })
 
   it('keeps every map of the run for a restarted process', () => {

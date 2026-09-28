@@ -1,6 +1,14 @@
 // The files main keeps for the page: what happens with a file that can't be
 // read, one in a shape this version doesn't know, and bad messages.
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -143,6 +151,37 @@ describe('PlaylistFile', () => {
       { id: 'q', name: 'Other', trackIds: ['y'] }
     ])
     expect(readdirSync(dir)).toEqual(['playlists.json'])
+  })
+})
+
+describe('moveIds when the new ids can not be written', () => {
+  it('says so for a file it could not read (no writer this session)', () => {
+    const path = join(dir, 'playlists.json')
+    mkdirSync(path)
+    const file = new PlaylistFile(path)
+    file.setFromPage([{ id: 'p', name: 'Mix', trackIds: ['old'] }])
+    expect(file.moveIds({ old: 'new' })).toBe(false)
+    // nothing to rename is no failure
+    expect(file.moveIds({ zz: 'yy' })).toBe(true)
+  })
+
+  it.skipIf(process.getuid?.() === 0)('says so when the write fails', () => {
+    const sub = join(dir, 'ro')
+    mkdirSync(sub)
+    const file = new QueueFile(join(sub, 'queue.json'))
+    file.setFromPage({ items: ['old'], index: 0, from: '', pos: 0 })
+    chmodSync(sub, 0o500)
+    try {
+      expect(file.moveIds({ old: 'new' })).toBe(false)
+    } finally {
+      chmodSync(sub, 0o700)
+    }
+  })
+
+  it('says it worked when both are on disk', () => {
+    const file = new QueueFile(join(dir, 'queue.json'))
+    file.setFromPage({ items: ['old'], index: 0, from: '', pos: 0 })
+    expect(file.moveIds({ old: 'new' })).toBe(true)
   })
 })
 

@@ -37,7 +37,8 @@ export class LibraryService {
     readonly send: (channel: string, data: unknown) => void,
     // track ids that changed: main renames them in its playlists and queue
     // files and writes them before it returns
-    readonly idsMoved: (moves: IdMoves) => void,
+    // (false when a write failed, so the library process keeps the map)
+    readonly idsMoved: (moves: IdMoves) => boolean,
     coverPreload: string,
     readonly dir = app.getPath('userData')
   ) {
@@ -52,9 +53,9 @@ export class LibraryService {
       folders: () => this.store.get().folders,
       canScan: store.readable,
       idsMoved: (moves) => {
-        this.idsMoved(moves)
         // the page renames them too, as the library with the new ids comes
         this.send(LibraryChannel.idsMoved, moves)
+        return this.idsMoved(moves)
       }
     })
     this.#proc = new LibraryProcess(

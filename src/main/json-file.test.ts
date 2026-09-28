@@ -11,6 +11,45 @@ import {
   writeJsonFileSync
 } from './json-file'
 
+// Holds an async write inside its fsync, after the temp file is written and
+// before the rename, so a test can act while a write is really running.
+const gate = vi.hoisted(() => ({
+  hold: undefined as Promise<void> | undefined,
+  entered: undefined as (() => void) | undefined
+}))
+vi.mock('fs/promises', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('fs/promises')>()
+  const open: typeof fs.open = async (...args) => {
+    const fh = await fs.open(...args)
+    const sync = fh.sync.bind(fh)
+    fh.sync = async () => {
+      const hold = gate.hold
+      if (hold) {
+        gate.entered?.()
+        await hold
+      }
+      return sync()
+    }
+    return fh
+  }
+  return { ...fs, open }
+})
+
+// Starts holding writes; `inside` resolves once a write is held, `release` lets it go.
+function holdWrites(): { inside: Promise<void>; release: () => void } {
+  let release!: () => void
+  gate.hold = new Promise<void>((r) => (release = r))
+  const inside = new Promise<void>((r) => (gate.entered = r))
+  return {
+    inside,
+    release: () => {
+      gate.hold = undefined
+      gate.entered = undefined
+      release()
+    }
+  }
+}
+
 let dir: string
 let file: string
 
@@ -152,22 +191,32 @@ describe('JsonFileWriter', () => {
 
   it('flushSync wins over an async write still running', async () => {
     const w = new JsonFileWriter(file, 60_000)
+    const held = holdWrites()
     w.schedule({ n: 1 })
     const running = w.flush()
+    // the async write has its temp file on disk and waits to rename it
+    await held.inside
+    expect(readdirSync(dir).some((n) => n.endsWith('.tmp'))).toBe(true)
     w.schedule({ n: 2 })
     w.flushSync()
     expect(onDisk()).toEqual({ n: 2 })
+    held.release()
     await running
+    // the older write did not rename over the newer one, and left no temp file
     expect(onDisk()).toEqual({ n: 2 })
     expect(readdirSync(dir)).toEqual(['settings.json'])
   })
 
   it('flushSync finishes a write that was started but not done', async () => {
     const w = new JsonFileWriter(file, 60_000)
+    const held = holdWrites()
     w.schedule({ n: 1 })
     const running = w.flush()
+    await held.inside
+    expect(readJsonFile(file).kind).toBe('missing')
     w.flushSync()
     expect(onDisk()).toEqual({ n: 1 })
+    held.release()
     await running
     expect(onDisk()).toEqual({ n: 1 })
     expect(readdirSync(dir)).toEqual(['settings.json'])

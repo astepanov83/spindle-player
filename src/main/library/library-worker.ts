@@ -402,6 +402,11 @@ async function followMoves(
   // kept in the index until main says the files have them
   ix.pendingMoves = mergeMoves(ix.pendingMoves, ids)
   log(`Library: ${moves.size} files are now reached by another path; their ids changed`)
+  // On disk before main renames its files: a crash in between must not leave
+  // new ids in the queue and old paths in the index. If this write fails the
+  // map is still sent, so this run stays right.
+  saveIndex()
+  writer?.flushSync()
   post({ type: 'ids-moved', moves: ix.pendingMoves })
   publish()
 }

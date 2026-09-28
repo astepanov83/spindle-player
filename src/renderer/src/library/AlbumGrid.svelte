@@ -1,11 +1,13 @@
 <!-- Cover grid, drawn a row at a time so a big library stays fast. -->
 <script lang="ts">
+  import type { Album } from '../../../shared/library'
   import Empty from './Empty.svelte'
   import Cover from '../ui/Cover.svelte'
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
   import { chunk, filterAlbums, gridColumns } from './views'
   import { virtualList } from '../ui/virtual-list.svelte'
+  import { keepPlace } from '../ui/keep-place.svelte'
   import { library } from '../stores/library.svelte'
   import { queue } from '../stores/queue.svelte'
 
@@ -26,6 +28,16 @@
     () => ({ count: rows.length, scrollEl, list, size: estimate, remeasure: true }),
     3
   )
+
+  keepPlace(() => ({
+    scrollEl,
+    list,
+    items: albums,
+    per: cols,
+    rowSize: rows.length ? v.total / rows.length : 0,
+    key: (a: Album) => a.id,
+    source: library.revision
+  }))
 
   function measure(node: HTMLDivElement): void {
     v.measure(node)

@@ -22,12 +22,6 @@ export interface FetcherDeps {
   log(text: string): void
 }
 
-// How often the page gets the library while covers come in. Each time it is
-// the whole library (several MB for 40k songs), so less often in a big one.
-export function publishGapMs(tracks: number): number {
-  return Math.min(10000, Math.max(2000, Math.round(tracks / 4)))
-}
-
 // no connection: look again after this long
 const offlineWaitMs = 5 * 60 * 1000
 // matching results downloaded per source before going on to the next source

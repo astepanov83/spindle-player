@@ -1,7 +1,14 @@
 // Library data plus view state. The view state lives here, not in the part,
 // so a layout rebuild keeps the open album, search, sort and section.
-// Main sends the data (from the index, then after each scan that changed something).
+// Main sends the data from the index at start, then what changed while scans
+// run (patches, see library-patch.ts).
 import type { Album, Art, LibraryData, ScanStatus, Track } from '../../../shared/library'
+import {
+  applyPatch,
+  type LibraryMessage,
+  type LibraryPatch,
+  type LibraryVersion
+} from '../../../shared/library-patch'
 import {
   nextPlaylistSort,
   withPlaylistSort,
@@ -53,12 +60,32 @@ class LibraryStore {
   playlistSorts: PlaylistSorts = $state.raw({})
   // the page mouse Back last closed, for Forward to reopen
   #closed: { page: Page; id: string } | null = null
+  // which library main sent last, so a patch is only put on the one it was made from
+  sent: LibraryVersion | undefined
 
-  load(data: LibraryData): void {
+  load(data: LibraryData & Partial<LibraryVersion>): void {
     this.#tracks = new Map(data.tracks.map((t) => [t.id, t]))
-    this.#order = new Map(data.tracks.map((t, i) => [t.id, i]))
-    this.#albumIndex = new Map(data.albums.map((a, i) => [a.id, i]))
-    this.albums = data.albums
+    this.#setAlbums(data.albums)
+    if (data.epoch !== undefined && data.n !== undefined)
+      this.sent = { epoch: data.epoch, n: data.n }
+  }
+
+  // Puts a patch on the library shown. Songs and albums that did not change
+  // keep their objects, and the album list stays the same list when no album
+  // changed, so the grid and tables don't redo more than they must. Throws
+  // when it doesn't fit (the caller asks for the whole library then). Returns
+  // whether songs left the library.
+  patch(p: LibraryPatch): boolean {
+    this.#setAlbums(applyPatch(this.albums, this.#tracks, p))
+    this.sent = { epoch: p.epoch, n: p.n }
+    return p.goneTracks.length > 0
+  }
+
+  #setAlbums(albums: Album[]): void {
+    // library order is album order, then each album's own
+    this.#order = new Map(albums.flatMap((a) => a.trackIds).map((id, i) => [id, i]))
+    this.#albumIndex = new Map(albums.map((a, i) => [a.id, i]))
+    if (albums !== this.albums) this.albums = albums
     this.#version++
     // the open album may be gone after a rescan
     if (this.open && !this.#albumIndex.has(this.open)) this.open = null
@@ -101,6 +128,11 @@ class LibraryStore {
     if (this.#closed?.id === id) this.#closed = null
   }
 
+  // bumped by every library the page gets
+  get revision(): number {
+    return this.#version
+  }
+
   has(id: string): boolean {
     void this.#version
     return this.#tracks.has(id)
@@ -137,6 +169,6 @@ class LibraryStore {
 export const library = new LibraryStore()
 
 // Main sends the library as UTF-8 JSON bytes (see LibraryApi).
-export function decodeLibrary(bytes: Uint8Array): LibraryData {
-  return JSON.parse(new TextDecoder().decode(bytes)) as LibraryData
+export function decodeLibrary(bytes: Uint8Array): LibraryMessage {
+  return JSON.parse(new TextDecoder().decode(bytes)) as LibraryMessage
 }

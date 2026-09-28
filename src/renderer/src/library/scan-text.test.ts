@@ -27,6 +27,10 @@ const status = (s: Partial<ScanStatus>): ScanStatus => ({
 describe('scanLine', () => {
   it('shows progress while scanning', () => {
     expect(scanLine(status({ phase: 'walk', done: 1234 }))).toBe('Looking for files: 1,234 found')
+    // tags are read while the walk goes on
+    expect(scanLine(status({ phase: 'walk', done: 1234, read: 56 }))).toBe(
+      'Looking for files: 1,234 found, 56 read'
+    )
     expect(scanLine(status({ phase: 'read', done: 12, total: 5000 }))).toBe(
       'Reading tags: 12 of 5,000'
     )

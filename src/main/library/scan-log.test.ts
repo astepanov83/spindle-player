@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { scanLogLine } from './scan-log'
 
 describe('scanLogLine', () => {
-  it('names the time of each phase that finished', () => {
-    expect(scanLogLine(900, [100, 300, 500], 12, 40, 3)).toBe(
-      'Library scan: 900 ms (listing 100, sizes and images 300, tags 500), ' +
-        '12 files read, 40 songs in 3 albums'
+  it('names when each phase that finished ended', () => {
+    expect(scanLogLine(900, [100, 300, 900], 12, 40, 3, 250)).toBe(
+      'Library scan: 900 ms (listed at 100, sizes at 300, tags at 900), ' +
+        '12 files read (first sent at 250), 40 songs in 3 albums'
     )
     expect(scanLogLine(120, [120], 0, 40, 3)).toBe(
-      'Library scan: 120 ms (listing 120), 0 files read, 40 songs in 3 albums'
+      'Library scan: 120 ms (listed at 120), 0 files read, 40 songs in 3 albums'
     )
   })
 

@@ -111,24 +111,3 @@ export class ScanChain {
     this.stop()
   }
 }
-
-// Whether the page should get the library every so often while a scan runs.
-// Only while it has no songs yet (the first scan fills it in as it goes). A
-// scan stopped part way, by Add folder for one, leaves this on for the next.
-export class FirstFill {
-  #on = false
-
-  get on(): boolean {
-    return this.#on
-  }
-
-  // pageEmpty: the page got no songs so far
-  start(pageEmpty: boolean): void {
-    if (pageEmpty) this.#on = true
-  }
-
-  // a scan ran to the end (or failed): the page has all there is
-  end(): void {
-    this.#on = false
-  }
-}

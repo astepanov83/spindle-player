@@ -7,6 +7,7 @@
 //   - A closed app window stops the scan; it is not asked again.
 import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 import type { ScanStatus } from '../../shared/library'
+import type { FullLibrary } from '../../shared/library-patch'
 import type { WorkerIn, WorkerOut } from './types'
 import type { AfterExit } from './library-process'
 
@@ -17,8 +18,12 @@ export type Ask =
   | { type: 'get-library' }
 
 // What the page gets when the process can't give it a library.
+// No epoch a process makes, so a patch from a process that comes back later
+// makes the page ask for the whole library.
 export const emptyLibrary = (): Uint8Array =>
-  new TextEncoder().encode(JSON.stringify({ albums: [], tracks: [] }))
+  new TextEncoder().encode(
+    JSON.stringify({ epoch: '', n: 0, albums: [], tracks: [] } satisfies FullLibrary)
+  )
 
 export interface ClientOptions {
   // false when there is no process to take it

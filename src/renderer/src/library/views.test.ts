@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Album, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 import {
+  placeShift,
   chunk,
   filterAlbums,
   gridColumns,
@@ -110,6 +111,30 @@ describe('sort', () => {
       'b/1',
       'b/2'
     ])
+  })
+})
+
+describe('placeShift', () => {
+  const id = (s: string): string => s
+  it('moves the view by the rows that came above the first row shown', () => {
+    // row 2 ("c") was first on screen; two songs came before it
+    expect(placeShift(['a', 'b', 'c', 'd'], ['a', 'x', 'b', 'y', 'c', 'd'], 2, 1, id)).toBe(2)
+  })
+
+  it('does nothing at the top, so new songs show there', () => {
+    expect(placeShift(['a', 'b'], ['x', 'a', 'b'], 0, 1, id)).toBe(0)
+  })
+
+  it('counts grid rows: albums that came above move the first album down a row', () => {
+    // 3 per row; row 1 starts with "d"
+    const old = ['a', 'b', 'c', 'd', 'e', 'f']
+    expect(placeShift(old, ['x', 'y', 'z', ...old], 1, 3, id)).toBe(1)
+    // one album above: "d" is now in the same row, one place on
+    expect(placeShift(old, ['x', ...old], 1, 3, id)).toBe(0)
+  })
+
+  it('holds on to the next row shown when the first one left', () => {
+    expect(placeShift(['a', 'b', 'c', 'd'], ['x', 'y', 'a', 'z', 'd'], 1, 1, id)).toBe(1)
   })
 })
 

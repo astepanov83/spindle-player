@@ -173,6 +173,12 @@ const baseOf = (name: string): string => name.slice(0, name.lastIndexOf('.')).to
 const wordsOf = (base: string): string[] => base.split(/[^\p{L}\p{N}]+/u).filter(Boolean)
 const looksLikeBack = (base: string): boolean => wordsOf(base).some((w) => notFront.has(w))
 
+// A folder's own image that no image in a scans subfolder can beat, so the
+// scan can read it before the subfolder is listed.
+export function isSurePick(p: FolderImagePick): boolean {
+  return p.rank <= rank.folderName
+}
+
 // the same rank: the name that sorts first, so readdir order doesn't matter
 function best(picks: FolderImagePick[]): FolderImagePick | undefined {
   let out: FolderImagePick | undefined

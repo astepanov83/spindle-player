@@ -70,6 +70,7 @@ const onIdsMoved = latest<IdMoves>(LibraryChannel.idsMoved, mergeMoves)
 
 const libraryApi: LibraryApi = {
   load: () => library,
+  get: () => invoke(LibraryChannel.get),
   addFolder: () => invoke(LibraryChannel.addFolder),
   removeFolder: (path) => send(LibraryChannel.removeFolder, path),
   rescan: () => send(LibraryChannel.rescan),

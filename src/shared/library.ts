@@ -74,6 +74,8 @@ export interface ScanStatus {
   done: number
   // files to read; 0 while walking
   total: number
+  // files read so far while walking (tags are read as folders are listed)
+  read?: number
   tracks: number
   albums: number
   // files whose tags could not be read in the last scan

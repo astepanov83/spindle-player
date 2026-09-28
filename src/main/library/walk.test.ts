@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Pacer } from './pacer'
-import { walk, type WalkFs } from './walk'
+import { walk, type Found, type WalkFs } from './walk'
 
 let root: string
 
@@ -157,6 +157,88 @@ describe('walk', () => {
     const out = await run([root], fs)
     expect(out.skipped).toEqual([join(root, 'B')])
     expect(out.files).toEqual([join(root, 'A/01.flac')])
+  })
+
+  it('hands over each folder as it is listed, before the walk ends', async () => {
+    file('A/01.flac')
+    file('A/a.cue')
+    file('B/Disc/02.flac')
+    const parts: Found[] = []
+    let ended = false
+    const done = walk(
+      [root],
+      new Pacer(8, 1, false),
+      () => {},
+      (f) => {
+        expect(ended).toBe(false)
+        parts.push(f)
+      }
+    ).then((out) => {
+      ended = true
+      return out
+    })
+    const out = await done
+    expect(parts.flatMap((p) => p.files)).toEqual(out.files)
+    expect(parts.flatMap((p) => p.cues)).toEqual(out.cues)
+    // the first folder's songs come before the deeper one is listed
+    expect(parts.findIndex((p) => p.files.length)).toBeLessThan(
+      parts.findIndex((p) => p.files.includes(join(root, 'B/Disc/02.flac')))
+    )
+  })
+
+  it('lists folders it is told are new first in each round, with the same paths', async () => {
+    file('A/01.flac')
+    file('B/02.flac')
+    file('C/03.flac')
+    const order: string[] = []
+    const out = await walk(
+      [root],
+      new Pacer(1, 1, false),
+      () => {},
+      (f) => order.push(...f.files),
+      undefined,
+      (dir) => dir === join(root, 'C')
+    )
+    expect(order[0]).toBe(join(root, 'C/03.flac'))
+    expect(sorted(out.files)).toEqual(
+      [join(root, 'A/01.flac'), join(root, 'B/02.flac'), join(root, 'C/03.flac')].sort()
+    )
+  })
+
+  it('hands over a folder image once nothing can beat it', async () => {
+    // a sure name: handed over with its folder
+    file('A/01.flac')
+    file('A/cover.jpg')
+    file('A/Scans/front.jpg')
+    // a lone image waits for the scans folder, which beats it
+    file('C/01.flac')
+    file('C/photo.jpg')
+    file('C/Covers/cover.png')
+    // a lone image with no scans folder is handed over too
+    file('E/01.flac')
+    file('E/pic.jpg')
+    const parts: Found[] = []
+    const out = await walk(
+      [root],
+      new Pacer(8, 1, false),
+      () => {},
+      (f) => parts.push(f)
+    )
+    const images = parts.flatMap((p) => p.images)
+    expect(images).toEqual(
+      expect.arrayContaining([
+        { dir: join(root, 'A'), path: join(root, 'A/cover.jpg') },
+        { dir: join(root, 'C'), path: join(root, 'C/Covers/cover.png') },
+        { dir: join(root, 'E'), path: join(root, 'E/pic.jpg') }
+      ])
+    )
+    // each folder once, and only its final pick
+    expect(images.length).toBe(3)
+    expect([...images].sort((a, b) => (a.dir < b.dir ? -1 : 1))).toEqual(out.images)
+    // A's comes with A's own listing, with its song
+    expect(parts.find((p) => p.files.includes(join(root, 'A/01.flac')))?.images).toEqual([
+      { dir: join(root, 'A'), path: join(root, 'A/cover.jpg') }
+    ])
   })
 
   it('drops a symlink to nothing', async () => {

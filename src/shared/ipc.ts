@@ -40,10 +40,12 @@ export interface SettingsApi {
 
 export const LibraryChannel = {
   load: 'library:load',
+  // the whole library now, for a page that missed a patch
+  get: 'library:get',
   addFolder: 'library:add-folder',
   removeFolder: 'library:remove-folder',
   rescan: 'library:rescan',
-  // main to page: a new library after a scan changed something
+  // main to page: what changed in the library (a patch, see library-patch.ts)
   changed: 'library:changed',
   // main to page: scan progress and the folder list
   status: 'library:status',
@@ -55,10 +57,13 @@ export const LibraryChannel = {
 // Main owns the folder list and the index; the page only asks.
 export interface LibraryApi {
   // The library as it was when the page loaded (from the index on disk).
-  // Libraries come as UTF-8 JSON of LibraryData: main passes the bytes on without
-  // reading them, and copying bytes is much cheaper than copying 50k objects.
+  // Libraries come as UTF-8 JSON of a LibraryMessage (library-patch.ts): main
+  // passes the bytes on without reading them, and copying bytes is much
+  // cheaper than copying 50k objects.
   // `moves`: track ids that changed this run (see id-moves.ts)
   load(): Promise<{ library: Uint8Array; status: ScanStatus; moves: IdMoves }>
+  // the whole library now, when a patch doesn't fit the one the page has
+  get(): Promise<Uint8Array>
   // opens the folder picker; resolves once the choice is saved
   addFolder(): Promise<void>
   removeFolder(path: string): void
@@ -113,6 +118,7 @@ export interface PageChannels {
   [SettingsChannel.load]: SettingsApi['load']
   [SettingsChannel.save]: SettingsApi['save']
   [LibraryChannel.load]: LibraryApi['load']
+  [LibraryChannel.get]: LibraryApi['get']
   [LibraryChannel.addFolder]: LibraryApi['addFolder']
   [LibraryChannel.removeFolder]: LibraryApi['removeFolder']
   [LibraryChannel.rescan]: LibraryApi['rescan']

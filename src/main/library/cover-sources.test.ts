@@ -96,6 +96,33 @@ describe('parseAnswer', () => {
       expect(pickCandidates(q(), parseAnswer(s, fixture(f))).length).toBeGreaterThan(0)
   })
 
+  it('reads what kind of release each result is', () => {
+    expect(parseAnswer('deezer', fixture('deezer-album.json'))[0].kind).toBe('album')
+    expect(parseAnswer('musicbrainz', fixture('mb-release-group.json'))[0].kind).toBe('album')
+    expect(parseAnswer('musicbrainz', fixture('mb-release-group.json'))[1].kind).toBe('other')
+    const single = {
+      results: [
+        {
+          collectionName: 'Thriller - Single',
+          artistName: 'Michael Jackson',
+          artworkUrl100: 'https://is1-ssl.mzstatic.com/x/100x100bb.jpg'
+        }
+      ]
+    }
+    expect(parseAnswer('itunes', single)[0]).toMatchObject({ kind: 'single', album: 'Thriller' })
+    const deezerEp = {
+      data: [
+        {
+          title: 'X',
+          artist: { name: 'Y' },
+          cover_xl: 'https://cdn-images.dzcdn.net/1.jpg',
+          record_type: 'ep'
+        }
+      ]
+    }
+    expect(parseAnswer('deezer', deezerEp)[0].kind).toBe('ep')
+  })
+
   it('gives nothing for answers of the wrong shape', () => {
     for (const s of ['deezer', 'itunes', 'musicbrainz'] as const) {
       expect(parseAnswer(s, null)).toEqual([])

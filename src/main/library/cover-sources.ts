@@ -1,6 +1,6 @@
 // Where each service is asked for a cover, and what its answer means (ticket 014).
 import type { CoverSource } from '../../shared/settings'
-import { stripEdition, type Candidate, type CoverQuery } from './cover-match'
+import { stripEdition, type Candidate, type CoverQuery, type ReleaseKind } from './cover-match'
 
 export const caaGroupUrl = (id: string): string =>
   `https://coverartarchive.org/release-group/${id}/front-1200`
@@ -49,24 +49,36 @@ const num = (v: unknown): number | undefined =>
 const yearOf = (v: unknown): number | undefined => num(Number(str(v)?.slice(0, 4)))
 const list = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter(isObject) : [])
 
+// Deezer's record_type and MusicBrainz's primary-type, in any case.
+function kindOf(v: unknown): ReleaseKind | undefined {
+  const t = str(v)?.toLowerCase()
+  if (!t) return undefined
+  return t === 'album' || t === 'single' || t === 'ep' ? t : 'other'
+}
+
 function deezer(json: Record<string, unknown>): Candidate[] {
   return list(json.data).flatMap((d) => {
     const album = str(d.title)
     const artist = isObject(d.artist) ? str(d.artist.name) : undefined
     const image = str(d.cover_xl)
-    return album && artist && image ? [{ album, artist, image, tracks: num(d.nb_tracks) }] : []
+    if (!album || !artist || !image) return []
+    return [{ album, artist, image, tracks: num(d.nb_tracks), kind: kindOf(d.record_type) }]
   })
 }
 
 function itunes(json: Record<string, unknown>): Candidate[] {
   return list(json.results).flatMap((r) => {
-    const album = str(r.collectionName)
+    const name = str(r.collectionName)
     const artist = str(r.artistName)
     const small = str(r.artworkUrl100)
-    if (!album || !artist || !small) return []
+    if (!name || !artist || !small) return []
+    // iTunes marks singles and EPs only in the name: "Thriller - Single"
+    const short = / - (Single|EP)$/.exec(name)
+    const album = short ? name.slice(0, short.index) : name
+    const kind: ReleaseKind = short ? (short[1] === 'EP' ? 'ep' : 'single') : 'album'
     // the same picture comes in any size by its name
     const image = small.replace(/\/100x100bb\./, '/1200x1200bb.')
-    return [{ album, artist, image, tracks: num(r.trackCount), year: yearOf(r.releaseDate) }]
+    return [{ album, artist, image, kind, tracks: num(r.trackCount), year: yearOf(r.releaseDate) }]
   })
 }
 
@@ -78,7 +90,8 @@ function musicbrainz(json: Record<string, unknown>): Candidate[] {
       .map((a) => (str(a.name) ?? '') + (str(a.joinphrase) ?? ''))
       .join('')
     if (!id || !album || !artist) return []
-    return [{ album, artist, image: caaGroupUrl(id), year: yearOf(g['first-release-date']) }]
+    const year = yearOf(g['first-release-date'])
+    return [{ album, artist, image: caaGroupUrl(id), year, kind: kindOf(g['primary-type']) }]
   })
 }
 

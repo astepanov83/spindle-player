@@ -108,6 +108,22 @@ describe('pickCandidates', () => {
     expect(got.map((x) => x.image)).toEqual(['best', 'many', 'far'])
   })
 
+  it('drops singles and EPs for an album of 5 songs or more', () => {
+    const got = pickCandidates(q({ year: 0 }), [
+      c({ kind: 'single', image: 'single' }),
+      c({ kind: 'ep', image: 'ep' })
+    ])
+    expect(got).toEqual([])
+  })
+
+  it('puts the album before a single of the same name', () => {
+    const got = pickCandidates(q({ year: 0, tracks: 2 }), [
+      c({ kind: 'single', year: undefined, tracks: undefined, image: 'single' }),
+      c({ kind: 'album', year: undefined, tracks: undefined, image: 'album' })
+    ])
+    expect(got.map((x) => x.image)).toEqual(['album', 'single'])
+  })
+
   it('never matches an empty name', () => {
     expect(pickCandidates(q({ album: '()' }), [c({ album: '' })])).toEqual([])
     expect(pickCandidates(q({ artist: '!!' }), [c({ artist: '' })])).toEqual([])

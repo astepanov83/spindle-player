@@ -20,14 +20,21 @@ export interface CoverQuery {
   mbRelease?: string
 }
 
+export type ReleaseKind = 'album' | 'single' | 'ep' | 'other'
+
 // One album a service found.
 export interface Candidate {
   artist: string
   album: string
   year?: number
   tracks?: number
+  // unknown for services that don't say
+  kind?: ReleaseKind
   image: string
 }
+
+// A single or EP shares its title with the album, but not its cover.
+const minAlbumTracks = 5
 
 const edition =
   /\b(deluxe|remaster(ed)?|edition|bonus|expanded|anniversary|mono|stereo|mix|version|reissue)\b/i
@@ -92,14 +99,16 @@ function artistMatches(q: CoverQuery, found: string): boolean {
 // Years or track counts apart; unknown counts as 1 apart.
 const gap = (a: number | undefined, b: number | undefined): number => (a && b ? Math.abs(a - b) : 1)
 
-// The results that match, best first: within 2 years first, then the closest
-// year, then the closest track count.
+// The results that match, best first: within 2 years first, then albums
+// before singles and EPs, then the closest year, then the closest track count.
 export function pickCandidates(q: CoverQuery, found: Candidate[]): Candidate[] {
   const album = cleanAlbum(q.album)
   if (!album) return []
+  const short = (c: Candidate): boolean => c.kind === 'single' || c.kind === 'ep'
   return found
     .filter((c) => cleanAlbum(c.album) === album && artistMatches(q, c.artist))
-    .map((c) => ({ c, y: gap(q.year, c.year), t: gap(q.tracks, c.tracks) }))
-    .sort((a, b) => Number(a.y > 2) - Number(b.y > 2) || a.y - b.y || a.t - b.t)
+    .filter((c) => !(short(c) && q.tracks >= minAlbumTracks))
+    .map((c) => ({ c, y: gap(q.year, c.year), t: gap(q.tracks, c.tracks), k: Number(short(c)) }))
+    .sort((a, b) => Number(a.y > 2) - Number(b.y > 2) || a.k - b.k || a.y - b.y || a.t - b.t)
     .map((x) => x.c)
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { templates } from '../shared/templates'
-import { placeCentered, sizeFor } from './window-place'
+import { AppliedSize, placeCentered, settleMs, sizeFor } from './window-place'
 
 const area = { x: 0, y: 0, width: 1920, height: 1080 }
 
@@ -66,5 +66,50 @@ describe('placeCentered', () => {
     const r = placeCentered(old, { width: 1100, height: 680 }, tiny, templates.studio)
     expect([r.width, r.height]).toEqual([860, 560])
     expect([r.x, r.y]).toEqual([0, 0])
+  })
+})
+
+describe('AppliedSize', () => {
+  const set = { width: 1000, height: 700 }
+
+  it('takes the window manager rounding the size it was given as that size', () => {
+    const a = new AppliedSize()
+    a.set(set, 0)
+    expect(a.userSize({ width: 1001, height: 700 }, 50)).toBeUndefined()
+    // and the rounded size is not a change later either, e.g. on close
+    expect(a.userSize({ width: 1001, height: 700 }, 5000)).toBeUndefined()
+  })
+
+  it('saves a size the user picks later', () => {
+    const a = new AppliedSize()
+    a.set(set, 0)
+    expect(a.userSize({ width: 1200, height: 700 }, settleMs + 1)).toEqual({
+      width: 1200,
+      height: 700
+    })
+    // from then on every change is the user's
+    expect(a.userSize({ width: 1200, height: 700 }, settleMs + 2)).toEqual({
+      width: 1200,
+      height: 700
+    })
+  })
+
+  it('saves nothing when the size stayed as set', () => {
+    const a = new AppliedSize()
+    a.set(set, 0)
+    expect(a.userSize(set, 5000)).toBeUndefined()
+  })
+
+  it('gives the window manager another chance when the window is shown', () => {
+    const a = new AppliedSize()
+    a.set(set, 0)
+    a.settle(3000)
+    expect(a.userSize({ width: 980, height: 700 }, 3100)).toBeUndefined()
+  })
+
+  it('does nothing on show when no size was set', () => {
+    const a = new AppliedSize()
+    a.settle(0)
+    expect(a.userSize(set, 10)).toEqual(set)
   })
 })

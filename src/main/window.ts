@@ -4,14 +4,13 @@ import { BrowserWindow, nativeTheme, screen, shell } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import type { TemplateId } from '../shared/layout'
-import type { Size } from '../shared/settings'
 import { templates } from '../shared/templates'
 import { WinChannel } from '../shared/ipc'
 import { windowBackground } from '../shared/theme'
 import type { SettingsStore } from './settings-store'
 import { RestartBudget } from './library/restart'
 import { blockNavigation, canOpenExternal } from './web-guard'
-import { placeCentered, sizeFor } from './window-place'
+import { AppliedSize, placeCentered, sizeFor } from './window-place'
 
 export function currentBackground(): string {
   return nativeTheme.shouldUseDarkColors ? windowBackground.dark : windowBackground.light
@@ -24,8 +23,11 @@ export class MainWindow {
   readonly win: BrowserWindow
   #resizeTimer: ReturnType<typeof setTimeout> | undefined
   // The size we set on a template switch. Not saved as the user's choice,
-  // so a size cut down to a small screen doesn't replace the one they picked.
-  #applied: Size | undefined
+  // so a size cut down to a small screen doesn't replace the one they picked,
+  // and neither is the window manager's rounding of it.
+  #applied = new AppliedSize()
+  // when the last resize came
+  #resizedAt = -Infinity
   // a page that keeps crashing is loaded again a few times, not forever
   #reloads = new RestartBudget(3, 60000)
 
@@ -35,7 +37,7 @@ export class MainWindow {
     const area = screen.getPrimaryDisplay().workArea
     // Centered on the screen, at the size this template had last time.
     const bounds = placeCentered(area, sizeFor(t, s.windowSizes), area, t)
-    this.#applied = { width: bounds.width, height: bounds.height }
+    this.#applied.set(bounds, Date.now())
 
     this.win = new BrowserWindow({
       ...bounds,
@@ -54,7 +56,11 @@ export class MainWindow {
     })
     const win = this.win
 
-    win.on('ready-to-show', () => win.show())
+    win.on('ready-to-show', () => {
+      // the window manager may change the size as the window is first shown
+      this.#applied.settle(Date.now())
+      win.show()
+    })
     // A crashed page leaves a blank window; load it again. Main has the
     // settings, playlists and queue, so little is lost.
     win.webContents.on('render-process-gone', (_, d) => {
@@ -66,6 +72,7 @@ export class MainWindow {
     win.on('maximize', () => win.webContents.send(WinChannel.maximized, true))
     win.on('unmaximize', () => win.webContents.send(WinChannel.maximized, false))
     win.on('resize', () => {
+      this.#resizedAt = Date.now()
       clearTimeout(this.#resizeTimer)
       this.#resizeTimer = setTimeout(
         () => this.#rememberSize(this.store.get().template),
@@ -94,9 +101,8 @@ export class MainWindow {
     // A maximized size is the screen's, not a choice for the template.
     if (win.isDestroyed() || win.isMaximized() || win.isMinimized() || win.isFullScreen()) return
     const [width, height] = win.getSize()
-    if (this.#applied && this.#applied.width === width && this.#applied.height === height) return
-    this.#applied = undefined
-    this.store.setWindowSize(id, { width, height })
+    const size = this.#applied.userSize({ width, height }, this.#resizedAt)
+    if (size) this.store.setWindowSize(id, size)
   }
 
   // Saves the size of the template we leave, then moves to the next one's
@@ -111,7 +117,7 @@ export class MainWindow {
     if (maximized) win.unmaximize()
     const area = screen.getDisplayMatching(old).workArea
     const bounds = placeCentered(old, sizeFor(t, this.store.get().windowSizes), area, t)
-    this.#applied = { width: bounds.width, height: bounds.height }
+    this.#applied.set(bounds, Date.now())
     // Minimum first, or a larger old minimum blocks shrinking.
     win.setMinimumSize(t.window.minWidth, t.window.minHeight)
     win.setBounds(bounds)

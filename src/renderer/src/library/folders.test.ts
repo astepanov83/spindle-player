@@ -5,6 +5,7 @@ import {
   filterFolder,
   folderBack,
   folderForward,
+  folderPlaySongs,
   folderSongs,
   folderTree,
   folderUp,
@@ -281,5 +282,57 @@ describe('filterFolder', () => {
     )
     expect(filterFolder(t, null, 'mus')).toEqual({ folders: [0], songs: [] })
     expect(filterFolder(t, null, 'b')).toEqual({ folders: [1], songs: [] })
+  })
+})
+
+describe('folderPlaySongs', () => {
+  const order = (t: Track): number => tracks.indexOf(t)
+
+  it('plays the subfolders in folder order, then the songs in the shown sort', () => {
+    const t = tree()
+    expect(ids(folderPlaySongs(t, 0, '', null, order))).toEqual([
+      'a1',
+      'a2',
+      'b1',
+      'loose1',
+      'loose2'
+    ])
+    expect(ids(folderPlaySongs(t, 0, '', { k: 't', dir: -1 }, order))).toEqual([
+      'a1',
+      'a2',
+      'b1',
+      'loose2',
+      'loose1'
+    ])
+  })
+
+  it('with a search, plays only what matches: the songs, and all of a folder whose name does', () => {
+    const t = folderTree(
+      folders,
+      [
+        track('Night Bus', 2),
+        track('a2', 2),
+        track('b1', 3),
+        track('Bus Stop', 0),
+        track('loose', 0)
+      ],
+      () => ''
+    )
+    // "Night Bus" is found in A; B plays in full, its name has a "b"
+    expect(ids(folderPlaySongs(t, 0, 'bus', null, () => 0))).toEqual(['Night Bus', 'Bus Stop'])
+    expect(ids(folderPlaySongs(t, 1, 'b', null, () => 0))).toEqual(['Night Bus', 'b1'])
+  })
+
+  it('plays every shown music folder from the top', () => {
+    const t = folderTree(
+      [
+        { name: '/x/Music', parent: -1 },
+        { name: '/x/Audiobooks', parent: -1 }
+      ],
+      [track('a', 0), track('b', 1)],
+      () => ''
+    )
+    expect(ids(folderPlaySongs(t, null, '', null, () => 0))).toEqual(['a', 'b'])
+    expect(ids(folderPlaySongs(t, null, 'audio', null, () => 0))).toEqual(['b'])
   })
 })

@@ -6,7 +6,7 @@
   import ArtistPic from './ArtistPic.svelte'
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
-  import { artistCovers, artistSongs } from './artists'
+  import { artistCovers, artistPageSongs, artistSongs } from './artists'
   import { openSongMenu } from './song-menu'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
@@ -22,11 +22,21 @@
   const plural = (n: number, one: string, many: string): string =>
     `${n.toLocaleString()} ${n === 1 ? one : many}`
 
-  // their albums in order, then the "Also on" songs
+  // their albums in order, then the "Also on" songs as sorted
+  const playIds = (): string[] =>
+    artistPageSongs(
+      a,
+      album,
+      (id) => library.track(id),
+      library.artistSort,
+      (t) => library.order(t)
+    )
+
   function play(shuffle: boolean): void {
-    if (!songs.length) return
+    const ids = playIds()
+    if (!ids.length) return
     if (shuffle) player.shuffle = true
-    queue.playList(songs, shuffle ? Math.floor(Math.random() * songs.length) : 0, a.name)
+    queue.playList(ids, shuffle ? Math.floor(Math.random() * ids.length) : 0, a.name)
   }
 </script>
 
@@ -49,7 +59,7 @@
     <div class="acts">
       <button class="pill" onclick={() => play(false)}>Play</button>
       <button class="pill ghost" onclick={() => play(true)}>Shuffle</button>
-      <button class="pill ghost" aria-haspopup="menu" onclick={(e) => openSongMenu(e, songs)}
+      <button class="pill ghost" aria-haspopup="menu" onclick={(e) => openSongMenu(e, playIds())}
         >Add to playlist</button
       >
     </div>

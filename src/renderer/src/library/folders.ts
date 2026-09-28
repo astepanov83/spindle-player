@@ -1,6 +1,7 @@
 // The Folders view (ticket 020): the folder tree from main's folder table,
 // search, and mouse Back and Forward between a folder and its subfolders. No DOM.
 import type { Folder, Track } from '../../../shared/library'
+import { sortRows, type Sort } from './views'
 
 export interface FolderNode {
   // shown name: a music folder's last part
@@ -162,11 +163,36 @@ export function filterFolder(
   const folders = i === null ? tree.roots : tree.nodes[i].children
   const songs = i === null ? [] : tree.nodes[i].tracks
   if (!s) return { folders, songs }
-  const songMatches = (t: Track): boolean =>
-    (t.title + '\n' + t.artist + '\n' + t.album).toLowerCase().includes(s)
   const has = (j: number): boolean => {
     const n = tree.nodes[j]
-    return n.name.toLowerCase().includes(s) || n.tracks.some(songMatches) || n.children.some(has)
+    return n.name.toLowerCase().includes(s) || n.tracks.some(songMatches(s)) || n.children.some(has)
   }
-  return { folders: folders.filter(has), songs: songs.filter(songMatches) }
+  return { folders: folders.filter(has), songs: songs.filter(songMatches(s)) }
+}
+
+const songMatches =
+  (s: string) =>
+  (t: Track): boolean =>
+    (t.title + '\n' + t.artist + '\n' + t.album).toLowerCase().includes(s)
+
+// What Play plays in a folder: what the page shows. The shown subfolders
+// first, each in folder order, then the folder's own songs in the table's
+// sort. With a search, a subfolder plays only its songs that match, or all
+// of it when its name matches (that is why it is shown).
+export function folderPlaySongs(
+  tree: FolderTree,
+  i: number | null,
+  q: string,
+  sort: Sort | null,
+  order: (t: Track) => number
+): Track[] {
+  const s = q.trim().toLowerCase()
+  const view = filterFolder(tree, i, q)
+  const matches = (j: number): Track[] => {
+    const n = tree.nodes[j]
+    if (n.name.toLowerCase().includes(s)) return folderSongs(tree, j)
+    return [...n.children.flatMap(matches), ...n.tracks.filter(songMatches(s))]
+  }
+  const below = view.folders.flatMap((j) => (s ? matches(j) : folderSongs(tree, j)))
+  return [...below, ...sortRows(view.songs, sort, order)]
 }

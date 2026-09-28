@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { Artist } from '../../../shared/artists'
+import type { Track } from '../../../shared/library'
 import {
   artistBack,
   artistCovers,
   artistForward,
+  artistPageSongs,
   artistSongs,
   filterArtists,
   goToArtist,
   type ArtistNav
 } from './artists'
+import type { Sort } from './views'
 
 const artist = (name: string, albums: string[] = [], also: string[] = []): Artist => ({
   key: name.toLowerCase(),
@@ -47,6 +50,21 @@ describe('artistSongs', () => {
       'x1',
       'y1'
     ])
+  })
+})
+
+describe('artistPageSongs', () => {
+  const song = (id: string, title: string): Track =>
+    ({ id, title, artist: 'A', album: id, duration: 60 }) as Track
+  const songs: Record<string, Track> = { x1: song('x1', 'Zebra'), y1: song('y1', 'Apple') }
+  const order = (t: Track): number => ['x1', 'y1'].indexOf(t.id)
+
+  it('plays their albums in order, then the "Also on" songs in the shown sort', () => {
+    const a = artist('A', ['a', 'b'], ['x1', 'y1'])
+    const play = (sort: Sort | null): string[] =>
+      artistPageSongs(a, album, (id) => songs[id], sort, order)
+    expect(play(null)).toEqual(['a1', 'a2', 'b1', 'x1', 'y1'])
+    expect(play({ k: 't', dir: 1 })).toEqual(['a1', 'a2', 'b1', 'y1', 'x1'])
   })
 })
 

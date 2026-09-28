@@ -6,7 +6,7 @@
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
   import Thumb from '../ui/Thumb.svelte'
-  import { crumbs, filterFolder, folderSongs, shownFolder } from './folders'
+  import { crumbs, filterFolder, folderPlaySongs, folderSongs, shownFolder } from './folders'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { openSongMenu } from './song-menu'
   import { library } from '../stores/library.svelte'
@@ -42,8 +42,14 @@
   const plural = (n: number, one: string, many: string): string =>
     `${n.toLocaleString()} ${n === 1 ? one : many}`
 
+  // what is shown: search and the table's sort
+  const playIds = (): string[] =>
+    folderPlaySongs(tree, shown, library.query, library.folderSort, (t) => library.order(t)).map(
+      (t) => t.id
+    )
+
   function play(shuffle: boolean): void {
-    const ids = songIds(shown)
+    const ids = playIds()
     if (!ids.length) return
     if (shuffle) player.shuffle = true
     queue.playList(ids, shuffle ? Math.floor(Math.random() * ids.length) : 0, title)
@@ -83,7 +89,7 @@
       class="pill ghost"
       aria-haspopup="menu"
       disabled={!total}
-      onclick={(e) => openSongMenu(e, songIds(shown))}>Add to playlist</button
+      onclick={(e) => openSongMenu(e, playIds())}>Add to playlist</button
     >
   </div>
 </div>

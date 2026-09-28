@@ -9,11 +9,11 @@
   <Stage />
   <div class="meta">
     {#if queue.current}
-      <div class="title">{queue.current.title}</div>
-      <div class="sub">{queue.current.artist} · {queue.current.album}</div>
+      <div class="song-title">{queue.current.title}</div>
+      <div class="song-sub">{queue.current.artist} · {queue.current.album}</div>
     {:else}
-      <div class="title">Nothing playing</div>
-      <div class="sub">Pick an album or a song to start</div>
+      <div class="song-title">Nothing playing</div>
+      <div class="song-sub">Pick an album or a song to start</div>
     {/if}
   </div>
 </div>
@@ -35,27 +35,13 @@
   .meta {
     flex: none;
   }
-  .title {
-    font-family: var(--display);
-    font-weight: 700;
+  .song-title {
     font-size: 21px;
-    letter-spacing: -0.01em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .sub {
-    font-size: 13.5px;
-    color: var(--ink-2);
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .full .meta {
     text-align: center;
   }
-  .full .title {
+  .full .song-title {
     font-size: 24px;
   }
 </style>

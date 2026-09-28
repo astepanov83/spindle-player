@@ -9,6 +9,7 @@
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
   import { placeholders } from './placeholders'
+  import { scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { songRows } from './views'
   import { library, type Section } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
@@ -40,12 +41,10 @@
     playlists.editing = id
   }
 
-  // a new view starts at the top
-  $effect(() => {
-    void library.open
-    void library.section
-    if (scrollEl) scrollEl.scrollTop = 0
-  })
+  scrollTopOnChange(
+    () => scrollEl,
+    () => [library.open, library.section]
+  )
 </script>
 
 {#snippet item(sec: Section, icon: IconName, label: string)}

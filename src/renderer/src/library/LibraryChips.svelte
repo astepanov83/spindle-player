@@ -7,6 +7,7 @@
   import PlaylistView from './PlaylistView.svelte'
   import SearchBox from './SearchBox.svelte'
   import { placeholders } from './placeholders'
+  import { scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { library, type Chip } from '../stores/library.svelte'
 
   const chips: [Chip, string][] = [
@@ -24,13 +25,10 @@
     library.openPlaylist = null
   }
 
-  // a new view starts at the top
-  $effect(() => {
-    void library.open
-    void library.openPlaylist
-    void library.chip
-    if (scrollEl) scrollEl.scrollTop = 0
-  })
+  scrollTopOnChange(
+    () => scrollEl,
+    () => [library.open, library.openPlaylist, library.chip]
+  )
 </script>
 
 <div class="lib">

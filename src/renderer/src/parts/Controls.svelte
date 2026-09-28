@@ -30,10 +30,10 @@
       <div class="minicv"><Cover src={queue.currentAlbum?.cover} /></div>
       <div class="meta">
         {#if queue.current}
-          <div class="title">{queue.current.title}</div>
-          <div class="sub">{queue.current.artist} · {queue.current.album}</div>
+          <div class="song-title">{queue.current.title}</div>
+          <div class="song-sub">{queue.current.artist} · {queue.current.album}</div>
         {:else}
-          <div class="title">Nothing playing</div>
+          <div class="song-title">Nothing playing</div>
         {/if}
       </div>
     </div>
@@ -130,22 +130,8 @@
   .meta {
     min-width: 0;
   }
-  .title {
-    font-family: var(--display);
-    font-weight: 700;
+  .song-title {
     font-size: 16px;
-    letter-spacing: -0.01em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .sub {
-    font-size: 13.5px;
-    color: var(--ink-2);
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .bc {
     display: flex;

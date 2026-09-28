@@ -79,14 +79,14 @@
   >
     {#snippet head()}
       <div class="head">
-        <div class="m">
+        <div class="page-meta">
           Playlist{view.missing
             ? ` · ${view.missing} ${view.missing === 1 ? 'song is' : 'songs are'} not in the library`
             : ''}
         </div>
         {#if playlists.editing === id}
           <input
-            class="name"
+            class="page-title name"
             aria-label="Playlist name"
             value={p.name}
             maxlength="200"
@@ -95,7 +95,7 @@
             {onkeydown}
           />
         {:else}
-          <h2>{p.name}</h2>
+          <h2 class="page-title">{p.name}</h2>
         {/if}
         <div class="acts">
           <button class="pill" disabled={!view.rows.length} onclick={play}>Play</button>
@@ -132,20 +132,6 @@
   }
   .head {
     min-width: 0;
-  }
-  .m {
-    color: var(--ink-3);
-    font-size: 13px;
-  }
-  h2,
-  .name {
-    font-family: var(--display);
-    font-size: 32px;
-    font-weight: 700;
-    margin: 4px 0 8px;
-    letter-spacing: -0.02em;
-    line-height: 1.05;
-    text-wrap: balance;
   }
   .name {
     display: block;

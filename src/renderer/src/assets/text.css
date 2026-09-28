@@ -1,0 +1,39 @@
+/*
+  Text styles that more than one part uses. Sizes that differ per place stay
+  in the component.
+*/
+
+/* the big name at the top of an album, playlist or song list */
+.page-title {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 700;
+  margin: 4px 0 8px;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+/* the small line above or below it ("Album · 2020", "12 songs") */
+.page-meta {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* the playing song's title and artist line, in Now playing and the player bar */
+.song-title {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.song-sub {
+  font-size: 13.5px;
+  color: var(--ink-2);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

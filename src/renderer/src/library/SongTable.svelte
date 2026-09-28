@@ -64,11 +64,11 @@
     {@render head()}
   {:else}
     <div>
-      <div class="m">{meta}</div>
-      <h2>{title}</h2>
+      <div class="page-meta">{meta}</div>
+      <h2 class="page-title">{title}</h2>
     </div>
   {/if}
-  <div class="m">{rows.length} songs</div>
+  <div class="page-meta">{rows.length} songs</div>
 </div>
 <div class="tbl">
   <div class="th">
@@ -121,18 +121,6 @@
     justify-content: space-between;
     gap: 12px;
     padding-bottom: 16px;
-  }
-  h2 {
-    font-family: var(--display);
-    font-size: 32px;
-    margin: 4px 0 8px;
-    letter-spacing: -0.02em;
-    line-height: 1.05;
-    text-wrap: balance;
-  }
-  .m {
-    color: var(--ink-3);
-    font-size: 13px;
   }
   .tbl {
     /* 44px, not 36: row numbers reach five digits in a big library */

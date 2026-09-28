@@ -26,9 +26,9 @@
 <div class="albhead">
   <div class="cv"><Cover src={al.coverLarge} /></div>
   <div>
-    <div class="m">Album{al.year ? ` · ${al.year}` : ''}</div>
-    <h2>{al.title}</h2>
-    <div class="m">{al.artist} · {tracks.length} songs · {minutes} min</div>
+    <div class="page-meta">Album{al.year ? ` · ${al.year}` : ''}</div>
+    <h2 class="page-title">{al.title}</h2>
+    <div class="page-meta">{al.artist} · {tracks.length} songs · {minutes} min</div>
     <div class="acts">
       <button class="pill" onclick={() => queue.playAlbum(al.id, 0)}>Play</button>
       <button class="pill ghost" onclick={shufflePlay}>Shuffle</button>
@@ -82,18 +82,6 @@
     overflow: hidden;
     box-shadow: 0 14px 30px -12px var(--shadow);
     flex: none;
-  }
-  h2 {
-    font-family: var(--display);
-    font-size: 32px;
-    margin: 4px 0 8px;
-    letter-spacing: -0.02em;
-    line-height: 1.05;
-    text-wrap: balance;
-  }
-  .m {
-    color: var(--ink-3);
-    font-size: 13px;
   }
   .acts {
     display: flex;

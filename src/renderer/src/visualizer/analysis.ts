@@ -1,6 +1,7 @@
 // The sound analysis every style shares, as in webmusicmo: log spaced bands,
 // instant attack, slow release, peak caps. Plain math, so it can be tested.
 // The frame loop (loop.ts) feeds it the analyser's data.
+import type { VisualizerStyle } from '../../../shared/settings'
 
 export const BANDS = 56
 export const WAVE_N = 256
@@ -9,6 +10,21 @@ export const F_LO = 45
 export const F_HI = 14500
 // how much a bar keeps per frame once the sound drops
 export const RELEASE = 0.86
+
+// How bars move: the share of the way up they go per frame, and how much they
+// keep per frame on the way down. Spectrum's bars are straight and about twice
+// as long as the ring's, so the ring's quick moves look jumpy there.
+export interface Motion {
+  attack: number
+  release: number
+}
+export const motions: Record<VisualizerStyle, Motion> = {
+  ring: { attack: 1, release: RELEASE },
+  spectrum: { attack: 0.4, release: 0.92 },
+  // only the cover's glow uses the bars here
+  wave: { attack: 1, release: RELEASE },
+  off: { attack: 1, release: RELEASE }
+}
 // a gentle lift toward the top band, so treble is not always the smallest
 export const TILT_DB = 8
 // frames a peak cap sits still, then how much it drops per frame
@@ -23,6 +39,8 @@ export const BASS_BANDS = 6
 // The wave line is lifted so quiet music shows, and soft limited (tanh) so a
 // loud master (peaks near 1) stays inside the stage instead of running off it.
 export const WAVE_GAIN = 3
+// the share of the way to the new line the wave goes per frame
+export const WAVE_EASE = 0.5
 // what the wave keeps per frame after a pause
 export const WAVE_FADE = 0.85
 // below this everything counts as still
@@ -75,12 +93,13 @@ export function dbToLevel(db: number): number {
   return Math.min(1, Math.max(0, (db - DB_LO) / (DB_HI - DB_LO))) ** 1.3
 }
 
-// One frame: bars jump up to the target and fall slowly; caps hold, then fall.
-export function stepLevels(m: Meter, target: Float32Array): void {
+// One frame: bars rise toward the target and fall slowly; caps hold, then fall.
+export function stepLevels(m: Meter, target: Float32Array, motion = motions.ring): void {
   const { levels, peaks, hold } = m
+  const { attack, release } = motion
   for (let i = 0; i < BANDS; i++) {
     const v = target[i]
-    levels[i] = v > levels[i] ? v : levels[i] * RELEASE
+    levels[i] = v > levels[i] ? levels[i] + (v - levels[i]) * attack : levels[i] * release
     if (levels[i] >= peaks[i]) {
       peaks[i] = levels[i]
       hold[i] = PEAK_HOLD
@@ -93,16 +112,21 @@ export function stepLevels(m: Meter, target: Float32Array): void {
 }
 
 // One frame of analyser data to levels.
-export function analyse(m: Meter, freqDb: Float32Array, edges: Int32Array): void {
+export function analyse(
+  m: Meter,
+  freqDb: Float32Array,
+  edges: Int32Array,
+  motion = motions.ring
+): void {
   bandDb(freqDb, edges, m.target)
   for (let i = 0; i < BANDS; i++) m.target[i] = dbToLevel(m.target[i])
-  stepLevels(m, m.target)
+  stepLevels(m, m.target, motion)
 }
 
 // One frame with no sound: everything falls toward zero.
-export function rest(m: Meter): void {
+export function rest(m: Meter, motion = motions.ring): void {
   m.target.fill(0)
-  stepLevels(m, m.target)
+  stepLevels(m, m.target, motion)
   for (let k = 0; k < WAVE_N; k++) m.wave[k] *= WAVE_FADE
 }
 
@@ -128,10 +152,37 @@ export function bassLevel(levels: Float32Array): number {
   return sum / BASS_BANDS
 }
 
-// WAVE_N evenly spaced samples of the analyser's time data, lifted, within -1..1.
+// Moves the wave toward half of the analyser's time data, as WAVE_N averaged
+// points, lifted, within -1..1. It starts where the sound crosses zero going up,
+// so a steady note holds still instead of sliding sideways every frame.
 export function sampleWave(time: Float32Array, wave: Float32Array): void {
-  const step = Math.floor(time.length / WAVE_N)
-  for (let k = 0; k < WAVE_N; k++) wave[k] = Math.tanh(time[k * step] * WAVE_GAIN)
+  const size = Math.max(1, Math.floor(time.length / 2 / WAVE_N))
+  const start = risingZero(time, size)
+  for (let k = 0; k < WAVE_N; k++) {
+    const v = Math.tanh(bucket(time, start + k * size, size) * WAVE_GAIN)
+    wave[k] += (v - wave[k]) * WAVE_EASE
+  }
+}
+
+// The average of `size` samples. Picking single samples instead turns the
+// treble into jitter.
+function bucket(time: Float32Array, at: number, size: number): number {
+  let sum = 0
+  for (let i = 0; i < size; i++) sum += time[at + i]
+  return sum / size
+}
+
+// The first point where the averaged sound goes from below zero to zero or
+// above, with room for the whole line after it. 0 if there is none.
+function risingZero(time: Float32Array, size: number): number {
+  const last = time.length - WAVE_N * size
+  let prev = bucket(time, 0, size)
+  for (let at = size; at <= last; at += size) {
+    const v = bucket(time, at, size)
+    if (prev < 0 && v >= 0) return at
+    prev = v
+  }
+  return 0
 }
 
 // Ring: band i sits this far round from the bottom, on both sides. Bass at the

@@ -10,6 +10,7 @@ import {
   PEAK_HOLD,
   RELEASE,
   TILT_DB,
+  WAVE_EASE,
   WAVE_GAIN,
   WAVE_N,
   analyse,
@@ -18,6 +19,7 @@ import {
   bassLevel,
   createMeter,
   dbToLevel,
+  motions,
   rest,
   ringAngle,
   sampleWave,
@@ -124,6 +126,17 @@ describe('stepLevels', () => {
     }
     expect(m.peaks[0]).toBeCloseTo(0.3)
   })
+  it('Spectrum rises part of the way and falls slower than Ring', () => {
+    const { attack, release } = motions.spectrum
+    const m = createMeter()
+    stepLevels(m, target(1), motions.spectrum)
+    expect(m.levels[0]).toBeCloseTo(attack)
+    stepLevels(m, target(1), motions.spectrum)
+    expect(m.levels[0]).toBeCloseTo(1 - (1 - attack) ** 2)
+    stepLevels(m, target(0), motions.spectrum)
+    expect(m.levels[0]).toBeCloseTo((1 - (1 - attack) ** 2) * release)
+    expect(release).toBeGreaterThan(motions.ring.release)
+  })
 })
 
 describe('analyse', () => {
@@ -167,18 +180,40 @@ describe('bassLevel', () => {
 })
 
 describe('sampleWave', () => {
-  it('takes evenly spaced samples and lifts them', () => {
-    const time = Float32Array.from({ length: 4096 }, (_, i) => i / 4096)
+  const sine = (hz: number, phase: number): Float32Array =>
+    Float32Array.from(
+      { length: 4096 },
+      (_, i) => 0.1 * Math.sin((2 * Math.PI * hz * i) / RATE + phase)
+    )
+  // many frames of the same sound, so the easing has caught up
+  const settled = (time: Float32Array): Float32Array => {
     const wave = new Float32Array(WAVE_N)
-    sampleWave(time, wave)
-    expect(wave[0]).toBe(0)
-    // small samples: about linear
-    expect(wave[1]).toBeCloseTo((16 / 4096) * WAVE_GAIN, 4)
-    expect(wave[WAVE_N - 1]).toBeCloseTo(Math.tanh((255 * 16 * WAVE_GAIN) / 4096))
+    for (let f = 0; f < 40; f++) sampleWave(time, wave)
+    return wave
+  }
+
+  it('moves part of the way per frame', () => {
+    const wave = new Float32Array(WAVE_N)
+    sampleWave(new Float32Array(4096).fill(0.1), wave)
+    expect(wave[5]).toBeCloseTo(WAVE_EASE * Math.tanh(0.1 * WAVE_GAIN))
+    sampleWave(new Float32Array(4096).fill(0.1), wave)
+    expect(wave[5]).toBeCloseTo((1 - (1 - WAVE_EASE) ** 2) * Math.tanh(0.1 * WAVE_GAIN))
+  })
+  it('averages the samples, so treble too fast to draw adds no jitter', () => {
+    const buzz = Float32Array.from({ length: 4096 }, (_, i) => (i % 2 ? 0.5 : -0.5))
+    expect(Math.max(...settled(buzz).map(Math.abs))).toBeLessThan(0.001)
+  })
+  it('starts where the sound goes up through zero, so a steady note holds still', () => {
+    const a = settled(sine(220, 0))
+    const b = settled(sine(220, 2))
+    // the line starts at zero on its way up
+    expect(Math.abs(a[0])).toBeLessThan(0.05)
+    expect(a[3]).toBeGreaterThan(a[0])
+    // a different phase of the same note draws about the same line
+    for (let k = 0; k < WAVE_N; k++) expect(b[k]).toBeCloseTo(a[k], 1)
   })
   it('keeps loud samples inside -1..1', () => {
-    const wave = new Float32Array(WAVE_N)
-    sampleWave(new Float32Array(4096).fill(-1), wave)
+    const wave = settled(new Float32Array(4096).fill(-1))
     expect(wave[0]).toBeGreaterThan(-1)
     expect(wave[0]).toBeLessThan(-0.99)
   })

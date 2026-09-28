@@ -11,7 +11,7 @@
 // the browser work out styles twice.
 import type { VisualizerStyle } from '../../../shared/settings'
 import { engine } from '../audio/engine'
-import { analyse, bandEdges, bassLevel, clear, rest, sampleWave, settle } from './analysis'
+import { analyse, bandEdges, bassLevel, clear, motions, rest, sampleWave, settle } from './analysis'
 import type { BarColors } from './colors'
 import { drawStage, type StageView } from './draw'
 import { meter } from './levels'
@@ -172,7 +172,7 @@ document.addEventListener('visibilitychange', () => {
   else wake()
 })
 
-function readAnalyser(): void {
+function readAnalyser(style: VisualizerStyle): void {
   const a = engine.analyser
   if (!edges || !freq || !time) {
     edges = bandEdges(engine.context.sampleRate, a.frequencyBinCount)
@@ -180,7 +180,7 @@ function readAnalyser(): void {
     time = new Float32Array(a.fftSize)
   }
   a.getFloatFrequencyData(freq)
-  analyse(meter, freq, edges)
+  analyse(meter, freq, edges, motions[style])
   a.getFloatTimeDomainData(time)
   sampleWave(time, meter.wave)
 }
@@ -204,8 +204,8 @@ function frame(now: number): void {
   raf = 0
   const { style, colors, playing } = look
   const on = style !== 'off'
-  if (on && playing) readAnalyser()
-  else if (on) rest(meter)
+  if (on && playing) readAnalyser(style)
+  else if (on) rest(meter, motions[style])
   const still = !playing && settle(meter)
   const bass = on ? Math.round(Math.min(1, bassLevel(meter.levels)) * 1000) : 0
   const busy = now < busyUntil

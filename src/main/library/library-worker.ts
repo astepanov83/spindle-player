@@ -50,6 +50,7 @@ import {
   serializeFetched,
   type Fetched
 } from './fetched-store'
+import { listSources, pruneSources, readSource, saveSource } from './fetched-files'
 import {
   cueReaderVersion,
   readerVersion,
@@ -207,7 +208,13 @@ function setFetch(on: boolean, sources: Record<CoverSource, boolean>): void {
   if (!on) setStatus({ fetch: undefined })
 }
 
-function startFetcher(s: WorkerStart): void {
+// the downloaded pictures, to make the large cover from
+let sourcesDir = ''
+let sources = new Set<string>()
+
+async function startFetcher(s: WorkerStart): Promise<void> {
+  sourcesDir = join(dirname(s.fetchedPath), 'fetched-covers')
+  sources = await listSources(sourcesDir)
   const r = readJsonFile(s.fetchedPath)
   if (r.kind === 'broken' || r.kind === 'unreadable')
     log(`Online covers file is ${r.kind}: ${s.fetchedPath}`)
@@ -227,7 +234,8 @@ function startFetcher(s: WorkerStart): void {
       limits: defaultLimits()
     }),
     addCover: addFetchedCover,
-    hasCover: (h) => cached.has(h),
+    // with no source picture there is no large cover, so it is downloaded again
+    hasCover: (h) => cached.has(h) && sources.has(h),
     fetched,
     changed: (found) => {
       saveFetched()
@@ -320,7 +328,7 @@ async function sendCover(data: Uint8Array, gen: number): Promise<string> {
 // lookup knows whether it decoded before it keeps it.
 async function addFetchedCover(data: Uint8Array): Promise<{ hash: string; ok: boolean }> {
   const h = hash('sha1', data)
-  if (cached.has(h)) return { hash: h, ok: true }
+  if (cached.has(h)) return { hash: h, ok: await keepSource(h, data) }
   if (!claimed.has(h)) {
     claimed.add(h)
     await waitForSlot(h, () => {})
@@ -328,9 +336,24 @@ async function addFetchedCover(data: Uint8Array): Promise<{ hash: string; ok: bo
     post({ type: 'cover', hash: h, data })
   }
   while (claimed.has(h)) await new Promise<void>((r) => coverWaiters.push(r))
-  if (cached.has(h) || bad.has(h)) return { hash: h, ok: cached.has(h) }
+  if (cached.has(h)) return { hash: h, ok: await keepSource(h, data) }
+  if (bad.has(h)) return { hash: h, ok: false }
   // main could not make it this time (no window, a timeout): look again later
   throw new NetError('the cover could not be made yet')
+}
+
+// Keeps a downloaded picture for the large cover. Not kept (a full disk): the
+// lookup counts it as not found yet and downloads it again later.
+async function keepSource(h: string, data: Uint8Array): Promise<boolean> {
+  if (sources.has(h)) return true
+  try {
+    await saveSource(sourcesDir, h, data)
+    sources.add(h)
+    return true
+  } catch (e) {
+    log(`Could not keep a downloaded cover: ${e}`)
+    return false
+  }
 }
 
 // Waits for a free slot to send a picture to main. The hash must be claimed
@@ -668,6 +691,7 @@ function* coverCandidates(h: string): Generator<() => Promise<Uint8Array | undef
   for (const im of ix.images.values()) if (im.cover === h) yield () => readFile(im.path)
   for (const e of ix.files.values())
     if (e.cover === h) yield async () => frontCover((await readTags(e.path)).common.picture)?.data
+  if (sources.has(h)) yield () => readSource(sourcesDir, h)
 }
 
 function coverSource(h: string): Promise<Uint8Array | undefined> {
@@ -793,7 +817,7 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   status = { ...status, folders: s.folders }
   await removeStrayTemp()
   await loadCached()
-  startFetcher(s)
+  await startFetcher(s)
   const r = readJsonFile(start.indexPath)
   // the index is only a cache of the music files, so it is made again either way
   if (r.kind === 'broken' || r.kind === 'unreadable')
@@ -811,6 +835,9 @@ const chain = new ScanChain(ready, {
   // after the prune, so it can't delete a cover the lookup just made
   prune: async (gen) => {
     await pruneCovers(gen)
+    if (chain.stale(gen)) return
+    await pruneSources(sourcesDir, (h) => liveUsed().has(h))
+    sources = await listSources(sourcesDir)
     if (!chain.stale(gen)) fetcher?.release()
   },
   // let a stopped scan's waits wake up and see the new number

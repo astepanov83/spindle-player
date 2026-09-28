@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ScanStatus } from '../../../shared/library'
 import {
   canRescan,
+  fetchLine,
   libraryProblem,
   notLoadedText,
   scanFailedText,
@@ -119,5 +120,32 @@ describe('canRescan', () => {
       { settingsUnreadable: true }
     ])
       expect(canRescan(status(s), false)).toBe(false)
+  })
+})
+
+describe('fetchLine', () => {
+  it('shows nothing while the lookup is off', () => {
+    expect(fetchLine(undefined)).toBeUndefined()
+  })
+
+  it('shows progress while running and totals after', () => {
+    expect(fetchLine({ found: 212, notFound: 96, left: 32, running: true })).toBe(
+      'Found 212 of 340 · 96 not found · 32 left'
+    )
+    expect(fetchLine({ found: 212, notFound: 128, left: 0, running: false })).toBe(
+      'Found 212 of 340 · 128 not found'
+    )
+    expect(fetchLine({ found: 1200, notFound: 0, left: 0, running: false })).toBe(
+      'Found 1,200 of 1,200'
+    )
+  })
+
+  it('says when there is nothing to look up, or it waits for a scan', () => {
+    expect(fetchLine({ found: 0, notFound: 0, left: 0, running: false })).toBe(
+      'Every album has a cover'
+    )
+    expect(fetchLine({ found: 0, notFound: 0, left: 1, running: false })).toBe(
+      'Waiting: 1 album to look up'
+    )
   })
 })

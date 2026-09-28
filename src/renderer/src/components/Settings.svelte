@@ -1,5 +1,6 @@
 <!-- The settings sheet under the gear. Main saves every choice (see App.svelte). -->
 <script lang="ts">
+  import CoverFetch from './CoverFetch.svelte'
   import MusicFolders from './MusicFolders.svelte'
   import Seg from '../ui/Seg.svelte'
   import type { QueueMode, TemplateId } from '../../../shared/layout'
@@ -75,6 +76,7 @@
       onchange={(t: ThemeChoice) => (settings.theme = t)}
     />
   </div>
+  <CoverFetch />
   <MusicFolders />
 </div>
 

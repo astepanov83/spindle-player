@@ -1,5 +1,5 @@
 // The scan status lines for the settings sheet and the empty library.
-import type { ScanStatus } from '../../../shared/library'
+import type { FetchStatus, ScanStatus } from '../../../shared/library'
 
 const n = (x: number): string => x.toLocaleString('en-US')
 const plural = (x: number, one: string, many: string): string => `${n(x)} ${x === 1 ? one : many}`
@@ -51,4 +51,18 @@ export function canRescan(s: ScanStatus, pageFailed: boolean): boolean {
     !libraryProblem(s, pageFailed) &&
     !s.settingsUnreadable
   )
+}
+
+// The online cover lookup's line in the settings sheet (ticket 014).
+export function fetchLine(f: FetchStatus | undefined): string | undefined {
+  if (!f) return undefined
+  const total = f.found + f.notFound + f.left
+  if (!total) return 'Every album has a cover'
+  // held until the scan ends
+  if (!f.running && !f.found && !f.notFound)
+    return `Waiting: ${plural(f.left, 'album', 'albums')} to look up`
+  const parts = [`Found ${n(f.found)} of ${n(total)}`]
+  if (f.notFound) parts.push(`${n(f.notFound)} not found`)
+  if (f.left) parts.push(`${n(f.left)} left`)
+  return parts.join(' · ')
 }

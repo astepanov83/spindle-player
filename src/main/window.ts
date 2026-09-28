@@ -9,6 +9,7 @@ import { templates } from '../shared/templates'
 import { WinChannel } from '../shared/ipc'
 import { windowBackground } from '../shared/theme'
 import type { SettingsStore } from './settings-store'
+import { RestartBudget } from './library/restart'
 import { blockNavigation, canOpenExternal } from './web-guard'
 import { placeCentered, sizeFor } from './window-place'
 
@@ -25,6 +26,8 @@ export class MainWindow {
   // The size we set on a template switch. Not saved as the user's choice,
   // so a size cut down to a small screen doesn't replace the one they picked.
   #applied: Size | undefined
+  // a page that keeps crashing is loaded again a few times, not forever
+  #reloads = new RestartBudget(3, 60000)
 
   constructor(readonly store: SettingsStore) {
     const s = store.get()
@@ -52,6 +55,14 @@ export class MainWindow {
     const win = this.win
 
     win.on('ready-to-show', () => win.show())
+    // A crashed page leaves a blank window; load it again. Main has the
+    // settings, playlists and queue, so little is lost.
+    win.webContents.on('render-process-gone', (_, d) => {
+      console.error(`The app page stopped (${d.reason})`)
+      if (d.reason === 'clean-exit' || win.isDestroyed()) return
+      if (this.#reloads.take(Date.now())) win.webContents.reload()
+      else console.error('The app page stopped too often; not loading it again')
+    })
     win.on('maximize', () => win.webContents.send(WinChannel.maximized, true))
     win.on('unmaximize', () => win.webContents.send(WinChannel.maximized, false))
     win.on('resize', () => {

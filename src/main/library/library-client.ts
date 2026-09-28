@@ -96,13 +96,26 @@ export class LibraryClient {
     })
   }
 
-  // The library as it is now, for the page's first paint or a reload. Asks
-  // again after a restart; an empty library if there is no process.
+  // The library as it is now, for the page's first paint or a reload. An
+  // empty library if there is no process.
   async library(): Promise<Uint8Array> {
+    return (await this.#library()) ?? emptyLibrary()
+  }
+
+  // The whole library, for a page that missed a patch. Fails when there is
+  // none: an empty one would wipe the library the page shows and empty its queue.
+  async wholeLibrary(): Promise<Uint8Array> {
+    const library = await this.#library()
+    if (!library) throw new Error('The library process gave no library')
+    return library
+  }
+
+  // Asks again after a restart.
+  async #library(): Promise<Uint8Array | undefined> {
     let library: Uint8Array | undefined
     for (let i = 0; i < 4 && !library; i++) library = (await this.ask({ type: 'get-library' })).data
     if (library) this.#loaded = true
-    return library ?? emptyLibrary()
+    return library
   }
 
   // Handles the messages this class owns; false for the rest.

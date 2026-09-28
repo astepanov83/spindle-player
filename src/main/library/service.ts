@@ -115,9 +115,10 @@ export class LibraryService {
     }
   }
 
-  // The whole library as it is now, for a page that missed a patch.
+  // The whole library as it is now, for a page that missed a patch. Fails
+  // when there is none, so the page keeps what it shows.
   library(): Promise<Uint8Array> {
-    return this.#client.library()
+    return this.#client.wholeLibrary()
   }
 
   // The library as it is now, for the page's first paint or a reload.

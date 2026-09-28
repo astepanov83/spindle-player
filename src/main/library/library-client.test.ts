@@ -92,6 +92,22 @@ describe('LibraryClient requests', () => {
     proc.up = false
     expect(await client.library()).toEqual(emptyLibrary())
   })
+
+  it('fails an ask for the whole library when there is none, so the page keeps its own', async () => {
+    const { client, proc } = setup()
+    proc.up = false
+    await expect(client.wholeLibrary()).rejects.toThrow()
+  })
+
+  it('gives the whole library when the process answers, also after a restart', async () => {
+    const { client, sent } = setup()
+    const lib = client.wholeLibrary()
+    client.onExit(1, 'restarted')
+    await Promise.resolve()
+    const req = (sent.at(-1) as { req: number }).req
+    client.onMessage({ type: 'reply', req, data: bytes })
+    expect(await lib).toBe(bytes)
+  })
 })
 
 describe('LibraryClient scans', () => {

@@ -62,7 +62,8 @@ export interface LibraryApi {
   // cheaper than copying 50k objects.
   // `moves`: track ids that changed this run (see id-moves.ts)
   load(): Promise<{ library: Uint8Array; status: ScanStatus; moves: IdMoves }>
-  // the whole library now, when a patch doesn't fit the one the page has
+  // the whole library now, when a patch doesn't fit the one the page has;
+  // rejects when main has none, so the page keeps what it shows
   get(): Promise<Uint8Array>
   // opens the folder picker; resolves once the choice is saved
   addFolder(): Promise<void>

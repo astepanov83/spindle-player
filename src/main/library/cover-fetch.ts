@@ -76,6 +76,9 @@ export class CoverFetcher {
   #stop = new AbortController()
   #loop: Promise<void> = Promise.resolve()
   #running = false
+  // what the loops look up now, for the spinner; kept through the offline wait
+  #phase: 'covers' | 'photos' = 'covers'
+  #inFlight = { covers: 0, photos: 0 }
   // pictures that were not there (a 404), not asked for again while the app
   // runs, so a retried album doesn't repeat them
   #missing = new Set<string>()
@@ -150,6 +153,7 @@ export class CoverFetcher {
   async #run(signal: AbortSignal): Promise<void> {
     if (!this.#on || this.#held || signal.aborted) return
     this.#running = true
+    this.#phase = 'covers'
     this.#report()
     const run: RunState = { taken: new Set(), offline: undefined, broken: false }
     try {
@@ -172,6 +176,8 @@ export class CoverFetcher {
         const { job, id } = next
         run.taken.add(id)
         let out: Outcome
+        const kind = job.album ? 'covers' : 'photos'
+        this.#working(kind, 1)
         try {
           out = job.album
             ? await this.#find(job.album, signal)
@@ -186,6 +192,8 @@ export class CoverFetcher {
             continue
           }
           throw e
+        } finally {
+          this.#working(kind, -1)
         }
         if (signal.aborted) return
         if (out === 'later') continue
@@ -204,6 +212,17 @@ export class CoverFetcher {
       if (!signal.aborted && !run.broken) this.d.log(`Covers online stopped: ${e}`)
       run.broken = true
     }
+  }
+
+  // An album left for later keeps no loop on covers, so the spinner moves
+  // to photos once no loop looks up an album.
+  #working(kind: 'covers' | 'photos', by: 1 | -1): void {
+    this.#inFlight[kind] += by
+    const { covers, photos } = this.#inFlight
+    const phase = covers ? 'covers' : photos ? 'photos' : this.#phase
+    if (phase === this.#phase) return
+    this.#phase = phase
+    this.#report()
   }
 
   // One wait for all loops of the run, so being offline logs once.
@@ -237,11 +256,13 @@ export class CoverFetcher {
   #steps(signal: AbortSignal): {
     step: <T>(f: () => Promise<T>) => Promise<T | typeof failed>
     error: () => void
-    // throws NetError when no service answered at all
+    // throws NetError when no service answered and none was only busy
     outcome: () => 'none' | 'later'
   } {
     let answered = 0
     let errors = 0
+    // a busy service is online: one 429 must not start the 5 minute wait
+    let busy = 0
     return {
       step: async (f) => {
         try {
@@ -250,13 +271,14 @@ export class CoverFetcher {
           return r
         } catch (e) {
           if (signal.aborted || !(e instanceof NetError || e instanceof BusyError)) throw e
+          if (e instanceof BusyError) busy++
           errors++
           return failed
         }
       },
       error: () => void errors++,
       outcome: () => {
-        if (errors && !answered) throw new NetError('no service answered')
+        if (errors && !answered && !busy) throw new NetError('no service answered')
         return errors ? 'later' : 'none'
       }
     }
@@ -342,6 +364,7 @@ export class CoverFetcher {
       this.d.fetched
     )
     const s: FetchStatus = { ...albums, running: this.#running }
+    if (this.#running) s.phase = this.#phase
     // artist photos are looked up only with Deezer on
     if (this.#sources?.deezer) s.artists = this.#counts(this.#artists, this.d.photos)
     this.d.status(s)

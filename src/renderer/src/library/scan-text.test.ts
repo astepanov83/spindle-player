@@ -176,12 +176,29 @@ describe('artist photos in the lookup lines', () => {
     expect(fetchBusy(covers)).toBe('covers')
     expect(fetchLine(covers)).toBe('Looking up covers: found 2 of 7 · 1 not found · 4 left')
     expect(photoLine(covers)).toBe('Artist photos: found 12 of 40 · 3 not found · 25 left')
-    const photos = { ...covers, notFound: 5, left: 0 }
+    const photos = { ...covers, notFound: 5, left: 0, phase: 'photos' as const }
     expect(fetchBusy(photos)).toBe('photos')
     expect(fetchLine(photos)).toBe('Found 2 of 7 · 5 not found')
     expect(photoLine(photos)).toBe(
       'Looking up artist photos: found 12 of 40 · 3 not found · 25 left'
     )
+  })
+
+  it('puts the spinner on the photo line when main says so, with albums left for later', () => {
+    const later = {
+      found: 2,
+      notFound: 1,
+      left: 4,
+      running: true,
+      phase: 'photos' as const,
+      artists
+    }
+    expect(fetchBusy(later)).toBe('photos')
+    expect(fetchLine(later)).toBe('Found 2 of 7 · 1 not found · 4 left')
+    expect(photoLine(later)).toBe(
+      'Looking up artist photos: found 12 of 40 · 3 not found · 25 left'
+    )
+    expect(fetchBusy({ ...later, phase: 'covers' })).toBe('covers')
   })
 
   it('shows totals when done', () => {

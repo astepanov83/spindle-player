@@ -89,6 +89,8 @@ export interface FetchCounts {
 // true while it looks up covers or artist photos.
 export interface FetchStatus extends FetchCounts {
   running: boolean
+  // while running: what the lookup is on now, covers or artist photos
+  phase?: 'covers' | 'photos'
   // artist photos (ticket 021); missing while Deezer is off
   artists?: FetchCounts
 }

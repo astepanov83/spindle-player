@@ -199,6 +199,29 @@ describe('CoverFetcher', () => {
     expect(d.sleep).not.toHaveBeenCalledWith(300000, expect.anything())
   })
 
+  it('does not wait 5 minutes when the only service asked was busy', async () => {
+    const { f, fetched, calls, d } = setup(() => new BusyError('429'))
+    f.setOptions(true, { musicbrainz: false, deezer: true, itunes: false })
+    f.setQueries([q('a'), q('b', { album: 'Help', key: searchKey('The Beatles', 'Help') })])
+    f.release()
+    await f.idle
+    expect(fetched.size).toBe(0)
+    expect(calls).toHaveLength(2)
+    expect(d.sleep).not.toHaveBeenCalledWith(300000, expect.anything())
+  })
+
+  it('does not wait 5 minutes when one service was busy and the others failed', async () => {
+    const { f, fetched, d } = setup((u) =>
+      u.includes('deezer') ? new BusyError('429') : new NetError('offline')
+    )
+    f.setOptions(true, all)
+    f.setQueries([q('a')])
+    f.release()
+    await f.idle
+    expect(fetched.size).toBe(0)
+    expect(d.sleep).not.toHaveBeenCalledWith(300000, expect.anything())
+  })
+
   it('counts a Deezer error answer as no answer, not as not found', async () => {
     const { f, fetched } = setup((u) => (u.includes('deezer') ? { error: { code: 4 } } : nothing))
     f.setOptions(true, all)
@@ -469,6 +492,53 @@ describe('artist photos', () => {
     off.f.setOptions(false, all)
     await off.f.idle
     expect(off.photos.size).toBe(0)
+  })
+
+  it('stores nothing and does not wait 5 minutes when the artist search is busy', async () => {
+    const { f, photos, calls, d } = setup(() => new BusyError('429'))
+    f.setOptions(true, all)
+    f.setQueries([], [artist(), artist('Blur')])
+    f.release()
+    await f.idle
+    expect(photos.size).toBe(0)
+    // both artists were asked for
+    expect(calls).toHaveLength(2)
+    expect(d.sleep).not.toHaveBeenCalledWith(300000, expect.anything())
+  })
+
+  it('stores nothing when the picture download fails, and not found when it is not there', async () => {
+    const fails = setup(deezer, () => {
+      throw new NetError('reset')
+    })
+    fails.f.setOptions(true, all)
+    fails.f.setQueries([], [artist()])
+    fails.f.release()
+    await fails.f.idle
+    expect(fails.photos.size).toBe(0)
+    expect(fails.d.sleep).not.toHaveBeenCalledWith(300000, expect.anything())
+    const gone = setup(deezer, () => undefined)
+    gone.f.setOptions(true, all)
+    gone.f.setQueries([], [artist()])
+    gone.f.release()
+    await gone.f.idle
+    expect(gone.photos.get('queen')?.source).toBe('none')
+  })
+
+  it('says it is on photos once no album is looked up, even with one left for later', async () => {
+    const { f, d } = setup((u) =>
+      u.includes('/search/album?') && u.includes('Abbey') ? new BusyError('429') : deezer(u)
+    )
+    f.setOptions(true, { musicbrainz: false, deezer: true, itunes: false })
+    f.setQueries([q('a')], [artist()])
+    f.release()
+    await f.idle
+    const running = vi
+      .mocked(d.status)
+      .mock.calls.map(([s]) => s)
+      .filter((s) => s.running)
+    expect(running[0].phase).toBe('covers')
+    expect(running.at(-1)).toMatchObject({ phase: 'photos', left: 1 })
+    expect(vi.mocked(d.status).mock.lastCall?.[0].phase).toBeUndefined()
   })
 
   it('skips an artist with a fresh result, and looks again when the name changes', async () => {

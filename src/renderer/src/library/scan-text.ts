@@ -70,10 +70,11 @@ export function fetchLine(f: FetchStatus | undefined): string | undefined {
   return parts.join(' · ')
 }
 
-// Which line gets the spinner: albums are looked up first, then artist photos.
+// Which line gets the spinner: what main says the lookup is on now. Albums
+// left for later still count as left, so the counts can't tell.
 export function fetchBusy(f: FetchStatus | undefined): 'covers' | 'photos' | undefined {
   if (!f?.running) return undefined
-  return !f.left && f.artists?.left ? 'photos' : 'covers'
+  return f.phase === 'photos' && f.artists ? 'photos' : 'covers'
 }
 
 // The artist photos line under it (ticket 021); none while Deezer is off.

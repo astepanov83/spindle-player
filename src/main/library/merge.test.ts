@@ -245,10 +245,20 @@ describe('cue sheets in the index', () => {
     const ix = indexOf([entry('/m/i.ape', { sampleRate: 44100, channels: 2, bits: 16 })])
     ix.cues.set('/m/i.cue', { path: '/m/i.cue', mtime: 2, size: 3, sheet })
     ix.cues.set('/m/empty.cue', { path: '/m/empty.cue', mtime: 2, size: 3 })
+    ix.reader = readerVersion
     const back = parseIndex(JSON.parse(JSON.stringify(serializeIndex(ix))))
     expect(back.cues).toEqual(ix.cues)
     expect(back.files).toEqual(ix.files)
     expect(back.reader).toBe(readerVersion)
+  })
+
+  it('starts an empty index at reader 1, so a scan with ffprobe reads old entries again', () => {
+    expect(emptyIndex().reader).toBe(1)
+    expect(parseIndex(undefined).reader).toBe(1)
+    expect(parseIndex({ version: indexVersion + 1, reader: readerVersion }).reader).toBe(1)
+    // saved by a first scan without ffprobe
+    const back = parseIndex(JSON.parse(JSON.stringify(serializeIndex(emptyIndex()))))
+    expect(back.reader).toBe(1)
   })
 
   it('takes an index with no reader number as reader 1, keeping its files', () => {

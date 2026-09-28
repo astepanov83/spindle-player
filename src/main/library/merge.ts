@@ -4,17 +4,18 @@ import { paletteVersion, parseThemePalettes } from '../../shared/palette'
 import type { CueSheet, CueTrack } from './cue'
 import {
   indexVersion,
-  readerVersion,
   type CueEntry,
   type FileEntry,
   type FolderImage,
   type LibraryIndex
 } from './types'
 
+// Reader 1 until a scan with ffprobe has run: a first scan without it must not
+// mark its entries as read by the newer reader.
 export function emptyIndex(): LibraryIndex {
   return {
     version: indexVersion,
-    reader: readerVersion,
+    reader: 1,
     files: new Map(),
     cues: new Map(),
     images: new Map(),

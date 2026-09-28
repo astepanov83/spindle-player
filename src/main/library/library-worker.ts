@@ -906,6 +906,12 @@ port.on('message', (e: Electron.MessageEvent) => {
       claimed.delete(m.hash)
       // "retry" stays unknown, so the next scan reads that file again
       if (m.result === 'ok') {
+        // A cover made again from its kept picture (refillFetched) comes with
+        // no palette, and the send that dropped it may have gone out: send again.
+        if (!cached.has(m.hash)) {
+          dirty = true
+          publisher.soon()
+        }
         cached.add(m.hash)
         bad.delete(m.hash)
       } else if (m.result === 'bad') bad.add(m.hash)

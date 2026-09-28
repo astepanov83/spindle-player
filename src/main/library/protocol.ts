@@ -3,14 +3,14 @@
 // Only files the index knows are served. The page can't name a path.
 // spindle://media/<file id>?decode asks for the file as WAV decoded by ffmpeg
 // (see decode.ts); files Chromium can't play are always served that way.
-import { createReadStream } from 'fs'
-import { readFile, stat } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { Readable } from 'stream'
 import { protocol } from 'electron'
 import { extOf, needsDecoding } from './tags'
 import { isCoverHash } from './cover-names'
 import { dataSize, DecodeStream, ffmpegArgs, startFfmpeg, wavHeader } from './decode'
 import { DecodePlans } from './decode-plan'
+import { openMedia } from './media-file'
 import { probeLength, probeTags } from './probe'
 import { audioType, parseRange, type RangeResult } from './range'
 import type { LibraryService } from './service'
@@ -134,26 +134,27 @@ async function media(
 ): Promise<Response> {
   const m = await lib.mediaInfo(id)
   if (!m) return notFound()
-  let size: number
-  let version: string
-  try {
-    const s = await stat(m.path)
-    size = s.size
-    version = `${s.mtimeMs}:${s.size}`
-    lib.mediaOpened(s.dev)
-  } catch {
-    return notFound()
-  }
+  const file = await openMedia(m.path)
+  if (!file) return notFound()
+  lib.mediaOpened(file.dev)
   const ext = extOf(m.path)
   const head = req.method === 'HEAD'
-  if (decode || needsDecoding(ext, m.codec))
-    return decoded(lib, m, req, { head, forced: decode, version })
-  return ranged(
-    parseRange(req.headers.get('Range'), size),
-    size,
-    audioType(ext),
-    head ? undefined : (start, end) => createReadStream(m.path, { start, end })
-  )
+  try {
+    if (decode || needsDecoding(ext, m.codec)) {
+      // ffmpeg opens the file itself
+      file.close()
+      return await decoded(lib, m, req, { head, forced: decode, version: file.version })
+    }
+    return ranged(
+      parseRange(req.headers.get('Range'), file.size),
+      file.size,
+      audioType(ext),
+      head ? undefined : file.stream
+    )
+  } finally {
+    // HEAD, an empty file or a bad range: no stream took the file over
+    file.close()
+  }
 }
 
 export function handleProtocol(lib: LibraryService): void {

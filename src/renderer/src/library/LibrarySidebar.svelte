@@ -2,14 +2,13 @@
 <script lang="ts">
   import AlbumGrid from './AlbumGrid.svelte'
   import AlbumPage from './AlbumPage.svelte'
-  import Empty from './Empty.svelte'
+  import ArtistView from './ArtistView.svelte'
   import FolderView from './FolderView.svelte'
   import PlaylistView from './PlaylistView.svelte'
   import SearchBox from './SearchBox.svelte'
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
-  import { placeholders } from './placeholders'
   import { onSideButton } from './side-buttons'
   import { scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { songRows } from './views'
@@ -34,6 +33,7 @@
   function pick(s: Section): void {
     library.section = s
     library.open = null
+    library.artist = null
   }
 
   function create(): void {
@@ -44,10 +44,14 @@
 
   scrollTopOnChange(
     () => scrollEl,
-    () => [library.open, library.section, library.folder]
+    () => [library.open, library.section, library.folder, library.artist]
   )
 
-  const pages: Partial<Record<Section, Page>> = { albums: 'open', folders: 'folder' }
+  const pages: Partial<Record<Section, Page>> = {
+    albums: 'open',
+    folders: 'folder',
+    artists: 'artist'
+  }
 </script>
 
 <svelte:window onmouseup={(e) => onSideButton(e, pages[library.section] ?? null)} />
@@ -89,7 +93,7 @@
     {:else if library.section === 'folders'}
       <FolderView {scrollEl} />
     {:else if library.section === 'artists'}
-      <Empty title={placeholders.artists[0]} text={placeholders.artists[1]} />
+      <ArtistView {scrollEl} />
     {/if}
   </div>
 </div>

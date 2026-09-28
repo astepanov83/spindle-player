@@ -1,36 +1,29 @@
-<!-- Cover grid, drawn a row at a time so a big library stays fast. -->
+<!-- Artists as round pictures, drawn a row at a time like the album grid, so
+     10k artists stay fast. -->
 <script lang="ts">
-  import type { Album } from '../../../shared/library'
   import Empty from './Empty.svelte'
-  import Cover from '../ui/Cover.svelte'
+  import ArtistPic from './ArtistPic.svelte'
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
-  import { chunk, filterAlbums, gridColumns } from './views'
+  import { artistKey, type Artist } from '../../../shared/artists'
+  import { artistCovers, artistSongs, filterArtists } from './artists'
+  import { chunk, gridColumns } from './views'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { library } from '../stores/library.svelte'
   import { queue } from '../stores/queue.svelte'
 
-  let {
-    scrollEl,
-    items,
-    onopen = (id) => (library.open = id)
-  }: {
-    scrollEl: HTMLElement | undefined
-    // these albums instead of the library's, with no search (an artist's)
-    items?: Album[]
-    onopen?: (albumId: string) => void
-  } = $props()
+  let { scrollEl }: { scrollEl: HTMLElement | undefined } = $props()
 
   const GAP = 16
   const ROW_GAP = 22
   let list: HTMLDivElement | undefined = $state()
   let width = $state(0)
 
-  const albums = $derived(items ?? filterAlbums(library.albums, library.query))
+  const artists = $derived(filterArtists(library.artists, library.query))
   const cols = $derived(gridColumns(width, 140, GAP))
-  const rows = $derived(chunk(albums, cols))
-  // cover + title + artist, measured for real once drawn
-  const estimate = $derived((width - GAP * (cols - 1)) / cols + 44 + ROW_GAP)
+  const rows = $derived(chunk(artists, cols))
+  // picture + name + count, measured for real once drawn
+  const estimate = $derived((width - GAP * (cols - 1)) / cols + 50 + ROW_GAP)
 
   const v = virtualList(
     () => ({ count: rows.length, scrollEl, list, size: estimate, remeasure: true }),
@@ -40,10 +33,29 @@
   function measure(node: HTMLDivElement): void {
     v.measure(node)
   }
+
+  // the artists of the song playing: its album's and its own
+  const playing = $derived(
+    new Set(
+      queue.current && queue.currentAlbum
+        ? [artistKey(queue.currentAlbum.artist), artistKey(queue.current.artist)]
+        : []
+    )
+  )
+
+  const album = (id: string): { cover: string; trackIds: string[] } => library.album(id)
+  const songCover = (id: string): string => library.art(library.track(id)).cover
+  const plural = (n: number, one: string, many: string): string =>
+    `${n.toLocaleString()} ${n === 1 ? one : many}`
+  // albums, or songs for an artist with only songs on other albums
+  const count = (a: Artist): string =>
+    a.albums.length
+      ? plural(a.albums.length, 'album', 'albums')
+      : plural(a.also.length, 'song', 'songs')
 </script>
 
-{#if !items && !albums.length}
-  <Empty title="No matches" text="Nothing found for this search. Try an album or artist name." />
+{#if !artists.length}
+  <Empty title="No matches" text="No artist has that in their name." />
 {/if}
 <div class="grid" bind:this={list} bind:clientWidth={width} style:height="{v.total}px">
   {#each v.items as item (item.key)}
@@ -54,24 +66,27 @@
       style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
       style:transform="translateY({v.offset(item)}px)"
     >
-      {#each rows[item.index] as al (al.id)}
+      {#each rows[item.index] as a (a.key)}
         <div class="card">
-          <div class="cvwrap">
-            <button class="cv" aria-label="Open {al.title}" onclick={() => onopen(al.id)}
-              ><Cover src={al.cover} /></button
+          <div class="picwrap">
+            <button class="pic" aria-label="Open {a.name}" onclick={() => library.openArtist(a.key)}
+              ><ArtistPic
+                photo={library.photos[a.key]?.cover}
+                covers={artistCovers(a, album, songCover)}
+              /></button
             >
             <button
               class="qp"
-              aria-label="Play {al.title}"
-              onclick={() => queue.playAlbum(al.id, 0)}
+              aria-label="Play {a.name}"
+              onclick={() => queue.playList(artistSongs(a, album), 0, a.name)}
             >
               <Icon name="play" />
             </button>
           </div>
           <div class="t">
-            {#if al.id === queue.currentAlbum?.id}<Eq />{/if}<span>{al.title}</span>
+            {#if playing.has(a.key)}<Eq />{/if}<span>{a.name}</span>
           </div>
-          <div class="a">{al.artist}</div>
+          <div class="a">{count(a)}</div>
         </div>
       {/each}
     </div>
@@ -94,30 +109,30 @@
   .card {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 8px;
-    text-align: left;
+    text-align: center;
     min-width: 0;
   }
-  .cvwrap {
+  .picwrap {
     position: relative;
+    width: 100%;
   }
-  .cv {
+  .pic {
     display: block;
     width: 100%;
-    position: relative;
     aspect-ratio: 1;
-    border-radius: 8px;
-    overflow: hidden;
+    border-radius: 50%;
     box-shadow: 0 8px 20px -10px var(--shadow);
     transition: transform 0.2s;
   }
-  .card:hover .cv {
+  .card:hover .pic {
     transform: translateY(-3px);
   }
   .qp {
     position: absolute;
-    right: 8px;
-    bottom: 8px;
+    right: 4%;
+    bottom: 4%;
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -141,6 +156,8 @@
     display: flex;
     gap: 6px;
     align-items: center;
+    justify-content: center;
+    max-width: 100%;
     min-width: 0;
   }
   .t span {

@@ -1,7 +1,15 @@
 // Library data plus view state. The view state lives here, not in the part,
 // so a layout rebuild keeps the open album, search, sort and section.
 // Main sends the data (from the index, then after each scan that changed something).
-import type { Album, Art, LibraryData, ScanStatus, Track } from '../../../shared/library'
+import { listArtists, type Artist } from '../../../shared/artists'
+import type {
+  Album,
+  Art,
+  ArtistPhoto,
+  LibraryData,
+  ScanStatus,
+  Track
+} from '../../../shared/library'
 import {
   nextPlaylistSort,
   withPlaylistSort,
@@ -18,13 +26,21 @@ import {
   type FolderNav,
   type FolderTree
 } from '../library/folders'
+import {
+  artistBack,
+  artistForward,
+  goToArtist,
+  type ArtistNav,
+  type ArtistPlace
+} from '../library/artists'
 
 export type Chip = 'albums' | 'artists' | 'folders' | 'playlists'
 // sidebar sections; playlists are "pl:<id>"
 export type Section = 'songs' | 'albums' | 'artists' | 'folders' | `pl:${string}`
 // the pages the mouse Back and Forward buttons close and reopen; in
-// Folders they go up a folder and back down
-export type Page = 'open' | 'openPlaylist' | 'folder'
+// Folders they go up a folder and back down, in Artists from an album to
+// its artist to the grid and back
+export type Page = 'open' | 'openPlaylist' | 'folder' | 'artist'
 
 class LibraryStore {
   // plain arrays, not deep proxies: they can hold 50k+ songs
@@ -33,6 +49,11 @@ class LibraryStore {
   #order = new Map<string, number>()
   #albumIndex = new Map<string, number>()
   folders: FolderTree = $state.raw(emptyTree())
+  // name order (see shared/artists.ts)
+  artists: Artist[] = $state.raw([])
+  #artistIndex = new Map<string, number>()
+  // artist key -> photo found online
+  photos: Readonly<Record<string, ArtistPhoto>> = $state.raw({})
   // The maps above are plain, so Svelte can't see them change. Every reader
   // touches this, so a $derived that looked up a track runs again after a load.
   #version = $state(0)
@@ -67,6 +88,13 @@ class LibraryStore {
   #folderNav: FolderNav = $state.raw({ folder: null, below: [] })
   // Folders show songs in folder order until a column is clicked, like playlists.
   folderSort: Sort | null = $state(null)
+  // The open artist's key, null for the grid. An album opened from it is
+  // `open`. Change them with openArtist and openArtistAlbum, so Forward
+  // knows what Back left.
+  artist: string | null = $state(null)
+  #artistAhead: ArtistPlace[] = []
+  // "Also on" shows in library order until a column is clicked, like playlists.
+  artistSort: Sort | null = $state(null)
   // the page mouse Back last closed, for Forward to reopen
   #closed: { page: Page; id: string } | null = null
 
@@ -79,9 +107,13 @@ class LibraryStore {
       const i = this.#albumIndex.get(id)
       return i === undefined ? '' : data.albums[i].cover
     })
+    this.artists = listArtists(data.albums, (id) => this.#tracks.get(id)!)
+    this.#artistIndex = new Map(this.artists.map((a, i) => [a.key, i]))
+    this.photos = data.artistPhotos ?? {}
     this.#version++
-    // the open album may be gone after a rescan
+    // the open album or artist may be gone after a rescan
     if (this.open && !this.#albumIndex.has(this.open)) this.open = null
+    if (this.artist && !this.#artistIndex.has(this.artist)) this.artist = null
   }
 
   playlistSort(id: string): Sort | null {
@@ -111,10 +143,42 @@ class LibraryStore {
     this.folderSort = nextPlaylistSort(this.folderSort, k)
   }
 
+  getArtist(key: string): Artist | undefined {
+    const i = this.#artistIndex.get(key)
+    return i === undefined ? undefined : this.artists[i]
+  }
+
+  get #artistNav(): ArtistNav {
+    return { artist: this.artist, album: this.open, ahead: this.#artistAhead }
+  }
+
+  set #artistNav(nav: ArtistNav) {
+    this.artist = nav.artist
+    this.open = nav.album
+    this.#artistAhead = nav.ahead
+  }
+
+  // null goes back to the grid
+  openArtist(key: string | null): void {
+    this.#artistNav = goToArtist(this.#artistNav, { artist: key, album: null })
+  }
+
+  openArtistAlbum(id: string): void {
+    this.#artistNav = goToArtist(this.#artistNav, { artist: this.artist, album: id })
+  }
+
+  sortArtist(k: SortKey): void {
+    this.artistSort = nextPlaylistSort(this.artistSort, k)
+  }
+
   // Mouse Back: from an album or playlist page to its list, or up a folder.
   back(page: Page): void {
     if (page === 'folder') {
       this.#folderNav = folderBack(this.folders, this.#folderNav)
+      return
+    }
+    if (page === 'artist') {
+      this.#artistNav = artistBack(this.#artistNav)
       return
     }
     const id = this[page]
@@ -127,6 +191,15 @@ class LibraryStore {
   forward(page: Page): void {
     if (page === 'folder') {
       this.#folderNav = folderForward(this.folders, this.#folderNav)
+      return
+    }
+    if (page === 'artist') {
+      this.#artistNav = artistForward(
+        this.#artistNav,
+        (p) =>
+          (!p.artist || this.#artistIndex.has(p.artist)) &&
+          (!p.album || this.#albumIndex.has(p.album))
+      )
       return
     }
     const c = this.#closed

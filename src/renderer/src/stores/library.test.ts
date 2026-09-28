@@ -108,3 +108,44 @@ describe('mouse Back and Forward', () => {
     expect(library.open).toBeNull()
   })
 })
+
+describe('Artists', () => {
+  const photo = { cover: 'spindle://cover/small/p', coverLarge: 'spindle://cover/large/p' }
+
+  it('lists the artists and their photos from the library', () => {
+    library.load({ ...lib('a'), artistPhotos: { x: photo } })
+    expect(library.artists.map((a) => a.name)).toEqual(['X'])
+    expect(library.getArtist('x')?.albums).toEqual(['a'])
+    expect(library.photos).toEqual({ x: photo })
+    library.load(lib('a'))
+    expect(library.photos).toEqual({})
+  })
+
+  it('Back goes from an album to its artist to the grid, and Forward back down', () => {
+    library.openArtist('x')
+    library.openArtistAlbum('a')
+    library.back('artist')
+    expect([library.artist, library.open]).toEqual(['x', null])
+    library.back('artist')
+    expect([library.artist, library.open]).toEqual([null, null])
+    // the Albums side is not touched
+    library.forward('open')
+    expect(library.open).toBeNull()
+    library.forward('artist')
+    library.forward('artist')
+    expect([library.artist, library.open]).toEqual(['x', 'a'])
+  })
+
+  it('closes an artist a rescan removed, and Forward skips it', () => {
+    library.openArtist('x')
+    library.back('artist')
+    const gone = lib('a')
+    gone.albums[0].artist = 'Y'
+    library.load(gone)
+    library.forward('artist')
+    expect(library.artist).toBeNull()
+    library.openArtist('y')
+    library.load(lib('a'))
+    expect(library.artist).toBeNull()
+  })
+})

@@ -8,7 +8,8 @@
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
 
-  let { albumId }: { albumId: string } = $props()
+  // back: the label of the link back (an artist's name when opened from them)
+  let { albumId, back = 'All albums' }: { albumId: string; back?: string } = $props()
 
   const al = $derived(library.album(albumId))
   const tracks = $derived(al.trackIds.map((id) => library.track(id)))
@@ -21,7 +22,7 @@
 </script>
 
 <button class="back" onclick={() => (library.open = null)}
-  ><Icon name="back" size={16} />All albums</button
+  ><Icon name="back" size={16} />{back}</button
 >
 <div class="albhead">
   <div class="cv"><Cover src={al.coverLarge} /></div>

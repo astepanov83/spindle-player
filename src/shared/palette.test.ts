@@ -66,6 +66,10 @@ const covers: Record<string, Uint8Array> = {
     ['#48cae4', 1500],
     ['#03045e', 548]
   ]),
+  palePink: image([
+    ['#f4c2d7', 3500],
+    ['#fbe8ef', 596]
+  ]),
   flatBlue: image([['#0050ff', 4096]]),
   flatYellow: image([['#ffd400', 4096]]),
   greyscale: gradient('#101010', '#e0e0e0'),
@@ -169,6 +173,13 @@ describe('coverPalettes', () => {
   it('cream only: light turns it to ochre instead of olive', () => {
     const [, , h] = hexToLch(coverPalettes(covers.cream).light[1])
     expect(h).toBeLessThan(80)
+  })
+
+  it('pale covers keep their color in dark, though the tint is fitted too', () => {
+    // with main's full lightness in the tint these came out nearly white
+    expect(coverPalettes(covers.palePink).dark[1]).toBe('#f4c2d7')
+    expect(hexToLch(coverPalettes(covers.cream).dark[1])[1]).toBeGreaterThan(0.07)
+    expect(hexToLch(coverPalettes(covers.flatYellow).dark[1])[1]).toBeGreaterThan(0.15)
   })
 
   it('greyscale stays grey: no made-up hue', () => {

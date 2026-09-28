@@ -43,5 +43,6 @@ describe('theme.css and theme.ts', () => {
       ])
       expect(g.flat[3]).toBe(over(value(theme, '--panel'), bg))
       expect(value(theme, '--tint')).toBe(`${Math.round(g.tint * 100)}%`)
+      expect(Number(value(theme, '--tint-max-l'))).toBe(g.tintMaxL)
     })
 })

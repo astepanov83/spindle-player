@@ -29,6 +29,9 @@
   --on-cover-shadow: rgba(0, 0, 0, 0.8);
   /* album color strength: tint areas and the Focus wash */
   --tint: 70%;
+  /* main is made no lighter than this before it goes into a tint, so a pale
+     cover's tint stays dark enough for a colorful accent (src/shared/theme.ts) */
+  --tint-max-l: 0.7;
   --wash-top: 20%;
   --wash-bottom: 50%;
 
@@ -65,6 +68,7 @@
     --glass: rgba(255, 255, 255, 0.7);
     --shadow: rgba(30, 32, 40, 0.25);
     --tint: 35%;
+    --tint-max-l: 1;
     --wash-top: 45%;
     --wash-bottom: 70%;
     --glow: 50%;

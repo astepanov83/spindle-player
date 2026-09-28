@@ -316,7 +316,9 @@ export const accentRange = {
 export function accentSurfaces(main: string, dark: string, theme: ThemeName): string[] {
   const g = accentGround[theme]
   const bg = windowBackground[theme]
-  return [...g.flat, mixOklch(main, bg, g.tint), mixOklch(dark, bg, g.tint / 2)]
+  const [L, C, H] = hexToLch(main)
+  const top = lchToHex([Math.min(L, g.tintMaxL), C, H])
+  return [...g.flat, mixOklch(top, bg, g.tint), mixOklch(dark, bg, g.tint / 2)]
 }
 
 // Moves a color into the theme's lightness range, then fits it for contrast

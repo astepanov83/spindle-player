@@ -109,7 +109,12 @@
   .look-tint {
     background: linear-gradient(
       170deg,
-      color-mix(in oklch, var(--c1) var(--tint), var(--bg)) 0%,
+      color-mix(
+          in oklch,
+          oklch(from var(--c1) min(l, var(--tint-max-l)) c h) var(--tint),
+          var(--bg)
+        )
+        0%,
       color-mix(in oklch, var(--c3) calc(var(--tint) / 2), var(--bg)) 55%,
       var(--bg) 100%
     );

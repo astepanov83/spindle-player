@@ -1,5 +1,6 @@
 // Main's side of the library. The library process owns the index and does the
 // heavy work; main passes messages on, runs the folder dialog, and makes covers.
+// The bookkeeping (replies, the scan asked for, the status) is in library-client.ts.
 import { join } from 'path'
 import { app, dialog, utilityProcess, type BrowserWindow } from 'electron'
 import { LibraryChannel } from '../../shared/ipc'
@@ -7,20 +8,11 @@ import type { ScanStatus } from '../../shared/library'
 import { ffmpegTool } from '../ffmpeg-path'
 import type { SettingsStore } from '../settings-store'
 import { CoverCache } from './cover-cache'
+import { LibraryClient } from './library-client'
 import { LibraryProcess } from './library-process'
 import { RestartBudget } from './restart'
 import libraryProcessPath from './library-worker?modulePath'
 import type { MediaInfo, WorkerIn, WorkerOut } from './types'
-
-type Reply = Extract<WorkerOut, { type: 'reply' }>
-type Ask =
-  | { type: 'find-track'; id: string }
-  | { type: 'cover-source'; hash: string }
-  | { type: 'get-library' }
-
-// What the page gets when the worker can't give it a library.
-const emptyLibrary = (): Uint8Array =>
-  new TextEncoder().encode(JSON.stringify({ albums: [], tracks: [] }))
 
 // At quit, main waits this long at most for the library process to save the index.
 const flushWaitMs = 2000
@@ -33,14 +25,11 @@ export class LibraryService {
   readonly ffmpeg = ffmpegTool('ffmpeg')
   readonly ffprobe = ffmpegTool('ffprobe')
   #proc: LibraryProcess
+  #client: LibraryClient
   #playing = false
   // device of the last audio file the page opened
   #playingDev: number | undefined
-  #status: ScanStatus
   #scannedOnStart = false
-  #nextReq = 0
-  #replies = new Map<number, (m: Reply) => void>()
-  #quitting = false
 
   constructor(
     readonly store: SettingsStore,
@@ -53,16 +42,12 @@ export class LibraryService {
       console.error(
         'ffmpeg or ffprobe not found (npm run fetch-ffmpeg); APE, WMA and the like will not play'
       )
-    this.#status = {
-      folders: store.get().folders,
-      phase: 'idle',
-      done: 0,
-      total: 0,
-      tracks: 0,
-      albums: 0,
-      failed: 0,
-      missing: []
-    }
+    this.#client = new LibraryClient({
+      post: (m) => this.#post(m),
+      send: (s) => this.send(LibraryChannel.status, s),
+      folders: () => this.store.get().folders,
+      canScan: store.readable
+    })
     this.#proc = new LibraryProcess(
       () =>
         utilityProcess.fork(libraryProcessPath, [], {
@@ -79,10 +64,11 @@ export class LibraryService {
       new RestartBudget(3, 60000),
       {
         message: (m) => this.#onMessage(m),
-        exit: (code, restarted) => this.#onExit(code, restarted),
+        exit: (code, restarted) => this.#client.onExit(code, restarted),
         // a new process starts at full speed; tell it if a song is playing
         started: () => {
           if (this.#playing) this.#sendPlaying()
+          this.#client.onStarted()
         }
       },
       flushWaitMs
@@ -90,46 +76,22 @@ export class LibraryService {
     this.#proc.start()
   }
 
-  #onExit(code: number, restarted: boolean): void {
-    // requests to the dead process get an empty answer (a 404 for the page)
-    for (const [req, done] of this.#replies) done({ type: 'reply', req })
-    this.#replies.clear()
-    if (this.#quitting) return
-    this.#setStatus({ phase: 'idle', done: 0, total: 0 })
-    if (restarted) console.error(`Library process stopped (code ${code}), starting it again`)
-    else {
-      console.error(`Library process stopped (code ${code}) too often; the library stays empty`)
-      this.#setStatus({ unavailable: true })
-    }
-  }
-
   #post(m: WorkerIn): boolean {
-    return this.#proc.post(m)
-  }
-
-  #setStatus(change: Partial<ScanStatus>): void {
-    this.#status = { ...this.#status, ...change }
-    this.send(LibraryChannel.status, this.#status)
+    // the client is made first, so the process may not exist yet
+    return this.#proc?.post(m) ?? false
   }
 
   #onMessage(m: WorkerOut): void {
+    if (this.#client.onMessage(m)) return
     switch (m.type) {
       case 'library':
         // JSON bytes the page parses; main never reads them
         this.send(LibraryChannel.changed, m.bytes)
         break
-      case 'status':
-        this.#status = m.status
-        this.send(LibraryChannel.status, m.status)
-        break
       case 'cover':
         void (
           m.paletteOnly ? this.covers.palette(m.hash, m.data) : this.covers.add(m.hash, m.data)
         ).then((done) => this.#post({ type: 'cover-done', hash: m.hash, ...done }))
-        break
-      case 'reply':
-        this.#replies.get(m.req)?.(m)
-        this.#replies.delete(m.req)
         break
       case 'log':
         console.info(m.text)
@@ -137,42 +99,21 @@ export class LibraryService {
     }
   }
 
-  // An answer from the worker; an empty one if there is no worker or it dies first.
-  #ask(m: Ask): Promise<Reply> {
-    const req = ++this.#nextReq
-    return new Promise<Reply>((r) => {
-      this.#replies.set(req, r)
-      if (!this.#post({ ...m, req })) {
-        this.#replies.delete(req)
-        r({ type: 'reply', req })
-      }
-    })
-  }
-
   // The library as it is now, for the page's first paint or a reload.
-  // Tries again after a worker restart; gives an empty library if there is no worker.
   async load(): Promise<{ library: Uint8Array; status: ScanStatus }> {
-    let library: Uint8Array | undefined
-    for (let i = 0; i < 4 && !library; i++)
-      library = (await this.#ask({ type: 'get-library' })).data
+    const library = await this.#client.library()
     // after the reply is on its way, so the scan doesn't delay the first paint
     if (!this.#scannedOnStart) {
       this.#scannedOnStart = true
       setTimeout(() => this.scan(false), 0)
     }
-    return { library: library ?? emptyLibrary(), status: this.#status }
+    return { library, status: this.#client.status }
   }
 
   // A scan already running stops; what it read stays. Files that failed last
   // time are read again only on a manual Rescan (retryFailed).
   scan(retryFailed: boolean): void {
-    // The folder list on disk is unknown, and a scan of the defaults (no
-    // folders) would empty the index and delete the covers.
-    if (!this.store.readable) {
-      console.error('Library: settings.json could not be read, so the folders are not scanned')
-      return
-    }
-    this.#post({ type: 'scan', folders: this.store.get().folders, retryFailed })
+    this.#client.scan(retryFailed)
   }
 
   // The app window closed: no more scanning or covers until a new one opens,
@@ -180,7 +121,7 @@ export class LibraryService {
   pause(): void {
     this.covers.shutDown()
     this.setPlaying(false)
-    this.#post({ type: 'stop' })
+    this.#client.stop()
   }
 
   // The page's play state: while a song plays from a disk being scanned, the
@@ -207,6 +148,8 @@ export class LibraryService {
   }
 
   async addFolder(win: BrowserWindow | null): Promise<void> {
+    // the list would change in memory only (the page greys the button out too)
+    if (!this.store.readable) return
     const options: Electron.OpenDialogOptions = {
       title: 'Add music folder',
       buttonLabel: 'Add',
@@ -218,33 +161,34 @@ export class LibraryService {
   }
 
   removeFolder(path: unknown): void {
+    if (!this.store.readable) return
     const folders = this.store.get().folders
     if (typeof path !== 'string' || !folders.includes(path)) return
     this.#setFolders(folders.filter((f) => f !== path))
   }
 
   // The status carries the list the settings sheet shows. It is set here too,
-  // since a worker that is gone for good sends no more status.
+  // since a process that is gone for good sends no more status.
   #setFolders(folders: string[]): void {
     this.store.setFolders(folders)
-    this.#setStatus({ folders: this.store.get().folders })
+    this.#client.setStatus({ folders: this.store.get().folders })
     this.scan(false)
   }
 
   // Only files in the index are served, by id; never a path from the page.
   async mediaInfo(id: string): Promise<MediaInfo | undefined> {
-    return (await this.#ask({ type: 'find-track', id })).media
+    return (await this.#client.ask({ type: 'find-track', id })).media
   }
 
   // The picture a cover hash was made from, to make the large size.
   async coverSource(hash: string): Promise<Uint8Array | undefined> {
-    return (await this.#ask({ type: 'cover-source', hash })).data
+    return (await this.#client.ask({ type: 'cover-source', hash })).data
   }
 
   // Quitting: lets the library process write the index, waiting a short while
   // at most (see LibraryProcess).
   flush(): Promise<void> {
-    this.#quitting = true
+    this.#client.quitting()
     return this.#proc.flush()
   }
 }

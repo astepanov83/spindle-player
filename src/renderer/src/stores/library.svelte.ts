@@ -28,6 +28,9 @@ class LibraryStore {
     failed: 0,
     missing: []
   })
+  // The page could not get or read a library from main. Kept apart from the
+  // status, which main sends often, so the next status doesn't hide it.
+  loadFailed = $state(false)
 
   chip: Chip = $state('albums')
   section: Section = $state('songs')

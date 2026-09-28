@@ -34,6 +34,7 @@ import { extOf, frontCover, normalizeTags } from './tags'
 import { walk } from './walk'
 import { pruneCoverFiles, removeOldTemp } from './cover-prune'
 import { ownCopy } from './bytes'
+import { FirstFill, ScanChain, Stopped } from './scan-chain'
 import { pictureWithHash } from './cover-source'
 import { markerOf, smallName } from './cover-names'
 import {
@@ -118,7 +119,15 @@ function setStatus(change: Partial<ScanStatus>): void {
 }
 
 let lastProgress = 0
-function progress(phase: 'walk' | 'read', done: number, total: number, force = false): void {
+function progress(
+  gen: number,
+  phase: 'walk' | 'read',
+  done: number,
+  total: number,
+  force = false
+): void {
+  // a stopped scan may still have a listing or read on its way
+  if (chain.stale(gen)) return
   const now = Date.now()
   if (!force && now - lastProgress < 100) return
   lastProgress = now
@@ -260,14 +269,11 @@ function liveUsed(): Set<string> {
   return usedCache.used
 }
 
-// The last prune. A scan starts only once it is done, so a prune never deletes
-// a cover that a newer scan made or is making.
-let pruning: Promise<void> = Promise.resolve()
-
 // Deletes covers nothing points at any more, and their palettes. It stops when
-// a newer scan is asked for; that scan prunes when it ends.
+// a newer scan is asked for; that scan prunes when it ends. The chain starts
+// no scan before it ended, so it never deletes a cover a newer scan uses.
 async function pruneCovers(gen: number): Promise<void> {
-  const stale = (): boolean => gen !== scanGen
+  const stale = (): boolean => chain.stale(gen)
   if (stale()) return
   // palettes don't change what the page shows, so only the file needs saving
   if (prunePalettes(ix, liveUsed())) {
@@ -288,12 +294,7 @@ async function pruneCovers(gen: number): Promise<void> {
 
 // --- scan ---
 
-// Bumped by every scan; a scan that sees a newer number stops.
-let scanGen = 0
-class Stopped extends Error {}
-function checkGen(gen: number): void {
-  if (gen !== scanGen) throw new Stopped()
-}
+const checkGen = (gen: number): void => chain.check(gen)
 
 async function readFileEntry(
   path: string,
@@ -359,33 +360,39 @@ function phaseTimes(took: number[]): string {
   return took.map((ms, i) => `${['listing', 'sizes and images', 'tags'][i]} ${ms}`).join(', ')
 }
 
-async function scan(folders: string[], retryFailed: boolean, gen: number): Promise<void> {
+async function scan(
+  folders: string[],
+  retryFailed: boolean,
+  gen: number,
+  id: number
+): Promise<void> {
   const t0 = performance.now()
   // ms spent listing, getting sizes, and reading, for the log
   const took: number[] = []
   const lap = (): void =>
     void took.push(Math.round(performance.now() - t0 - took.reduce((a, b) => a + b, 0)))
-  const firstFill = ix.files.size === 0
+  firstFill.start(built.data.tracks.length === 0)
   // While scanning: save what was read so far, so a quit or crash keeps it.
   // A first scan also shows it, so an empty library fills in as it goes.
   const interim = setInterval(() => {
-    if (firstFill && dirty) publish()
+    if (firstFill.on && dirty) publish()
     saveIndex()
   }, interimMs)
+  let failed = false
   let read = 0
   try {
     retryBad = retryFailed
-    setStatus({ folders, phase: 'walk', done: 0, total: 0, missing: [] })
+    setStatus({ folders, phase: 'walk', done: 0, total: 0, missing: [], scanFailed: false })
     scannedDevs = await devicesOf(folders)
     setPace()
     const listing = await walk(
       folders,
       dirPace,
       () => checkGen(gen),
-      (files) => progress('walk', files, 0)
+      (files) => progress(gen, 'walk', files, 0)
     )
     lap()
-    progress('walk', listing.files.length, 0, true)
+    progress(gen, 'walk', listing.files.length, 0, true)
 
     const found: { path: string; mtime: number; size: number }[] = []
     const cues: typeof found = []
@@ -443,7 +450,7 @@ async function scan(folders: string[], retryFailed: boolean, gen: number): Promi
     })
 
     const byPath = new Map(found.map((f) => [f.path, f]))
-    progress('read', 0, toRead.length, true)
+    progress(gen, 'read', 0, toRead.length, true)
     await eachPaced(toRead, readPace, async (path) => {
       checkGen(gen)
       const f = byPath.get(path)!
@@ -451,9 +458,9 @@ async function scan(folders: string[], retryFailed: boolean, gen: number): Promi
       checkGen(gen)
       if (applyBatch(ix, [entry])) markChanged()
       read++
-      progress('read', read, toRead.length)
+      progress(gen, 'read', read, toRead.length)
     })
-    progress('read', read, toRead.length, true)
+    progress(gen, 'read', read, toRead.length, true)
     if (newReader) {
       ix.reader = readerVersion
       unsaved = true
@@ -466,25 +473,26 @@ async function scan(folders: string[], retryFailed: boolean, gen: number): Promi
       checkGen(gen)
     }
   } catch (error) {
-    if (!(error instanceof Stopped)) log(`Library scan failed: ${error}`)
     // a stopped scan keeps what it read; the next one carries on from there
     if (error instanceof Stopped) {
       saveIndex()
-      return
+      throw error
     }
+    log(`Library scan failed: ${error}`)
+    failed = true
   } finally {
     clearInterval(interim)
   }
+  firstFill.end()
   if (dirty) publish()
   saveIndex()
-  setStatus({ phase: 'idle', done: 0, total: 0 })
+  setStatus({ phase: 'idle', done: 0, total: 0, scanFailed: failed })
+  post({ type: 'scanned', id })
   log(
     `Library scan: ${Math.round(performance.now() - t0)} ms (${phaseTimes(took)}), ` +
       `${read} files read, ` +
       `${status.tracks} songs in ${status.albums} albums`
   )
-  pruning = pruneCovers(gen).catch((e) => log(`Could not prune covers: ${e}`))
-  await pruning
 }
 
 // --- lookups for the protocol ---
@@ -515,25 +523,16 @@ port.on('message', (e: Electron.MessageEvent) => {
     case 'start':
       started(m.start)
       break
-    case 'scan': {
-      if (closing) break
-      const gen = ++scanGen
-      // let a stopped scan's waits wake up and see the new number
-      wakeCoverWaiters()
-      ready
-        .then(() => pruning)
-        .then(() => scan(m.folders, m.retryFailed, gen))
-        .catch((e) => log(`Library scan failed: ${e}`))
+    case 'scan':
+      void chain.request((gen) => scan(m.folders, m.retryFailed, gen, m.id))
       break
-    }
     case 'playing':
       playing = m.playing
       playingDev = m.dev
       setPace()
       break
     case 'stop':
-      ++scanGen
-      wakeCoverWaiters()
+      chain.stop()
       break
     case 'cover-done':
       sent.delete(m.hash)
@@ -571,8 +570,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       saveIndex()
       writer?.flushSync()
       closing = true
-      ++scanGen
-      wakeCoverWaiters()
+      chain.close()
       post({ type: 'flushed' })
       break
     case 'cover-source':
@@ -618,3 +616,12 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   ixEdits++
   build()
 })
+
+// Scans and prunes, one after the other; see scan-chain.ts.
+const chain = new ScanChain(ready, {
+  prune: pruneCovers,
+  // let a stopped scan's waits wake up and see the new number
+  wake: wakeCoverWaiters,
+  log
+})
+const firstFill = new FirstFill()

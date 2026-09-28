@@ -91,8 +91,9 @@ export interface MediaInfo {
 export type WorkerIn =
   // always the first message; the process waits for it
   | { type: 'start'; start: WorkerStart }
-  // retryFailed: read files that failed last time again (a manual Rescan)
-  | { type: 'scan'; folders: string[]; retryFailed: boolean }
+  // retryFailed: read files that failed last time again (a manual Rescan).
+  // id comes back with 'scanned' when the scan ends.
+  | { type: 'scan'; id: number; folders: string[]; retryFailed: boolean }
   // a picture sent with 'cover' is written (ok), can't be decoded (bad),
   // or went unanswered (retry: try again on a later scan)
   // rebuild: a cached small cover that can't be decoded was deleted; make it again
@@ -126,3 +127,5 @@ export type WorkerOut =
   | { type: 'reply'; req: number; media?: MediaInfo; data?: Uint8Array }
   | { type: 'log'; text: string }
   | { type: 'flushed' }
+  // a scan ran to the end or failed; a stopped one sends nothing
+  | { type: 'scanned'; id: number }

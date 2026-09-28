@@ -1,10 +1,12 @@
 <!-- "Music folders" in the settings sheet. Main owns the list; this only asks. -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
-  import { scanLine } from '../library/scan-text'
+  import { statusLines } from '../library/scan-text'
   import { library } from '../stores/library.svelte'
 
   const s = $derived(library.status)
+  // with settings.json unreadable, main would change the list in memory only
+  const locked = $derived(!!s.settingsUnreadable)
 </script>
 
 <div class="set">
@@ -19,6 +21,7 @@
             class="rm"
             aria-label="Remove {f}"
             title="Remove"
+            disabled={locked}
             onclick={() => window.libraryApi.removeFolder(f)}
             ><Icon name="close" size={16} /></button
           >
@@ -27,14 +30,20 @@
     </ul>
   {/if}
   <div class="acts">
-    <button class="btn" onclick={() => window.libraryApi.addFolder()}>Add folder</button>
+    <button class="btn" disabled={locked} onclick={() => window.libraryApi.addFolder()}
+      >Add folder</button
+    >
     <button
       class="btn"
       disabled={!s.folders.length || s.phase !== 'idle'}
       onclick={() => window.libraryApi.rescan()}>Rescan</button
     >
   </div>
-  <p class="hint" aria-live="polite">{scanLine(s)}</p>
+  <div aria-live="polite">
+    {#each statusLines(s, library.loadFailed) as line (line)}
+      <p class="hint">{line}</p>
+    {/each}
+  </div>
 </div>
 
 <style>
@@ -89,7 +98,7 @@
     place-items: center;
     color: var(--ink-3);
   }
-  .rm:hover {
+  .rm:hover:not(:disabled) {
     background: var(--hover);
     color: var(--ink);
   }
@@ -110,6 +119,10 @@
   .btn:disabled {
     color: var(--ink-3);
     cursor: default;
+  }
+  .rm:disabled {
+    cursor: default;
+    opacity: 0.4;
   }
   .hint {
     margin: 0;

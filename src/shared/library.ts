@@ -64,6 +64,11 @@ export interface ScanStatus {
   failed: number
   // folders that could not be read in the last scan, e.g. an unplugged drive
   missing: string[]
-  // main gave up on the library worker: no library this run
-  unavailable?: boolean
+  // Main gave up on the library process for this run. not-loaded: it never
+  // gave a library. stopped: it did, then stopped; songs no longer play.
+  unavailable?: 'not-loaded' | 'stopped'
+  // the last scan ended with an error (it is logged); the next scan clears it
+  scanFailed?: boolean
+  // settings.json could not be read, so the folders can't be changed or scanned this run
+  settingsUnreadable?: boolean
 }

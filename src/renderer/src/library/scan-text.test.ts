@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { ScanStatus } from '../../../shared/library'
-import { scanLine } from './scan-text'
+import {
+  libraryProblem,
+  notLoadedText,
+  scanFailedText,
+  scanLine,
+  settingsText,
+  statusLines,
+  stoppedText
+} from './scan-text'
 
 const status = (s: Partial<ScanStatus>): ScanStatus => ({
   folders: ['/m'],
@@ -15,12 +23,6 @@ const status = (s: Partial<ScanStatus>): ScanStatus => ({
 })
 
 describe('scanLine', () => {
-  it('says so when the library could not be loaded', () => {
-    expect(scanLine(status({ unavailable: true, tracks: 0 }))).toBe(
-      'The library could not be loaded. Restart Spindle to try again.'
-    )
-  })
-
   it('shows progress while scanning', () => {
     expect(scanLine(status({ phase: 'walk', done: 1234 }))).toBe('Looking for files: 1,234 found')
     expect(scanLine(status({ phase: 'read', done: 12, total: 5000 }))).toBe(
@@ -37,5 +39,45 @@ describe('scanLine', () => {
 
   it('says when there are no folders', () => {
     expect(scanLine(status({ folders: [] }))).toBe('No music folders yet.')
+  })
+})
+
+describe('libraryProblem', () => {
+  it('says the library could not be loaded when it never was', () => {
+    expect(libraryProblem(status({ unavailable: 'not-loaded' }), false)).toBe(notLoadedText)
+    // the page could not read what main sent, whatever the status says
+    expect(libraryProblem(status({}), true)).toBe(notLoadedText)
+  })
+
+  it('says the library stopped when it gave up after a good load', () => {
+    expect(libraryProblem(status({ unavailable: 'stopped', tracks: 20 }), false)).toBe(stoppedText)
+  })
+
+  it('says nothing when all is well', () => {
+    expect(libraryProblem(status({ tracks: 3 }), false)).toBeUndefined()
+  })
+})
+
+describe('statusLines', () => {
+  it('shows the problem instead of the totals', () => {
+    expect(statusLines(status({ unavailable: 'stopped', tracks: 20 }), false)).toEqual([
+      stoppedText
+    ])
+  })
+
+  it('keeps a page-side failure when a new status comes', () => {
+    expect(statusLines(status({ tracks: 20, albums: 2 }), true)).toEqual([notLoadedText])
+  })
+
+  it('adds a line for unreadable settings and a failed scan', () => {
+    expect(
+      statusLines(status({ folders: [], settingsUnreadable: true, scanFailed: true }), false)
+    ).toEqual(['No music folders yet.', settingsText, scanFailedText])
+  })
+
+  it('drops the failed-scan line while a new scan runs', () => {
+    expect(statusLines(status({ phase: 'walk', done: 3, scanFailed: true }), false)).toEqual([
+      'Looking for files: 3 found'
+    ])
   })
 })

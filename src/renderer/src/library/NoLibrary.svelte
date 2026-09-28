@@ -1,16 +1,20 @@
 <!-- What the library shows before there are any songs. -->
 <script lang="ts">
   import { library } from '../stores/library.svelte'
-  import { scanLine, unavailableText } from './scan-text'
+  import { libraryProblem, scanLine, settingsText, stoppedText } from './scan-text'
 
   const s = $derived(library.status)
   const scanning = $derived(s.phase !== 'idle')
+  const problem = $derived(libraryProblem(s, library.loadFailed))
 </script>
 
 <div class="none">
-  {#if s.unavailable}
-    <b>Library not loaded</b>
-    <p>{unavailableText}</p>
+  {#if problem}
+    <b>{problem === stoppedText ? 'Library stopped' : 'Library not loaded'}</b>
+    <p>{problem}</p>
+  {:else if s.settingsUnreadable && !s.folders.length}
+    <b>Settings not loaded</b>
+    <p>{settingsText}</p>
   {:else if scanning}
     <b>Looking for music</b>
     <p>{scanLine(s)}</p>

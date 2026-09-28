@@ -29,27 +29,35 @@ const [saved, lib, lists, lastQueue] = await Promise.all([
   orFallback(() => window.settingsApi.load(), defaultSettings(), 'the settings'),
   orFallback<{ library?: Uint8Array; status: ScanStatus }>(
     () => window.libraryApi.load(),
-    { status: { ...library.status, unavailable: true } },
+    { status: library.status },
     'the library'
   ),
   orFallback(() => window.playlistsApi.load(), [], 'the playlists'),
   orFallback(() => window.playbackApi.loadQueue(), emptyQueue(), 'the queue')
 ])
 loadSettings(saved.value, saved.ok)
-try {
-  if (lib.value.library) library.load(decodeLibrary(lib.value.library))
-  library.status = lib.value.status
-} catch (e) {
-  console.error('Could not read the library', e)
-  library.status = { ...lib.value.status, unavailable: true }
-}
+library.status = lib.value.status
+library.loadFailed = !lib.ok
+if (lib.value.library) loadLibrary(lib.value.library)
 playlists.load(lists.value, lists.ok)
 // paused where it was; songs no longer in the library leave the queue
 queue.restore(lastQueue.value)
 
+// A library that can't be read leaves the one shown as it is.
+function loadLibrary(bytes: Uint8Array): boolean {
+  try {
+    library.load(decodeLibrary(bytes))
+  } catch (e) {
+    console.error('Could not read the library', e)
+    library.loadFailed = true
+    return false
+  }
+  library.loadFailed = false
+  return true
+}
+
 window.libraryApi.onChanged((bytes) => {
-  library.load(decodeLibrary(bytes))
-  queue.prune()
+  if (loadLibrary(bytes)) queue.prune()
 })
 window.libraryApi.onStatus((s) => (library.status = s))
 

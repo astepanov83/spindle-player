@@ -9,17 +9,9 @@ import { Readable } from 'stream'
 import { protocol } from 'electron'
 import { extOf, needsDecoding } from './tags'
 import { isCoverHash } from './cover-cache'
-import {
-  dataSize,
-  DecodeStream,
-  ffmpegArgs,
-  startFfmpeg,
-  wavFormat,
-  wavHeader,
-  wavHeaderSize,
-  type WavFormat
-} from './decode'
-import { probeTags } from './probe'
+import { dataSize, DecodeStream, ffmpegArgs, startFfmpeg, wavHeader } from './decode'
+import { DecodePlans } from './decode-plan'
+import { probeLength, probeTags } from './probe'
 import { audioType, parseRange, type RangeResult } from './range'
 import type { LibraryService } from './service'
 import type { MediaInfo } from './types'
@@ -96,54 +88,36 @@ function ranged(
   return new Response(stream, { status: 200, headers })
 }
 
-// The WAV format and length of a file to decode. The index has them for files
-// read since 012; others are asked of ffprobe once per run.
-const probed = new Map<string, { format: WavFormat; duration: number }>()
-
-async function decodePlan(
-  lib: LibraryService,
-  m: MediaInfo
-): Promise<{ format: WavFormat; duration: number } | undefined> {
-  if (m.sampleRate && m.channels && m.duration > 0)
-    return { format: wavFormat(m.sampleRate, m.channels, m.bits), duration: m.duration }
-  const known = probed.get(m.path)
-  if (known) return known
-  if (!lib.ffprobe) return undefined
-  try {
-    const f = (await probeTags(lib.ffprobe, m.path)).format
-    const duration = f.duration ?? m.duration
-    if (!f.sampleRate || !f.numberOfChannels || !(duration > 0)) return undefined
-    const plan = {
-      format: wavFormat(f.sampleRate, f.numberOfChannels, f.bitsPerSample),
-      duration
-    }
-    if (probed.size >= 200) probed.clear()
-    probed.set(m.path, plan)
-    return plan
-  } catch (e) {
-    console.error(`Could not read the format of ${m.path}: ${e}`)
-    return undefined
-  }
-}
+const plans = new DecodePlans()
 
 async function decoded(
   lib: LibraryService,
   m: MediaInfo,
   req: Request,
-  head: boolean
+  o: { head: boolean; forced: boolean; version: string }
 ): Promise<Response> {
   const ffmpeg = lib.ffmpeg
-  const plan = ffmpeg ? await decodePlan(lib, m) : undefined
+  const ffprobe = lib.ffprobe
+  const probe = ffprobe
+    ? { tags: (p: string) => probeTags(ffprobe, p), length: (p: string) => probeLength(ffprobe, p) }
+    : undefined
+  let plan
+  try {
+    plan = ffmpeg ? await plans.get(m, o.version, o.forced, probe) : undefined
+  } catch (e) {
+    console.error(`Could not read the format of ${m.path}: ${e}`)
+  }
   if (!ffmpeg || !plan) return notFound()
   const { format, duration } = plan
   const data = dataSize(format, duration)
   const header = wavHeader(format, data)
-  const range = parseRange(req.headers.get('Range'), wavHeaderSize + data)
+  const size = header.length + data
+  const range = parseRange(req.headers.get('Range'), size)
   return ranged(
     range,
-    wavHeaderSize + data,
+    size,
     'audio/wav',
-    head
+    o.head
       ? undefined
       : (start, end) =>
           new DecodeStream(header, format, start, end, (seconds) =>
@@ -161,16 +135,19 @@ async function media(
   const m = await lib.mediaInfo(id)
   if (!m) return notFound()
   let size: number
+  let version: string
   try {
     const s = await stat(m.path)
     size = s.size
+    version = `${s.mtimeMs}:${s.size}`
     lib.mediaOpened(s.dev)
   } catch {
     return notFound()
   }
   const ext = extOf(m.path)
   const head = req.method === 'HEAD'
-  if (decode || needsDecoding(ext, m.codec)) return decoded(lib, m, req, head)
+  if (decode || needsDecoding(ext, m.codec))
+    return decoded(lib, m, req, { head, forced: decode, version })
   return ranged(
     parseRange(req.headers.get('Range'), size),
     size,

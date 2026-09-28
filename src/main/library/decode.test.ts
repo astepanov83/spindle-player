@@ -5,6 +5,7 @@ import {
   dataSize,
   DecodeStream,
   ffmpegArgs,
+  maxPlainData,
   runningDecoders,
   stopAllDecoders,
   wavFormat,
@@ -27,6 +28,36 @@ describe('the WAV file', () => {
     expect(dataSize(cd, 0.5)).toBe(88200)
     expect(dataSize(wavFormat(44100, 2, 24), 1)).toBe(264600)
     expect(dataSize(cd, -1)).toBe(0)
+  })
+
+  it('writes RF64 with a ds64 chunk when the sound passes 4 GiB', () => {
+    // 24-bit 192 kHz stereo, 65 minutes: 4.49 GB
+    const f = wavFormat(192000, 2, 24)
+    const data = dataSize(f, 3900)
+    expect(data).toBe(4492800000)
+    const h = wavHeader(f, data)
+    const v = new DataView(h.buffer)
+    const ascii = (a: number, n: number): string => String.fromCharCode(...h.subarray(a, a + n))
+    expect(h.length).toBe(80)
+    expect(ascii(0, 4)).toBe('RF64')
+    expect(v.getUint32(4, true)).toBe(0xffffffff)
+    expect(ascii(8, 12)).toBe('WAVEds64\x1c\0\0\0')
+    expect(v.getBigUint64(20, true)).toBe(BigInt(72 + data))
+    expect(v.getBigUint64(28, true)).toBe(BigInt(data))
+    expect(v.getBigUint64(36, true)).toBe(BigInt(3900 * 192000))
+    expect(v.getUint32(44, true)).toBe(0)
+    expect(ascii(48, 4)).toBe('fmt ')
+    expect(v.getUint16(58, true)).toBe(2)
+    expect(v.getUint32(60, true)).toBe(192000)
+    expect(v.getUint16(70, true)).toBe(24)
+    expect(ascii(72, 4)).toBe('data')
+    expect(v.getUint32(76, true)).toBe(0xffffffff)
+  })
+
+  it('keeps plain RIFF up to the largest size it can hold', () => {
+    expect(wavHeader(cd, maxPlainData).length).toBe(44)
+    expect(new DataView(wavHeader(cd, maxPlainData).buffer).getUint32(4, true)).toBe(0xffffffff)
+    expect(wavHeader(cd, maxPlainData + 1).length).toBe(80)
   })
 
   it('has a standard 44-byte PCM header', () => {
@@ -136,6 +167,21 @@ describe('DecodeStream', () => {
     const out = await all
     expect(starts).toEqual([1])
     expect([...out]).toEqual([3, 4, 5, 6, 7, 8])
+  })
+
+  it('counts the sound from the end of an RF64 header', async () => {
+    const header = wavHeader(cd, maxPlainData + 1)
+    const child = new FakeDecoder()
+    const starts: number[] = []
+    const s = new DecodeStream(header, cd, 80 + 4 * 44100 + 1, 80 + 4 * 44100 + 3, (t) => {
+      starts.push(t)
+      return child
+    })
+    const all = readAll(s)
+    await new Promise((r) => setImmediate(r))
+    child.stdout.write(bytes(8))
+    expect([...(await all)]).toEqual([2, 3, 4])
+    expect(starts).toEqual([1])
   })
 
   it('sends only part of the header when the range ends in it', async () => {

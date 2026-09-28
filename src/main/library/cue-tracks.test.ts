@@ -199,6 +199,52 @@ describe('cueTracks', () => {
     expect(items.map((i) => i.entry.title)).toEqual(['T1', 'T2'])
   })
 
+  it('takes one track per file as the whole file, also after a pregap', () => {
+    const ix = index(
+      [
+        entry('/m/a/01.flac', { duration: 200 }),
+        entry('/m/a/02.flac', { duration: 180, title: 'Own Title' })
+      ],
+      [
+        [
+          '/m/a/x.cue',
+          {
+            files: ['01.flac', '02.flac'],
+            tracks: [
+              { no: 1, file: 0, start: 2, title: 'One' },
+              { no: 2, file: 1, start: 1.5 }
+            ]
+          }
+        ]
+      ]
+    )
+    const { items } = cueTracks(ix)
+    expect(items.map((i) => i.id)).toEqual([shortHash('/m/a/01.flac'), shortHash('/m/a/02.flac')])
+    expect(items.map((i) => i.part)).toEqual([undefined, undefined])
+    expect(items.map((i) => i.entry.duration)).toEqual([200, 180])
+    // no TITLE in the sheet: the file's own title before "Track 02"
+    expect(items.map((i) => i.entry.title)).toEqual(['One', 'Own Title'])
+  })
+
+  it('names a stretch of an image with no TITLE by its number, not by the image title', () => {
+    const ix = index(
+      [entry('/m/a/i.ape', { title: 'Whole Album' })],
+      [
+        [
+          '/m/a/i.cue',
+          {
+            files: ['i.ape'],
+            tracks: [
+              { no: 1, file: 0, start: 0 },
+              { no: 2, file: 0, start: 9 }
+            ]
+          }
+        ]
+      ]
+    )
+    expect(cueTracks(ix).items.map((i) => i.entry.title)).toEqual(['Track 01', 'Track 02'])
+  })
+
   it('ends the last track of each file at that file’s end', () => {
     const ix = index(
       [entry('/m/a/1.flac', { duration: 300 }), entry('/m/a/2.flac', { duration: 200 })],

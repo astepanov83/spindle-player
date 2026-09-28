@@ -69,19 +69,22 @@ function imageTracks(
   // a sheet whose tracks start past the end of the file is not for this file
   const last = tracks[tracks.length - 1]
   if (!last || (image.duration > 0 && last.start >= image.duration)) return []
-  const whole = tracks.length === 1 && tracks[0].start === 0
+  // one track in a file is that whole file (a sheet over split files), also
+  // when its INDEX 01 comes after a pregap: it plays from 0, like the file
+  const whole = tracks.length === 1
   const out: CueItem[] = []
   tracks.forEach((t, i) => {
     const id = whole ? shortHash(image.path) : shortHash(`${image.path}#${t.no}`)
     if (used.has(id)) return
     used.add(id)
     const end = tracks[i + 1]?.start
-    const length = (end ?? image.duration) - t.start
+    const length = whole ? image.duration : (end ?? image.duration) - t.start
     const entry: FileEntry = {
       path: image.path,
       mtime: image.mtime,
       size: image.size,
-      title: t.title ?? `Track ${String(t.no).padStart(2, '0')}`,
+      title:
+        t.title ?? (whole ? image.title : undefined) ?? `Track ${String(t.no).padStart(2, '0')}`,
       artist: t.performer ?? sheet.performer ?? image.artist,
       albumArtist: sheet.performer ?? image.albumArtist,
       album: sheet.title ?? image.album,

@@ -12,8 +12,6 @@ export interface WavFormat {
   bits: 16 | 24
 }
 
-export const wavHeaderSize = 44
-
 // 24-bit sources stay 24-bit; everything else is 16-bit.
 export function wavFormat(sampleRate: number, channels: number, bits?: number): WavFormat {
   return {
@@ -30,26 +28,43 @@ export function dataSize(f: WavFormat, seconds: number): number {
   return Math.max(0, Math.round(seconds * f.sampleRate)) * blockSize(f)
 }
 
-// A plain 44-byte PCM WAV header.
+// The most a plain WAV's 32-bit RIFF size can say: 4 GiB less its header.
+export const maxPlainData = 0xffffffff - 36
+
+// A PCM WAV header: plain RIFF (44 bytes), or RF64 (80 bytes) when the sound
+// is too big for RIFF's 32-bit sizes (4 GiB: 24-bit 192 kHz stereo after about
+// 62 minutes). RF64 keeps the real sizes in a ds64 chunk; Chromium's WAV
+// reader takes it and seeks it like a plain WAV (checked with a 4.5 GB plan).
 export function wavHeader(f: WavFormat, dataBytes: number): Uint8Array {
-  const b = new Uint8Array(wavHeaderSize)
+  const big = dataBytes > maxPlainData
+  const b = new Uint8Array(big ? 80 : 44)
   const v = new DataView(b.buffer)
   const ascii = (at: number, s: string): void => {
     for (let i = 0; i < s.length; i++) b[at + i] = s.charCodeAt(i)
   }
-  ascii(0, 'RIFF')
-  v.setUint32(4, 36 + dataBytes, true)
+  let at = 12
+  ascii(0, big ? 'RF64' : 'RIFF')
+  v.setUint32(4, big ? 0xffffffff : b.length - 8 + dataBytes, true)
   ascii(8, 'WAVE')
-  ascii(12, 'fmt ')
-  v.setUint32(16, 16, true)
-  v.setUint16(20, 1, true)
-  v.setUint16(22, f.channels, true)
-  v.setUint32(24, f.sampleRate, true)
-  v.setUint32(28, f.sampleRate * blockSize(f), true)
-  v.setUint16(32, blockSize(f), true)
-  v.setUint16(34, f.bits, true)
-  ascii(36, 'data')
-  v.setUint32(40, dataBytes, true)
+  if (big) {
+    ascii(12, 'ds64')
+    v.setUint32(16, 28, true)
+    v.setBigUint64(20, BigInt(b.length - 8 + dataBytes), true)
+    v.setBigUint64(28, BigInt(dataBytes), true)
+    v.setBigUint64(36, BigInt(dataBytes / blockSize(f)), true)
+    v.setUint32(44, 0, true)
+    at = 48
+  }
+  ascii(at, 'fmt ')
+  v.setUint32(at + 4, 16, true)
+  v.setUint16(at + 8, 1, true)
+  v.setUint16(at + 10, f.channels, true)
+  v.setUint32(at + 12, f.sampleRate, true)
+  v.setUint32(at + 16, f.sampleRate * blockSize(f), true)
+  v.setUint16(at + 20, blockSize(f), true)
+  v.setUint16(at + 22, f.bits, true)
+  ascii(at + 24, 'data')
+  v.setUint32(at + 28, big ? 0xffffffff : dataBytes, true)
   return b
 }
 

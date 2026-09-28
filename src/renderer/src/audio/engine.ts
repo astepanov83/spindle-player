@@ -49,7 +49,7 @@ const wholeFile: Part = { start: 0 }
 // how close to a part's end counts as there
 const endSlack = 0.005
 
-class AudioEngine {
+export class AudioEngine {
   readonly el: HTMLAudioElement
   readonly context: AudioContext
   readonly analyser: AnalyserNode

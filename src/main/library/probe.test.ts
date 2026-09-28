@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { probeToTags, run } from './probe'
+import { lengthMayBeGuessed, packetsLength, probeToTags, run } from './probe'
 import { normalizeTags } from './tags'
 
 // ffprobe 7.0.2 on the user's "October Rust" image (APE 3.97, no tags).
@@ -127,5 +127,28 @@ describe('run', () => {
 
   it('fails when the program is not there', async () => {
     await expect(run('/nonexistent/ffprobe', [])).rejects.toThrow(/ENOENT/)
+  })
+})
+
+describe('packetsLength', () => {
+  it('runs from the first packet to the end of the last', () => {
+    expect(
+      packetsLength('0.000000,0.026122\n0.026122,0.026122\n120.006531,0.026122\n')
+    ).toBeCloseTo(120.032653, 6)
+    expect(packetsLength('1.5,0.5\n3.0,0.5\n')).toBe(2)
+  })
+
+  it('skips lines with no time and gives nothing for no packets', () => {
+    expect(packetsLength('N/A,0.1\n2,1\n\n')).toBe(1)
+    expect(packetsLength('')).toBeUndefined()
+  })
+})
+
+describe('lengthMayBeGuessed', () => {
+  it('is true for MPEG audio and raw ADTS AAC only', () => {
+    expect(lengthMayBeGuessed('MP2/3 (MPEG audio layer 2/3)')).toBe(true)
+    expect(lengthMayBeGuessed('raw ADTS AAC (Advanced Audio Coding)')).toBe(true)
+    expect(lengthMayBeGuessed('WAV / WAVE (Waveform Audio)')).toBe(false)
+    expect(lengthMayBeGuessed(undefined)).toBe(false)
   })
 })

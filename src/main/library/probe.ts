@@ -120,3 +120,34 @@ export async function probeTags(bin: string, path: string): Promise<RawTags> {
   if (!tags) throw new Error('ffprobe found no audio')
   return tags
 }
+
+// The real length from the last audio packet's end, for files whose container
+// has no sample count (an mp3 with no Xing header, raw ADTS AAC). ffprobe's
+// own length for those is a guess from the bitrate. `csv` is ffprobe's
+// "pts_time,duration_time" lines.
+export function packetsLength(csv: string): number | undefined {
+  let first: number | undefined
+  let end: number | undefined
+  for (const line of csv.split('\n')) {
+    const [p, d] = line.split(',')
+    const pts = Number(p)
+    if (!p || !Number.isFinite(pts)) continue
+    first ??= pts
+    const e = pts + (Number(d) || 0)
+    if (end === undefined || e > end) end = e
+  }
+  return first !== undefined && end !== undefined && end > first ? end - first : undefined
+}
+
+// Reads every packet of the file (not decoding them), so a whole read of it.
+export async function probeLength(bin: string, path: string): Promise<number | undefined> {
+  const args = ['-v', 'error', '-select_streams', 'a:0']
+  args.push('-show_entries', 'packet=pts_time,duration_time', '-of', 'csv=p=0', `file:${path}`)
+  // about 20 bytes a packet: 64 MB is a few days of mp3
+  return packetsLength(await run(bin, args, 120000, 64 * 1024 * 1024))
+}
+
+// Containers whose length ffprobe (and music-metadata) may guess from the bitrate.
+export function lengthMayBeGuessed(container: string | undefined): boolean {
+  return /MPEG audio|ADTS/i.test(container ?? '')
+}

@@ -8,7 +8,7 @@
   let { photo, covers }: { photo: string | undefined; covers: string[] } = $props()
 
   // a photo the cache lost shows the covers, not a broken image. Only until
-  // the next load: a scan can make its small file again at the same URL.
+  // the next library or patch: a scan can make its small file again at the same URL.
   let failed = $state({ url: '', load: -1 })
   const broken = $derived(failed.url === photo && failed.load === library.revision)
 </script>

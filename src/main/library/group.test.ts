@@ -6,6 +6,13 @@ import type { FileEntry, LibraryIndex } from './types'
 import { cleanArtist, searchKey } from './cover-match'
 import { artistKey } from '../../shared/artists'
 import type { Fetched } from './fetched-store'
+import type { LibraryData } from '../../shared/library'
+import {
+  applyPatch,
+  diffLibrary,
+  type HeldLibrary,
+  type PatchBody
+} from '../../shared/library-patch'
 
 const entry = (path: string, more: Partial<FileEntry> = {}): FileEntry => ({
   path,
@@ -391,5 +398,91 @@ describe('artist photos (ticket 021)', () => {
     expect(build(files, undefined, (x) => x !== h, undefined, photos()).data.artistPhotos).toEqual(
       {}
     )
+  })
+})
+
+describe('library patches (ticket 022)', () => {
+  const h1 = 'c'.repeat(40)
+  const h2 = 'd'.repeat(40)
+  const queen = (hash: string): Fetched =>
+    new Map([[artistKey('Queen'), { hash, source: 'deezer', at: 0, key: cleanArtist('Queen') }]])
+  const roots = ['/m', '/n']
+  const buildNow = (files: FileEntry[], photos?: Fetched): LibraryData => {
+    const ix = emptyIndex()
+    for (const f of files) ix.files.set(f.path, f)
+    return buildLibrary(ix, () => true, undefined, roots, photos).data
+  }
+
+  // The page's side: what it keeps, and the library it shows from that.
+  function page(start: LibraryData): {
+    take: (p: PatchBody) => void
+    shown: () => LibraryData
+  } {
+    const tracks = new Map(start.tracks.map((t) => [t.id, t]))
+    let held: HeldLibrary = {
+      albums: start.albums,
+      folders: start.folders,
+      photos: start.artistPhotos ?? {}
+    }
+    return {
+      take: (p) => (held = applyPatch(held, tracks, p)),
+      shown: () => ({
+        albums: held.albums,
+        tracks: held.albums.flatMap((a) => a.trackIds.map((id) => tracks.get(id)!)),
+        folders: held.folders,
+        artistPhotos: held.photos
+      })
+    }
+  }
+
+  it('gives the page the same library as a full build, folders and photos too', () => {
+    const zed = entry('/m/Zed/1.mp3', { album: 'Jazz', artist: 'Queen', title: 'Mustapha' })
+    const gold1 = entry('/m/Abba/Gold/1.mp3', { album: 'Gold', artist: 'ABBA', title: 'SOS' })
+    const gold2 = entry('/m/Abba/Gold/2.mp3', { album: 'Gold', artist: 'ABBA', title: 'Mamma' })
+    const other = entry('/n/x/1.mp3', { album: 'X', artist: 'Blur', title: 'Song 2' })
+    const cd1 = entry('/m/Beta/CD1/1.mp3', { album: 'Beta', artist: 'Queen', title: 'One' })
+    // files come in walk order, not name order, and photos while the lookup runs
+    const steps: [FileEntry[], Fetched?][] = [
+      [[zed]],
+      [[zed, gold1, gold2]],
+      [[zed, gold1, gold2, other], queen(h1)],
+      [[zed, gold1, gold2, other, cd1, { ...gold1, title: 'S.O.S.' }], queen(h2)],
+      [[gold1, other]]
+    ]
+    const empty = buildNow([])
+    const p = page(empty)
+    let last = empty
+    const sent: PatchBody[] = []
+    for (const [files, photos] of steps) {
+      const next = buildNow(files, photos)
+      const d = diffLibrary(last, next)!
+      sent.push(d)
+      p.take(d)
+      expect(p.shown()).toEqual(next)
+      last = next
+    }
+    // Abba came before Zed: Zed's folder moved, and its song was not sent again
+    expect(sent[1].folderMoves).toBeDefined()
+    expect(sent[1].tracks.map((t) => t.title).sort()).toEqual(['Mamma', 'SOS'])
+    expect(sent[2].photos).toEqual({ [artistKey('Queen')]: expect.anything() })
+    // Queen's songs left, and with them the photo
+    expect(sent[4].gonePhotos).toEqual([artistKey('Queen')])
+    expect(p.shown().folders.map((f) => f.name)).toEqual(['/m', 'Abba', 'Gold', '/n', 'x'])
+  })
+
+  it('sends only photos when only a photo was found', () => {
+    const files = [entry('/m/q/1.mp3', { album: 'Jazz', artist: 'Queen', title: 'Mustapha' })]
+    const d = diffLibrary(buildNow(files), buildNow(files, queen(h1)))!
+    expect(d).toEqual({
+      albums: [],
+      tracks: [],
+      goneTracks: [],
+      photos: {
+        [artistKey('Queen')]: {
+          cover: `spindle://cover/small/${h1}`,
+          coverLarge: `spindle://cover/large/${h1}`
+        }
+      }
+    })
   })
 })

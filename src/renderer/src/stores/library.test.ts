@@ -121,7 +121,7 @@ describe('Artists', () => {
     expect(library.photos).toEqual({})
   })
 
-  it('counts loads, so a photo that failed to show tries again after a scan', () => {
+  it('counts libraries, so a photo that failed to show tries again after one', () => {
     const before = library.revision
     library.load(lib('a'))
     expect(library.revision).toBe(before + 1)
@@ -233,5 +233,74 @@ describe('patches while a scan runs', () => {
     expect(gone).toBe(true)
     expect(library.open).toBeNull()
     expect(library.has('b1')).toBe(false)
+  })
+
+  it('updates folders, artists and photos, and keeps the open folder and artist', () => {
+    const l = lib('a', 'b')
+    l.albums[1].artist = 'Y'
+    l.albums[0].trackIds = ['a1']
+    l.albums[1].trackIds = ['b1']
+    library.load({
+      ...l,
+      tracks: [song('a1', 'a'), { ...song('b1', 'b'), artist: 'Y', folder: 1 }],
+      folders: [
+        { name: '/m', parent: -1 },
+        { name: 'B', parent: 0 }
+      ],
+      epoch: 'e',
+      n: 0
+    })
+    library.openFolder(library.folders.nodes[1].key)
+    library.openArtist('y')
+    const open = library.folder
+    const before = library.revision
+    // a folder "A" came before "B", with a new song by a new artist
+    library.patch({
+      patch: true,
+      epoch: 'e',
+      from: 0,
+      n: 1,
+      albums: [{ ...library.album('a'), trackIds: ['a1', 'a2'] }],
+      tracks: [{ ...song('a2', 'a'), artist: 'Z', folder: 1 }],
+      goneTracks: [],
+      folders: [
+        { name: '/m', parent: -1 },
+        { name: 'A', parent: 0 },
+        { name: 'B', parent: 0 }
+      ],
+      folderMoves: [0, 2],
+      photos: { z: { cover: 'spindle://cover/small/z', coverLarge: 'spindle://cover/large/z' } }
+    })
+    expect(library.revision).toBeGreaterThan(before)
+    expect(library.track('b1').folder).toBe(2)
+    expect(library.folders.nodes.map((n) => n.name)).toEqual(['m', 'A', 'B'])
+    expect(library.folder).toBe(open)
+    expect(
+      library.folders.nodes[library.folders.byKey.get(open!)!].tracks.map((t) => t.id)
+    ).toEqual(['b1'])
+    expect(library.artist).toBe('y')
+    expect(library.getArtist('z')?.also).toEqual(['a2'])
+    expect(Object.keys(library.photos)).toEqual(['z'])
+  })
+
+  it('takes photos alone without making the lists again', () => {
+    start()
+    const { albums, artists, folders } = library
+    const before = library.revision
+    library.patch({
+      patch: true,
+      epoch: 'e',
+      from: 0,
+      n: 1,
+      albums: [],
+      tracks: [],
+      goneTracks: [],
+      photos: { x: { cover: 'spindle://cover/small/x', coverLarge: 'spindle://cover/large/x' } }
+    })
+    expect(library.photos.x.cover).toBe('spindle://cover/small/x')
+    expect([library.albums, library.artists, library.folders]).toEqual([albums, artists, folders])
+    expect(library.artists).toBe(artists)
+    // a photo that failed to show tries again
+    expect(library.revision).toBe(before + 1)
   })
 })

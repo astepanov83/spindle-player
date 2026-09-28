@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { Album, LibraryData, Track } from './library'
 import type { ThemePalettes } from './palette'
-import { applyPatch, diffLibrary, patchStep, same, type LibraryPatch } from './library-patch'
+import {
+  applyPatch,
+  diffLibrary,
+  patchStep,
+  same,
+  type HeldLibrary,
+  type LibraryPatch
+} from './library-patch'
 
 const palette: ThemePalettes = {
   dark: ['#111111', '#222222', '#333333'],
@@ -37,7 +44,14 @@ const album = (id: string, trackIds: string[], more: Partial<Album> = {}): Album
 const lib = (albums: Album[], tracks: Track[]): LibraryData => ({
   albums,
   tracks,
-  folders: [{ name: '/m', parent: -1 }]
+  folders: [{ name: '/m', parent: -1 }],
+  artistPhotos: {}
+})
+
+const held = (l: LibraryData): HeldLibrary => ({
+  albums: l.albums,
+  folders: l.folders,
+  photos: l.artistPhotos ?? {}
 })
 
 // What the page has after the patch: albums in order, and every track by id.
@@ -45,11 +59,13 @@ function patched(old: LibraryData, next: LibraryData): LibraryData {
   const d = diffLibrary(old, next)
   if (!d) return old
   const tracks = new Map(old.tracks.map((t) => [t.id, t]))
-  const albums = applyPatch(old.albums, tracks, d)
-  return lib(
-    albums,
-    albums.flatMap((a) => a.trackIds.map((id) => tracks.get(id)!))
-  )
+  const h = applyPatch(held(old), tracks, d)
+  return {
+    albums: h.albums,
+    tracks: h.albums.flatMap((a) => a.trackIds.map((id) => tracks.get(id)!)),
+    folders: h.folders,
+    artistPhotos: h.photos
+  }
 }
 
 describe('same', () => {
@@ -106,7 +122,7 @@ describe('diffLibrary', () => {
     )
     const tracks = new Map(base.tracks.map((t) => [t.id, t]))
     const one = tracks.get('1')
-    const albums = applyPatch(base.albums, tracks, diffLibrary(base, next)!)
+    const { albums } = applyPatch(held(base), tracks, diffLibrary(base, next)!)
     expect(albums[0]).toBe(base.albums[0])
     expect(tracks.get('1')).toBe(one)
   })
@@ -116,18 +132,52 @@ describe('applyPatch', () => {
   it('gives the same album list when only songs changed', () => {
     const next = lib(base().albums, [track('1', 'x', { duration: 5 })])
     const tracks = new Map(base().tracks.map((t) => [t.id, t]))
-    const old = base().albums
-    const albums = applyPatch(old, tracks, diffLibrary(base(), next)!)
-    expect(albums).toBe(old)
+    const old = held(base())
+    const out = applyPatch(old, tracks, diffLibrary(base(), next)!)
+    expect(out.albums).toBe(old.albums)
+    expect(out.folders).toBe(old.folders)
+    expect(out.photos).toBe(old.photos)
     expect(tracks.get('1')?.duration).toBe(5)
   })
 
   it('throws on an order with an album it does not have', () => {
     const p = { albums: [], tracks: [track('2', 'x')], goneTracks: ['1'], order: ['nope'] }
     const tracks = new Map(base().tracks.map((t) => [t.id, t]))
-    expect(() => applyPatch(base().albums, tracks, p)).toThrow()
+    expect(() => applyPatch(held(base()), tracks, p)).toThrow()
     // nothing changed
     expect([...tracks.keys()]).toEqual(['1'])
+  })
+
+  it('throws when a folder went and a song still in it was not sent', () => {
+    const p = {
+      albums: [],
+      tracks: [],
+      goneTracks: [],
+      folders: [{ name: '/n', parent: -1 }],
+      folderMoves: [-1]
+    }
+    const tracks = new Map(base().tracks.map((t) => [t.id, t]))
+    const one = tracks.get('1')
+    expect(() => applyPatch(held(base()), tracks, p)).toThrow()
+    expect(tracks.get('1')).toBe(one)
+  })
+
+  it('renumbers songs whose folder moved, and drops photos that went', () => {
+    const old = { ...base(), artistPhotos: { a: { cover: 'x', coverLarge: 'y' } } }
+    const next: LibraryData = {
+      ...base(),
+      folders: [
+        { name: '/a', parent: -1 },
+        { name: '/m', parent: -1 }
+      ],
+      tracks: [track('1', 'x', { folder: 1 })],
+      artistPhotos: {}
+    }
+    const d = diffLibrary(old, next)!
+    expect(d.tracks).toEqual([])
+    expect(d.folderMoves).toEqual([1])
+    expect(d.gonePhotos).toEqual(['a'])
+    expect(patched(old, next)).toEqual(next)
   })
 
   function base(): LibraryData {

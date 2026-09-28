@@ -14,6 +14,7 @@ import type {
 } from '../../../shared/library'
 import {
   applyPatch,
+  type HeldLibrary,
   type LibraryMessage,
   type LibraryPatch,
   type LibraryVersion
@@ -112,9 +113,10 @@ class LibraryStore {
 
   load(data: LibraryData & Partial<LibraryVersion>): void {
     this.#tracks = new Map(data.tracks.map((t) => [t.id, t]))
-    this.#folderTable = data.folders ?? []
-    this.photos = data.artistPhotos ?? {}
-    this.#setAlbums(data.albums)
+    this.#show(
+      { albums: data.albums, folders: data.folders ?? [], photos: data.artistPhotos ?? {} },
+      true
+    )
     if (data.epoch !== undefined && data.n !== undefined)
       this.sent = { epoch: data.epoch, n: data.n }
   }
@@ -125,24 +127,42 @@ class LibraryStore {
   // when it doesn't fit (the caller asks for the whole library then). Returns
   // whether songs left the library.
   patch(p: LibraryPatch): boolean {
-    this.#setAlbums(applyPatch(this.albums, this.#tracks, p))
+    const held = applyPatch(
+      { albums: this.albums, folders: this.#folderTable, photos: this.photos },
+      this.#tracks,
+      p
+    )
+    // a patch with only photos (the lookup found some) leaves the lists as they are
+    const songs =
+      p.tracks.length > 0 ||
+      p.goneTracks.length > 0 ||
+      held.albums !== this.albums ||
+      held.folders !== this.#folderTable
+    this.#show(held, songs)
     this.sent = { epoch: p.epoch, n: p.n }
     return p.goneTracks.length > 0
   }
 
-  #setAlbums(albums: Album[]): void {
-    // library order is album order, then each album's own
-    const ids = albums.flatMap((a) => a.trackIds)
-    this.#order = new Map(ids.map((id, i) => [id, i]))
-    this.#albumIndex = new Map(albums.map((a, i) => [a.id, i]))
-    if (albums !== this.albums) this.albums = albums
-    const tracks = ids.map((id) => this.#tracks.get(id)!)
-    this.folders = folderTree(this.#folderTable, tracks, (id) => {
-      const i = this.#albumIndex.get(id)
-      return i === undefined ? '' : albums[i].cover
-    })
-    this.artists = listArtists(albums, (id) => this.#tracks.get(id)!)
-    this.#artistIndex = new Map(this.artists.map((a, i) => [a.key, i]))
+  // `songs`: songs, albums or folders changed, so the lists made from them
+  // are made again
+  #show(held: HeldLibrary, songs: boolean): void {
+    this.photos = held.photos
+    if (songs) {
+      const albums = held.albums
+      // library order is album order, then each album's own
+      const ids = albums.flatMap((a) => a.trackIds)
+      this.#order = new Map(ids.map((id, i) => [id, i]))
+      this.#albumIndex = new Map(albums.map((a, i) => [a.id, i]))
+      if (albums !== this.albums) this.albums = albums
+      this.#folderTable = held.folders
+      const tracks = ids.map((id) => this.#tracks.get(id)!)
+      this.folders = folderTree(held.folders, tracks, (id) => {
+        const i = this.#albumIndex.get(id)
+        return i === undefined ? '' : albums[i].cover
+      })
+      this.artists = listArtists(albums, (id) => this.#tracks.get(id)!)
+      this.#artistIndex = new Map(this.artists.map((a, i) => [a.key, i]))
+    }
     this.#version++
     // the open album or artist may be gone after a rescan
     if (this.open && !this.#albumIndex.has(this.open)) this.open = null

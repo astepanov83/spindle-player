@@ -49,6 +49,14 @@ describe('cleanup', () => {
     expect(cleanArtist('Björk')).toBe('bjork')
   })
 
+  it('keeps vowel signs and voicing marks, which change the word', () => {
+    expect(cleanAlbum('हम आपके हैं कौन')).not.toBe(cleanAlbum('हम आपक ह कन'))
+    expect(cleanAlbum('ドラゴンボール')).not.toBe(cleanAlbum('トラコンホール'))
+    // accents on Latin, Greek and Cyrillic letters still go
+    expect(cleanArtist('Sigur Rós')).toBe('sigur ros')
+    expect(cleanAlbum('Мой рок-н-ролл')).toBe(cleanAlbum('Мои рок-н-ролл'))
+  })
+
   it('keeps letters of other scripts', () => {
     expect(cleanAlbum('Группа крови')).toBe('группа крови')
     expect(cleanArtist('椎名林檎')).toBe('椎名林檎')
@@ -83,6 +91,13 @@ describe('pickCandidates', () => {
     ).toHaveLength(1)
     expect(
       pickCandidates(q({ artist: 'Mariah Carey, Boyz II Men' }), [c({ artist: 'Mariah Carey' })])
+    ).toHaveLength(1)
+  })
+
+  it('takes no joint-credit name shorter than 4 letters', () => {
+    expect(pickCandidates(q({ artist: 'DC' }), [c({ artist: 'AC/DC' })])).toEqual([])
+    expect(
+      pickCandidates(q({ artist: 'Fire' }), [c({ artist: 'Earth, Wind & Fire' })])
     ).toHaveLength(1)
   })
 

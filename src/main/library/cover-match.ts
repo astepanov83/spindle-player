@@ -41,13 +41,17 @@ const edition =
 
 // Lowercase, no accents, "&" as "and", anything but letters and digits as one space.
 function fold(s: string): string {
-  return s
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim()
+  return (
+    s
+      .normalize('NFKD')
+      // accents on Latin, Greek and Cyrillic letters only: in Indic scripts and
+      // kana the marks are part of the word
+      .replace(/([\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}])\p{Mn}+/gu, '$1')
+      .toLowerCase()
+      .replace(/&/g, ' and ')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim()
+  )
 }
 
 // The album's name without edition words and disc numbers, as written.
@@ -81,8 +85,14 @@ const various = new Set(['various artists', 'various', 'va'])
 // The names in a joint credit: "Jay-Z & Kanye West", "Drake feat. Rihanna".
 const joiner = /\s*(?:[,&/+;]|\s(?:and|feat\.?|ft\.?|featuring|with|x|vs\.?)\s)\s*/i
 
+// Shorter names match too much: "DC" from "AC/DC".
+const minCreditLength = 4
+
 function credits(s: string): string[] {
-  return s.split(joiner).map(cleanArtist).filter(Boolean)
+  return s
+    .split(joiner)
+    .map(cleanArtist)
+    .filter((c) => c.length >= minCreditLength)
 }
 
 function artistMatches(q: CoverQuery, found: string): boolean {

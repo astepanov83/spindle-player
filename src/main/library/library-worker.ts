@@ -41,7 +41,7 @@ import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
 import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from './cover-names'
-import { CoverFetcher } from './cover-fetch'
+import { CoverFetcher, publishGapMs } from './cover-fetch'
 import { CoverHttp, defaultLimits, NetError } from './cover-http'
 import {
   dropGone,
@@ -181,13 +181,12 @@ function saveFetched(): void {
 
 // A found cover shows at most this often while the lookup runs, so the page
 // isn't sent the whole library for every album.
-const fetchPublishMs = 2000
 let fetchPublish: ReturnType<typeof setTimeout> | undefined
 function publishSoon(): void {
   fetchPublish ??= setTimeout(() => {
     fetchPublish = undefined
     publish()
-  }, fetchPublishMs)
+  }, publishGapMs(built.data.tracks.length))
 }
 
 const abortableSleep = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -331,6 +330,8 @@ async function sendCover(data: Uint8Array, gen: number): Promise<string> {
 async function addFetchedCover(data: Uint8Array): Promise<{ hash: string; ok: boolean }> {
   const h = hash('sha1', data)
   if (cached.has(h)) return { hash: h, ok: await keepSource(h, data) }
+  // Chromium could not decode it before; no need to send it to main again
+  if (bad.has(h)) return { hash: h, ok: false }
   if (!claimed.has(h)) {
     claimed.add(h)
     await waitForSlot(h, () => {})

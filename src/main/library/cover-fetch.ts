@@ -22,6 +22,12 @@ export interface FetcherDeps {
   log(text: string): void
 }
 
+// How often the page gets the library while covers come in. Each time it is
+// the whole library (several MB for 40k songs), so less often in a big one.
+export function publishGapMs(tracks: number): number {
+  return Math.min(10000, Math.max(2000, Math.round(tracks / 4)))
+}
+
 // no connection: look again after this long
 const offlineWaitMs = 5 * 60 * 1000
 // matching results downloaded per source before going on to the next source
@@ -44,6 +50,9 @@ export class CoverFetcher {
   #stop = new AbortController()
   #loop: Promise<void> = Promise.resolve()
   #running = false
+  // pictures that were not there (a 404), not asked for again while the app
+  // runs, so a retried album doesn't repeat them
+  #missing = new Set<string>()
 
   constructor(readonly d: FetcherDeps) {}
 
@@ -148,8 +157,13 @@ export class CoverFetcher {
     limiter: 'caa' | 'deezer' | 'itunes',
     signal: AbortSignal
   ): Promise<string | undefined> {
+    if (this.#missing.has(url)) return undefined
     const img = await this.d.http.image(url, limiter, signal)
-    if (!img || signal.aborted) return undefined
+    if (signal.aborted) return undefined
+    if (!img) {
+      this.#missing.add(url)
+      return undefined
+    }
     const r = await this.d.addCover(img)
     return r.ok ? r.hash : undefined
   }

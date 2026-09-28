@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CoverFetcher, type FetcherDeps } from './cover-fetch'
+import { CoverFetcher, publishGapMs, type FetcherDeps } from './cover-fetch'
 import { BusyError, NetError } from './cover-http'
 import { searchKey, type CoverQuery } from './cover-match'
 import type { Fetched } from './fetched-store'
@@ -214,6 +214,21 @@ describe('CoverFetcher', () => {
     expect(fetched.get('a')?.source).toBe('deezer')
   })
 
+  it('does not ask again for a picture that was not there, when the album is retried', async () => {
+    let n = 0
+    const { f, calls } = setup(
+      (u) => (u.includes('deezer') ? (n++ === 0 ? new BusyError('429') : deezerHit) : nothing),
+      (u) => (u.includes('coverartarchive') ? undefined : jpeg)
+    )
+    f.setOptions(true, all)
+    f.setQueries([q('a', { mbReleaseGroup: rg })])
+    f.release()
+    await f.idle
+    f.setQueries([q('a', { mbReleaseGroup: rg })])
+    await f.idle
+    expect(calls.filter((u) => u.includes('coverartarchive'))).toHaveLength(1)
+  })
+
   it('stops before the next request when turned off', async () => {
     const { f, calls } = setup(() => deezerHit)
     f.setOptions(true, all)
@@ -301,5 +316,15 @@ describe('CoverFetcher', () => {
     f.setOptions(true, all)
     expect(fetched.has('a')).toBe(false)
     expect(d.changed).toHaveBeenCalledWith(false)
+  })
+})
+
+describe('publishGapMs', () => {
+  it('shows found covers every 2s in a small library, and less often in a big one', () => {
+    expect(publishGapMs(300)).toBe(2000)
+    expect(publishGapMs(8000)).toBe(2000)
+    expect(publishGapMs(20000)).toBe(5000)
+    expect(publishGapMs(40000)).toBe(10000)
+    expect(publishGapMs(200000)).toBe(10000)
   })
 })

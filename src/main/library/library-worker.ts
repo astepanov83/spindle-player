@@ -34,6 +34,7 @@ import { extOf, frontCover, normalizeTags } from './tags'
 import { walk } from './walk'
 import { pruneCoverFiles } from './cover-prune'
 import { ownCopy } from './bytes'
+import { pictureWithHash } from './cover-source'
 import { markerOf, smallName } from './cover-names'
 import {
   readerVersion,
@@ -484,14 +485,15 @@ async function scan(folders: string[], retryFailed: boolean, gen: number): Promi
 
 // --- lookups for the protocol ---
 
-async function coverSource(h: string): Promise<Uint8Array | undefined> {
-  for (const im of ix.images.values()) if (im.cover === h) return readFile(im.path)
-  for (const e of ix.files.values()) {
-    if (e.cover !== h) continue
-    const meta = await readTags(e.path)
-    return frontCover(meta.common.picture)?.data
-  }
-  return undefined
+// Folder images first: reading one is cheaper than reading tags.
+function* coverCandidates(h: string): Generator<() => Promise<Uint8Array | undefined>> {
+  for (const im of ix.images.values()) if (im.cover === h) yield () => readFile(im.path)
+  for (const e of ix.files.values())
+    if (e.cover === h) yield async () => frontCover((await readTags(e.path)).common.picture)?.data
+}
+
+function coverSource(h: string): Promise<Uint8Array | undefined> {
+  return pictureWithHash(h, coverCandidates(h))
 }
 
 // What main needs to serve a file by its id.

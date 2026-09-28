@@ -266,7 +266,16 @@ describe('decodeCue with a single-byte code page', () => {
     ]),
     sheet('ДДТ', 'Осень', ['Что такое осень?', 'Ёлка', 'Я получил эту роль']),
     sheet('Ария', 'Герой асфальта', ['Улица роз', '«1100»', 'Я']),
-    sheet('Various', 'Сборник', ['Rock-n-roll мёртв', 'Hello', 'Звезда по имени Солнце'])
+    sheet('Various', 'Сборник', ['Rock-n-roll мёртв', 'Hello', 'Звезда по имени Солнце']),
+    sheet('ГРАЖДАНСКАЯ ОБОРОНА', 'ВСЁ ИДЁТ ПО ПЛАНУ', ['ВСЁ ИДЁТ ПО ПЛАНУ', 'МОЯ ОБОРОНА']),
+    sheet('Various', 'Artist - Название', [
+      'Кино - Кукушка',
+      'Ёж',
+      'Би-2 - Полковнику никто не пишет'
+    ]),
+    sheet('Various', 'Сборник № 3', ['Трек №1', '«Ночь»', 'А я иду']),
+    sheet('Океан Ельзи', 'Без меж', ['Обійми', 'Я і ти', 'Відпусти', 'Така, як ти є']),
+    sheet('Ляпис Трубецкой', 'Ў', ['Ў', 'Воины света', 'Каждый ўдзень'])
   ]
   const western = [
     sheet('Mötley Crüe', 'Dr. Feelgood', ['Kickstart My Heart', 'Same Ol’ Situation']),
@@ -276,7 +285,12 @@ describe('decodeCue with a single-byte code page', () => {
     sheet('Motörhead', 'Ace of Spades', ['Ace of Spades']),
     sheet('Beyoncé', 'Lemonade', ['Formation', 'Sorry']),
     sheet('Various', 'Été', ['Señorita', 'Über alles', 'Crème brûlée']),
-    sheet('Various', 'Été 2', ['Jag är så glad', 'Øresund'])
+    sheet('Various', 'Été 2', ['Jag är så glad', 'Øresund']),
+    // single bytes that are Cyrillic letters or signs in cp1251
+    sheet('Björk', 'Live', ['Track ×2']),
+    sheet('Various', 'Live at 2½ Club', ['Intro']),
+    sheet('Various', 'Opus ¹', ['Intro']),
+    sheet('Various', 'Voyage à Paris', ['Intro'])
   ]
 
   it('reads Russian sheets as Windows-1251', () => {
@@ -313,7 +327,10 @@ describe('wordScore', () => {
   it('counts against mixed scripts, runs of accents and odd signs', () => {
     expect(wordScore('Cafй')).toBe(-1)
     expect(wordScore('Ãðóïïà')).toBe(-6)
-    expect(wordScore('a ÷ b ¸')).toBe(-2)
+    expect(wordScore('a \x98 b')).toBe(-1)
+    expect(wordScore('Opus №')).toBe(-1)
+    expect(wordScore('Симфония № 5')).toBe(8)
+    expect(wordScore('Track ×2, 2½, ¹ £5')).toBe(0)
     expect(wordScore('«a» \u2013 b')).toBe(0)
   })
 })

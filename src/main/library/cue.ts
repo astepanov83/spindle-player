@@ -72,12 +72,18 @@ export function decodeSingleByte(bytes: Uint8Array): string {
   return best
 }
 
-// Punctuation a title may well have. Any other non-ASCII sign is likely a
-// letter read with the wrong code page.
+// Signs a title may well have: typographic punctuation, and every Latin-1
+// sign (x2, 2½, ¹, £), since cp1252 sheets use them. Any other non-ASCII sign
+// is likely a letter read with the wrong code page.
 const fineSigns = new Set(
-  '\u00a0\u00ab\u00bb\u2013\u2014\u2018\u2019\u201c\u201d\u201e\u2026\u2022\u00a9\u00ae\u00b0\u2116\u00b7\u2122'
+  '\u2013\u2014\u2018\u2019\u201a\u201c\u201d\u201e\u2020\u2021\u2022\u2026\u2030\u2039\u203a\u20ac\u2122\u00d7\u00f7' +
+    Array.from({ length: 0x20 }, (_, i) => String.fromCharCode(0xa0 + i)).join('')
 )
 const cyrillic = /\p{Script=Cyrillic}/u
+// Russian, Ukrainian and Belarusian one-letter words ("я", "в", "і", "ў")
+const cyrillicWords = new Set('авиксоуяжбійзўАВИКСОУЯЖБІЙЗЎ')
+// The cue command at the start of a line (TITLE, REM GENRE): not part of the value
+const command = /^\s*(?:REM\s+[A-Z_]+|[A-Z]+)(?=\s)/
 
 // How much the non-ASCII part of a text looks like real words: +1 for each
 // non-ASCII letter in a likely word, -1 for each in an unlikely one and for
@@ -85,24 +91,42 @@ const cyrillic = /\p{Script=Cyrillic}/u
 // more accented letter than plain ones ("Café", "été"). Cyrillic mixed with
 // Latin ("Cafй") is what cp1251 makes of a Western name, and a run of
 // accented letters ("Äèñêîãðàôèÿ") is what cp1252 makes of a Russian one.
-export function wordScore(text: string): number {
+// A one-letter word says little: "à" and "а" are the same byte. A lone
+// Cyrillic letter counts only as a real one-letter word in a Cyrillic line;
+// among Latin words, or when it is no such word ("Ч" from "×"), it counts
+// against. "№" counts only before a number (cp1252's "¹" is the same byte).
+export function wordScore(textIn: string): number {
   let score = 0
-  for (const m of text.matchAll(/\p{L}+|[^\p{L}\p{ASCII}]/gu)) {
-    const w = m[0]
-    if (!/\p{L}/u.test(w)) {
-      if (!fineSigns.has(w)) score--
-      continue
+  for (const raw of textIn.split(/\r\n|\r|\n/)) {
+    const line = raw.replace(command, '')
+    const words = [...line.matchAll(/\p{L}+/gu)].map((m) => m[0])
+    const cyrillicLine = words.some((w) => w.length > 1 && [...w].every((c) => cyrillic.test(c)))
+    const latinLine = words.some((w) => /[a-z]/i.test(w))
+    for (const m of line.matchAll(/\p{L}+|[^\p{L}\p{ASCII}]/gu)) {
+      const w = m[0]
+      if (!/\p{L}/u.test(w)) {
+        if (w === '\u2116') {
+          if (!/^\s?\d/.test(line.slice(m.index + 1))) score--
+        } else if (!fineSigns.has(w)) score--
+        continue
+      }
+      if ([...w].length === 1) {
+        if (cyrillic.test(w))
+          score +=
+            cyrillicWords.has(w) && cyrillicLine ? 1 : cyrillicWords.has(w) && !latinLine ? 0 : -1
+        continue
+      }
+      let ascii = 0
+      let cyr = 0
+      for (const ch of w)
+        if (ch <= '\x7f') ascii++
+        else if (cyrillic.test(ch)) cyr++
+      const other = [...w].length - ascii - cyr
+      const nonAscii = cyr + other
+      if (nonAscii === 0) continue
+      const likely = (cyr > 0 && ascii === 0 && other === 0) || (cyr === 0 && other <= ascii + 1)
+      score += likely ? nonAscii : -nonAscii
     }
-    let ascii = 0
-    let cyr = 0
-    for (const ch of w)
-      if (ch <= '\x7f') ascii++
-      else if (cyrillic.test(ch)) cyr++
-    const other = [...w].length - ascii - cyr
-    const nonAscii = cyr + other
-    if (nonAscii === 0) continue
-    const likely = (cyr > 0 && ascii === 0 && other === 0) || (cyr === 0 && other <= ascii + 1)
-    score += likely ? nonAscii : -nonAscii
   }
   return score
 }

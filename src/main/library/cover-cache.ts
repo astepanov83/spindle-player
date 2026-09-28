@@ -14,6 +14,7 @@ import { join } from 'path'
 import { BrowserWindow, ipcMain } from 'electron'
 import { CoverChannel, type CoverJob, type CoverResult } from '../../shared/cover-job'
 import type { ThemePalettes } from '../../shared/palette'
+import { blockNavigation } from '../web-guard'
 import { outcomeOf, PendingJobs, type Outcome } from './cover-jobs'
 
 export const smallSide = 320
@@ -87,6 +88,8 @@ export class CoverCache {
       }
     })
     this.#win = win
+    blockNavigation(win.webContents)
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     win.on('closed', () => {
       if (this.#win !== win) return
       this.#win = undefined

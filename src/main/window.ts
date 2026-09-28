@@ -9,6 +9,7 @@ import { templates } from '../shared/templates'
 import { WinChannel } from '../shared/ipc'
 import { windowBackground } from '../shared/theme'
 import type { SettingsStore } from './settings-store'
+import { blockNavigation, canOpenExternal } from './web-guard'
 import { placeCentered, sizeFor } from './window-place'
 
 export function currentBackground(): string {
@@ -62,8 +63,10 @@ export class MainWindow {
     })
     win.on('close', () => this.#rememberSize(this.store.get().template))
 
+    blockNavigation(win.webContents)
     win.webContents.setWindowOpenHandler((details) => {
-      shell.openExternal(details.url)
+      // file:, javascript:, custom schemes and the like never leave the app
+      if (canOpenExternal(details.url)) void shell.openExternal(details.url)
       return { action: 'deny' }
     })
 

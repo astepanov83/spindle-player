@@ -1,5 +1,5 @@
 import { join } from 'path'
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, nativeTheme } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import {
   LibraryChannel,
@@ -11,6 +11,7 @@ import {
 import { pageSettings } from '../shared/settings'
 import { handleProtocol, registerScheme } from './library/protocol'
 import { LibraryService } from './library/service'
+import { pageIpc } from './page-ipc'
 import { PlaylistFile, QueueFile } from './page-files'
 import { SettingsStore } from './settings-store'
 import { currentBackground, MainWindow } from './window'
@@ -32,41 +33,44 @@ function createWindow(): void {
   })
 }
 
+// Only the app window's page may use these; see page-ipc.ts.
+const page = pageIpc(() => (main && !main.win.isDestroyed() ? main.win.webContents : undefined))
+
 function senderWindow(
   e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
 ): BrowserWindow | null {
   return BrowserWindow.fromWebContents(e.sender)
 }
 
-ipcMain.on(WinChannel.minimize, (e) => senderWindow(e)?.minimize())
-ipcMain.on(WinChannel.close, (e) => senderWindow(e)?.close())
-ipcMain.on(WinChannel.toggleMaximize, (e) => {
+page.on(WinChannel.minimize, (e) => senderWindow(e)?.minimize())
+page.on(WinChannel.close, (e) => senderWindow(e)?.close())
+page.on(WinChannel.toggleMaximize, (e) => {
   const win = senderWindow(e)
   if (!win) return
   if (win.isMaximized()) win.unmaximize()
   else win.maximize()
 })
-ipcMain.handle(WinChannel.isMaximized, (e) => senderWindow(e)?.isMaximized() ?? false)
+page.handle(WinChannel.isMaximized, (e) => senderWindow(e)?.isMaximized() ?? false)
 
-ipcMain.handle(SettingsChannel.load, () => pageSettings(store.get()))
-ipcMain.on(SettingsChannel.save, (_, raw: unknown) => {
+page.handle(SettingsChannel.load, () => pageSettings(store.get()))
+page.on(SettingsChannel.save, (_, raw) => {
   const before = store.get()
   const next = store.setFromPage(raw)
   if (next.theme !== before.theme) nativeTheme.themeSource = next.theme
   if (next.template !== before.template) main?.applyTemplate(before.template, next.template)
 })
 
-ipcMain.handle(LibraryChannel.load, () => library.load())
-ipcMain.handle(LibraryChannel.addFolder, (e) => library.addFolder(senderWindow(e)))
-ipcMain.on(LibraryChannel.removeFolder, (_, path: unknown) => library.removeFolder(path))
-ipcMain.on(LibraryChannel.rescan, () => library.scan())
+page.handle(LibraryChannel.load, () => library.load())
+page.handle(LibraryChannel.addFolder, (e) => library.addFolder(senderWindow(e)))
+page.on(LibraryChannel.removeFolder, (_, path) => library.removeFolder(path))
+page.on(LibraryChannel.rescan, () => library.scan())
 
-ipcMain.handle(PlaylistChannel.load, () => playlists.get())
-ipcMain.on(PlaylistChannel.save, (_, raw: unknown) => playlists.setFromPage(raw))
-ipcMain.handle(PlaybackChannel.loadQueue, () => savedQueue.get())
-ipcMain.on(PlaybackChannel.saveQueue, (_, raw: unknown) => savedQueue.setFromPage(raw))
-ipcMain.on(PlaybackChannel.savePlace, (_, raw: unknown) => savedQueue.setPlace(raw))
-ipcMain.on(PlaybackChannel.log, (_, text: unknown) => {
+page.handle(PlaylistChannel.load, () => playlists.get())
+page.on(PlaylistChannel.save, (_, raw) => playlists.setFromPage(raw))
+page.handle(PlaybackChannel.loadQueue, () => savedQueue.get())
+page.on(PlaybackChannel.saveQueue, (_, raw) => savedQueue.setFromPage(raw))
+page.on(PlaybackChannel.savePlace, (_, raw) => savedQueue.setPlace(raw))
+page.on(PlaybackChannel.log, (_, text) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
 })
 

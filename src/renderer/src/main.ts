@@ -12,6 +12,11 @@ import { playlists } from './stores/playlists.svelte'
 import { queue } from './stores/queue.svelte'
 import { loadSettings } from './stores/settings.svelte'
 
+// A file dropped on the window would replace the app (main blocks that too).
+// Nothing in the page takes drops yet.
+for (const type of ['dragover', 'drop'] as const)
+  window.addEventListener(type, (e) => e.preventDefault())
+
 // Settings and the library first, so the first paint already shows the saved
 // template and the albums. The window stays hidden until then, so the wait doesn't show.
 const [saved, lib, lists, lastQueue] = await Promise.all([

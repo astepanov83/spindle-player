@@ -91,3 +91,31 @@ export interface PlaybackApi {
   // a song that would not play, written to main's log
   log(text: string): void
 }
+
+// Which API method each page-to-main channel carries. The preload's calls and
+// main's handlers are both typed from this, so a change on one side and not
+// the other is a type error.
+export interface PageChannels {
+  [WinChannel.minimize]: WinApi['minimize']
+  [WinChannel.toggleMaximize]: WinApi['toggleMaximize']
+  [WinChannel.close]: WinApi['close']
+  [WinChannel.isMaximized]: WinApi['isMaximized']
+  [SettingsChannel.load]: SettingsApi['load']
+  [SettingsChannel.save]: SettingsApi['save']
+  [LibraryChannel.load]: LibraryApi['load']
+  [LibraryChannel.addFolder]: LibraryApi['addFolder']
+  [LibraryChannel.removeFolder]: LibraryApi['removeFolder']
+  [LibraryChannel.rescan]: LibraryApi['rescan']
+  [PlaylistChannel.load]: PlaylistsApi['load']
+  [PlaylistChannel.save]: PlaylistsApi['save']
+  [PlaybackChannel.loadQueue]: PlaybackApi['loadQueue']
+  [PlaybackChannel.saveQueue]: PlaybackApi['saveQueue']
+  [PlaybackChannel.savePlace]: PlaybackApi['savePlace']
+  [PlaybackChannel.log]: PlaybackApi['log']
+}
+
+// Channels that answer (ipcRenderer.invoke) and channels that only send.
+export type InvokeChannel = {
+  [K in keyof PageChannels]: ReturnType<PageChannels[K]> extends Promise<unknown> ? K : never
+}[keyof PageChannels]
+export type SendChannel = Exclude<keyof PageChannels, InvokeChannel>

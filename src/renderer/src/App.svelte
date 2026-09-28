@@ -22,9 +22,8 @@
   import { setLook } from './visualizer/loop'
 
   // each cover has a palette per theme; the light one has a darker accent
-  const palette = $derived(
-    (queue.currentAlbum?.palette ?? defaultPalettes)[theme.light ? 'light' : 'dark']
-  )
+  const palettes = $derived(queue.currentAlbum?.palette ?? defaultPalettes)
+  const palette = $derived(palettes[theme.light ? 'light' : 'dark'])
 
   $effect(() => engine.setVolume(settings.volume))
 
@@ -32,7 +31,7 @@
   $effect(() =>
     setLook({
       style: settings.visualizer,
-      colors: barColors(queue.currentAlbum?.palette ?? defaultPalettes, theme.light),
+      colors: barColors(palettes, theme.light),
       playing: player.playing
     })
   )

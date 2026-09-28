@@ -19,8 +19,11 @@ export interface EngineEvents {
   ended(): void
   // sound is coming out
   playing(): void
+  // stopped by us, or by something else (media keys, the system's media controls)
   paused(): void
   seeked(): void
+  // play() was refused (for example NotAllowedError); not the song's fault
+  refused(message: string): void
   error(e: EngineError): void
 }
 
@@ -79,7 +82,10 @@ class AudioEngine {
     })
     el.addEventListener('ended', () => this.#on.ended?.())
     el.addEventListener('playing', () => this.#on.playing?.())
-    el.addEventListener('pause', () => this.#on.paused?.())
+    // at the end of a song 'pause' comes just before 'ended'; that one is not a pause
+    el.addEventListener('pause', () => {
+      if (!el.ended) this.#on.paused?.()
+    })
     el.addEventListener('seeked', () => this.#on.seeked?.())
     el.addEventListener('error', () => {
       // an error with no source is our own clear(), not a bad file
@@ -109,7 +115,7 @@ class AudioEngine {
     this.el.play().catch((e: DOMException) => {
       // AbortError: a newer load() came first. NotSupportedError: the error event handles it.
       if (e.name !== 'AbortError' && e.name !== 'NotSupportedError')
-        this.#on.error?.({ code: 0, message: `${e.name}: ${e.message}` })
+        this.#on.refused?.(`${e.name}: ${e.message}`)
     })
   }
 

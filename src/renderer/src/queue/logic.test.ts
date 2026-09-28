@@ -40,6 +40,21 @@ describe('advance', () => {
   })
 })
 
+describe('advance while skipping failed songs', () => {
+  // one album in the library: the next album is always the same one
+  const same = (): string[] => ['a/0', 'a/1', 'a/2']
+
+  it('does not add an album that is already in the queue', () => {
+    const s = q(2)
+    expect(advance(s, { shuffle: false, nextAlbum: same, noRepeats: true })).toBe(s)
+  })
+
+  it('still adds a new album', () => {
+    const s = advance(q(2), { shuffle: false, nextAlbum, noRepeats: true })
+    expect(s.items).toEqual(['a/0', 'a/1', 'a/2', 'b/0', 'b/1'])
+  })
+})
+
 describe('back', () => {
   it('restarts after 3 seconds', () => {
     expect(back(q(1), 3.5)).toEqual({ state: q(1), restart: true })

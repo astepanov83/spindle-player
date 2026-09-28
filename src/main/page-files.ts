@@ -20,8 +20,10 @@ export class PlaylistFile {
   }
 
   setFromPage(raw: unknown): void {
+    // anything but a list is a bad message, not "no playlists"
+    if (!Array.isArray(raw)) return
     // the page sends the list itself; the file wraps it
-    this.#data = parsePlaylists(playlistsFile(Array.isArray(raw) ? raw : []))
+    this.#data = parsePlaylists(playlistsFile(raw))
     this.#writer.schedule(playlistsFile(this.#data))
   }
 

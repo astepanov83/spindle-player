@@ -12,6 +12,8 @@ export interface NextOptions {
   shuffle: boolean
   // the next album's songs, to carry on when the queue runs out
   nextAlbum: (lastId: string) => string[]
+  // don't add the next album if its songs are already in the queue
+  noRepeats?: boolean
   random?: () => number
 }
 
@@ -24,7 +26,11 @@ export function advance(q: QueueState, o: NextOptions): QueueState {
     return { ...q, index: i }
   }
   let items = q.items
-  if (q.index + 1 >= items.length) items = [...items, ...o.nextAlbum(items[items.length - 1])]
+  if (q.index + 1 >= items.length) {
+    let more = o.nextAlbum(items[items.length - 1])
+    if (o.noRepeats && more.some((id) => items.includes(id))) more = []
+    items = [...items, ...more]
+  }
   if (q.index + 1 >= items.length) return q
   return { ...q, items, index: q.index + 1 }
 }

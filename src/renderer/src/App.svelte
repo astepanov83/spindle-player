@@ -8,6 +8,11 @@
   import { engine } from './audio/engine'
   import { layout } from './stores/layout.svelte'
   import { menu } from './stores/menu.svelte'
+  import {
+    setupMediaSession,
+    showInMediaSession,
+    showStateInMediaSession
+  } from './stores/media-session'
   import { togglePlay, player } from './stores/player.svelte'
   import { queue } from './stores/queue.svelte'
   import { settings } from './stores/settings.svelte'
@@ -19,6 +24,10 @@
   )
 
   $effect(() => engine.setVolume(settings.volume))
+
+  setupMediaSession()
+  $effect(() => showInMediaSession(queue.current, queue.currentAlbum))
+  $effect(() => showStateInMediaSession())
 
   // Every change goes to main, which saves it and applies the window size and theme.
   $effect(() => window.settingsApi.save($state.snapshot(settings)))

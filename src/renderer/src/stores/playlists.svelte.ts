@@ -24,7 +24,7 @@ class PlaylistStore {
 
   // Makes a playlist and returns its id.
   create(trackIds: string[] = []): string {
-    const id = crypto.randomUUID().slice(0, 8)
+    const id = crypto.randomUUID()
     const name = ops.newName(this.list)
     this.#set(ops.create(this.list, id, name, trackIds))
     if (trackIds.length) notice.show(`Added ${songs(trackIds.length)} to ${name}`)

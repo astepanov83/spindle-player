@@ -44,8 +44,19 @@ class QueueStore {
       },
       duration: (d) => (player.duration = d),
       ended: () => this.#ended(),
-      playing: () => (this.#fails = 0),
-      paused: () => this.savePos(),
+      // follow the element, so a pause from media keys or the system shows too
+      playing: () => {
+        this.#fails = 0
+        player.playing = true
+      },
+      paused: () => {
+        player.playing = false
+        this.savePos()
+      },
+      refused: (message) => {
+        window.playbackApi.log(`Playback refused: ${message}`)
+        player.playing = false
+      },
       seeked: () => this.savePos(),
       error: (e) => this.#failed(e)
     })
@@ -96,10 +107,13 @@ class QueueStore {
     this.#start()
   }
 
-  #nextOptions(): NextOptions {
+  // skipping: while skipping songs that fail, don't add an album that is already
+  // in the queue again (the library wraps around), so the queue can't keep growing
+  #nextOptions(skipping = false): NextOptions {
     return {
       shuffle: player.shuffle,
-      nextAlbum: (id) => (library.has(id) ? library.nextAlbumTracks(id) : [])
+      nextAlbum: (id) => (library.has(id) ? library.nextAlbumTracks(id) : []),
+      noRepeats: skipping
     }
   }
 
@@ -121,13 +135,17 @@ class QueueStore {
     } else this.#stop()
   }
 
-  #move(andPlay: boolean): void {
+  #move(andPlay: boolean, skipping = false): boolean {
     const before = this.#state()
-    const after = advance(before, this.#nextOptions())
+    const after = advance(before, this.#nextOptions(skipping))
     // nowhere to go (nothing in the library after the list): stop at the end
-    if (after === before) return this.#stop()
+    if (after === before) {
+      this.#stop()
+      return false
+    }
     this.#set(after)
     this.#start(andPlay)
+    return true
   }
 
   #stop(): void {
@@ -141,6 +159,7 @@ class QueueStore {
     if (r.restart) {
       player.pos = 0
       engine.seek(0)
+      play()
     } else {
       this.#fails = 0
       this.#set(r.state)
@@ -153,7 +172,7 @@ class QueueStore {
   }
 
   // A song that won't play (ALAC, WMA, a file that is gone...): log it, say so,
-  // and go on to the next one.
+  // and go on to the next one. When paused (a restored queue), stay on it.
   #failed(e: EngineError): void {
     const t = this.current
     if (!t) return
@@ -161,15 +180,19 @@ class QueueStore {
       `Could not play track ${t.id} "${t.title}" (${t.codec || 'unknown codec'}): ` +
         `error ${e.code} ${e.message}`
     )
+    // A format Chromium can't read and a file that is gone give the same error (4).
+    if (!player.playing) {
+      notice.show(`Can't play "${t.title}".`)
+      return
+    }
     this.#fails++
     if (afterFailure(this.#fails, this.items.length) === 'stop') {
       notice.show(`Could not play ${this.#fails} songs in a row. Stopped.`)
       this.#fails = 0
       return this.#stop()
     }
-    // A format Chromium can't read and a file that is gone give the same error (4).
-    notice.show(`Can't play "${t.title}". Skipped.`)
-    this.#move(player.playing)
+    if (this.#move(true, true)) notice.show(`Can't play "${t.title}". Skipped.`)
+    else notice.show(`Can't play "${t.title}". Stopped at the end of the list.`)
   }
 
   // After the library changed: songs that are gone leave the queue.

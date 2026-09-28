@@ -96,10 +96,8 @@ describe('watchOffset', () => {
   it('watches a line added above the rows, and stops', () => {
     const { box, header, rows } = page()
     const got: number[] = []
-    const stop = watchOffset(
-      rows as unknown as HTMLElement,
-      box as unknown as HTMLElement,
-      (m) => got.push(m)
+    const stop = watchOffset(rows as unknown as HTMLElement, box as unknown as HTMLElement, (m) =>
+      got.push(m)
     )
     const mo = FakeMutationObserver.all[0]
     // the table and the box, not the rows (which change on every scroll)

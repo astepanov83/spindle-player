@@ -6,13 +6,11 @@
 
   function create(): void {
     const id = playlists.create()
-    library.playlistSort = null
     library.openPlaylist = id
     playlists.editing = id
   }
 
   function open(id: string): void {
-    library.playlistSort = null
     library.openPlaylist = id
   }
 </script>

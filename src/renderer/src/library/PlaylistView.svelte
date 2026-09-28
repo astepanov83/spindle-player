@@ -2,7 +2,7 @@
 <script lang="ts">
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
-  import { nextPlaylistSort, playlistRows, sortRows } from './views'
+  import { playlistRows, sortRows } from './views'
   import { library } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
   import { queue } from '../stores/queue.svelte'
@@ -33,7 +33,7 @@
 
   function play(): void {
     if (!p) return
-    const rows = sortRows(view.rows, library.playlistSort, (t) => library.order(t))
+    const rows = sortRows(view.rows, library.playlistSort(id), (t) => library.order(t))
     queue.playList(
       rows.map((t) => t.id),
       0,
@@ -73,8 +73,8 @@
     meta="Playlist"
     items={view.rows}
     {scrollEl}
-    sort={library.playlistSort}
-    onsort={(k) => (library.playlistSort = nextPlaylistSort(library.playlistSort, k))}
+    sort={library.playlistSort(id)}
+    onsort={(k) => library.sortPlaylist(id, k)}
     playlistId={id}
   >
     {#snippet head()}

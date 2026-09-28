@@ -30,7 +30,6 @@
   const songs = $derived(songRows(library.albums, (id) => library.track(id), library.query))
 
   function pick(s: Section): void {
-    if (s !== library.section) library.playlistSort = null
     library.section = s
     library.open = null
   }

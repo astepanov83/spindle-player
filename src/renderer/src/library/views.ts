@@ -62,6 +62,20 @@ export function nextPlaylistSort(sort: Sort | null, k: SortKey): Sort | null {
   return sort.dir === 1 ? { k, dir: -1 } : null
 }
 
+// Each playlist's sort, by playlist id. One in its own order has no entry.
+export type PlaylistSorts = Readonly<Record<string, Sort>>
+
+export function withPlaylistSort(
+  sorts: PlaylistSorts,
+  id: string,
+  sort: Sort | null
+): PlaylistSorts {
+  const next = { ...sorts }
+  if (sort) next[id] = sort
+  else delete next[id]
+  return next
+}
+
 // A playlist's songs that are in the library. The others stay in the file
 // (a rescan may find them again) but are not shown or played.
 export function playlistRows(

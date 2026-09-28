@@ -7,6 +7,7 @@ import {
   gridColumns,
   nextPlaylistSort,
   nextSort,
+  withPlaylistSort,
   playlistRows,
   songRows,
   sortRows
@@ -141,6 +142,16 @@ describe('playlist views', () => {
     expect(b).toEqual({ k: 't', dir: -1 })
     expect(nextPlaylistSort(b, 't')).toBeNull()
     expect(nextPlaylistSort(b, 'a')).toEqual({ k: 'a', dir: 1 })
+  })
+
+  it('keeps a sort per playlist, and drops it when back in playlist order', () => {
+    const up = { k: 't', dir: 1 } as const
+    const one = withPlaylistSort({}, 'p1', up)
+    const two = withPlaylistSort(one, 'p2', { k: 'd', dir: -1 })
+    expect(two).toEqual({ p1: up, p2: { k: 'd', dir: -1 } })
+    // the old value is left as it was, so a store holding it sees a new object
+    expect(one).toEqual({ p1: up })
+    expect(withPlaylistSort(two, 'p1', null)).toEqual({ p2: { k: 'd', dir: -1 } })
   })
 
   it('leaves out songs that are not in the library and counts them', () => {

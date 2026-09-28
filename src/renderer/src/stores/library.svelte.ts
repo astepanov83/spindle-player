@@ -2,7 +2,13 @@
 // so a layout rebuild keeps the open album, search, sort and section.
 // Main sends the data (from the index, then after each scan that changed something).
 import type { Album, LibraryData, ScanStatus, Track } from '../../../shared/library'
-import type { Sort } from '../library/views'
+import {
+  nextPlaylistSort,
+  withPlaylistSort,
+  type PlaylistSorts,
+  type Sort,
+  type SortKey
+} from '../library/views'
 
 export type Chip = 'albums' | 'artists' | 'folders' | 'playlists'
 // sidebar sections; playlists are "pl:<id>"
@@ -40,8 +46,9 @@ class LibraryStore {
   openPlaylist: string | null = $state(null)
   query = $state('')
   sort: Sort = $state({ k: 'a', dir: 1 })
-  // playlists show in their own order until a column is clicked
-  playlistSort: Sort | null = $state(null)
+  // Playlists show in their own order until a column is clicked. Each keeps
+  // its sort while the app runs; it is not saved.
+  playlistSorts: PlaylistSorts = $state.raw({})
 
   load(data: LibraryData): void {
     this.#tracks = new Map(data.tracks.map((t) => [t.id, t]))
@@ -51,6 +58,15 @@ class LibraryStore {
     this.#version++
     // the open album may be gone after a rescan
     if (this.open && !this.#albumIndex.has(this.open)) this.open = null
+  }
+
+  playlistSort(id: string): Sort | null {
+    return this.playlistSorts[id] ?? null
+  }
+
+  sortPlaylist(id: string, k: SortKey): void {
+    const sort = nextPlaylistSort(this.playlistSort(id), k)
+    this.playlistSorts = withPlaylistSort(this.playlistSorts, id, sort)
   }
 
   has(id: string): boolean {

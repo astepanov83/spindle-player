@@ -62,7 +62,9 @@ export function fetchLine(f: FetchStatus | undefined): string | undefined {
   // held until the scan ends
   if (!f.running && !f.found && !f.notFound)
     return `Waiting: ${plural(f.left, 'album', 'albums')} to look up`
-  const parts = [`Found ${n(f.found)} of ${n(total)}`]
+  const found = `${n(f.found)} of ${n(total)}`
+  // "Found 3 of 40" alone did not say covers were still being fetched (ticket 019)
+  const parts = [f.running ? `Looking up covers: found ${found}` : `Found ${found}`]
   if (f.notFound) parts.push(`${n(f.notFound)} not found`)
   if (f.left) parts.push(`${n(f.left)} left`)
   return parts.join(' · ')

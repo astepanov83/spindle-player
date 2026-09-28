@@ -193,7 +193,10 @@ function wakeCoverWaiters(): void {
   for (const f of w) f()
 }
 
-const known = (h: string): boolean => cached.has(h) || bad.has(h)
+// A manual Rescan tries pictures marked bad once more: a decode can fail for
+// lack of memory, and the marker would keep the album without a cover for good.
+let retryBad = false
+const known = (h: string): boolean => cached.has(h) || (!retryBad && bad.has(h))
 
 async function sendCover(data: Uint8Array, gen: number): Promise<string> {
   const h = hash('sha1', data)
@@ -371,6 +374,7 @@ async function scan(folders: string[], retryFailed: boolean, gen: number): Promi
   }, interimMs)
   let read = 0
   try {
+    retryBad = retryFailed
     setStatus({ folders, phase: 'walk', done: 0, total: 0, missing: [] })
     scannedDevs = await devicesOf(folders)
     setPace()
@@ -535,8 +539,10 @@ port.on('message', (e: Electron.MessageEvent) => {
       sent.delete(m.hash)
       claimed.delete(m.hash)
       // "retry" stays unknown, so the next scan reads that file again
-      if (m.result === 'ok') cached.add(m.hash)
-      else if (m.result === 'bad') bad.add(m.hash)
+      if (m.result === 'ok') {
+        cached.add(m.hash)
+        bad.delete(m.hash)
+      } else if (m.result === 'bad') bad.add(m.hash)
       else if (m.result === 'rebuild') {
         // the next scan reads the file or image again, since its cover is gone
         cached.delete(m.hash)

@@ -17,7 +17,7 @@ import type { ThemePalettes } from '../../shared/palette'
 import { writeFileAtomic } from '../json-file'
 import { blockNavigation } from '../web-guard'
 import { badName, largeName, smallName } from './cover-names'
-import { outcomeOf, PendingJobs, withTimeout, type Outcome } from './cover-jobs'
+import { judge, outcomeOf, PendingJobs, Slots, withTimeout, type Outcome } from './cover-jobs'
 
 export const smallSide = 320
 export const largeSide = 1000
@@ -48,8 +48,7 @@ export class CoverCache {
   #win: BrowserWindow | undefined
   #loaded: Promise<void> | undefined
   #jobs = new PendingJobs(jobTimeoutMs, () => this.#drop('a cover job got no answer'))
-  #queue: (() => void)[] = []
-  #running = 0
+  #slots = new Slots(jobsAtOnce)
   #nextId = 0
   #idle: ReturnType<typeof setTimeout> | undefined
   #large = new Map<string, Promise<string | undefined>>()
@@ -99,7 +98,8 @@ export class CoverCache {
       this.#jobs.failAll()
     })
     win.webContents.on('render-process-gone', (_, d) => {
-      if (this.#win === win) this.#drop(`the cover window stopped (${d.reason})`)
+      if (this.#win === win)
+        this.#drop(`the cover window stopped (${d.reason})`, d.reason !== 'clean-exit')
     })
     const loaded = withTimeout(win.loadURL('about:blank'), loadTimeoutMs, 'The cover window load')
     this.#loaded = loaded
@@ -111,20 +111,31 @@ export class CoverCache {
   }
 
   // Closes the window; jobs still waiting end as "retry", not as bad pictures.
-  #drop(why: string): void {
-    console.error(`Covers: ${why}; the pictures are tried again on the next scan`)
+  // After a crash, each of them runs once more alone (see judge).
+  #drop(why: string, crash = false): void {
+    console.error(`Covers: ${why}; the pictures are tried again`)
     const win = this.#win
     this.#win = undefined
     this.#loaded = undefined
-    this.#jobs.failAll()
+    this.#jobs.failAll(crash)
     if (win && !win.isDestroyed()) win.destroy()
   }
 
   // Runs one job in the hidden window: a JPEG scaled so the shorter side is
   // `side` (never up), the palette, or both.
   async #run(data: Uint8Array, want: Omit<CoverJob, 'id' | 'data'>): Promise<Outcome> {
-    if (this.#running >= jobsAtOnce) await new Promise<void>((r) => this.#queue.push(r))
-    this.#running++
+    const o = judge(await this.#runOnce(data, want, false), false)
+    if (o !== 'alone') return o
+    const again = judge(await this.#runOnce(data, want, true), true)
+    return again === 'alone' ? { kind: 'retry' } : again
+  }
+
+  async #runOnce(
+    data: Uint8Array,
+    want: Omit<CoverJob, 'id' | 'data'>,
+    alone: boolean
+  ): Promise<Outcome> {
+    await this.#slots.take(alone)
     clearTimeout(this.#idle)
     try {
       const win = await this.#window()
@@ -144,9 +155,8 @@ export class CoverCache {
       if (!(e instanceof ShutDown)) console.error('Could not resize a cover', e)
       return { kind: 'retry' }
     } finally {
-      this.#running--
-      this.#queue.shift()?.()
-      if (!this.#running) this.#idle = setTimeout(() => this.close(), idleMs)
+      this.#slots.give()
+      if (!this.#slots.busy) this.#idle = setTimeout(() => this.close(), idleMs)
     }
   }
 
@@ -157,6 +167,8 @@ export class CoverCache {
       const o = await this.#run(data, { side: smallSide, palette: true })
       if (o.kind === 'ok' && o.jpg) {
         await writeFileAtomic(this.smallPath(hash), o.jpg)
+        // a picture marked bad before, tried again on a manual Rescan
+        await rm(join(this.dir, badName(hash)), { force: true })
         return { result: 'ok', palette: o.palette }
       }
       if (o.kind === 'bad') await writeFileAtomic(join(this.dir, badName(hash)), '')

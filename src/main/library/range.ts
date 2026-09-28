@@ -38,7 +38,7 @@ const types: Record<string, string> = {
   aac: 'audio/aac',
   wav: 'audio/wav',
   webm: 'audio/webm',
-  // Chromium can't play these; the type only helps the error message
+  // Chromium can't play these; they are sent as WAV (decode.ts)
   wma: 'audio/x-ms-wma',
   ape: 'audio/ape',
   wv: 'audio/wavpack',

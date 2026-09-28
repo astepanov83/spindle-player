@@ -20,6 +20,9 @@ export interface RawTags {
     duration?: number
     codec?: string
     container?: string
+    sampleRate?: number
+    numberOfChannels?: number
+    bitsPerSample?: number
   }
 }
 
@@ -42,7 +45,8 @@ function yearOf(year: unknown, date: unknown): number | undefined {
 
 type Tags = Omit<FileEntry, 'path' | 'mtime' | 'size' | 'cover' | 'error'>
 
-export function normalizeTags(raw: RawTags): Tags {
+// ext: the file's extension, to tell if the WAV format is worth keeping
+export function normalizeTags(raw: RawTags, ext = ''): Tags {
   const c = raw.common
   const f = raw.format
   const artists = (c.artists ?? []).map(cleanText).filter((a): a is string => !!a)
@@ -63,13 +67,18 @@ export function normalizeTags(raw: RawTags): Tags {
     codec: cleanText(f.codec),
     container: cleanText(f.container)
   }
+  if (needsDecoding(ext, out.codec)) {
+    out.sampleRate = positive(f.sampleRate)
+    out.channels = positive(f.numberOfChannels)
+    out.bits = positive(f.bitsPerSample)
+  }
   // leave missing tags out, so the index file stays small
   for (const k of Object.keys(out) as (keyof Tags)[]) if (out[k] === undefined) delete out[k]
   return out
 }
 
 // Formats Chromium can play, plus some it can't (ALAC in m4a, WMA, APE, WavPack,
-// AIFF). Those are listed anyway, so the songs show up; playing one skips it with a notice.
+// AIFF), which main decodes with ffmpeg (see needsDecoding).
 const audioExt = new Set([
   'mp3',
   'flac',
@@ -95,6 +104,18 @@ export function extOf(name: string): string {
 
 export function isAudioFile(name: string): boolean {
   return !name.startsWith('.') && audioExt.has(extOf(name))
+}
+
+export function isCueFile(name: string): boolean {
+  return !name.startsWith('.') && extOf(name) === 'cue'
+}
+
+// Chromium in Electron 44 can't play these (decision 60), so main decodes them
+// with ffmpeg. Other files are decoded only when the page finds it can't play them.
+const decodeExt = new Set(['ape', 'wma', 'wv', 'aif', 'aiff'])
+
+export function needsDecoding(ext: string, codec: string | undefined): boolean {
+  return decodeExt.has(ext) || codec === 'ALAC'
 }
 
 // Folder images Chromium decodes (covers are resized in a hidden window).

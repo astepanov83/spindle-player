@@ -5,3 +5,5 @@ out/
 .DS_Store
 .env
 .eslintcache
+# ffmpeg and ffprobe, fetched by scripts/fetch-ffmpeg.mjs
+resources/ffmpeg/

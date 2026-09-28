@@ -11,6 +11,7 @@ import {
   WinChannel
 } from '../shared/ipc'
 import { pageSettings } from '../shared/settings'
+import { stopAllDecoders } from './library/decode'
 import { handleProtocol, registerScheme } from './library/protocol'
 import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
@@ -122,6 +123,8 @@ app.whenReady().then(() => {
 // process saves on its own, so quitting waits for its answer (2s at most).
 let libraryFlushed = false
 app.on('will-quit', (e) => {
+  // the page's requests end with it, but an ffmpeg must never outlive the app
+  stopAllDecoders()
   store?.flushSync()
   playlists?.flushSync()
   savedQueue?.flushSync()

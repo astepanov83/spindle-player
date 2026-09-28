@@ -11,7 +11,7 @@ import {
   type IRandomAccessFileInfo,
   type IReadChunkOptions
 } from 'strtok3'
-import { extOf } from './tags'
+import { extOf, type Picture, type RawTags } from './tags'
 
 const MB = 1024 * 1024
 // The last Ogg page starts within this many bytes of the end.
@@ -98,13 +98,18 @@ class BudgetTokenizer extends AbstractTokenizer {
   }
 }
 
-export type Meta = Pick<IAudioMetadata, 'common' | 'format'>
+// Tags as music-metadata gives them, or ffprobe (no pictures then).
+export type Meta = RawTags & { common: { picture?: Picture[] } }
 
-// Throws if the file can't be read, or can't be read cheaply (ReadLimitError).
-// Ticket 012: ffprobe goes where this throws, before the file falls back to its name.
+// Throws if the file can't be read, or can't be read cheaply (ReadLimitError),
+// and `probe` (ffprobe) can't read it either.
 export async function readTags(
   path: string,
-  options: { skipCovers?: boolean; budget?: ReturnType<typeof readBudget> } = {}
+  options: {
+    skipCovers?: boolean
+    budget?: ReturnType<typeof readBudget>
+    probe?: (path: string) => Promise<RawTags>
+  } = {}
 ): Promise<Meta> {
   const handle = await open(path, 'r')
   try {
@@ -112,14 +117,25 @@ export async function readTags(
     const ext = extOf(path)
     if (ext === 'ape') {
       const old = oldApeHeader(await readAt(handle, 0, 32))
-      if (old) return { common: {}, format: old } as Meta
+      if (old) {
+        // music-metadata can't read these; ffprobe can, including the tags
+        const p = await options.probe?.(path).catch(() => undefined)
+        return { common: p?.common ?? {}, format: { ...p?.format, ...old } }
+      }
     }
-    const tokenizer = new BudgetTokenizer(handle, path, size, options.budget ?? readBudget(size))
-    const meta = await parseFromTokenizer(tokenizer, {
-      skipCovers: options.skipCovers ?? false,
-      // a duration count reads the whole mp3 or Ogg file; see below
-      duration: false
-    })
+    let meta: IAudioMetadata
+    try {
+      const tokenizer = new BudgetTokenizer(handle, path, size, options.budget ?? readBudget(size))
+      meta = await parseFromTokenizer(tokenizer, {
+        skipCovers: options.skipCovers ?? false,
+        // a duration count reads the whole mp3 or Ogg file; see below
+        duration: false
+      })
+    } catch (error) {
+      if (!options.probe) throw error
+      // the file falls back to its name only if ffprobe fails too
+      return await options.probe(path).catch(() => Promise.reject(error))
+    }
     const f = meta.format
     let duration = f.duration
     if (!duration && f.container === 'Ogg' && size > 0) {
@@ -144,14 +160,22 @@ async function readAt(handle: FileHandle, position: number, length: number): Pro
 // Monkey's Audio before 3.98 has a header music-metadata doesn't know. It
 // reads it as the new one and then reads the whole file looking for the tags.
 // Only the length is taken from it.
-export function oldApeHeader(
-  b: Uint8Array
-): { container: string; duration: number; sampleRate: number } | undefined {
+export function oldApeHeader(b: Uint8Array):
+  | {
+      container: string
+      duration: number
+      sampleRate: number
+      numberOfChannels: number
+      bitsPerSample: number
+    }
+  | undefined {
   if (b.length < 32 || String.fromCharCode(...b.subarray(0, 4)) !== 'MAC ') return undefined
   const v = new DataView(b.buffer, b.byteOffset, b.byteLength)
   const version = v.getUint16(4, true)
   if (version >= 3980) return undefined
   const compression = v.getUint16(6, true)
+  const flags = v.getUint16(8, true)
+  const channels = v.getUint16(10, true)
   const sampleRate = v.getUint32(12, true)
   const totalFrames = v.getUint32(24, true)
   const finalFrameBlocks = v.getUint32(28, true)
@@ -162,7 +186,10 @@ export function oldApeHeader(
   return {
     container: "Monkey's Audio",
     duration: sampleRate ? blocks / sampleRate : 0,
-    sampleRate
+    sampleRate,
+    numberOfChannels: channels,
+    // format flags: 1 is 8-bit, 8 is 24-bit
+    bitsPerSample: flags & 1 ? 8 : flags & 8 ? 24 : 16
   }
 }
 

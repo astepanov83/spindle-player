@@ -10,9 +10,12 @@ import type { ScanStatus } from '../../shared/library'
 import { JsonFileWriter, readJsonFile } from '../json-file'
 import { buildLibrary, type BuiltLibrary } from './group'
 import { eachPaced, Pacer, scanSlow } from './pacer'
+import { decodeCue, parseCue } from './cue'
+import { probeTags } from './probe'
 import { readTags } from './read-tags'
 import {
   applyBatch,
+  applyCue,
   applyListing,
   dirOf,
   emptiedFolders,
@@ -20,19 +23,24 @@ import {
   isUnder,
   missingPalettes,
   parseIndex,
+  planCueReads,
   planReads,
   prunePalettes,
+  readAgainWithProbe,
   serializeIndex,
   usedCovers
 } from './merge'
-import { frontCover, isAudioFile, normalizeTags, pickFolderImage } from './tags'
-import type {
-  FileEntry,
-  FolderImage,
-  LibraryIndex,
-  WorkerIn,
-  WorkerOut,
-  WorkerStart
+import { extOf, frontCover, isAudioFile, isCueFile, normalizeTags, pickFolderImage } from './tags'
+import {
+  readerVersion,
+  type CueEntry,
+  type FileEntry,
+  type FolderImage,
+  type LibraryIndex,
+  type MediaInfo,
+  type WorkerIn,
+  type WorkerOut,
+  type WorkerStart
 } from './types'
 
 const port = process.parentPort
@@ -268,12 +276,13 @@ function checkGen(gen: number): void {
 
 interface Listing {
   files: string[]
+  cues: string[]
   images: string[]
   skipped: string[]
 }
 
 async function walk(roots: string[], gen: number): Promise<Listing> {
-  const out: Listing = { files: [], images: [], skipped: [] }
+  const out: Listing = { files: [], cues: [], images: [], skipped: [] }
   const seenFiles = new Set<string>()
   // real paths, so a symlink loop is walked once
   const seenDirs = new Set<string>()
@@ -310,9 +319,10 @@ async function walk(roots: string[], gen: number): Promise<Listing> {
         if (isDir) next.push(path)
         else if (isFile) {
           names.push(d.name)
-          if (isAudioFile(d.name) && !seenFiles.has(path)) {
+          const audio = isAudioFile(d.name)
+          if ((audio || isCueFile(d.name)) && !seenFiles.has(path)) {
             seenFiles.add(path)
-            out.files.push(path)
+            ;(audio ? out.files : out.cues).push(path)
           }
         }
       }
@@ -333,15 +343,35 @@ async function readFileEntry(
 ): Promise<FileEntry> {
   let meta
   try {
-    meta = await readTags(path)
+    meta = await readTags(path, { probe })
   } catch (error) {
     // listed by its file and folder names; tried again on a Rescan or once it changes
     return { path, mtime, size, duration: 0, error: String((error as Error)?.message ?? error) }
   }
-  const entry: FileEntry = { path, mtime, size, ...normalizeTags(meta) }
+  const entry: FileEntry = { path, mtime, size, ...normalizeTags(meta, extOf(path)) }
   const pic = frontCover(meta.common.picture)
   if (pic?.data.length) entry.cover = await sendCover(pic.data, gen)
   return entry
+}
+
+// ffprobe, once main said where it is
+const probe = (path: string): ReturnType<typeof probeTags> =>
+  start.ffprobe ? probeTags(start.ffprobe, path) : Promise.reject(new Error('no ffprobe'))
+
+// Cue sheets are a few KB. One that can't be read or has no audio tracks is
+// kept without a sheet, so it isn't read again until it changes.
+async function readCue(f: { path: string; mtime: number; size: number }): Promise<CueEntry> {
+  const c: CueEntry = { ...f }
+  try {
+    // a "cue" of megabytes is not a cue sheet
+    if (f.size <= 1024 * 1024) {
+      const sheet = parseCue(decodeCue(new Uint8Array(await readFile(f.path))))
+      if (sheet) c.sheet = sheet
+    }
+  } catch {
+    // gone or unreadable: no sheet; the image is listed as one song
+  }
+  return c
 }
 
 async function readImage(
@@ -392,11 +422,17 @@ async function scan(folders: string[], retryFailed: boolean, gen: number): Promi
     progress('walk', listing.files.length, 0, true)
 
     const found: { path: string; mtime: number; size: number }[] = []
-    await eachPaced(listing.files, statPace, async (path) => {
+    const cues: typeof found = []
+    const cueSet = new Set(listing.cues)
+    await eachPaced([...listing.files, ...listing.cues], statPace, async (path) => {
       checkGen(gen)
       try {
         const s = await stat(path)
-        found.push({ path, mtime: Math.floor(s.mtimeMs), size: s.size })
+        ;(cueSet.has(path) ? cues : found).push({
+          path,
+          mtime: Math.floor(s.mtimeMs),
+          size: s.size
+        })
       } catch {
         // gone since the walk
       }
@@ -411,11 +447,34 @@ async function scan(folders: string[], retryFailed: boolean, gen: number): Promi
 
     lap()
     checkGen(gen)
-    const toRead = planReads(ix.files, found, known, retryFailed)
+    // entries an older tag reader got wrong are read once more with ffprobe
+    const newReader = !!start.ffprobe && ix.reader < readerVersion
+    const toRead = planReads(
+      ix.files,
+      found,
+      known,
+      retryFailed,
+      newReader ? readAgainWithProbe : undefined
+    )
+    const cuesToRead = planCueReads(ix.cues, cues, retryFailed)
     const skipped = [...listing.skipped, ...emptiedFolders(ix, folders, listing.files)]
-    if (applyListing(ix, folders, { paths: found.map((f) => f.path), images, skipped }))
+    if (
+      applyListing(ix, folders, {
+        paths: found.map((f) => f.path),
+        cues: cues.map((c) => c.path),
+        images,
+        skipped
+      })
+    )
       markChanged()
     setStatus({ missing: folders.filter((f) => skipped.some((s) => isUnder(f, s))) })
+
+    await eachPaced(cuesToRead, readPace, async (f) => {
+      checkGen(gen)
+      const c = await readCue(f)
+      checkGen(gen)
+      if (applyCue(ix, c)) markChanged()
+    })
 
     const byPath = new Map(found.map((f) => [f.path, f]))
     progress('read', 0, toRead.length, true)
@@ -429,6 +488,10 @@ async function scan(folders: string[], retryFailed: boolean, gen: number): Promi
       progress('read', read, toRead.length)
     })
     progress('read', read, toRead.length, true)
+    if (newReader) {
+      ix.reader = readerVersion
+      unsaved = true
+    }
     lap()
     await fillPalettes(gen)
     // wait until main has every picture, so the covers are there for the albums
@@ -467,6 +530,15 @@ async function coverSource(h: string): Promise<Uint8Array | undefined> {
     return frontCover(meta.common.picture)?.data
   }
   return undefined
+}
+
+// What main needs to serve a file by its id.
+function mediaInfo(id: string): MediaInfo | undefined {
+  const path = built.paths.get(id)
+  const e = path ? ix.files.get(path) : undefined
+  if (!e) return undefined
+  const { codec, duration, sampleRate, channels, bits } = e
+  return { path: e.path, codec, duration, sampleRate, channels, bits }
 }
 
 port.on('message', (e: Electron.MessageEvent) => {
@@ -513,7 +585,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       break
     case 'find-track':
       ready.then(
-        () => post({ type: 'reply', req: m.req, path: built.paths.get(m.id) }),
+        () => post({ type: 'reply', req: m.req, media: mediaInfo(m.id) }),
         () => post({ type: 'reply', req: m.req })
       )
       break

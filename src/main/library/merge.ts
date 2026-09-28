@@ -1,10 +1,25 @@
 // The index in memory: reading it from disk, and folding scan results into it.
 import { sep } from 'path'
 import { paletteVersion, parseThemePalettes } from '../../shared/palette'
-import { indexVersion, type FileEntry, type FolderImage, type LibraryIndex } from './types'
+import type { CueSheet, CueTrack } from './cue'
+import {
+  indexVersion,
+  readerVersion,
+  type CueEntry,
+  type FileEntry,
+  type FolderImage,
+  type LibraryIndex
+} from './types'
 
 export function emptyIndex(): LibraryIndex {
-  return { version: indexVersion, files: new Map(), images: new Map(), palettes: new Map() }
+  return {
+    version: indexVersion,
+    reader: readerVersion,
+    files: new Map(),
+    cues: new Map(),
+    images: new Map(),
+    palettes: new Map()
+  }
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -29,9 +44,39 @@ function parseEntry(v: unknown): FileEntry | undefined {
     'error'
   ] as const)
     if (str(v[k]) && v[k]) e[k] = v[k]
-  for (const k of ['track', 'disc', 'year'] as const) if (num(v[k]) && v[k] > 0) e[k] = v[k]
+  for (const k of ['track', 'disc', 'year', 'sampleRate', 'channels', 'bits'] as const)
+    if (num(v[k]) && v[k] > 0) e[k] = v[k]
   if (num(v.duration) && v.duration > 0) e.duration = v.duration
   return e
+}
+
+function parseCueTrack(v: unknown, files: number): CueTrack | undefined {
+  if (!isObject(v) || !num(v.no) || !num(v.file) || !num(v.start)) return undefined
+  if (v.file < 0 || v.file >= files || v.start < 0) return undefined
+  const t: CueTrack = { no: v.no, file: v.file, start: v.start }
+  if (str(v.title)) t.title = v.title
+  if (str(v.performer)) t.performer = v.performer
+  return t
+}
+
+function parseCueSheet(v: unknown): CueSheet | undefined {
+  if (!isObject(v) || !Array.isArray(v.files) || !Array.isArray(v.tracks)) return undefined
+  if (!v.files.every(str)) return undefined
+  const files = v.files as string[]
+  const tracks = v.tracks.map((t) => parseCueTrack(t, files.length))
+  if (!tracks.length || tracks.some((t) => !t)) return undefined
+  const sheet: CueSheet = { files, tracks: tracks as CueTrack[] }
+  for (const k of ['title', 'performer', 'genre'] as const) if (str(v[k])) sheet[k] = v[k]
+  for (const k of ['year', 'disc'] as const) if (num(v[k])) sheet[k] = v[k]
+  return sheet
+}
+
+function parseCueEntry(v: unknown): CueEntry | undefined {
+  if (!isObject(v) || !str(v.path) || !num(v.mtime) || !num(v.size)) return undefined
+  const c: CueEntry = { path: v.path, mtime: v.mtime, size: v.size }
+  const sheet = parseCueSheet(v.sheet)
+  if (sheet) c.sheet = sheet
+  return c
 }
 
 function parseImage(v: unknown): FolderImage | undefined {
@@ -46,6 +91,13 @@ function parseImage(v: unknown): FolderImage | undefined {
 export function parseIndex(raw: unknown): LibraryIndex {
   const ix = emptyIndex()
   if (!isObject(raw) || raw.version !== indexVersion) return ix
+  // an index from before the reader number was kept
+  ix.reader = num(raw.reader) ? raw.reader : 1
+  if (Array.isArray(raw.cues))
+    for (const v of raw.cues) {
+      const c = parseCueEntry(v)
+      if (c) ix.cues.set(c.path, c)
+    }
   if (Array.isArray(raw.files))
     for (const v of raw.files) {
       const e = parseEntry(v)
@@ -67,7 +119,9 @@ export function parseIndex(raw: unknown): LibraryIndex {
 export function serializeIndex(ix: LibraryIndex): unknown {
   return {
     version: ix.version,
+    reader: ix.reader,
     files: [...ix.files.values()],
+    cues: [...ix.cues.values()],
     images: [...ix.images.values()],
     paletteVersion,
     palettes: Object.fromEntries(ix.palettes)
@@ -86,12 +140,14 @@ export function isUnder(path: string, dir: string): boolean {
 // The files a scan has to read: new ones, changed ones, and ones whose cover
 // is gone from the cache. Files that failed last time only on a manual Rescan
 // (a fixed permission doesn't change mtime): a start-up scan that reads them
-// every time can cost minutes on a NAS.
+// every time can cost minutes on a NAS. `again` picks more entries to read
+// again, for a newer tag reader.
 export function planReads(
   known: Map<string, FileEntry>,
   found: { path: string; mtime: number; size: number }[],
   cached: (hash: string) => boolean,
-  retryFailed: boolean
+  retryFailed: boolean,
+  again: (e: FileEntry) => boolean = () => false
 ): string[] {
   const out: string[] = []
   for (const f of found) {
@@ -101,11 +157,31 @@ export function planReads(
       k.mtime !== f.mtime ||
       k.size !== f.size ||
       (retryFailed && k.error !== undefined) ||
-      (k.cover && !cached(k.cover))
+      (k.cover && !cached(k.cover)) ||
+      again(k)
     )
       out.push(f.path)
   }
   return out
+}
+
+// Entries the tag reader before ffprobe (reader 1) got wrong: files it could
+// not read, and old Monkey's Audio files it gave only a length.
+export function readAgainWithProbe(e: FileEntry): boolean {
+  return e.error !== undefined || (e.container === "Monkey's Audio" && !e.title)
+}
+
+// The cue sheets a scan has to read: new and changed ones, and on a manual
+// Rescan ones that gave no sheet (a fixed permission doesn't change mtime).
+export function planCueReads(
+  known: Map<string, CueEntry>,
+  found: { path: string; mtime: number; size: number }[],
+  retryFailed = false
+): { path: string; mtime: number; size: number }[] {
+  return found.filter((f) => {
+    const k = known.get(f.path)
+    return !k || k.mtime !== f.mtime || k.size !== f.size || (retryFailed && !k.sheet)
+  })
 }
 
 // Music folders that listed no files this time but have songs in the index.
@@ -122,18 +198,19 @@ export function emptiedFolders(ix: LibraryIndex, folders: string[], paths: strin
 export function applyListing(
   ix: LibraryIndex,
   folders: string[],
-  listing: { paths: string[]; images: FolderImage[]; skipped: string[] }
+  listing: { paths: string[]; cues?: string[]; images: FolderImage[]; skipped: string[] }
 ): boolean {
-  const present = new Set(listing.paths)
+  const present = new Set([...listing.paths, ...(listing.cues ?? [])])
   const kept = (path: string): boolean =>
     folders.some((f) => isUnder(path, f)) &&
     (present.has(path) || listing.skipped.some((s) => isUnder(path, s)))
   let changed = false
-  for (const path of ix.files.keys())
-    if (!kept(path)) {
-      ix.files.delete(path)
-      changed = true
-    }
+  for (const map of [ix.files, ix.cues])
+    for (const path of map.keys())
+      if (!kept(path)) {
+        map.delete(path)
+        changed = true
+      }
 
   const images = new Map<string, FolderImage>()
   for (const [dir, im] of ix.images)
@@ -154,6 +231,13 @@ function sameImages(a: Map<string, FolderImage>, b: Map<string, FolderImage>): b
     if (!o || o.path !== im.path || o.cover !== im.cover) return false
   }
   return true
+}
+
+// Adds or replaces a cue sheet. Returns true if it changed.
+export function applyCue(ix: LibraryIndex, c: CueEntry): boolean {
+  const old = ix.cues.get(c.path)
+  ix.cues.set(c.path, c)
+  return !old || JSON.stringify(old) !== JSON.stringify(c)
 }
 
 // Adds or replaces files the worker read. Returns true if anything changed.

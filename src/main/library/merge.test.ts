@@ -1,19 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyBatch,
+  applyCue,
   applyListing,
   emptiedFolders,
   emptyIndex,
   isUnder,
   missingPalettes,
   parseIndex,
+  planCueReads,
   planReads,
   prunePalettes,
+  readAgainWithProbe,
   serializeIndex,
   usedCovers
 } from './merge'
 import { fallbackPalettes, paletteVersion } from '../../shared/palette'
-import { indexVersion, type FileEntry, type LibraryIndex } from './types'
+import { indexVersion, readerVersion, type FileEntry, type LibraryIndex } from './types'
 
 const h1 = '1'.repeat(40)
 const h2 = '2'.repeat(40)
@@ -224,5 +227,108 @@ describe('helpers', () => {
     ix.palettes.set(h1, fallbackPalettes('a'))
     // h3 is not in the cache (bad or not made yet)
     expect(missingPalettes(ix, (h) => h !== h3)).toEqual([h2])
+  })
+})
+
+describe('cue sheets in the index', () => {
+  const sheet = {
+    title: 'October Rust',
+    year: 1996,
+    files: ['CDImage.ape'],
+    tracks: [
+      { no: 1, file: 0, start: 0, title: 'Bad Ground' },
+      { no: 2, file: 0, start: 38.4 }
+    ]
+  }
+
+  it('reads back cues, the reader number and the decode format', () => {
+    const ix = indexOf([entry('/m/i.ape', { sampleRate: 44100, channels: 2, bits: 16 })])
+    ix.cues.set('/m/i.cue', { path: '/m/i.cue', mtime: 2, size: 3, sheet })
+    ix.cues.set('/m/empty.cue', { path: '/m/empty.cue', mtime: 2, size: 3 })
+    const back = parseIndex(JSON.parse(JSON.stringify(serializeIndex(ix))))
+    expect(back.cues).toEqual(ix.cues)
+    expect(back.files).toEqual(ix.files)
+    expect(back.reader).toBe(readerVersion)
+  })
+
+  it('takes an index with no reader number as reader 1, keeping its files', () => {
+    const back = parseIndex({ version: indexVersion, files: [entry('/m/a.mp3')] })
+    expect(back.reader).toBe(1)
+    expect(back.files.size).toBe(1)
+    expect(back.cues.size).toBe(0)
+  })
+
+  it('drops a broken sheet but keeps the cue, so it is not read again', () => {
+    const back = parseIndex({
+      version: indexVersion,
+      cues: [
+        {
+          path: '/m/a.cue',
+          mtime: 1,
+          size: 1,
+          sheet: { files: ['a'], tracks: [{ no: 1, file: 3, start: 0 }] }
+        },
+        { path: '/m/b.cue', mtime: 1, size: 1, sheet: { files: [1], tracks: [] } },
+        { path: 5 }
+      ]
+    })
+    expect([...back.cues.values()]).toEqual([
+      { path: '/m/a.cue', mtime: 1, size: 1 },
+      { path: '/m/b.cue', mtime: 1, size: 1 }
+    ])
+  })
+
+  it('reads new and changed sheets only', () => {
+    const known = new Map([['/m/a.cue', { path: '/m/a.cue', mtime: 1, size: 5 }]])
+    const found = [
+      { path: '/m/a.cue', mtime: 1, size: 5 },
+      { path: '/m/b.cue', mtime: 1, size: 5 },
+      { path: '/m/a.cue', mtime: 2, size: 5 }
+    ]
+    expect(planCueReads(known, found)).toEqual(found.slice(1))
+  })
+
+  it('reads a sheet that gave nothing again on a Rescan only', () => {
+    const known = new Map([['/m/a.cue', { path: '/m/a.cue', mtime: 1, size: 5 }]])
+    const found = [{ path: '/m/a.cue', mtime: 1, size: 5 }]
+    expect(planCueReads(known, found)).toEqual([])
+    expect(planCueReads(known, found, true)).toEqual(found)
+  })
+
+  it('drops sheets that are gone, keeping those under folders that could not be read', () => {
+    const ix = emptyIndex()
+    for (const p of ['/m/a/x.cue', '/m/b/y.cue', '/m/c/z.cue'])
+      ix.cues.set(p, { path: p, mtime: 1, size: 1 })
+    applyListing(ix, ['/m'], { paths: [], cues: ['/m/a/x.cue'], images: [], skipped: ['/m/b'] })
+    expect([...ix.cues.keys()]).toEqual(['/m/a/x.cue', '/m/b/y.cue'])
+  })
+
+  it('reports a change of a sheet only when it differs', () => {
+    const ix = emptyIndex()
+    const c = { path: '/m/a.cue', mtime: 1, size: 1, sheet }
+    expect(applyCue(ix, c)).toBe(true)
+    expect(applyCue(ix, { ...c })).toBe(false)
+    expect(applyCue(ix, { ...c, mtime: 2 })).toBe(true)
+  })
+})
+
+describe('reading again with ffprobe', () => {
+  it('picks files that failed and old APEs with no tags', () => {
+    expect(readAgainWithProbe(entry('/m/a.ape', { container: "Monkey's Audio" }))).toBe(true)
+    expect(readAgainWithProbe(entry('/m/b.wv', { error: 'Tags not read' }))).toBe(true)
+    expect(readAgainWithProbe(entry('/m/c.ape', { container: "Monkey's Audio", title: 'T' }))).toBe(
+      false
+    )
+    expect(readAgainWithProbe(entry('/m/d.flac', { container: 'FLAC' }))).toBe(false)
+  })
+
+  it('plans those reads even though the files did not change', () => {
+    const known = new Map([
+      ['/m/a.ape', entry('/m/a.ape', { container: "Monkey's Audio" })],
+      ['/m/b.flac', entry('/m/b.flac')]
+    ])
+    const found = [...known.values()].map(({ path, mtime, size }) => ({ path, mtime, size }))
+    expect(planReads(known, found, () => true, false)).toEqual([])
+    expect(planReads(known, found, () => true, false, readAgainWithProbe)).toEqual(['/m/a.ape'])
   })
 })

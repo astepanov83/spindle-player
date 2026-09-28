@@ -1,26 +1,24 @@
 // Builds the albums and tracks the page shows from the index.
-import { hash } from 'crypto'
 import { basename } from 'path'
-import type { Album, LibraryData, Track } from '../../shared/library'
+import type { Album, LibraryData, Track, TrackPart } from '../../shared/library'
 import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../shared/palette'
+import { cueTracks } from './cue-tracks'
+import { shortHash } from './ids'
 import { dirOf } from './merge'
 import { discFolderNumber, isDiscFolder, titleFromFileName } from './tags'
 import type { FileEntry, LibraryIndex } from './types'
 
 export interface BuiltLibrary {
   data: LibraryData
-  // track id -> file path, for the media protocol
+  // file id -> file path, for the media protocol. Every file has one, also a
+  // disc image that is listed as its cue tracks (they play it by its id).
   paths: Map<string, string>
 }
 
 export const unknownArtist = 'Unknown artist'
 export const variousArtists = 'Various Artists'
 
-// Short and stable: the same path gives the same id on every start.
-export function shortHash(s: string): string {
-  // the one-shot hash() is about twice as fast as createHash for 50k paths
-  return hash('sha1', s).slice(0, 16)
-}
+export { shortHash }
 
 export function coverUrls(hash: string): { cover: string; coverLarge: string } {
   return { cover: `spindle://cover/small/${hash}`, coverLarge: `spindle://cover/large/${hash}` }
@@ -50,6 +48,7 @@ interface Item {
   disc: number
   no: number
   fromName: string
+  part?: TrackPart
 }
 
 interface Group {
@@ -123,23 +122,30 @@ function withoutTracks(al: Album & { tracks: Track[] }): Album {
 export function buildLibrary(ix: LibraryIndex, hasCover: (hash: string) => boolean): BuiltLibrary {
   const groups = new Map<string, Group>()
   const paths = new Map<string, string>()
-  for (const e of ix.files.values()) {
+  const add = (e: FileEntry, id: string, part?: TrackPart): void => {
     const key = albumKey(e)
     let g = groups.get(key)
     if (!g) groups.set(key, (g = { key, items: [] }))
     const name = basename(e.path)
     const fromName = e.title ? undefined : titleFromFileName(name)
-    const id = shortHash(e.path)
-    paths.set(id, e.path)
     g.items.push({
       e,
       id,
       name,
       disc: discOf(e),
       no: e.track ?? fromName?.no ?? 0,
-      fromName: fromName?.title ?? ''
+      fromName: fromName?.title ?? '',
+      part
     })
   }
+  // a disc image with a cue sheet is served by its own id, but listed as the sheet's tracks
+  const cues = cueTracks(ix)
+  for (const e of ix.files.values()) {
+    const id = shortHash(e.path)
+    paths.set(id, e.path)
+    if (!cues.images.has(e.path)) add(e, id)
+  }
+  for (const c of cues.items) add(c.entry, c.id, c.part)
 
   const albums: (Album & { tracks: Track[] })[] = []
   for (const g of groups.values()) {
@@ -151,17 +157,21 @@ export function buildLibrary(ix: LibraryIndex, hasCover: (hash: string) => boole
     const artist = albumArtistOf(entries)
     const cover = coverOf(entries, ix, hasCover)
     const fallbackArtist = artist === variousArtists ? unknownArtist : artist
-    const tracks = g.items.map(({ e, id: trackId, disc, no, fromName }): Track => ({
-      id: trackId,
-      title: e.title ?? fromName,
-      duration: e.duration,
-      albumId: id,
-      artist: e.artist ?? e.albumArtist ?? fallbackArtist,
-      album: title,
-      no,
-      disc,
-      codec: e.codec ?? ''
-    }))
+    const tracks = g.items.map(({ e, id: trackId, disc, no, fromName, part }): Track => {
+      const t: Track = {
+        id: trackId,
+        title: e.title ?? fromName,
+        duration: e.duration,
+        albumId: id,
+        artist: e.artist ?? e.albumArtist ?? fallbackArtist,
+        album: title,
+        no,
+        disc,
+        codec: e.codec ?? ''
+      }
+      if (part) t.part = part
+      return t
+    })
     albums.push({
       id,
       title,

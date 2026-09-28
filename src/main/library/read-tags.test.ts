@@ -57,6 +57,7 @@ describe('oldApeHeader', () => {
     // 527 frames of 294912 blocks, the last one 74184, at 44.1 kHz
     expect(h.duration).toBeCloseTo((526 * 294912 + 74184) / 44100, 3)
     expect(h.container).toBe("Monkey's Audio")
+    expect([h.sampleRate, h.numberOfChannels, h.bitsPerSample]).toEqual([44100, 2, 16])
   })
 
   it('leaves the new header and other files to music-metadata', () => {
@@ -207,5 +208,70 @@ describe('readTags', () => {
       expect(e.read).toBeLessThanOrEqual(most)
       expect(e.read).toBeGreaterThan(most / 2)
     }
+  })
+
+  describe('with ffprobe', () => {
+    const probed = {
+      common: { title: 'From ffprobe', album: 'Album' },
+      format: { duration: 99, container: 'probed', sampleRate: 48000, numberOfChannels: 2 }
+    }
+
+    it('gets the tags of an old APE, and keeps the length from its header', async () => {
+      const path = join(dir, 'old-probed.ape')
+      const b = new Uint8Array(1024)
+      b.set(oldApe, 0)
+      await writeFile(path, b)
+      const asked: string[] = []
+      const m = await readTags(path, {
+        probe: async (p) => {
+          asked.push(p)
+          return probed
+        }
+      })
+      expect(asked).toEqual([path])
+      expect(m.common.title).toBe('From ffprobe')
+      expect(m.format.container).toBe("Monkey's Audio")
+      expect(m.format.duration).toBeGreaterThan(3500)
+      expect(m.format.sampleRate).toBe(44100)
+    })
+
+    it('still gives the length of an old APE when ffprobe fails', async () => {
+      const path = join(dir, 'old-noprobe.ape')
+      const b = new Uint8Array(1024)
+      b.set(oldApe, 0)
+      await writeFile(path, b)
+      const m = await readTags(path, { probe: () => Promise.reject(new Error('no')) })
+      expect(m.common).toEqual({})
+      expect(m.format.duration).toBeGreaterThan(3500)
+    })
+
+    it('asks ffprobe about a file music-metadata cannot read', async () => {
+      const path = join(dir, 'zeros-probed.mp3')
+      await writeFile(path, new Uint8Array(4 * MB))
+      const m = await readTags(path, { probe: async () => probed })
+      expect(m.common.title).toBe('From ffprobe')
+    })
+
+    it('keeps music-metadata’s error when ffprobe fails too', async () => {
+      const path = join(dir, 'zeros-both.mp3')
+      await writeFile(path, new Uint8Array(4 * MB))
+      const e = await readTags(path, { probe: () => Promise.reject(new Error('no')) }).catch(
+        (e) => e
+      )
+      expect(e).toBeInstanceOf(ReadLimitError)
+    })
+
+    it('leaves a file music-metadata reads alone', async () => {
+      const path = join(dir, 'b.flac')
+      await writeFile(path, flac())
+      let asked = false
+      await readTags(path, {
+        probe: async () => {
+          asked = true
+          return probed
+        }
+      })
+      expect(asked).toBe(false)
+    })
   })
 })

@@ -19,8 +19,9 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
-    "package": "npm run build && electron-builder --linux",
-    "postinstall": "install-electron && electron-builder install-app-deps"
+    "package": "npm run build && node scripts/fetch-ffmpeg.mjs --strict && electron-builder --linux",
+    "fetch-ffmpeg": "node scripts/fetch-ffmpeg.mjs",
+    "postinstall": "install-electron && electron-builder install-app-deps && node scripts/fetch-ffmpeg.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",

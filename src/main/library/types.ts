@@ -1,6 +1,7 @@
 // The library index on disk, and the messages between main and the library process.
 import type { ScanStatus } from '../../shared/library'
 import type { ThemePalettes } from '../../shared/palette'
+import type { CueSheet } from './cue'
 
 // One audio file. Tags are already cleaned up (see tags.ts); a missing tag is left out.
 export interface FileEntry {
@@ -20,6 +21,11 @@ export interface FileEntry {
   duration: number
   codec?: string
   container?: string
+  // Kept only for files Chromium can't play, which ffmpeg decodes to WAV
+  // (see needsDecoding in tags.ts)
+  sampleRate?: number
+  channels?: number
+  bits?: number
   // hash of the embedded cover picture
   cover?: string
   // set when the tags could not be read; the file is still listed by its name
@@ -35,9 +41,20 @@ export interface FolderImage {
   cover: string
 }
 
+// A .cue sheet. No sheet when it has no audio tracks or could not be read.
+export interface CueEntry {
+  path: string
+  mtime: number
+  size: number
+  sheet?: CueSheet
+}
+
 export interface LibraryIndex {
   version: number
+  // which tag reader made the entries; see readerVersion
+  reader: number
   files: Map<string, FileEntry>
+  cues: Map<string, CueEntry>
   // folder path -> its cover image
   images: Map<string, FolderImage>
   // cover hash -> the album colors picked from it
@@ -46,12 +63,28 @@ export interface LibraryIndex {
 
 // Bump to make every file be read again (for example when a new tag is added).
 export const indexVersion = 1
+// 2: ffprobe reads what music-metadata can't (ticket 012). Entries from an
+// older reader that failed or have no title are read again once.
+export const readerVersion = 2
 
 export interface WorkerStart {
   indexPath: string
   coversDir: string
   // for the status before the first scan
   folders: string[]
+  // the bundled ffprobe, for files music-metadata can't read; none if missing
+  ffprobe?: string
+}
+
+// What main needs to serve a file: its path, and for a file ffmpeg decodes,
+// the WAV it makes.
+export interface MediaInfo {
+  path: string
+  codec?: string
+  duration: number
+  sampleRate?: number
+  channels?: number
+  bits?: number
 }
 
 // main to the library process
@@ -90,6 +123,6 @@ export type WorkerOut =
   // a picture main should resize into the cover cache and pick the palette of;
   // with paletteOnly, a cached small cover that only needs its palette
   | { type: 'cover'; hash: string; data: Uint8Array; paletteOnly?: boolean }
-  | { type: 'reply'; req: number; path?: string; data?: Uint8Array }
+  | { type: 'reply'; req: number; media?: MediaInfo; data?: Uint8Array }
   | { type: 'log'; text: string }
   | { type: 'flushed' }

@@ -1,14 +1,28 @@
 // spindle:// serves covers and audio to the sandboxed page:
-//   spindle://cover/small/<hash>, spindle://cover/large/<hash>, spindle://media/<track id>
+//   spindle://cover/small/<hash>, spindle://cover/large/<hash>, spindle://media/<file id>
 // Only files the index knows are served. The page can't name a path.
+// spindle://media/<file id>?decode asks for the file as WAV decoded by ffmpeg
+// (see decode.ts); files Chromium can't play are always served that way.
 import { createReadStream } from 'fs'
 import { readFile, stat } from 'fs/promises'
 import { Readable } from 'stream'
 import { protocol } from 'electron'
-import { extOf } from './tags'
+import { extOf, needsDecoding } from './tags'
 import { isCoverHash } from './cover-cache'
-import { audioType, parseRange } from './range'
+import {
+  dataSize,
+  DecodeStream,
+  ffmpegArgs,
+  startFfmpeg,
+  wavFormat,
+  wavHeader,
+  wavHeaderSize,
+  type WavFormat
+} from './decode'
+import { probeTags } from './probe'
+import { audioType, parseRange, type RangeResult } from './range'
 import type { LibraryService } from './service'
+import type { MediaInfo } from './types'
 
 export const scheme = 'spindle'
 
@@ -55,39 +69,114 @@ async function cover(lib: LibraryService, size: string, hash: string): Promise<R
   }
 }
 
-async function media(lib: LibraryService, id: string, req: Request): Promise<Response> {
-  const path = await lib.trackPath(id)
-  if (!path) return notFound()
-  let size: number
-  try {
-    const s = await stat(path)
-    size = s.size
-    lib.mediaOpened(s.dev)
-  } catch {
-    return notFound()
-  }
+// A 200 or 206 answer for the range of a file of `size` bytes. No body for HEAD.
+function ranged(
+  range: RangeResult,
+  size: number,
+  type: string,
+  body: ((start: number, end: number) => Readable) | undefined
+): Response {
   const headers: Record<string, string> = {
     ...common,
-    'Content-Type': audioType(extOf(path)),
+    'Content-Type': type,
     'Accept-Ranges': 'bytes'
   }
-  const range = parseRange(req.headers.get('Range'), size)
   if (range.kind === 'bad')
     return new Response(null, {
       status: 416,
       headers: { ...headers, 'Content-Range': `bytes */${size}` }
     })
   const { start, end } = range.kind === 'part' ? range : { start: 0, end: size - 1 }
-  const body =
-    req.method === 'HEAD' || size === 0
-      ? null
-      : (Readable.toWeb(createReadStream(path, { start, end })) as ReadableStream)
   headers['Content-Length'] = String(size === 0 ? 0 : end - start + 1)
+  const stream = size === 0 || !body ? null : (Readable.toWeb(body(start, end)) as ReadableStream)
   if (range.kind === 'part') {
     headers['Content-Range'] = `bytes ${start}-${end}/${size}`
-    return new Response(body, { status: 206, headers })
+    return new Response(stream, { status: 206, headers })
   }
-  return new Response(body, { status: 200, headers })
+  return new Response(stream, { status: 200, headers })
+}
+
+// The WAV format and length of a file to decode. The index has them for files
+// read since 012; others are asked of ffprobe once per run.
+const probed = new Map<string, { format: WavFormat; duration: number }>()
+
+async function decodePlan(
+  lib: LibraryService,
+  m: MediaInfo
+): Promise<{ format: WavFormat; duration: number } | undefined> {
+  if (m.sampleRate && m.channels && m.duration > 0)
+    return { format: wavFormat(m.sampleRate, m.channels, m.bits), duration: m.duration }
+  const known = probed.get(m.path)
+  if (known) return known
+  if (!lib.ffprobe) return undefined
+  try {
+    const f = (await probeTags(lib.ffprobe, m.path)).format
+    const duration = f.duration ?? m.duration
+    if (!f.sampleRate || !f.numberOfChannels || !(duration > 0)) return undefined
+    const plan = {
+      format: wavFormat(f.sampleRate, f.numberOfChannels, f.bitsPerSample),
+      duration
+    }
+    if (probed.size >= 200) probed.clear()
+    probed.set(m.path, plan)
+    return plan
+  } catch (e) {
+    console.error(`Could not read the format of ${m.path}: ${e}`)
+    return undefined
+  }
+}
+
+async function decoded(
+  lib: LibraryService,
+  m: MediaInfo,
+  req: Request,
+  head: boolean
+): Promise<Response> {
+  const ffmpeg = lib.ffmpeg
+  const plan = ffmpeg ? await decodePlan(lib, m) : undefined
+  if (!ffmpeg || !plan) return notFound()
+  const { format, duration } = plan
+  const data = dataSize(format, duration)
+  const header = wavHeader(format, data)
+  const range = parseRange(req.headers.get('Range'), wavHeaderSize + data)
+  return ranged(
+    range,
+    wavHeaderSize + data,
+    'audio/wav',
+    head
+      ? undefined
+      : (start, end) =>
+          new DecodeStream(header, format, start, end, (seconds) =>
+            startFfmpeg(ffmpeg, ffmpegArgs(m.path, seconds, format))
+          )
+  )
+}
+
+async function media(
+  lib: LibraryService,
+  id: string,
+  req: Request,
+  decode: boolean
+): Promise<Response> {
+  const m = await lib.mediaInfo(id)
+  if (!m) return notFound()
+  let size: number
+  try {
+    const s = await stat(m.path)
+    size = s.size
+    lib.mediaOpened(s.dev)
+  } catch {
+    return notFound()
+  }
+  const ext = extOf(m.path)
+  const head = req.method === 'HEAD'
+  if (decode || needsDecoding(ext, m.codec)) return decoded(lib, m, req, head)
+  return ranged(
+    parseRange(req.headers.get('Range'), size),
+    size,
+    audioType(ext),
+    head ? undefined : (start, end) => createReadStream(m.path, { start, end })
+  )
 }
 
 export function handleProtocol(lib: LibraryService): void {
@@ -95,7 +184,8 @@ export function handleProtocol(lib: LibraryService): void {
     const url = new URL(req.url)
     const parts = url.pathname.split('/').filter(Boolean)
     if (url.hostname === 'cover' && parts.length === 2) return cover(lib, parts[0], parts[1])
-    if (url.hostname === 'media' && parts.length === 1) return media(lib, parts[0], req)
+    if (url.hostname === 'media' && parts.length === 1)
+      return media(lib, parts[0], req, url.searchParams.has('decode'))
     return notFound()
   })
 }

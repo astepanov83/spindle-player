@@ -4,12 +4,13 @@ import { join } from 'path'
 import { app, dialog, utilityProcess, type BrowserWindow } from 'electron'
 import { LibraryChannel } from '../../shared/ipc'
 import type { ScanStatus } from '../../shared/library'
+import { ffmpegTool } from '../ffmpeg-path'
 import type { SettingsStore } from '../settings-store'
 import { CoverCache } from './cover-cache'
 import { LibraryProcess } from './library-process'
 import { RestartBudget } from './restart'
 import libraryProcessPath from './library-worker?modulePath'
-import type { WorkerIn, WorkerOut } from './types'
+import type { MediaInfo, WorkerIn, WorkerOut } from './types'
 
 type Reply = Extract<WorkerOut, { type: 'reply' }>
 type Ask =
@@ -28,6 +29,9 @@ const libraryPoolSize = '8'
 
 export class LibraryService {
   readonly covers: CoverCache
+  // the bundled decoders; without them APE, WMA and the like don't play
+  readonly ffmpeg = ffmpegTool('ffmpeg')
+  readonly ffprobe = ffmpegTool('ffprobe')
   #proc: LibraryProcess
   #playing = false
   // device of the last audio file the page opened
@@ -45,6 +49,10 @@ export class LibraryService {
     readonly dir = app.getPath('userData')
   ) {
     this.covers = new CoverCache(join(dir, 'covers'), coverPreload)
+    if (!this.ffmpeg || !this.ffprobe)
+      console.error(
+        'ffmpeg or ffprobe not found (npm run fetch-ffmpeg); APE, WMA and the like will not play'
+      )
     this.#status = {
       folders: store.get().folders,
       phase: 'idle',
@@ -64,7 +72,8 @@ export class LibraryService {
       () => ({
         indexPath: join(this.dir, 'library.json'),
         coversDir: this.covers.dir,
-        folders: this.store.get().folders
+        folders: this.store.get().folders,
+        ffprobe: this.ffprobe
       }),
       // a library process that dies is started again a few times, then left dead
       new RestartBudget(3, 60000),
@@ -223,8 +232,8 @@ export class LibraryService {
   }
 
   // Only files in the index are served, by id; never a path from the page.
-  async trackPath(id: string): Promise<string | undefined> {
-    return (await this.#ask({ type: 'find-track', id })).path
+  async mediaInfo(id: string): Promise<MediaInfo | undefined> {
+    return (await this.#ask({ type: 'find-track', id })).media
   }
 
   // The picture a cover hash was made from, to make the large size.

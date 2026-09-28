@@ -15,6 +15,17 @@ export interface Track {
   disc: number
   // e.g. "MPEG 1 Layer 3", "FLAC", "ALAC"; empty when unknown
   codec: string
+  // set when the track is a stretch of a bigger file (a CUE sheet's disc image)
+  part?: TrackPart
+}
+
+// Where a track lies in its file, in seconds. `file` is the id the page loads
+// (spindle://media/<file>), the same for every track of one image.
+export interface TrackPart {
+  file: string
+  start: number
+  // none for the last track: it runs to the end of the file
+  end?: number
 }
 
 export interface Album {

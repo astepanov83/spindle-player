@@ -6,6 +6,7 @@ import type { WorkerIn } from './types'
 // A client with a fake process that is up until `down` is set.
 function setup(canScan = true): {
   client: LibraryClient
+  events: string[]
   sent: WorkerIn[]
   statuses: ScanStatus[]
   logs: string[]
@@ -16,12 +17,15 @@ function setup(canScan = true): {
   const statuses: ScanStatus[] = []
   const logs: string[] = []
   const proc = { up: true }
+  const events: string[] = []
   const client = new LibraryClient({
     post: (m) => {
       if (!proc.up) return false
       sent.push(m)
+      events.push(`post ${m.type}`)
       return true
     },
+    idsMoved: (moves) => events.push(`files ${JSON.stringify(moves)}`),
     send: (s) => statuses.push(s),
     folders: () => ['/m'],
     canScan,
@@ -29,7 +33,7 @@ function setup(canScan = true): {
   })
   const scans = (): Extract<WorkerIn, { type: 'scan' }>[] =>
     sent.filter((m): m is Extract<WorkerIn, { type: 'scan' }> => m.type === 'scan')
-  return { client, sent, statuses, logs, proc, scans }
+  return { client, events, sent, statuses, logs, proc, scans }
 }
 
 const bytes = new Uint8Array([1, 2])
@@ -201,5 +205,21 @@ describe('LibraryClient status', () => {
     const { client } = setup()
     client.onMessage({ type: 'status', status: workerStatus({ scanFailed: true }) })
     expect(client.status.scanFailed).toBe(true)
+  })
+})
+
+describe('LibraryClient id moves', () => {
+  it('writes the files before it tells the process they are saved', () => {
+    const { client, events, sent } = setup()
+    expect(client.onMessage({ type: 'ids-moved', moves: { a: 'b' } })).toBe(true)
+    expect(events).toEqual(['files {"a":"b"}', 'post ids-saved'])
+    expect(sent.at(-1)).toEqual({ type: 'ids-saved', moves: { a: 'b' } })
+  })
+
+  it('keeps every map of the run for a restarted process', () => {
+    const { client } = setup()
+    client.onMessage({ type: 'ids-moved', moves: { a: 'b' } })
+    client.onMessage({ type: 'ids-moved', moves: { b: 'c', x: 'y' } })
+    expect(client.aliases).toEqual({ a: 'c', b: 'c', x: 'y' })
   })
 })

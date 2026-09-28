@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeMoves, moveIds, movePlaylists, moveQueue } from './id-moves'
+import { mergeMoves, moveIds, movePlaylists, moveQueue, splitMoves } from './id-moves'
 import { parsePlaylists, playlistsFile } from './playlists'
 import { parseSavedQueue } from './saved-queue'
 
@@ -58,5 +58,15 @@ describe('moveQueue', () => {
 describe('mergeMoves', () => {
   it('follows a move of a move', () => {
     expect(mergeMoves({ a: 'b' }, { b: 'c', d: 'e' })).toEqual({ a: 'c', b: 'c', d: 'e' })
+  })
+})
+
+describe('splitMoves', () => {
+  it('renames now only what the library already has', () => {
+    const lib = new Set(['A'])
+    expect(splitMoves({ a: 'A', b: 'B' }, (id) => lib.has(id))).toEqual({
+      now: { a: 'A' },
+      later: { b: 'B' }
+    })
   })
 })

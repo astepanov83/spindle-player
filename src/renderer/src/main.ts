@@ -15,7 +15,13 @@ import { orFallback } from './start'
 import { emptyQueue } from '../../shared/saved-queue'
 import { defaultSettings } from '../../shared/settings'
 import type { ScanStatus } from '../../shared/library'
-import { mergeMoves, type IdMoves } from '../../shared/id-moves'
+import {
+  mergeMoves,
+  moveQueue,
+  movePlaylists,
+  splitMoves,
+  type IdMoves
+} from '../../shared/id-moves'
 
 // A file dropped on the window would replace the app (main blocks that too).
 // Nothing in the page takes drops yet.
@@ -40,9 +46,23 @@ loadSettings(saved.value, saved.ok)
 library.status = lib.value.status
 library.loadFailed = !lib.ok
 if (lib.value.library) loadLibrary(lib.value.library)
-playlists.load(lists.value, lists.ok)
+
+// Ids that changed come just before the library that has the new ones, and
+// are renamed as it loads, so the queue doesn't drop those songs. A map that
+// came before now (sent again at start) may be for this library already.
+let moves: IdMoves | undefined
+window.libraryApi.onIdsMoved((m) => (moves = moves ? mergeMoves(moves, m) : m))
+let startLists = lists.value
+let startQueue = lastQueue.value
+if (moves) {
+  const { now, later } = splitMoves(moves, (id) => library.has(id))
+  startLists = movePlaylists(startLists, now)
+  startQueue = moveQueue(startQueue, now)
+  moves = Object.keys(later).length ? later : undefined
+}
+playlists.load(startLists, lists.ok)
 // paused where it was; songs no longer in the library leave the queue
-queue.restore(lastQueue.value)
+queue.restore(startQueue)
 
 // A library that can't be read leaves the one shown as it is.
 function loadLibrary(bytes: Uint8Array): boolean {
@@ -56,11 +76,6 @@ function loadLibrary(bytes: Uint8Array): boolean {
   library.loadFailed = false
   return true
 }
-
-// Ids that changed come just before the library that has the new ones. They
-// are renamed as it loads, so the queue doesn't drop those songs.
-let moves: IdMoves | undefined
-window.libraryApi.onIdsMoved((m) => (moves = moves ? mergeMoves(moves, m) : m))
 
 window.libraryApi.onChanged((bytes) => {
   if (moves) {

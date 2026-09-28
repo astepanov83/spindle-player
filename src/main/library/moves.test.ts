@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { CueSheet } from './cue'
 import { buildLibrary } from './group'
 import { shortHash } from './ids'
-import { emptyIndex } from './merge'
-import { fileKey, findMoves, idMoves, moveEntries, movePlan } from './moves'
+import { emptyIndex, parseIndex, serializeIndex } from './merge'
+import { confirmMoves, fileKey, findMoves, idMoves, moveEntries, movePlan } from './moves'
 import type { FileEntry, LibraryIndex } from './types'
 
 const entry = (path: string, more: Partial<FileEntry> = {}): FileEntry => ({
@@ -210,5 +210,29 @@ describe('moveEntries', () => {
     ix.files.set('/b', entry('/b', { title: 'there' }))
     moveEntries(ix, new Map([['/a', '/b']]))
     expect(ix.files.get('/b')?.title).toBe('there')
+  })
+})
+
+describe('confirmMoves', () => {
+  it('drops what main saved and keeps a newer move of the same id', () => {
+    expect(confirmMoves({ a: 'b', c: 'd', e: 'f' }, { a: 'b', c: 'x' })).toEqual({
+      c: 'd',
+      e: 'f'
+    })
+  })
+})
+
+describe('pendingMoves in the index file', () => {
+  it('is saved and read back, and junk is dropped', () => {
+    const ix = emptyIndex()
+    const a = shortHash('/m/link/a.flac')
+    const b = shortHash('/m/real/a.flac')
+    ix.pendingMoves = { [a]: b }
+    const raw = JSON.parse(JSON.stringify(serializeIndex(ix)))
+    expect(parseIndex(raw).pendingMoves).toEqual({ [a]: b })
+    raw.pendingMoves = { [a]: 7, x: b, [b]: a }
+    expect(parseIndex(raw).pendingMoves).toEqual({ [b]: a })
+    delete raw.pendingMoves
+    expect(parseIndex(raw).pendingMoves).toEqual({})
   })
 })

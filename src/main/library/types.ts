@@ -60,6 +60,10 @@ export interface LibraryIndex {
   images: Map<string, FolderImage>
   // cover hash -> the album colors picked from it
   palettes: Map<string, ThemePalettes>
+  // Track ids that changed (moves.ts) and that main has not said are in
+  // playlists.json and queue.json yet. Saved with the moved entries, so a
+  // crash in between sends them again on the next start.
+  pendingMoves: IdMoves
 }
 
 // Bump to make every file be read again (for example when a new tag is added).
@@ -75,6 +79,9 @@ export interface WorkerStart {
   folders: string[]
   // the bundled ffprobe, for files music-metadata can't read; none if missing
   ffprobe?: string
+  // old id -> new id of songs moved earlier this run, so a restarted process
+  // still serves a song playing under its old id
+  aliases?: IdMoves
 }
 
 // What main needs to serve a file: its path, and for a file ffmpeg decodes,
@@ -108,6 +115,8 @@ export type WorkerIn =
   | { type: 'get-library'; req: number }
   // quitting: save the index now, then answer 'flushed'
   | { type: 'flush' }
+  // the id map sent with 'ids-moved' is in playlists.json and queue.json
+  | { type: 'ids-saved'; moves: IdMoves }
   // a song is playing: the scan slows down so the audio gets the disk first.
   // dev: the playing file's device, so a scan of another disk keeps its speed
   | { type: 'playing'; playing: boolean; dev?: number }
@@ -131,5 +140,6 @@ export type WorkerOut =
   // a scan ran to the end or failed; a stopped one sends nothing
   | { type: 'scanned'; id: number }
   // track ids that changed because their files are now reached by another
-  // path; sent once, before the library with the new ids
+  // path; sent before the library with the new ids, and again at start until
+  // main answers 'ids-saved'
   | { type: 'ids-moved'; moves: IdMoves }

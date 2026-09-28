@@ -40,3 +40,15 @@ export function mergeMoves(a: IdMoves, b: IdMoves): IdMoves {
   for (const [from, to] of Object.entries(b)) if (!Object.hasOwn(out, from)) out[from] = to
   return out
 }
+
+// The moves whose new id is already in the library (`now`), and the rest,
+// which wait for a library that has them (`later`).
+export function splitMoves(
+  moves: IdMoves,
+  has: (id: string) => boolean
+): { now: IdMoves; later: IdMoves } {
+  const now: IdMoves = {}
+  const later: IdMoves = {}
+  for (const [from, to] of Object.entries(moves)) (has(to) ? now : later)[from] = to
+  return { now, later }
+}

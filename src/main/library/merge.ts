@@ -20,7 +20,8 @@ export function emptyIndex(): LibraryIndex {
     files: new Map(),
     cues: new Map(),
     images: new Map(),
-    palettes: new Map()
+    palettes: new Map(),
+    pendingMoves: {}
   }
 }
 
@@ -110,6 +111,9 @@ export function parseIndex(raw: unknown): LibraryIndex {
       const im = parseImage(v)
       if (im) ix.images.set(dirOf(im.path), im)
     }
+  if (isObject(raw.pendingMoves))
+    for (const [from, to] of Object.entries(raw.pendingMoves))
+      if (isTrackId(from) && isTrackId(to)) ix.pendingMoves[from] = to
   if (raw.paletteVersion === paletteVersion && isObject(raw.palettes))
     for (const [hash, v] of Object.entries(raw.palettes)) {
       const p = parseThemePalettes(v)
@@ -126,9 +130,12 @@ export function serializeIndex(ix: LibraryIndex): unknown {
     cues: [...ix.cues.values()],
     images: [...ix.images.values()],
     paletteVersion,
-    palettes: Object.fromEntries(ix.palettes)
+    palettes: Object.fromEntries(ix.palettes),
+    pendingMoves: ix.pendingMoves
   }
 }
+
+const isTrackId = (v: unknown): v is string => str(v) && /^[0-9a-f]{16}$/.test(v)
 
 export function dirOf(path: string): string {
   const i = path.lastIndexOf(sep)

@@ -6,6 +6,7 @@
 import { cueTracks } from './cue-tracks'
 import { cueTrackId, shortHash } from './ids'
 import { isUnder } from './merge'
+import type { IdMoves } from '../../shared/id-moves'
 import type { LibraryIndex } from './types'
 
 // The same for every path that reaches one file. None when the file system
@@ -65,6 +66,15 @@ export function idMoves(ix: LibraryIndex, moves: Map<string, string>): Record<st
     if (to && item.part && item.entry.track !== undefined)
       out[item.id] = cueTrackId(to, item.entry.track)
   }
+  return out
+}
+
+// What is still to be confirmed once main saved `saved`: an entry changed
+// since (a newer move of the same id) stays.
+export function confirmMoves(pending: IdMoves, saved: IdMoves): IdMoves {
+  const out: IdMoves = {}
+  for (const [from, to] of Object.entries(pending))
+    if (!Object.hasOwn(saved, from) || saved[from] !== to) out[from] = to
   return out
 }
 

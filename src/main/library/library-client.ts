@@ -5,6 +5,7 @@
 //   - A scan cut short by a crash is asked for again once the new process runs,
 //     but only once: a scan that crashes it twice is dropped and shown as failed.
 //   - A closed app window stops the scan; it is not asked again.
+import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 import type { ScanStatus } from '../../shared/library'
 import type { WorkerIn, WorkerOut } from './types'
 
@@ -27,6 +28,9 @@ export interface ClientOptions {
   folders(): string[]
   // false when settings.json could not be read, so the folder list is unknown
   canScan: boolean
+  // Track ids changed: rename them in playlists.json and queue.json and write
+  // both before returning, since the library process is told right after.
+  idsMoved?(moves: IdMoves): void
   log?(text: string): void
 }
 
@@ -42,6 +46,8 @@ export class LibraryClient {
   // the process gave a library at least once this run
   #loaded = false
   #quitting = false
+  // every id map this run, for a restarted process (see WorkerStart.aliases)
+  #aliases: IdMoves = {}
   #log: (text: string) => void
 
   constructor(readonly o: ClientOptions) {
@@ -61,6 +67,10 @@ export class LibraryClient {
 
   get status(): ScanStatus {
     return this.#status
+  }
+
+  get aliases(): IdMoves {
+    return this.#aliases
   }
 
   setStatus(change: Partial<ScanStatus>): void {
@@ -114,6 +124,12 @@ export class LibraryClient {
       case 'library':
         this.#loaded = true
         return false
+      case 'ids-moved':
+        this.#aliases = mergeMoves(this.#aliases, m.moves)
+        // the files first; then the process may drop the map from its index
+        this.o.idsMoved?.(m.moves)
+        this.o.post({ type: 'ids-saved', moves: m.moves })
+        return true
       default:
         return false
     }

@@ -35,7 +35,7 @@ import { walk } from './walk'
 import { pruneCoverFiles, removeOldTemp } from './cover-prune'
 import { ownCopy } from './bytes'
 import { FirstFill, ScanChain, Stopped } from './scan-chain'
-import { fileKey, findMoves, idMoves, moveEntries, movePlan } from './moves'
+import { confirmMoves, fileKey, findMoves, idMoves, moveEntries, movePlan } from './moves'
 import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
 import { markerOf, smallName } from './cover-names'
@@ -399,8 +399,10 @@ async function followMoves(
   moveEntries(ix, moves)
   markChanged()
   aliases = mergeMoves(aliases, ids)
+  // kept in the index until main says the files have them
+  ix.pendingMoves = mergeMoves(ix.pendingMoves, ids)
   log(`Library: ${moves.size} files are now reached by another path; their ids changed`)
-  post({ type: 'ids-moved', moves: ids })
+  post({ type: 'ids-moved', moves: ix.pendingMoves })
   publish()
 }
 
@@ -626,6 +628,15 @@ port.on('message', (e: Electron.MessageEvent) => {
       chain.close()
       post({ type: 'flushed' })
       break
+    case 'ids-saved': {
+      const left = confirmMoves(ix.pendingMoves, m.moves)
+      if (Object.keys(left).length === Object.keys(ix.pendingMoves).length) break
+      ix.pendingMoves = left
+      // only the file changes; the page's library is the same
+      unsaved = true
+      saveIndex()
+      break
+    }
     case 'cover-source':
       ready
         .then(() => coverSource(m.hash))
@@ -667,6 +678,9 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
     log(`Library index is ${r.kind}, scanning again: ${start.indexPath}`)
   ix = parseIndex(r.kind === 'ok' ? r.value : undefined)
   ixEdits++
+  aliases = mergeMoves(s.aliases ?? {}, ix.pendingMoves)
+  // a quit or crash came before main saved them: send them again
+  if (Object.keys(ix.pendingMoves).length) post({ type: 'ids-moved', moves: ix.pendingMoves })
   build()
 })
 

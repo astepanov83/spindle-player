@@ -35,7 +35,8 @@ export class LibraryService {
   constructor(
     readonly store: SettingsStore,
     readonly send: (channel: string, data: unknown) => void,
-    // track ids that changed: main renames them in its playlists and queue files
+    // track ids that changed: main renames them in its playlists and queue
+    // files and writes them before it returns
     readonly idsMoved: (moves: IdMoves) => void,
     coverPreload: string,
     readonly dir = app.getPath('userData')
@@ -49,7 +50,12 @@ export class LibraryService {
       post: (m) => this.#post(m),
       send: (s) => this.send(LibraryChannel.status, s),
       folders: () => this.store.get().folders,
-      canScan: store.readable
+      canScan: store.readable,
+      idsMoved: (moves) => {
+        this.idsMoved(moves)
+        // the page renames them too, as the library with the new ids comes
+        this.send(LibraryChannel.idsMoved, moves)
+      }
     })
     this.#proc = new LibraryProcess(
       () =>
@@ -61,7 +67,8 @@ export class LibraryService {
         indexPath: join(this.dir, 'library.json'),
         coversDir: this.covers.dir,
         folders: this.store.get().folders,
-        ffprobe: this.ffprobe
+        ffprobe: this.ffprobe,
+        aliases: this.#client.aliases
       }),
       // a library process that dies is started again a few times, then left dead
       new RestartBudget(3, 60000),
@@ -98,11 +105,6 @@ export class LibraryService {
         break
       case 'log':
         console.info(m.text)
-        break
-      case 'ids-moved':
-        this.idsMoved(m.moves)
-        // the page renames them too, as the library with the new ids comes
-        this.send(LibraryChannel.idsMoved, m.moves)
         break
     }
   }

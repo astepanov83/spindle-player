@@ -138,7 +138,6 @@ describe('PlaylistFile', () => {
     ])
     file.flushSync()
     file.moveIds({ old: 'new' })
-    file.flushSync()
     expect(JSON.parse(readFileSync(path, 'utf8')).playlists).toEqual([
       { id: 'p', name: 'Mix', trackIds: ['new', 'x'] },
       { id: 'q', name: 'Other', trackIds: ['y'] }
@@ -168,7 +167,7 @@ describe('QueueFile', () => {
     const file = new QueueFile(path)
     file.setFromPage({ items: ['a', 'old'], index: 1, from: 'X', pos: 7 })
     file.moveIds({ old: 'new' })
-    file.flushSync()
+    // on disk at once, before the library process is told
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
       items: ['a', 'new'],
       index: 1,

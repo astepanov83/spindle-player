@@ -17,7 +17,15 @@ import type { ThemePalettes } from '../../shared/palette'
 import { writeFileAtomic } from '../json-file'
 import { blockNavigation } from '../web-guard'
 import { badName, largeName, smallName } from './cover-names'
-import { judge, outcomeOf, PendingJobs, Slots, withTimeout, type Outcome } from './cover-jobs'
+import {
+  isCrash,
+  judge,
+  outcomeOf,
+  PendingJobs,
+  Slots,
+  withTimeout,
+  type Outcome
+} from './cover-jobs'
 
 export const smallSide = 320
 export const largeSide = 1000
@@ -99,7 +107,8 @@ export class CoverCache {
     })
     win.webContents.on('render-process-gone', (_, d) => {
       if (this.#win === win)
-        this.#drop(`the cover window stopped (${d.reason})`, d.reason !== 'clean-exit')
+        // only a crash can be the picture's fault; "killed" and the like are not
+        this.#drop(`the cover window stopped (${d.reason})`, isCrash(d.reason))
     })
     const loaded = withTimeout(win.loadURL('about:blank'), loadTimeoutMs, 'The cover window load')
     this.#loaded = loaded

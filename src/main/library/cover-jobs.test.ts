@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fallbackPalettes } from '../../shared/palette'
-import { judge, outcomeOf, PendingJobs, Slots, type Outcome } from './cover-jobs'
+import { isCrash, judge, outcomeOf, PendingJobs, Slots, type Outcome } from './cover-jobs'
 
 describe('outcomeOf', () => {
   it('marks only a real decode failure as bad', () => {
@@ -58,6 +58,15 @@ describe('PendingJobs', () => {
     // a late answer is ignored
     jobs.settle(1, { kind: 'bad' })
     expect(jobs.size).toBe(0)
+  })
+})
+
+describe('isCrash', () => {
+  it('counts only a crash or running out of memory', () => {
+    expect(isCrash('crashed')).toBe(true)
+    expect(isCrash('oom')).toBe(true)
+    for (const r of ['killed', 'clean-exit', 'abnormal-exit', 'launch-failed', 'integrity-failure'])
+      expect(isCrash(r)).toBe(false)
   })
 })
 

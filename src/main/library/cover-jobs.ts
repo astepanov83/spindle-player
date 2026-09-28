@@ -62,6 +62,12 @@ export class PendingJobs {
   }
 }
 
+// A render-process-gone reason a picture can cause. "killed", "clean-exit",
+// "launch-failed" and the like say nothing about it.
+export function isCrash(reason: string): boolean {
+  return reason === 'crashed' || reason === 'oom'
+}
+
 // What a job's outcome means once it ran. A picture the window called bad, or
 // one in the window when it crashed, is run once more alone ('alone'): with
 // four at once, the crash may be another picture's, and a decode may fail for

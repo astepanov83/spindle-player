@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DecodePlans, type Prober } from './decode-plan'
 import type { RawTags } from './tags'
 import type { MediaInfo } from './types'
@@ -14,6 +14,53 @@ function prober(format: RawTags['format'], length?: number): Prober & { asked: s
     length: async (p) => {
       asked.push(`length ${p}`)
       return length
+    }
+  }
+}
+
+// A tags() that can be held open and then resolved or rejected by hand, so a
+// test can check what a second get() sees while the first is still running.
+function heldTagsProber(length?: number): Prober & {
+  asked: string[]
+  resolveTags: (t: RawTags) => void
+  rejectTags: (e: Error) => void
+} {
+  const asked: string[] = []
+  let resolveTags: (t: RawTags) => void = () => {}
+  let rejectTags: (e: Error) => void = () => {}
+  return {
+    asked,
+    resolveTags: (t) => resolveTags(t),
+    rejectTags: (e) => rejectTags(e),
+    tags: (p) => {
+      asked.push(`tags ${p}`)
+      return new Promise((res, rej) => {
+        resolveTags = res
+        rejectTags = rej
+      })
+    },
+    length: async (p) => {
+      asked.push(`length ${p}`)
+      return length
+    }
+  }
+}
+
+// A length() that always rejects, e.g. an ffprobe timeout or output cap.
+function failingLengthProber(
+  format: RawTags['format'],
+  error: Error
+): Prober & { asked: string[] } {
+  const asked: string[] = []
+  return {
+    asked,
+    tags: async (p) => {
+      asked.push(`tags ${p}`)
+      return { common: {}, format }
+    },
+    length: async (p) => {
+      asked.push(`length ${p}`)
+      throw error
     }
   }
 }
@@ -73,5 +120,55 @@ describe('DecodePlans', () => {
     const wma: MediaInfo = { path: '/m/a.wma', duration: 50 }
     expect(await new DecodePlans().get(wma, '1', false, undefined)).toBeUndefined()
     expect(await new DecodePlans().get(wma, '1', false, prober({ duration: 5 }))).toBeUndefined()
+  })
+
+  it('shares one ffprobe run between two callers that arrive before it settles', async () => {
+    const plans = new DecodePlans()
+    const p = heldTagsProber()
+    const mp3: MediaInfo = { path: '/m/vbr.mp3', duration: 172.6 }
+    const a = plans.get(mp3, '1:10', true, p)
+    const b = plans.get(mp3, '1:10', true, p)
+    // only one tags() call, even though both get() calls are in flight
+    expect(p.asked).toEqual(['tags /m/vbr.mp3'])
+    p.resolveTags({ common: {}, format: { duration: 50, sampleRate: 44100, numberOfChannels: 2 } })
+    const [planA, planB] = await Promise.all([a, b])
+    expect(planA).toEqual(planB)
+    expect(planA?.duration).toBe(50)
+    expect(p.asked).toEqual(['tags /m/vbr.mp3'])
+  })
+
+  it('falls back to the guessed duration when the real length fails, and caches it', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const plans = new DecodePlans()
+    const p = failingLengthProber(
+      {
+        duration: 172.6,
+        container: 'MP2/3 (MPEG audio layer 2/3)',
+        sampleRate: 44100,
+        numberOfChannels: 2
+      },
+      new Error('ffprobe timed out')
+    )
+    const mp3: MediaInfo = { path: '/m/vbr.mp3', duration: 172.6 }
+    const plan = await plans.get(mp3, '1:10', true, p)
+    expect(plan?.duration).toBe(172.6)
+    expect(spy).toHaveBeenCalledTimes(1)
+    // cached: a second get() makes no new ffprobe calls
+    await plans.get(mp3, '1:10', true, p)
+    expect(p.asked).toEqual(['tags /m/vbr.mp3', 'length /m/vbr.mp3'])
+    spy.mockRestore()
+  })
+
+  it('leaves nothing pending when tags() rejects, so a later get() tries again', async () => {
+    const plans = new DecodePlans()
+    const p = heldTagsProber()
+    const mp3: MediaInfo = { path: '/m/vbr.mp3', duration: 172.6 }
+    const first = plans.get(mp3, '1:10', true, p)
+    p.rejectTags(new Error('ffprobe failed'))
+    await expect(first).rejects.toThrow('ffprobe failed')
+    const second = plans.get(mp3, '1:10', true, p)
+    p.resolveTags({ common: {}, format: { duration: 50, sampleRate: 44100, numberOfChannels: 2 } })
+    expect((await second)?.duration).toBe(50)
+    expect(p.asked).toEqual(['tags /m/vbr.mp3', 'tags /m/vbr.mp3'])
   })
 })

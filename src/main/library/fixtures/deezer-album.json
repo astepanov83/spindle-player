@@ -1,0 +1,38 @@
+{
+  "data": [
+    {
+      "id": 112126942,
+      "title": "Abbey Road (Super Deluxe Edition)",
+      "cover_xl": "https://cdn-images.dzcdn.net/images/cover/cb1291c76d83e54e03ea17e53df99cf2/1000x1000-000000-80-0-0.jpg",
+      "nb_tracks": 40,
+      "artist": {
+        "id": 1,
+        "name": "The Beatles"
+      },
+      "record_type": "album"
+    },
+    {
+      "id": 12047952,
+      "title": "Abbey Road (Remastered)",
+      "cover_xl": "https://cdn-images.dzcdn.net/images/cover/aa94ab293730bb7845d2aa8c672b2c29/1000x1000-000000-80-0-0.jpg",
+      "nb_tracks": 17,
+      "artist": {
+        "id": 1,
+        "name": "The Beatles"
+      },
+      "record_type": "album"
+    },
+    {
+      "id": 164909482,
+      "title": "Abbey Road",
+      "cover_xl": "https://cdn-images.dzcdn.net/images/cover/ab08841286faed60be3836909d386917/1000x1000-000000-80-0-0.jpg",
+      "nb_tracks": 17,
+      "artist": {
+        "id": 100917612,
+        "name": "The Beatles Complete On Ukulele"
+      },
+      "record_type": "album"
+    }
+  ],
+  "total": 4
+}

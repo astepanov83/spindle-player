@@ -1,0 +1,41 @@
+{
+  "count": 22,
+  "release-groups": [
+    {
+      "id": "9162580e-5df4-32de-80cc-f45a8d8a9b1d",
+      "score": 100,
+      "title": "Abbey Road",
+      "first-release-date": "1969-09-26",
+      "primary-type": "Album",
+      "artist-credit": [
+        {
+          "name": "The Beatles"
+        }
+      ]
+    },
+    {
+      "id": "4b65927f-9611-48b2-a9da-61c72055683a",
+      "score": 91,
+      "title": "Abbey Road Interactions",
+      "first-release-date": "2020",
+      "primary-type": "Other",
+      "artist-credit": [
+        {
+          "name": "The Beatles"
+        }
+      ]
+    },
+    {
+      "id": "99a0636c-e69f-3099-85f1-e6049b24946c",
+      "score": 91,
+      "title": "Abbey Road Companion",
+      "first-release-date": null,
+      "primary-type": "Other",
+      "artist-credit": [
+        {
+          "name": "The Beatles"
+        }
+      ]
+    }
+  ]
+}

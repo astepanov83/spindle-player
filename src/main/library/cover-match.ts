@@ -30,7 +30,7 @@ export interface Candidate {
 }
 
 const edition =
-  /\b(deluxe|remaster(ed)?|edition|bonus|expanded|anniversary|mono|stereo|version|reissue)\b/i
+  /\b(deluxe|remaster(ed)?|edition|bonus|expanded|anniversary|mono|stereo|mix|version|reissue)\b/i
 
 // Lowercase, no accents, "&" as "and", anything but letters and digits as one space.
 function fold(s: string): string {

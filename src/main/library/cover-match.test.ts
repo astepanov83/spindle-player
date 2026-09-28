@@ -34,6 +34,8 @@ describe('cleanup', () => {
     expect(cleanAlbum('Abbey Road - Remastered 2009')).toBe('abbey road')
     expect(cleanAlbum('Mellon Collie CD1')).toBe('mellon collie')
     expect(cleanAlbum('Mellon Collie (Disc 2)')).toBe('mellon collie')
+    expect(cleanAlbum('Abbey Road (2019 Mix)')).toBe('abbey road')
+    expect(cleanAlbum('Club Classics (Remix Album)')).toBe('club classics remix album')
   })
 
   it('keeps brackets that are part of the name', () => {

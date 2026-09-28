@@ -33,8 +33,10 @@
     <button class="btn" disabled={locked} onclick={() => window.libraryApi.addFolder()}
       >Add folder</button
     >
-    <button class="btn" disabled={!canRescan(s)} onclick={() => window.libraryApi.rescan()}
-      >Rescan</button
+    <button
+      class="btn"
+      disabled={!canRescan(s, library.loadFailed)}
+      onclick={() => window.libraryApi.rescan()}>Rescan</button
     >
   </div>
   <div aria-live="polite">

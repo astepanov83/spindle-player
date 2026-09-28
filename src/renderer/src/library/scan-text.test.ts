@@ -87,6 +87,11 @@ describe('statusLines', () => {
     ])
   })
 
+  it('says only to restart when the page could not read the library', () => {
+    expect(statusLines(status({ scanFailed: true }), true)).toEqual([notLoadedText])
+    expect(canRescan(status({}), true)).toBe(false)
+  })
+
   it('does not offer Rescan once the library process gave up', () => {
     expect(statusLines(status({ unavailable: 'stopped', scanFailed: true }), false)).toEqual([
       stoppedText
@@ -102,7 +107,7 @@ describe('statusLines', () => {
 
 describe('canRescan', () => {
   it('is on with folders, a library process and no scan running', () => {
-    expect(canRescan(status({}))).toBe(true)
+    expect(canRescan(status({}), false)).toBe(true)
   })
 
   it('is off without folders, while scanning, with no library process, or unreadable settings', () => {
@@ -113,6 +118,6 @@ describe('canRescan', () => {
       { unavailable: 'not-loaded' as const },
       { settingsUnreadable: true }
     ])
-      expect(canRescan(status(s))).toBe(false)
+      expect(canRescan(status(s), false)).toBe(false)
   })
 })

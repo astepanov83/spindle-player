@@ -38,11 +38,17 @@ export function statusLines(s: ScanStatus, pageFailed: boolean): string[] {
   else if (!(s.settingsUnreadable && !s.folders.length && s.phase === 'idle'))
     lines.push(scanLine(s))
   if (s.settingsUnreadable) lines.push(settingsText)
-  if (s.scanFailed && s.phase === 'idle' && !s.unavailable) lines.push(scanFailedText)
+  if (s.scanFailed && s.phase === 'idle' && !problem) lines.push(scanFailedText)
   return lines
 }
 
-// Rescan does something only with folders, a library process, and no scan running.
-export function canRescan(s: ScanStatus): boolean {
-  return !!s.folders.length && s.phase === 'idle' && !s.unavailable && !s.settingsUnreadable
+// Rescan is offered only with folders, no scan running, and no problem that
+// says to restart (the process gave up, or the page could not read the library).
+export function canRescan(s: ScanStatus, pageFailed: boolean): boolean {
+  return (
+    !!s.folders.length &&
+    s.phase === 'idle' &&
+    !libraryProblem(s, pageFailed) &&
+    !s.settingsUnreadable
+  )
 }

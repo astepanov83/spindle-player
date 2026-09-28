@@ -2,7 +2,9 @@
 import { basename } from 'path'
 import type { Album, LibraryData, Track, TrackPart } from '../../shared/library'
 import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../shared/palette'
+import { searchKey, type CoverQuery } from './cover-match'
 import { cueTracks } from './cue-tracks'
+import { fetchedCover, type Fetched } from './fetched-store'
 import { shortHash } from './ids'
 import { dirOf } from './merge'
 import { discFolderNumber, isDiscFolder, titleFromFileName } from './tags'
@@ -13,6 +15,9 @@ export interface BuiltLibrary {
   // file id -> file path, for the media protocol. Every file has one, also a
   // disc image that is listed as its cue tracks (they play it by its id).
   paths: Map<string, string>
+  // albums with no picture of their own and an album tag, in library order,
+  // for the online lookup (ticket 014)
+  queries: CoverQuery[]
 }
 
 export const unknownArtist = 'Unknown artist'
@@ -105,6 +110,16 @@ function coverOf(
   return undefined
 }
 
+// The first MusicBrainz ids in track order.
+function mbIds(entries: FileEntry[]): Pick<CoverQuery, 'mbReleaseGroup' | 'mbRelease'> {
+  const out: Pick<CoverQuery, 'mbReleaseGroup' | 'mbRelease'> = {}
+  const rg = entries.find((e) => e.mbReleaseGroup)?.mbReleaseGroup
+  const rel = entries.find((e) => e.mbRelease)?.mbRelease
+  if (rg) out.mbReleaseGroup = rg
+  if (rel) out.mbRelease = rel
+  return out
+}
+
 // The cover's colors. No cover: made-up colors from the album id, so albums
 // don't all look the same grey. A cover whose palette isn't picked yet shows
 // the one an older paletteVersion picked, or stays neutral for the moment
@@ -122,7 +137,11 @@ function withoutTracks(al: Album & { tracks: Track[] }): Album {
   return out
 }
 
-export function buildLibrary(ix: LibraryIndex, hasCover: (hash: string) => boolean): BuiltLibrary {
+export function buildLibrary(
+  ix: LibraryIndex,
+  hasCover: (hash: string) => boolean,
+  fetched: Fetched = new Map()
+): BuiltLibrary {
   const groups = new Map<string, Group>()
   const paths = new Map<string, string>()
   const add = (e: FileEntry, id: string, part?: TrackPart): void => {
@@ -151,6 +170,7 @@ export function buildLibrary(ix: LibraryIndex, hasCover: (hash: string) => boole
   for (const c of cues.items) add(c.entry, c.id, c.part)
 
   const albums: (Album & { tracks: Track[] })[] = []
+  const queries: CoverQuery[] = []
   for (const g of groups.values()) {
     g.items.sort(byDiscAndNumber)
     const entries = g.items.map((it) => it.e)
@@ -158,7 +178,22 @@ export function buildLibrary(ix: LibraryIndex, hasCover: (hash: string) => boole
     const id = shortHash(g.key)
     const title = first.album ?? basename(albumFolder(dirOf(first.path)))
     const artist = albumArtistOf(entries)
-    const cover = coverOf(entries, ix, hasCover)
+    const local = coverOf(entries, ix, hasCover)
+    const key = first.album ? searchKey(artist, first.album) : ''
+    // a picture found online comes last, so local ones always win
+    const cover = local ?? (key ? fetchedCover(fetched, id, key, hasCover) : undefined)
+    if (!local && first.album)
+      queries.push({
+        albumId: id,
+        artist,
+        album: first.album,
+        year: yearOf(entries),
+        tracks: g.items.length,
+        compilation: artist === variousArtists,
+        noArtist: artist === unknownArtist,
+        key,
+        ...mbIds(entries)
+      })
     const fallbackArtist = artist === variousArtists ? unknownArtist : artist
     const tracks = g.items.map(({ e, id: trackId, disc, no, fromName, part }): Track => {
       const t: Track = {
@@ -199,8 +234,11 @@ export function buildLibrary(ix: LibraryIndex, hasCover: (hash: string) => boole
 
   const tracks: Track[] = []
   for (const al of albums) for (const t of al.tracks) tracks.push(t)
+  const order = new Map(albums.map((a, i) => [a.id, i]))
+  queries.sort((a, b) => order.get(a.albumId)! - order.get(b.albumId)!)
   return {
     data: { albums: albums.map(withoutTracks), tracks },
-    paths
+    paths,
+    queries
   }
 }

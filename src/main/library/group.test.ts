@@ -3,6 +3,8 @@ import { albumFolder, buildLibrary, shortHash, unknownArtist, variousArtists } f
 import { defaultPalettes, fallbackPalettes } from '../../shared/palette'
 import { emptyIndex } from './merge'
 import type { FileEntry, LibraryIndex } from './types'
+import { searchKey } from './cover-match'
+import type { Fetched } from './fetched-store'
 
 const entry = (path: string, more: Partial<FileEntry> = {}): FileEntry => ({
   path,
@@ -15,12 +17,13 @@ const entry = (path: string, more: Partial<FileEntry> = {}): FileEntry => ({
 function build(
   files: FileEntry[],
   setup?: (ix: LibraryIndex) => void,
-  has: (hash: string) => boolean = () => true
+  has: (hash: string) => boolean = () => true,
+  fetched?: Fetched
 ): ReturnType<typeof buildLibrary> {
   const ix = emptyIndex()
   for (const f of files) ix.files.set(f.path, f)
   setup?.(ix)
-  return buildLibrary(ix, has)
+  return buildLibrary(ix, has, fetched)
 }
 
 describe('buildLibrary', () => {
@@ -242,5 +245,68 @@ describe('disc folders without disc tags', () => {
   it('prefers the disc tag over the folder name', () => {
     const { data } = build([entry('/m/Album/CD1/01.mp3', { album: 'Album', disc: 3 })])
     expect(data.tracks[0].disc).toBe(3)
+  })
+})
+
+describe('covers found online', () => {
+  const h = 'f'.repeat(40)
+  const local = 'e'.repeat(40)
+  const rg = 'f5093c06-23e3-404f-aeaa-40f72885ee3a'
+  const files = [
+    entry('/m/ar/1.mp3', { album: 'Abbey Road', artist: 'The Beatles', mbReleaseGroup: rg })
+  ]
+  const albumId = build(files).data.albums[0].id
+  const fetched = (key = searchKey('The Beatles', 'Abbey Road')): Fetched =>
+    new Map([[albumId, { hash: h, source: 'deezer', at: 0, key }]])
+
+  it('uses a fetched cover when there is no local one', () => {
+    const { data } = build(files, undefined, () => true, fetched())
+    expect(data.albums[0].cover).toBe(`spindle://cover/small/${h}`)
+  })
+
+  it('lets a local cover win', () => {
+    const { data } = build([{ ...files[0], cover: local }], undefined, () => true, fetched())
+    expect(data.albums[0].cover).toBe(`spindle://cover/small/${local}`)
+  })
+
+  it('ignores a fetched cover for other names, or one not in the cache', () => {
+    expect(build(files, undefined, () => true, fetched('x\0y')).data.albums[0].cover).toBe('')
+    expect(build(files, undefined, (x) => x !== h, fetched()).data.albums[0].cover).toBe('')
+  })
+
+  it('lists albums with no local cover and an album tag, in library order', () => {
+    const { queries } = build([
+      entry('/m/z/1.mp3', { album: 'Zebra', artist: 'Zed' }),
+      ...files,
+      entry('/m/untagged/1.mp3'),
+      entry('/m/c/1.mp3', { album: 'C', artist: 'X', cover: local })
+    ])
+    expect(queries.map((q) => q.album)).toEqual(['Abbey Road', 'Zebra'])
+    expect(queries[0]).toEqual({
+      albumId,
+      artist: 'The Beatles',
+      album: 'Abbey Road',
+      year: 0,
+      tracks: 1,
+      compilation: false,
+      noArtist: false,
+      key: searchKey('The Beatles', 'Abbey Road'),
+      mbReleaseGroup: rg
+    })
+  })
+
+  it('marks compilations and albums with no artist', () => {
+    const { queries } = build([
+      entry('/m/comp/1.mp3', { album: 'Hits', artist: 'A' }),
+      entry('/m/comp/2.mp3', { album: 'Hits', artist: 'B' }),
+      entry('/m/anon/1.mp3', { album: 'Demos' })
+    ])
+    const by = (a: string): (typeof queries)[number] => queries.find((q) => q.album === a)!
+    expect(by('Hits')).toMatchObject({ artist: variousArtists, compilation: true })
+    expect(by('Demos')).toMatchObject({ artist: unknownArtist, noArtist: true })
+  })
+
+  it('still lists an album that shows a fetched cover, so a stale one is looked up again', () => {
+    expect(build(files, undefined, () => true, fetched()).queries).toHaveLength(1)
   })
 })

@@ -16,6 +16,7 @@ import {
   usedCovers
 } from './merge'
 import { fallbackPalettes, paletteVersion } from '../../shared/palette'
+import type { Fetched } from './fetched-store'
 import {
   cueReaderVersion,
   indexVersion,
@@ -391,5 +392,19 @@ describe('reading every file again for a new reader', () => {
     ix.files.set('/m/a.mp3', entry('/m/a.mp3', { mbReleaseGroup: id, mbRelease: id }))
     const back = parseIndex(JSON.parse(JSON.stringify(serializeIndex(ix))))
     expect(back.files.get('/m/a.mp3')).toMatchObject({ mbReleaseGroup: id, mbRelease: id })
+  })
+})
+
+describe('covers found online in the cache', () => {
+  const h = 'f'.repeat(40)
+  const f: Fetched = new Map([['al', { hash: h, source: 'itunes', at: 0, key: 'k' }]])
+
+  it('counts them as used, so the prune keeps them', () => {
+    expect(usedCovers(emptyIndex(), f).has(h)).toBe(true)
+    expect(usedCovers(emptyIndex()).has(h)).toBe(false)
+  })
+
+  it('gives them palettes when they have none', () => {
+    expect(missingPalettes(emptyIndex(), () => true, f)).toEqual([h])
   })
 })

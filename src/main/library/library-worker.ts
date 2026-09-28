@@ -103,7 +103,7 @@ function log(text: string): void {
 // --- state ---
 
 let ix: LibraryIndex = emptyIndex()
-let built: BuiltLibrary = { data: { albums: [], tracks: [] }, paths: new Map() }
+let built: BuiltLibrary = { data: { albums: [], tracks: [] }, paths: new Map(), queries: [] }
 // the index changed since the page last got the library
 let dirty = false
 let status: ScanStatus = {

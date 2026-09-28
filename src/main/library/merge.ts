@@ -3,6 +3,7 @@ import { sep } from 'path'
 import { paletteVersion, parseThemePalettes, type ThemePalettes } from '../../shared/palette'
 import { isCoverHash } from './cover-names'
 import type { CueSheet, CueTrack } from './cue'
+import type { Fetched } from './fetched-store'
 import {
   cueReaderVersion,
   indexVersion,
@@ -291,10 +292,12 @@ export function applyBatch(ix: LibraryIndex, entries: FileEntry[]): boolean {
 }
 
 // Every cover hash the index points at, so the cache can drop the rest.
-export function usedCovers(ix: LibraryIndex): Set<string> {
+// fetched: covers found online, kept even though no file points at them
+export function usedCovers(ix: LibraryIndex, fetched?: Fetched): Set<string> {
   const out = new Set<string>()
   for (const e of ix.files.values()) if (e.cover) out.add(e.cover)
   for (const im of ix.images.values()) if (im.cover) out.add(im.cover)
+  if (fetched) for (const f of fetched.values()) if (f.hash) out.add(f.hash)
   return out
 }
 
@@ -316,6 +319,10 @@ export function prunePalettes(ix: LibraryIndex, used: Set<string>): boolean {
 }
 
 // Covers in the cache that have no palette yet, e.g. from an index made before 009.
-export function missingPalettes(ix: LibraryIndex, cached: (hash: string) => boolean): string[] {
-  return [...usedCovers(ix)].filter((h) => cached(h) && !ix.palettes.has(h))
+export function missingPalettes(
+  ix: LibraryIndex,
+  cached: (hash: string) => boolean,
+  fetched?: Fetched
+): string[] {
+  return [...usedCovers(ix, fetched)].filter((h) => cached(h) && !ix.palettes.has(h))
 }

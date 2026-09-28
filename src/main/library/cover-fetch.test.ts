@@ -308,6 +308,47 @@ describe('CoverFetcher', () => {
     expect(calls.filter((u) => u.includes('deezer.com'))).toHaveLength(1)
   })
 
+  it('looks up 5 albums at a time', async () => {
+    const { f, d, fetched } = setup(() => deezerHit)
+    let now = 0
+    let most = 0
+    const answers: (() => void)[] = []
+    d.http.json = async () => {
+      now++
+      most = Math.max(most, now)
+      await new Promise<void>((r) => answers.push(r))
+      now--
+      return deezerHit
+    }
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+    f.setOptions(true, all)
+    f.setQueries(ids.map((id) => q(id)))
+    f.release()
+    await vi.waitFor(() => expect(answers).toHaveLength(5))
+    while (answers.length) {
+      answers.shift()!()
+      await new Promise((r) => setTimeout(r, 0))
+    }
+    await f.idle
+    expect(most).toBe(5)
+    expect(ids.every((id) => fetched.get(id)?.source === 'deezer')).toBe(true)
+  })
+
+  it('waits the 5 minutes once for all albums when offline, and logs it once', async () => {
+    const { f, d } = setup(() => new NetError('offline'))
+    const log = vi.fn()
+    d.log = log
+    f.setOptions(true, all)
+    f.setQueries(['a', 'b', 'c'].map((id) => q(id)))
+    f.release()
+    await vi.waitFor(() => expect(d.sleep).toHaveBeenCalledWith(300000, expect.anything()))
+    await new Promise((r) => setTimeout(r, 10))
+    f.setOptions(false, all)
+    await f.idle
+    expect(vi.mocked(d.sleep).mock.calls.filter(([ms]) => ms === 300000)).toHaveLength(1)
+    expect(log).toHaveBeenCalledTimes(1)
+  })
+
   it('looks up misses again when a source is turned on', () => {
     const { f, fetched, d } = setup(() => nothing)
     fetched.set('a', { source: 'none', at: 0, key: q('a').key })

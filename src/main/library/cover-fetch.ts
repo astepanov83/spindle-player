@@ -32,12 +32,23 @@ export function publishGapMs(tracks: number): number {
 const offlineWaitMs = 5 * 60 * 1000
 // matching results downloaded per source before going on to the next source
 const triesPerSource = 3
+// albums looked up at once; each service's limiter still spaces its requests,
+// so this only fills the time spent waiting for answers
+const albumsAtOnce = 5
 
 // later: a service failed and the others found nothing; stored as nothing,
 // so the next run asks again
 type Outcome = { hash: string; source: CoverSource } | 'none' | 'later'
 
 const failed = Symbol('failed')
+
+interface RunState {
+  taken: Set<string>
+  // the 5 minute wait after no service answered, shared by the loops
+  offline: Promise<void> | undefined
+  // an error that is not the network's: every loop stops
+  broken: boolean
+}
 
 export class CoverFetcher {
   #on = false
@@ -100,13 +111,14 @@ export class CoverFetcher {
     this.#loop = this.#loop.then(() => this.#run(signal))
   }
 
-  // done: albums looked up in this run, so a cover that is gone again at once
-  // (a full disk) can't make the loop ask for it over and over
-  #next(done: Set<string>): CoverQuery | undefined {
+  // taken: albums looked up or being looked up in this run, so two loops never
+  // take the same one, and a cover that is gone again at once (a full disk)
+  // can't make the loop ask for it over and over
+  #next(taken: Set<string>): CoverQuery | undefined {
     const now = this.d.now()
     const f = this.d.fetched
     return this.#queries.find(
-      (q) => !done.has(q.albumId) && !isFresh(f.get(q.albumId), q.key, now, this.d.hasCover)
+      (q) => !taken.has(q.albumId) && !isFresh(f.get(q.albumId), q.key, now, this.d.hasCover)
     )
   }
 
@@ -114,9 +126,25 @@ export class CoverFetcher {
     if (!this.#on || this.#held || signal.aborted) return
     this.#running = true
     this.#report()
-    const done = new Set<string>()
+    const run: RunState = { taken: new Set(), offline: undefined, broken: false }
     try {
-      for (let q = this.#next(done); q && !signal.aborted; q = this.#next(done)) {
+      await Promise.all(Array.from({ length: albumsAtOnce }, () => this.#takeAlbums(run, signal)))
+    } finally {
+      this.#running = false
+      this.#report()
+    }
+  }
+
+  // One of the loops of a run: takes the next album until none is left.
+  async #takeAlbums(run: RunState, signal: AbortSignal): Promise<void> {
+    try {
+      for (;;) {
+        // no new album goes out while another loop waits out being offline
+        while (run.offline) await run.offline
+        if (signal.aborted || run.broken) return
+        const q = this.#next(run.taken)
+        if (!q) return
+        run.taken.add(q.albumId)
         let out: Outcome
         try {
           out = await this.#find(q, signal)
@@ -124,14 +152,14 @@ export class CoverFetcher {
           if (signal.aborted) return
           // no service answered: most likely offline
           if (e instanceof NetError) {
-            this.d.log(`Covers online: ${e.message}; looking again in 5 minutes`)
-            await this.d.sleep(offlineWaitMs, signal)
+            // looked up again after the wait
+            run.taken.delete(q.albumId)
+            await this.#offlineWait(run, e, signal)
             continue
           }
           throw e
         }
         if (signal.aborted) return
-        done.add(q.albumId)
         if (out === 'later') continue
         const at = this.d.now()
         this.d.fetched.set(
@@ -144,11 +172,18 @@ export class CoverFetcher {
         this.#report()
       }
     } catch (e) {
-      if (!signal.aborted) this.d.log(`Covers online stopped: ${e}`)
-    } finally {
-      this.#running = false
-      this.#report()
+      if (!signal.aborted && !run.broken) this.d.log(`Covers online stopped: ${e}`)
+      run.broken = true
     }
+  }
+
+  // One wait for all loops of the run, so being offline logs once.
+  #offlineWait(run: RunState, e: NetError, signal: AbortSignal): Promise<void> {
+    if (!run.offline) {
+      this.d.log(`Covers online: ${e.message}; looking again in 5 minutes`)
+      run.offline = this.d.sleep(offlineWaitMs, signal).finally(() => (run.offline = undefined))
+    }
+    return run.offline
   }
 
   // Downloads a picture and puts it in the cache; undefined if it doesn't decode.

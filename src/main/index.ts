@@ -17,7 +17,7 @@ import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
 import { PlaylistFile, QueueFile } from './page-files'
 import { SettingsStore } from './settings-store'
-import { takeLock } from './single-instance'
+import { devRetryData, isDevRetry, takeLock } from './single-instance'
 import { currentBackground, MainWindow } from './window'
 
 let store: SettingsStore
@@ -31,7 +31,10 @@ registerScheme()
 // Before anything reads or writes userData: one copy per user-data folder.
 // Only the dev server waits, for the copy it just stopped to finish saving.
 const devServer = is.dev && !!process.env['ELECTRON_RENDERER_URL']
-const locked = takeLock(() => app.requestSingleInstanceLock(), devServer ? 10000 : 0)
+const locked = takeLock(
+  (retry) => app.requestSingleInstanceLock(retry ? devRetryData : undefined),
+  devServer ? 10000 : 0
+)
 void locked.then((ok) => {
   if (ok) return
   console.warn('Spindle is already running with this user-data folder; showing that one.')
@@ -97,9 +100,11 @@ page.on(PlaybackChannel.log, (_, text) => {
 })
 
 // Another copy was started: it quits, and this one comes to the front.
-app.on('second-instance', () => {
+app.on('second-instance', (_e, _argv, _cwd, data) => {
   // a window made now would close again with the app
   if (!started || quitting) return
+  // a dev copy asking again while it waits for this one to quit
+  if (isDevRetry(data)) return
   if (!main) {
     createWindow()
     return

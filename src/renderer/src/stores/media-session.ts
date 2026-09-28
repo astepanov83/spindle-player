@@ -2,6 +2,7 @@
 // media session. Without handlers Chromium would play or pause the element
 // itself; with them, the queue decides, and Next and Previous work too.
 import type { Album, Track } from '../../../shared/library'
+import { CoverBlob } from './cover-blob'
 import { pause, play, player, seek } from './player.svelte'
 import { queue } from './queue.svelte'
 
@@ -17,17 +18,30 @@ export function setupMediaSession(): void {
   })
 }
 
+const covers = new CoverBlob({
+  fetch: (url) => fetch(url),
+  create: (blob) => URL.createObjectURL(blob),
+  revoke: (url) => URL.revokeObjectURL(url)
+})
+// counts calls, so a cover that comes late for an older song is not shown
+let shown = 0
+
+// The text goes at once; the cover follows when it is fetched. For a song
+// with no cover, Chromium keeps showing the last picture it had.
 export function showInMediaSession(t: Track | undefined, al: Album | undefined): void {
   const ms = navigator.mediaSession
   if (!ms) return
-  ms.metadata = t
-    ? new MediaMetadata({
-        title: t.title,
-        artist: t.artist,
-        album: t.album,
-        artwork: al?.coverLarge ? [{ src: al.coverLarge, type: 'image/jpeg' }] : []
-      })
-    : null
+  const n = ++shown
+  if (!t) {
+    ms.metadata = null
+    return
+  }
+  const text = { title: t.title, artist: t.artist, album: t.album }
+  ms.metadata = new MediaMetadata(text)
+  if (!al?.coverLarge) return
+  void covers.load(al.coverLarge).then((art) => {
+    if (art && n === shown) ms.metadata = new MediaMetadata({ ...text, artwork: [art] })
+  })
 }
 
 export function showStateInMediaSession(): void {

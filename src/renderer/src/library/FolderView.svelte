@@ -8,6 +8,7 @@
   import Thumb from '../ui/Thumb.svelte'
   import { crumbs, filterFolder, folderPlaySongs, folderSongs, shownFolder } from './folders'
   import { virtualList } from '../ui/virtual-list.svelte'
+  import { keepPlace } from '../ui/keep-place.svelte'
   import { openSongMenu } from './song-menu'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
@@ -37,6 +38,16 @@
 
   let list: HTMLDivElement | undefined = $state()
   const v = virtualList(() => ({ count: view.folders.length, scrollEl, list, size: ROW }), 6)
+  // by key: a scan can number the folders again
+  keepPlace(() => ({
+    scrollEl,
+    list,
+    items: view.folders.map((i) => tree.nodes[i].key),
+    per: 1,
+    rowSize: ROW,
+    key: (k: string) => k,
+    source: library.revision
+  }))
 
   const songIds = (i: number | null): string[] => folderSongs(tree, i).map((t) => t.id)
   const plural = (n: number, one: string, many: string): string =>

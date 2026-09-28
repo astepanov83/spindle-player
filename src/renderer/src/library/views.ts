@@ -102,6 +102,8 @@ export function chunk<T>(items: T[], size: number): T[][] {
 // place when songs or albums come or go above it (a scan adds them, ticket 022).
 // `first`: the first row on screen; `per`: items in a row (1 in a table). At
 // the top it stays at the top, so new songs show. Items are matched by key.
+// A list scrolled past its end moves by the rows it grew, so what is below
+// it (a folder's songs under its subfolders) stays in place.
 export function placeShift<T>(
   old: T[],
   next: T[],
@@ -110,6 +112,7 @@ export function placeShift<T>(
   key: (item: T) => string
 ): number {
   if (first <= 0) return 0
+  if (first * per >= old.length) return Math.ceil(next.length / per) - Math.ceil(old.length / per)
   const at = new Map<string, number>()
   next.forEach((x, i) => at.set(key(x), i))
   // the first item on screen, or the next that is still there

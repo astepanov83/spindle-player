@@ -9,6 +9,7 @@
   import { artistCovers, artistSongs, filterArtists } from './artists'
   import { chunk, gridColumns } from './views'
   import { virtualList } from '../ui/virtual-list.svelte'
+  import { keepPlace } from '../ui/keep-place.svelte'
   import { library } from '../stores/library.svelte'
   import { queue } from '../stores/queue.svelte'
 
@@ -29,6 +30,16 @@
     () => ({ count: rows.length, scrollEl, list, size: estimate, remeasure: true }),
     3
   )
+
+  keepPlace(() => ({
+    scrollEl,
+    list,
+    items: artists,
+    per: cols,
+    rowSize: rows.length ? v.total / rows.length : 0,
+    key: (a: Artist) => a.key,
+    source: library.revision
+  }))
 
   function measure(node: HTMLDivElement): void {
     v.measure(node)

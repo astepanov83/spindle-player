@@ -134,6 +134,12 @@ describe('placeShift', () => {
     expect(placeShift(old, ['x', ...old], 1, 3, id)).toBe(0)
   })
 
+  it('moves by the rows the list grew when it is scrolled past its end', () => {
+    expect(placeShift(['a', 'b'], ['a', 'x', 'b'], 5, 1, id)).toBe(1)
+    expect(placeShift(['a', 'b', 'c'], ['a', 'x', 'b', 'c'], 3, 3, id)).toBe(1)
+    expect(placeShift(['a', 'b', 'c'], ['a', 'b'], 4, 1, id)).toBe(-1)
+  })
+
   it('holds on to the next row shown when the first one left', () => {
     expect(placeShift(['a', 'b', 'c', 'd'], ['x', 'y', 'a', 'z', 'd'], 1, 1, id)).toBe(1)
   })

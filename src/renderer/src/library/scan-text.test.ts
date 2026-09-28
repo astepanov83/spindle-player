@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ScanStatus } from '../../../shared/library'
 import {
+  canRescan,
   libraryProblem,
   notLoadedText,
   scanFailedText,
@@ -70,14 +71,48 @@ describe('statusLines', () => {
   })
 
   it('adds a line for unreadable settings and a failed scan', () => {
-    expect(
-      statusLines(status({ folders: [], settingsUnreadable: true, scanFailed: true }), false)
-    ).toEqual(['No music folders yet.', settingsText, scanFailedText])
+    expect(statusLines(status({ tracks: 1, albums: 1, scanFailed: true }), false)).toEqual([
+      '1 song in 1 album',
+      scanFailedText
+    ])
+    expect(statusLines(status({ tracks: 1, albums: 1, settingsUnreadable: true }), false)).toEqual([
+      '1 song in 1 album',
+      settingsText
+    ])
+  })
+
+  it('does not say "no folders" when the folder list could not be read', () => {
+    expect(statusLines(status({ folders: [], settingsUnreadable: true }), false)).toEqual([
+      settingsText
+    ])
+  })
+
+  it('does not offer Rescan once the library process gave up', () => {
+    expect(statusLines(status({ unavailable: 'stopped', scanFailed: true }), false)).toEqual([
+      stoppedText
+    ])
   })
 
   it('drops the failed-scan line while a new scan runs', () => {
     expect(statusLines(status({ phase: 'walk', done: 3, scanFailed: true }), false)).toEqual([
       'Looking for files: 3 found'
     ])
+  })
+})
+
+describe('canRescan', () => {
+  it('is on with folders, a library process and no scan running', () => {
+    expect(canRescan(status({}))).toBe(true)
+  })
+
+  it('is off without folders, while scanning, with no library process, or unreadable settings', () => {
+    for (const s of [
+      { folders: [] },
+      { phase: 'read' as const },
+      { unavailable: 'stopped' as const },
+      { unavailable: 'not-loaded' as const },
+      { settingsUnreadable: true }
+    ])
+      expect(canRescan(status(s))).toBe(false)
   })
 })

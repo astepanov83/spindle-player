@@ -29,9 +29,20 @@ export function scanLine(s: ScanStatus): string {
 }
 
 // Every line for the settings sheet: the problem or the scan line, then notices.
+// With no library process, Rescan can't help, so it isn't offered.
 export function statusLines(s: ScanStatus, pageFailed: boolean): string[] {
-  const lines = [libraryProblem(s, pageFailed) ?? scanLine(s)]
+  const problem = libraryProblem(s, pageFailed)
+  const lines: string[] = []
+  if (problem) lines.push(problem)
+  // the folder list is unknown then, so "no folders" would be wrong
+  else if (!(s.settingsUnreadable && !s.folders.length && s.phase === 'idle'))
+    lines.push(scanLine(s))
   if (s.settingsUnreadable) lines.push(settingsText)
-  if (s.scanFailed && s.phase === 'idle') lines.push(scanFailedText)
+  if (s.scanFailed && s.phase === 'idle' && !s.unavailable) lines.push(scanFailedText)
   return lines
+}
+
+// Rescan does something only with folders, a library process, and no scan running.
+export function canRescan(s: ScanStatus): boolean {
+  return !!s.folders.length && s.phase === 'idle' && !s.unavailable && !s.settingsUnreadable
 }

@@ -1,7 +1,7 @@
 <!-- "Music folders" in the settings sheet. Main owns the list; this only asks. -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
-  import { statusLines } from '../library/scan-text'
+  import { canRescan, statusLines } from '../library/scan-text'
   import { library } from '../stores/library.svelte'
 
   const s = $derived(library.status)
@@ -33,10 +33,8 @@
     <button class="btn" disabled={locked} onclick={() => window.libraryApi.addFolder()}
       >Add folder</button
     >
-    <button
-      class="btn"
-      disabled={!s.folders.length || s.phase !== 'idle'}
-      onclick={() => window.libraryApi.rescan()}>Rescan</button
+    <button class="btn" disabled={!canRescan(s)} onclick={() => window.libraryApi.rescan()}
+      >Rescan</button
     >
   </div>
   <div aria-live="polite">

@@ -73,7 +73,7 @@ describe('search', () => {
 })
 
 describe('sort', () => {
-  const { albums, tracks } = lib()
+  const { tracks } = lib()
   const all = [...tracks.values()]
   const order = (t: Track): number => all.indexOf(t)
 
@@ -101,7 +101,14 @@ describe('sort', () => {
       'a/0',
       'a/1'
     ])
-    expect(albums).toHaveLength(2)
+    // reversed, the ties still keep library order
+    expect(sortRows(shuffled, { k: 'a', dir: -1 }, order).map((t) => t.id)).toEqual([
+      'a/0',
+      'a/1',
+      'b/0',
+      'b/1',
+      'b/2'
+    ])
   })
 })
 

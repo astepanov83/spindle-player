@@ -69,6 +69,12 @@ class LibraryStore {
     this.playlistSorts = withPlaylistSort(this.playlistSorts, id, sort)
   }
 
+  // a deleted playlist's sort
+  forgetPlaylistSort(id: string): void {
+    if (id in this.playlistSorts)
+      this.playlistSorts = withPlaylistSort(this.playlistSorts, id, null)
+  }
+
   has(id: string): boolean {
     void this.#version
     return this.#tracks.has(id)

@@ -46,6 +46,7 @@ class PlaylistStore {
     this.#set(ops.remove(this.list, id))
     if (library.section === `pl:${id}`) library.section = 'songs'
     if (library.openPlaylist === id) library.openPlaylist = null
+    library.forgetPlaylistSort(id)
     if (p) notice.show(`Deleted ${p.name}`)
   }
 

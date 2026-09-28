@@ -27,12 +27,18 @@ export function stream(
     // keeps a UTF-8 character split between two pieces whole
     const text = new StringDecoder('utf8')
     let size = 0
+    // past the cap: the output is cut off, even if the program ends well first
+    let over = false
     let err = ''
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs)
     child.stdout.on('data', (b: Buffer) => {
       size += b.length
+      if (over) return
       if (size <= limit) onText(text.write(b))
-      else child.kill('SIGKILL')
+      else {
+        over = true
+        child.kill('SIGKILL')
+      }
     })
     child.stderr.on('data', (b: Buffer) => {
       if (err.length < 2000) err += b.toString()
@@ -43,7 +49,8 @@ export function stream(
     })
     child.on('close', (code, signal) => {
       clearTimeout(timer)
-      if (code === 0) {
+      if (over) reject(new Error(`${bin} said more than ${limit} bytes`))
+      else if (code === 0) {
         onText(text.end())
         resolve()
       } else reject(new Error(`${bin} failed (${signal ?? code}): ${err.trim().slice(0, 300)}`))

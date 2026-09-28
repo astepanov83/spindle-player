@@ -126,7 +126,7 @@ describe('run', () => {
         5000,
         1000
       )
-    ).rejects.toThrow(/SIGKILL/)
+    ).rejects.toThrow(/more than 1000 bytes/)
   })
 
   it('fails when the program is not there', async () => {
@@ -140,6 +140,14 @@ function spanOf(csv: string, size = csv.length || 1): number | undefined {
   for (let i = 0; i < csv.length; i += size) span.push(csv.slice(i, i + size))
   return span.length()
 }
+
+describe('stream past its cap', () => {
+  it('fails even when the program ends well before the kill lands', async () => {
+    await expect(
+      run(process.execPath, ['-e', 'process.stdout.write("x".repeat(100000))'], 5000, 1000)
+    ).rejects.toThrow(/more than 1000 bytes/)
+  })
+})
 
 describe('PacketSpan', () => {
   it('runs from the first packet to the end of the last', () => {
@@ -190,7 +198,7 @@ describe('stream', () => {
         5000,
         1000
       )
-    ).rejects.toThrow(/SIGKILL/)
+    ).rejects.toThrow(/more than 1000 bytes/)
   })
 })
 

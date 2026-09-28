@@ -48,6 +48,8 @@ export interface CueEntry {
   mtime: number
   size: number
   sheet?: CueSheet
+  // which cue reader made it; see cueReaderVersion (missing means 1)
+  reader?: number
 }
 
 export interface LibraryIndex {
@@ -74,6 +76,9 @@ export const indexVersion = 1
 // 2: ffprobe reads what music-metadata can't (ticket 012). Entries from an
 // older reader that failed or have no title are read again once.
 export const readerVersion = 2
+// 2: a non-UTF-8 sheet may be cp1252, not only cp1251 (ticket 011). Every
+// sheet from an older reader is read again once.
+export const cueReaderVersion = 2
 
 export interface WorkerStart {
   indexPath: string

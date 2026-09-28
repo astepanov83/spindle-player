@@ -4,6 +4,7 @@ import { paletteVersion, parseThemePalettes, type ThemePalettes } from '../../sh
 import { isCoverHash } from './cover-names'
 import type { CueSheet, CueTrack } from './cue'
 import {
+  cueReaderVersion,
   indexVersion,
   type CueEntry,
   type FileEntry,
@@ -80,6 +81,7 @@ function parseCueEntry(v: unknown): CueEntry | undefined {
   const c: CueEntry = { path: v.path, mtime: v.mtime, size: v.size }
   const sheet = parseCueSheet(v.sheet)
   if (sheet) c.sheet = sheet
+  if (num(v.reader)) c.reader = v.reader
   return c
 }
 
@@ -191,8 +193,9 @@ export function readAgainWithProbe(e: FileEntry): boolean {
   return e.error !== undefined || (e.container === "Monkey's Audio" && !e.title)
 }
 
-// The cue sheets a scan has to read: new and changed ones, and on a manual
-// Rescan ones that gave no sheet (a fixed permission doesn't change mtime).
+// The cue sheets a scan has to read: new and changed ones, ones an older cue
+// reader made, and on a manual Rescan ones that gave no sheet (a fixed
+// permission doesn't change mtime).
 export function planCueReads(
   known: Map<string, CueEntry>,
   found: { path: string; mtime: number; size: number }[],
@@ -200,7 +203,13 @@ export function planCueReads(
 ): { path: string; mtime: number; size: number }[] {
   return found.filter((f) => {
     const k = known.get(f.path)
-    return !k || k.mtime !== f.mtime || k.size !== f.size || (retryFailed && !k.sheet)
+    return (
+      !k ||
+      k.mtime !== f.mtime ||
+      k.size !== f.size ||
+      (k.reader ?? 1) < cueReaderVersion ||
+      (retryFailed && !k.sheet)
+    )
   })
 }
 

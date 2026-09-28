@@ -41,6 +41,7 @@ import { pictureWithHash } from './cover-source'
 import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from './cover-names'
 import {
+  cueReaderVersion,
   readerVersion,
   type CueEntry,
   type FileEntry,
@@ -325,7 +326,7 @@ const probe = (path: string): ReturnType<typeof probeTags> =>
 // Cue sheets are a few KB. One that can't be read or has no audio tracks is
 // kept without a sheet, so it isn't read again until it changes.
 async function readCue(f: { path: string; mtime: number; size: number }): Promise<CueEntry> {
-  const c: CueEntry = { ...f }
+  const c: CueEntry = { ...f, reader: cueReaderVersion }
   try {
     // a "cue" of megabytes is not a cue sheet
     if (f.size <= 1024 * 1024) {

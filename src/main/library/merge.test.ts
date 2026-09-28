@@ -16,7 +16,13 @@ import {
   usedCovers
 } from './merge'
 import { fallbackPalettes, paletteVersion } from '../../shared/palette'
-import { indexVersion, readerVersion, type FileEntry, type LibraryIndex } from './types'
+import {
+  cueReaderVersion,
+  indexVersion,
+  readerVersion,
+  type FileEntry,
+  type LibraryIndex
+} from './types'
 
 const h1 = '1'.repeat(40)
 const h2 = '2'.repeat(40)
@@ -310,7 +316,9 @@ describe('cue sheets in the index', () => {
   })
 
   it('reads new and changed sheets only', () => {
-    const known = new Map([['/m/a.cue', { path: '/m/a.cue', mtime: 1, size: 5 }]])
+    const known = new Map([
+      ['/m/a.cue', { path: '/m/a.cue', mtime: 1, size: 5, reader: cueReaderVersion }]
+    ])
     const found = [
       { path: '/m/a.cue', mtime: 1, size: 5 },
       { path: '/m/b.cue', mtime: 1, size: 5 },
@@ -320,10 +328,27 @@ describe('cue sheets in the index', () => {
   })
 
   it('reads a sheet that gave nothing again on a Rescan only', () => {
-    const known = new Map([['/m/a.cue', { path: '/m/a.cue', mtime: 1, size: 5 }]])
+    const known = new Map([
+      ['/m/a.cue', { path: '/m/a.cue', mtime: 1, size: 5, reader: cueReaderVersion }]
+    ])
     const found = [{ path: '/m/a.cue', mtime: 1, size: 5 }]
     expect(planCueReads(known, found)).toEqual([])
     expect(planCueReads(known, found, true)).toEqual(found)
+  })
+
+  it('reads again once a sheet an older cue reader made', () => {
+    const found = [{ path: '/m/a.cue', mtime: 1, size: 5 }]
+    const old = new Map([['/m/a.cue', { ...found[0], sheet: { files: [], tracks: [] } }]])
+    expect(planCueReads(old, found)).toEqual(found)
+    const now = new Map([['/m/a.cue', { ...old.get('/m/a.cue')!, reader: cueReaderVersion }]])
+    expect(planCueReads(now, found)).toEqual([])
+  })
+
+  it('keeps the cue reader number in the index', () => {
+    const ix = emptyIndex()
+    ix.cues.set('/m/a.cue', { path: '/m/a.cue', mtime: 1, size: 1, reader: cueReaderVersion })
+    const back = parseIndex(JSON.parse(JSON.stringify(serializeIndex(ix))))
+    expect(back.cues.get('/m/a.cue')?.reader).toBe(cueReaderVersion)
   })
 
   it('drops sheets that are gone, keeping those under folders that could not be read', () => {

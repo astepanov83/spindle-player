@@ -73,14 +73,14 @@ describe('LibraryClient requests', () => {
   it('answers empty when the process dies first', async () => {
     const { client } = setup()
     const r = client.ask({ type: 'get-library' })
-    client.onExit(1, true)
+    client.onExit(1, 'restarted')
     expect((await r).data).toBeUndefined()
   })
 
   it('asks for the library again after a restart', async () => {
     const { client, sent } = setup()
     const lib = client.library()
-    client.onExit(1, true)
+    client.onExit(1, 'restarted')
     await Promise.resolve()
     const req = (sent.at(-1) as { req: number }).req
     client.onMessage({ type: 'reply', req, data: bytes })
@@ -99,7 +99,7 @@ describe('LibraryClient scans', () => {
     const { client, scans } = setup()
     client.scan(true)
     expect(scans()).toEqual([{ type: 'scan', id: 1, folders: ['/m'], retryFailed: true }])
-    client.onExit(1, true)
+    client.onExit(1, 'restarted')
     client.onStarted()
     expect(scans()).toHaveLength(2)
     expect(scans()[1]).toEqual(scans()[0])
@@ -109,7 +109,7 @@ describe('LibraryClient scans', () => {
     const { client, scans } = setup()
     client.scan(false)
     client.onMessage({ type: 'scanned', id: 1 })
-    client.onExit(1, true)
+    client.onExit(1, 'restarted')
     client.onStarted()
     expect(scans()).toHaveLength(1)
   })
@@ -120,7 +120,7 @@ describe('LibraryClient scans', () => {
     client.scan(true)
     // the first one was replaced; its end is not the second one's
     client.onMessage({ type: 'scanned', id: 1 })
-    client.onExit(1, true)
+    client.onExit(1, 'restarted')
     client.onStarted()
     expect(scans().at(-1)).toMatchObject({ id: 2, retryFailed: true })
   })
@@ -128,9 +128,9 @@ describe('LibraryClient scans', () => {
   it('drops a scan that crashes the process twice, and says the scan failed', () => {
     const { client, scans, statuses, logs } = setup()
     client.scan(false)
-    client.onExit(1, true)
+    client.onExit(1, 'restarted')
     client.onStarted()
-    client.onExit(1, true)
+    client.onExit(1, 'restarted')
     client.onStarted()
     expect(scans()).toHaveLength(2)
     expect(statuses.at(-1)?.scanFailed).toBe(true)
@@ -149,7 +149,7 @@ describe('LibraryClient scans', () => {
     client.scan(false)
     client.stop()
     expect(sent.at(-1)).toEqual({ type: 'stop' })
-    client.onExit(1, true)
+    client.onExit(1, 'restarted')
     client.onStarted()
     expect(scans()).toHaveLength(1)
   })
@@ -165,8 +165,7 @@ describe('LibraryClient scans', () => {
   it('does nothing after quitting', () => {
     const { client, statuses, scans } = setup()
     client.scan(false)
-    client.quitting()
-    client.onExit(0, false)
+    client.onExit(0, 'quitting')
     client.onStarted()
     expect(statuses).toHaveLength(0)
     expect(scans()).toHaveLength(1)
@@ -176,7 +175,7 @@ describe('LibraryClient scans', () => {
 describe('LibraryClient status', () => {
   it('says the library never loaded when the process gives up before a library', () => {
     const { client } = setup()
-    client.onExit(1, false)
+    client.onExit(1, 'given-up')
     expect(client.status.unavailable).toBe('not-loaded')
   })
 
@@ -185,14 +184,14 @@ describe('LibraryClient status', () => {
     const lib = client.library()
     client.onMessage({ type: 'reply', req: (sent[0] as { req: number }).req, data: bytes })
     await lib
-    client.onExit(1, false)
+    client.onExit(1, 'given-up')
     expect(client.status.unavailable).toBe('stopped')
   })
 
   it('counts a library the process pushed as a good load', () => {
     const { client } = setup()
     expect(client.onMessage({ type: 'library', bytes })).toBe(false)
-    client.onExit(1, false)
+    client.onExit(1, 'given-up')
     expect(client.status.unavailable).toBe('stopped')
   })
 

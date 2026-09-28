@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LibraryProcess, type Child } from './library-process'
+import { LibraryProcess, type AfterExit, type Child } from './library-process'
 import { RestartBudget } from './restart'
 import type { WorkerIn } from './types'
 
@@ -17,11 +17,11 @@ const start = { indexPath: '/u/library.json', coversDir: '/u/covers', folders: [
 function setup(): {
   proc: LibraryProcess
   children: FakeChild[]
-  exits: [number, boolean][]
+  exits: [number, AfterExit][]
   logs: string[]
 } {
   const children: FakeChild[] = []
-  const exits: [number, boolean][] = []
+  const exits: [number, AfterExit][] = []
   const logs: string[] = []
   const proc = new LibraryProcess(
     () => {
@@ -33,7 +33,7 @@ function setup(): {
     new RestartBudget(3, 60000),
     {
       message: () => {},
-      exit: (code, restarted) => exits.push([code, restarted]),
+      exit: (code, after) => exits.push([code, after]),
       started: () => {}
     },
     2000,
@@ -72,7 +72,7 @@ describe('LibraryProcess', () => {
     children[0].emit('exit', 1)
     await vi.advanceTimersByTimeAsync(0)
     expect(done).toBe(true)
-    expect(exits).toEqual([[1, false]])
+    expect(exits).toEqual([[1, 'quitting']])
     expect(children).toHaveLength(1)
   })
 
@@ -105,7 +105,7 @@ describe('LibraryProcess', () => {
     expect(() => children[0].emit('error', 'FatalError', 'v8::Heap', '')).not.toThrow()
     expect(logs[0]).toMatch(/FatalError/)
     children[0].emit('exit', 134)
-    expect(exits).toEqual([[134, true]])
+    expect(exits).toEqual([[134, 'restarted']])
     expect(children).toHaveLength(2)
     expect(children[1].sent[0].type).toBe('start')
   })
@@ -113,7 +113,7 @@ describe('LibraryProcess', () => {
   it('stops starting new processes after too many exits', () => {
     const { children, exits } = setup()
     for (let i = 0; i < 4; i++) children[i].emit('exit', 1)
-    expect(exits.map((e) => e[1])).toEqual([true, true, true, false])
+    expect(exits.map((e) => e[1])).toEqual(['restarted', 'restarted', 'restarted', 'given-up'])
     expect(children).toHaveLength(4)
   })
 

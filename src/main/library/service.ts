@@ -75,7 +75,7 @@ export class LibraryService {
       new RestartBudget(3, 60000),
       {
         message: (m) => this.#onMessage(m),
-        exit: (code, restarted) => this.#client.onExit(code, restarted),
+        exit: (code, after) => this.#client.onExit(code, after),
         // a new process starts at full speed; tell it if a song is playing
         started: () => {
           if (this.#playing) this.#sendPlaying()
@@ -200,7 +200,6 @@ export class LibraryService {
   // Quitting: lets the library process write the index, waiting a short while
   // at most (see LibraryProcess).
   flush(): Promise<void> {
-    this.#client.quitting()
     return this.#proc.flush()
   }
 }

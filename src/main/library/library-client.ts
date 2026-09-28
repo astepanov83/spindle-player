@@ -8,6 +8,7 @@
 import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 import type { ScanStatus } from '../../shared/library'
 import type { WorkerIn, WorkerOut } from './types'
+import type { AfterExit } from './library-process'
 
 export type Reply = Extract<WorkerOut, { type: 'reply' }>
 export type Ask =
@@ -46,7 +47,6 @@ export class LibraryClient {
   #scanCrashed = false
   // the process gave a library at least once this run
   #loaded = false
-  #quitting = false
   // every id map this run, for a restarted process (see WorkerStart.aliases)
   #aliases: IdMoves = {}
   #log: (text: string) => void
@@ -165,16 +165,12 @@ export class LibraryClient {
     this.o.post({ type: 'stop' })
   }
 
-  quitting(): void {
-    this.#quitting = true
-  }
-
-  // The process ended; `restarted` tells if a new one was started.
-  onExit(code: number, restarted: boolean): void {
+  // The process ended; `after` tells what comes next (see LibraryProcess).
+  onExit(code: number, after: AfterExit): void {
     // requests to the dead process get an empty answer (a 404 for the page)
     for (const [req, done] of this.#replies) done({ type: 'reply', req })
     this.#replies.clear()
-    if (this.#quitting) return
+    if (after === 'quitting') return
     if (this.#scan?.again) {
       this.#log('Library: the scan stopped the library process twice; not starting it again')
       this.#scan = undefined
@@ -182,7 +178,8 @@ export class LibraryClient {
     } else if (this.#scan) this.#scan.again = true
     const change: Partial<ScanStatus> = { phase: 'idle', done: 0, total: 0 }
     if (this.#scanCrashed) change.scanFailed = true
-    if (restarted) this.#log(`Library process stopped (code ${code}), starting it again`)
+    if (after === 'restarted')
+      this.#log(`Library process stopped (code ${code}), starting it again`)
     else {
       this.#log(`Library process stopped (code ${code}) too often; the library stays as it is`)
       this.#scan = undefined

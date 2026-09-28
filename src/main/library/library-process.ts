@@ -12,10 +12,13 @@ export interface Child {
   on(event: 'error', listener: (type: string, location: string, report: string) => void): this
 }
 
+// What follows a process that ended: a new one, none (it died too often), or
+// none since the app is quitting.
+export type AfterExit = 'restarted' | 'given-up' | 'quitting'
+
 export interface ProcessEvents {
   message(m: WorkerOut): void
-  // the process ended; `restarted` tells if a new one was started
-  exit(code: number, restarted: boolean): void
+  exit(code: number, after: AfterExit): void
   // a new process is running, for main to send it what it needs to know
   started(): void
 }
@@ -57,9 +60,13 @@ export class LibraryProcess {
       if (this.#child !== child) return
       this.#child = undefined
       this.#flushed?.()
-      const restart = !this.#quitting && this.restarts.take(Date.now())
-      this.events.exit(code, restart)
-      if (restart) this.start()
+      const after: AfterExit = this.#quitting
+        ? 'quitting'
+        : this.restarts.take(Date.now())
+          ? 'restarted'
+          : 'given-up'
+      this.events.exit(code, after)
+      if (after === 'restarted') this.start()
     })
     // the start data goes first; the process waits for it before anything else
     child.postMessage({ type: 'start', start: this.startData() })

@@ -5,6 +5,7 @@ import {
   type VirtualItem
 } from '@tanstack/svelte-virtual'
 import { untrack } from 'svelte'
+import { watchOffset } from './list-offset'
 
 export interface VirtualListOptions {
   count: number
@@ -42,18 +43,27 @@ export function virtualList(opts: () => VirtualListOptions, overscan = 8): Virtu
     v = inst
     version++
   })
+  // an effect's return value runs when the component goes away
   $effect(() => stop)
+
+  // Where the rows start in the scroll box; the header above them can change height.
+  let margin = $state(0)
+  const listEl = $derived(opts().list)
+  const boxEl = $derived(opts().scrollEl)
+  $effect(() => {
+    if (listEl && boxEl) return watchOffset(listEl, boxEl, (m) => (margin = m))
+  })
 
   // .pre: update the count before the rows are drawn
   $effect.pre(() => {
     const o = opts()
-    const margin = o.list?.offsetTop ?? 0
     const el = o.scrollEl ?? null
+    const m = margin
     untrack(() => {
       v.setOptions({
         count: o.count,
         estimateSize: () => o.size,
-        scrollMargin: margin,
+        scrollMargin: m,
         getScrollElement: () => el
       })
       if (o.remeasure) v.measure()

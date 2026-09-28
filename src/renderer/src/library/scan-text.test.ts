@@ -130,7 +130,10 @@ describe('fetchLine', () => {
 
   it('shows progress while running and totals after', () => {
     expect(fetchLine({ found: 212, notFound: 96, left: 32, running: true })).toBe(
-      'Found 212 of 340 · 96 not found · 32 left'
+      'Looking up covers: found 212 of 340 · 96 not found · 32 left'
+    )
+    expect(fetchLine({ found: 0, notFound: 0, left: 5, running: true })).toBe(
+      'Looking up covers: found 0 of 5 · 5 left'
     )
     expect(fetchLine({ found: 212, notFound: 128, left: 0, running: false })).toBe(
       'Found 212 of 340 · 128 not found'

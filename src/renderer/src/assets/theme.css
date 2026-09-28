@@ -34,6 +34,8 @@
   --c2: #557;
   --c3: #223;
   --bass: 0;
+  /* how strong the cover's bass glow is; light needs more to show on a pale tint */
+  --glow: 22%;
 
   --display: 'Bricolage Grotesque Variable', 'Segoe UI', system-ui, sans-serif;
   --ui: 'Onest Variable', 'Segoe UI', system-ui, sans-serif;
@@ -62,6 +64,7 @@
     --tint: 35%;
     --wash-top: 45%;
     --wash-bottom: 70%;
+    --glow: 50%;
   }
 }
 

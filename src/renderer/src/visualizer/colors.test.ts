@@ -15,10 +15,18 @@ describe('barColors', () => {
     dark: ['#f2a541', '#e0735c', '#2d3047'],
     light: ['#f2a541', '#b8412b', '#2d3047']
   }
-  it('dark: the dark accent as is, main lightened', () => {
-    expect(barColors(p, false)).toEqual({ c1: '#e0735c', c2: mixHex('#f2a541', '#ffffff', 0.3) })
+  it('dark: the dark accent as is, main lightened, quiet bars faded', () => {
+    expect(barColors(p, false)).toEqual({
+      c1: '#e0735c',
+      c2: mixHex('#f2a541', '#ffffff', 0.3),
+      fade: 0.4
+    })
   })
-  it('light: the light accent as is, main darkened', () => {
-    expect(barColors(p, true)).toEqual({ c1: '#b8412b', c2: mixHex('#f2a541', '#000000', 0.3) })
+  it('light: the light accent and main darkened, bars mostly solid', () => {
+    expect(barColors(p, true)).toEqual({
+      c1: mixHex('#b8412b', '#000000', 0.2),
+      c2: mixHex('#f2a541', '#000000', 0.4),
+      fade: 0.7
+    })
   })
 })

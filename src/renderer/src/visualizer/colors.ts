@@ -18,13 +18,23 @@ export function mixHex(hex: string, to: string, t: number): string {
 }
 
 export interface BarColors {
+  // bar tips and peak caps
   c1: string
+  // bar roots
   c2: string
+  // how see-through a silent bar is (0..1); loud bars are solid
+  fade: number
 }
 
-// The accent as the theme's palette has it (already readable on that background),
-// and main pushed away from the background: toward white on dark, black on light.
+// Dark: the accent as the theme's palette has it, main pushed toward white, and
+// quiet bars fade into the background.
+// Light: the stage sits on the album tint, not on --bg, where the fitted accent
+// (3:1 on --bg) drops to about 2.5:1. So both colors go darker (about 3.4:1 on
+// the tints of the test covers) and bars stay mostly solid, since fading
+// toward a pale tint washes them out.
 export function barColors(palettes: ThemePalettes, light: boolean): BarColors {
   const [main, accent] = palettes[light ? 'light' : 'dark']
-  return { c1: accent, c2: mixHex(main, light ? '#000000' : '#ffffff', 0.3) }
+  if (light)
+    return { c1: mixHex(accent, '#000000', 0.2), c2: mixHex(main, '#000000', 0.4), fade: 0.7 }
+  return { c1: accent, c2: mixHex(main, '#ffffff', 0.3), fade: 0.4 }
 }

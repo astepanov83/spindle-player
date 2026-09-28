@@ -1,44 +1,30 @@
 <!--
   Where the visualizer draws: a canvas, plus the cover on the big stage.
-  For now it draws the resting look when something changes. Ticket 008 adds
-  the requestAnimationFrame loop that calls drawStage every frame.
+  The frame loop (loop.ts) does the drawing; this only tells it the stage is
+  there and when its size changed.
 -->
 <script lang="ts">
-  import { defaultPalettes } from '../../../shared/palette'
   import Cover from '../ui/Cover.svelte'
   import { layout } from '../stores/layout.svelte'
   import { queue } from '../stores/queue.svelte'
   import { settings } from '../stores/settings.svelte'
-  import { theme } from '../stores/theme.svelte'
-  import { barColors } from './colors'
-  import { drawStage } from './draw'
+  import { addStage, wake } from './loop'
 
   let { cover = true }: { cover?: boolean } = $props()
 
   const names = { ring: 'Ring', spectrum: 'Spectrum', wave: 'Wave', off: 'Visualizer off' }
 
   let stage: HTMLDivElement
-  let size = $state(0)
 
   $effect(() => {
-    const ro = new ResizeObserver(() => size++)
+    const remove = addStage(stage)
+    // also fires when a hidden tab with the stage in it shows again
+    const ro = new ResizeObserver(() => wake())
     ro.observe(stage)
     return () => {
       ro.disconnect()
+      remove()
     }
-  })
-
-  function redraw(): void {
-    drawStage(
-      stage,
-      settings.visualizer,
-      barColors(queue.currentAlbum?.palette ?? defaultPalettes, theme.light)
-    )
-  }
-
-  $effect(() => {
-    void size
-    redraw()
   })
 </script>
 
@@ -46,7 +32,7 @@
   <canvas></canvas>
   {#if cover}
     <!-- the cover changes size with the style, so draw again when it settles -->
-    <div class="cover" ontransitionend={redraw}>
+    <div class="cover" ontransitionend={() => wake()}>
       <div class="img"><Cover src={queue.currentAlbum?.coverLarge} /></div>
     </div>
   {/if}
@@ -80,7 +66,7 @@
       border-radius 0.45s,
       top 0.45s;
     box-shadow:
-      0 0 0 calc(var(--bass) * 9px) color-mix(in srgb, var(--c2) 22%, transparent),
+      0 0 0 calc(var(--bass) * 9px) color-mix(in srgb, var(--c2) var(--glow), transparent),
       0 22px calc(40px + var(--bass) * 40px) -12px color-mix(in srgb, var(--c2) 55%, var(--shadow));
   }
   .img {

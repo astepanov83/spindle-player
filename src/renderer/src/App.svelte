@@ -17,6 +17,8 @@
   import { queue } from './stores/queue.svelte'
   import { settings } from './stores/settings.svelte'
   import { theme } from './stores/theme.svelte'
+  import { barColors } from './visualizer/colors'
+  import { setLook } from './visualizer/loop'
 
   // each cover has a palette per theme; the light one has a darker accent
   const palette = $derived(
@@ -24,6 +26,15 @@
   )
 
   $effect(() => engine.setVolume(settings.volume))
+
+  // The visualizer loop runs outside Svelte; it only hears about slow changes.
+  $effect(() =>
+    setLook({
+      style: settings.visualizer,
+      colors: barColors(queue.currentAlbum?.palette ?? defaultPalettes, theme.light),
+      playing: player.playing
+    })
+  )
 
   setupMediaSession()
   $effect(() => showInMediaSession(queue.current, queue.currentAlbum))

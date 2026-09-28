@@ -1,8 +1,8 @@
-// What the draw functions read. Ticket 008 fills these every frame from the
-// analyser. Until then they stay at zero, which is the paused look.
-export const BANDS = 56
-export const WAVE_N = 256
+// What the draw functions read. The frame loop (loop.ts) fills these from the
+// analyser; all zero is the resting look.
+import { createMeter } from './analysis'
 
-export const levels = new Float32Array(BANDS)
-export const peaks = new Float32Array(BANDS)
-export const wave = new Float32Array(WAVE_N)
+export { BANDS, WAVE_N } from './analysis'
+
+export const meter = createMeter()
+export const { levels, peaks, wave } = meter

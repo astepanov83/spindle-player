@@ -2,6 +2,7 @@
 // A stage with no cover (the small one in the bar) gets a compact version.
 import type { VisualizerStyle } from '../../../shared/settings'
 import type { BarColors } from './colors'
+import { ringAngle } from './analysis'
 import { BANDS, WAVE_N, levels, peaks, wave } from './levels'
 
 type Ctx = CanvasRenderingContext2D
@@ -28,16 +29,15 @@ function drawRing(
   for (let i = 0; i < BANDS; i++) {
     const v = levels[i]
     const len = Math.max(1.5 * dpr, v * maxLen)
-    const a = Math.PI / 2 - (i + 0.5) * step
     const g = x.createLinearGradient(0, inner, 0, inner + len)
     g.addColorStop(0, col.c2)
     g.addColorStop(1, col.c1)
     const cap = inner + Math.max(len, peaks[i] * maxLen) + Math.min(5 * dpr, pad)
-    for (const side of [1, -1]) {
+    for (const side of [1, -1] as const) {
       x.save()
-      x.rotate(side * a)
+      x.rotate(ringAngle(i, side))
       x.strokeStyle = g
-      x.globalAlpha = 0.4 + v * 0.6
+      x.globalAlpha = col.fade + v * (1 - col.fade)
       x.beginPath()
       x.moveTo(0, inner)
       x.lineTo(0, inner + len)
@@ -80,7 +80,7 @@ function drawSpectrum(
     const pk = compact ? Math.max(peaks[i], peaks[i + 1]) : peaks[i]
     const h = Math.max(2 * dpr, v * maxH)
     const bx = m + j * slot + (slot - bw) / 2
-    x.globalAlpha = 0.45 + v * 0.55
+    x.globalAlpha = col.fade + v * (1 - col.fade)
     x.fillStyle = g
     x.fillRect(bx, base - h, bw, h)
     x.globalAlpha = 0.55 + pk * 0.45
@@ -111,7 +111,7 @@ function drawMirror(x: Ctx, W: number, H: number, dpr: number, col: BarColors): 
     g.addColorStop(0.5, col.c2)
     g.addColorStop(1, col.c1)
     x.strokeStyle = g
-    x.globalAlpha = 0.45 + v * 0.55
+    x.globalAlpha = col.fade + v * (1 - col.fade)
     x.beginPath()
     x.moveTo(slot * (j + 0.5), mid - h)
     x.lineTo(slot * (j + 0.5), mid + h)
@@ -152,19 +152,23 @@ function drawWave(
   x.save()
   x.strokeStyle = g
   x.lineJoin = 'round'
-  x.shadowColor = col.c1
-  x.shadowBlur = (compact ? 6 : 14) * dpr
+  x.lineCap = 'round'
   line(0.6, 0.35, 1.5 * dpr, true)
+  // The glow is a wide faint stroke under the line. shadowBlur looks softer
+  // but more than doubled the cost of the frame without a GPU.
+  x.strokeStyle = col.c1
+  line(1, 0.14, (compact ? 5 : 10) * dpr, false)
+  x.strokeStyle = g
   line(1, 0.95, (compact ? 1.8 : 2.5) * dpr, false)
   x.restore()
   x.globalAlpha = 1
 }
 
 // Draws one stage: a `.vstage` element with a canvas and maybe a `.cover`.
-// Ticket 008 calls this from its requestAnimationFrame loop.
+// Called from the frame loop (loop.ts).
 export function drawStage(stage: HTMLElement, style: VisualizerStyle, col: BarColors): void {
   const cv = stage.querySelector('canvas')
-  if (!cv || !stage.offsetParent) return
+  if (!cv) return
   const dpr = window.devicePixelRatio || 1
   const w = Math.round(stage.clientWidth * dpr)
   const h = Math.round(stage.clientHeight * dpr)

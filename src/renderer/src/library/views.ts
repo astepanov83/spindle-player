@@ -111,15 +111,31 @@ export function placeShift<T>(
   per: number,
   key: (item: T) => string
 ): number {
-  if (first <= 0) return 0
-  if (first * per >= old.length) return Math.ceil(next.length / per) - Math.ceil(old.length / per)
+  return first <= 0 ? 0 : heldShift(old, next, first * per, per, key).rows
+}
+
+// placeShift from an item, not a row: `from` is the index of the item to hold
+// in place. In a grid, songs that come above move the items a column or two,
+// so the next change holds the same item again (see keep-place.svelte.ts); a
+// row's first item each time would lose those columns and drift up.
+// Returns the rows to move and the item held.
+export function heldShift<T>(
+  old: T[],
+  next: T[],
+  from: number,
+  per: number,
+  key: (item: T) => string
+): { rows: number; held?: string } {
+  if (from >= old.length)
+    return { rows: Math.ceil(next.length / per) - Math.ceil(old.length / per) }
   const at = new Map<string, number>()
   next.forEach((x, i) => at.set(key(x), i))
-  // the first item on screen, or the next that is still there
-  const end = Math.min(old.length, (first + 20) * per)
-  for (let i = first * per; i < end; i++) {
-    const j = at.get(key(old[i]))
-    if (j !== undefined) return Math.floor(j / per) - Math.floor(i / per)
+  // the item, or the next that is still there
+  const end = Math.min(old.length, from + 20 * per)
+  for (let i = from; i < end; i++) {
+    const k = key(old[i])
+    const j = at.get(k)
+    if (j !== undefined) return { rows: Math.floor(j / per) - Math.floor(i / per), held: k }
   }
-  return 0
+  return { rows: 0 }
 }

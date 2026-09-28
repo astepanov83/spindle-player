@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Album, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 import {
+  heldShift,
   placeShift,
   chunk,
   filterAlbums,
@@ -132,6 +133,17 @@ describe('placeShift', () => {
     expect(placeShift(old, ['x', 'y', 'z', ...old], 1, 3, id)).toBe(1)
     // one album above: "d" is now in the same row, one place on
     expect(placeShift(old, ['x', ...old], 1, 3, id)).toBe(0)
+  })
+
+  it('holds an item in its row when fewer than a row came above it', () => {
+    // 3 per row; "e" (row 1) is held
+    const old = ['a', 'b', 'c', 'd', 'e', 'f']
+    expect(heldShift(old, ['x', ...old], 4, 3, id)).toEqual({ rows: 0, held: 'e' })
+    // two more came: "e" is now in row 2
+    expect(heldShift(['x', ...old], ['x', 'y', 'z', ...old], 5, 3, id)).toEqual({
+      rows: 1,
+      held: 'e'
+    })
   })
 
   it('moves by the rows the list grew when it is scrolled past its end', () => {

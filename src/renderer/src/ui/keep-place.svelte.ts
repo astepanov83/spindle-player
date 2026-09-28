@@ -3,7 +3,7 @@
 // search moves the view as before. A list scrolled to the top stays there,
 // so new songs show. Call during component setup.
 import { tick, untrack } from 'svelte'
-import { placeShift } from '../library/views'
+import { heldShift } from '../library/views'
 
 export interface PlaceOptions<T> {
   // the element that scrolls, and the one the rows sit in
@@ -21,6 +21,9 @@ export interface PlaceOptions<T> {
 
 export function keepPlace<T>(opts: () => PlaceOptions<T>): void {
   let last: { items: T[]; source: number } | undefined
+  // the item held in place last time, and where the view was left; while it
+  // stays there, the next change holds the same item
+  let held: { key: string; scroll: number } | undefined
   // .pre: the old rows are still drawn, so the first one on screen is known
   $effect.pre(() => {
     const o = opts()
@@ -32,11 +35,23 @@ export function keepPlace<T>(opts: () => PlaceOptions<T>): void {
       if (!box || !o.list || o.rowSize <= 0) return
       const listTop = o.list.getBoundingClientRect().top - box.getBoundingClientRect().top
       // listTop is negative once the list's top has scrolled past
-      if (listTop >= 0) return
+      if (listTop >= 0) {
+        held = undefined
+        return
+      }
       const first = Math.floor(-listTop / o.rowSize)
-      const shift = placeShift(prev.items, o.items, first, o.per, o.key)
+      let from = first * o.per
+      if (held && Math.abs(box.scrollTop - held.scroll) < 1) {
+        const k = held.key
+        const i = prev.items.findIndex((x) => o.key(x) === k)
+        if (i >= 0 && Math.floor(i / o.per) === first) from = i
+      }
+      const { rows, held: key } = heldShift(prev.items, o.items, from, o.per, o.key)
       // after the list has its new height, or the box can't scroll that far
-      if (shift) void tick().then(() => (box.scrollTop += shift * o.rowSize))
+      void tick().then(() => {
+        if (rows) box.scrollTop += rows * o.rowSize
+        held = key === undefined ? undefined : { key, scroll: box.scrollTop }
+      })
     })
   })
 }

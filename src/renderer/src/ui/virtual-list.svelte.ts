@@ -55,6 +55,11 @@ export function virtualList(opts: () => VirtualListOptions, overscan = 8): Virtu
     return watchOffset(listEl, boxEl, (m) => (margin = m))
   })
 
+  // Rows are measured again only when the width changed their size. Not on a
+  // new count: a scan adds rows every few seconds, and the rows above the
+  // screen would fall back to the guess and move what is shown.
+  let measuredAt: number | undefined
+
   // .pre: update the count before the rows are drawn
   $effect.pre(() => {
     const o = opts()
@@ -67,7 +72,8 @@ export function virtualList(opts: () => VirtualListOptions, overscan = 8): Virtu
         scrollMargin: m,
         getScrollElement: () => el
       })
-      if (o.remeasure) v.measure()
+      if (o.remeasure && o.size !== measuredAt) v.measure()
+      measuredAt = o.size
     })
   })
 

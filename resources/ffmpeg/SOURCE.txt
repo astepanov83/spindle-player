@@ -1,0 +1,55 @@
+Source code for ffmpeg and ffprobe
+==================================
+
+Spindle ships two programs it did not write: ffmpeg and ffprobe, in this
+folder. They are John Van Sickle's static build of FFmpeg 7.0.2 for Linux x64
+(https://johnvansickle.com/ffmpeg/), as republished by the ffmpeg-static
+project (https://github.com/eugeneware/ffmpeg-static, release b6.1.1).
+Spindle runs them unmodified, as separate programs.
+
+They are licensed under the GNU General Public License version 3
+(LICENSE.txt in this folder). Spindle itself is under the MIT license.
+README.txt in this folder is the build's own notes, with the versions of the
+libraries built into it.
+
+
+Where to get the source
+-----------------------
+
+The Corresponding Source for these two programs, as far as it can be found
+(see "What is not included" below), is one archive:
+
+    ffmpeg-7.0.2-linux-x64-source.tar
+
+It is published next to each Spindle release that ships these programs:
+
+    <SOURCE ARCHIVE URL: put the release download link here before publishing>
+
+The archive holds the FFmpeg 7.0.2 source, the source of each library linked
+into the build, the build's configure line, and SOURCES.txt, which says where
+each file came from and gives its sha256.
+
+
+Written offer
+-------------
+
+For at least three years after the last time we distribute a version of
+Spindle that includes these programs, we will give anyone who has a copy of
+them a copy of the Corresponding Source, either as access to copy it from a
+network server at no charge, or on a physical medium customarily used for
+software interchange for no more than the reasonable cost of physically
+making and sending that copy.
+
+To ask for it, open an issue at
+https://github.com/astepanov83/spindle-player/issues
+and say which Spindle version you have.
+
+
+What is not included
+--------------------
+
+John Van Sickle's build scripts are not published, and the build does not
+record the versions of a few libraries linked into it: GMP, Nettle, libtasn1,
+Fontconfig, libogg, and the GNU C Library (linked statically). For libtheora
+and libvidstab the version is known but not the exact commit; the archive
+holds the most likely one and says so. SOURCES.txt lists each case.

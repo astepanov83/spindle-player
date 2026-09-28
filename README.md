@@ -59,4 +59,10 @@ See [docs/design.md](docs/design.md) for how templates, parts and slots fit toge
 
 [MIT](LICENSE)
 
-The packaged app also ships ffmpeg and ffprobe as separate programs, which Spindle runs. They are not part of Spindle's code and are not under its MIT license: they are John Van Sickle's static builds of [FFmpeg](https://ffmpeg.org), licensed under the GNU GPL version 3 (see `resources/ffmpeg/LICENSE.txt` and `README.txt` after `npm install`, and `resources/app.asar.unpacked/resources/ffmpeg/` in the installed app). The builds come from the [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) release `b6.1.1`; FFmpeg's source is at https://ffmpeg.org/download.html.
+The packaged app also ships ffmpeg and ffprobe as separate programs, which Spindle runs unmodified. They are not part of Spindle's code and are not under its MIT license: they are John Van Sickle's static build of [FFmpeg](https://ffmpeg.org) 7.0.2, licensed under the GNU GPL version 3 (see `resources/ffmpeg/LICENSE.txt` and `README.txt` after `npm install`, and `resources/app.asar.unpacked/resources/ffmpeg/` in the installed app). The build comes from the [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) release `b6.1.1`.
+
+### Source for ffmpeg and ffprobe
+
+The GPL asks that anyone who gets these programs can also get their source. [`resources/ffmpeg/SOURCE.txt`](resources/ffmpeg/SOURCE.txt) says where it is (an archive next to each release), with a written offer to provide it for at least three years. It is shipped next to the programs.
+
+`node scripts/fetch-ffmpeg-source.mjs` makes that archive: it downloads the FFmpeg 7.0.2 source and the source of each library linked into the build (about 100 MB, needs git and GNU tar), checks each file's sha256 or git commit, and packs them into `ffmpeg-source/ffmpeg-7.0.2-linux-x64-source.tar`. Attach that file to the release and put its link in `SOURCE.txt` before publishing. `SOURCES.txt` in the archive lists what each file is, and the few libraries whose exact version the build does not record.

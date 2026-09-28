@@ -85,3 +85,13 @@ for (const [asset, [name, hash, fileHash]] of Object.entries(files)) {
   renameSync(tmp, join(dir, name))
   console.log(`fetch-ffmpeg: ${name} (${(out.length / 1e6).toFixed(1)} MB)`)
 }
+
+// The GPL source offer shipped next to the programs needs a real link before a
+// public release (see scripts/fetch-ffmpeg-source.mjs). Only a warning: a
+// local package for testing is fine without it.
+const offer = join(dir, 'SOURCE.txt')
+if (strict && (!existsSync(offer) || /<SOURCE ARCHIVE URL/.test(readFileSync(offer, 'utf8'))))
+  console.warn(
+    'fetch-ffmpeg: resources/ffmpeg/SOURCE.txt has no source archive link yet; ' +
+      'add it before publishing this package'
+  )

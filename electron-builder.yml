@@ -10,6 +10,7 @@ files:
   - '!work/*'
   - '!.superpowers/**'
   - '!scripts/*'
+  - '!ffmpeg-source/**'
   - '!vitest.config.ts'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!svelte.config.mjs'

@@ -38,7 +38,8 @@ vi.mock('../audio/engine', () => ({
 
 const log = vi.fn()
 const saveQueue = vi.fn()
-vi.stubGlobal('window', { playbackApi: { log, saveQueue, savePos: vi.fn() } })
+const savePlace = vi.fn()
+vi.stubGlobal('window', { playbackApi: { log, saveQueue, savePlace } })
 
 const { queue } = await import('./queue.svelte')
 const { player } = await import('./player.svelte')
@@ -89,6 +90,8 @@ beforeEach(() => {
   queue.playAlbum('a', 0)
   fake.reset()
   log.mockClear()
+  saveQueue.mockClear()
+  savePlace.mockClear()
 })
 
 describe('a song ends', () => {
@@ -218,5 +221,34 @@ describe('a rescan', () => {
     queue.prune()
     expect(queue.items).toEqual(['a0', 'a1'])
     expect(fake.calls).toEqual([])
+  })
+})
+
+describe('saving', () => {
+  it('sends the list only when it changes, and the place on every song change', () => {
+    fake.on.ended!()
+    queue.jump(0)
+    queue.next()
+    expect(saveQueue).not.toHaveBeenCalled()
+    expect(savePlace).toHaveBeenLastCalledWith({ index: 1, pos: 0 })
+    queue.playAlbum('b', 1)
+    expect(saveQueue).toHaveBeenCalledTimes(1)
+    expect(saveQueue).toHaveBeenLastCalledWith({
+      items: ['b0', 'b1'],
+      index: 1,
+      from: 'Album b',
+      pos: 0
+    })
+  })
+
+  it('sends the whole list with the new index when a rescan drops songs', () => {
+    queue.jump(2)
+    savePlace.mockClear()
+    const l = lib(['a', 3], ['b', 2])
+    l.tracks = l.tracks.filter((t) => t.id !== 'a0')
+    l.albums[0].trackIds = ['a1', 'a2']
+    library.load(l)
+    queue.prune()
+    expect(saveQueue).toHaveBeenLastCalledWith(expect.objectContaining({ index: 1 }))
   })
 })

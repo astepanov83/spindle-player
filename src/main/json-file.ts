@@ -4,15 +4,22 @@ import {
   copyFileSync,
   fsyncSync,
   openSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
   writeSync
 } from 'fs'
 import { open, rename, rm } from 'fs/promises'
+import { basename, dirname, join } from 'path'
 
+// broken: read fine but not JSON. unreadable: the read itself failed (EACCES,
+// EIO, EISDIR...), so nothing is known about what is in it.
 export type ReadResult =
-  { kind: 'ok'; value: unknown } | { kind: 'missing' } | { kind: 'broken'; error: unknown }
+  | { kind: 'ok'; value: unknown }
+  | { kind: 'missing' }
+  | { kind: 'broken'; error: unknown }
+  | { kind: 'unreadable'; error: unknown }
 
 export function readJsonFile(path: string): ReadResult {
   let text: string
@@ -20,7 +27,7 @@ export function readJsonFile(path: string): ReadResult {
     text = readFileSync(path, 'utf8')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'missing' }
-    return { kind: 'broken', error }
+    return { kind: 'unreadable', error }
   }
   try {
     return { kind: 'ok', value: JSON.parse(text) }
@@ -29,18 +36,63 @@ export function readJsonFile(path: string): ReadResult {
   }
 }
 
-// Reads a file, and keeps a copy of a broken one for a look later, since the next save replaces it.
-export function readJsonFileKeepBroken(path: string, what: string): unknown {
+export interface OpenedFile {
+  // undefined when there is nothing usable; the caller starts from defaults
+  value: unknown
+  // false when the file must not be replaced this session
+  canWrite: boolean
+}
+
+// Reads a file the app saves again later. Whatever the next save would lose is
+// kept first: a file that is not JSON goes to "<name>.broken", JSON in a shape
+// or version this build doesn't know goes to "<name>.unknown". A file that can't
+// be read at all is never written this session, since it may still be fine.
+// If the copy fails, the file is not written either.
+export function openJsonFile(
+  path: string,
+  what: string,
+  known: (value: unknown) => boolean
+): OpenedFile {
   const read = readJsonFile(path)
-  if (read.kind === 'broken') {
-    console.error(`${what} is broken, starting fresh: ${path}`, read.error)
-    try {
-      copyFileSync(path, `${path}.broken`)
-    } catch {
-      // nothing more to save
-    }
+  switch (read.kind) {
+    case 'missing':
+      return { value: undefined, canWrite: true }
+    case 'unreadable':
+      console.error(`${what} can't be read; using defaults and not saving it: ${path}`, read.error)
+      return { value: undefined, canWrite: false }
+    case 'broken':
+      console.error(`${what} is broken, starting fresh: ${path}`, read.error)
+      return { value: undefined, canWrite: keepCopy(path, `${path}.broken`) }
+    case 'ok':
+      if (known(read.value)) return { value: read.value, canWrite: true }
+      console.error(`${what} has a shape this version doesn't know; a copy is kept: ${path}`)
+      return { value: read.value, canWrite: keepCopy(path, `${path}.unknown`) }
   }
-  return read.kind === 'ok' ? read.value : undefined
+}
+
+function keepCopy(path: string, to: string): boolean {
+  try {
+    copyFileSync(path, to)
+    return true
+  } catch (error) {
+    console.error(`Could not keep a copy of ${path}; not saving it this session`, error)
+    return false
+  }
+}
+
+// Temp files left by a quit or crash in the middle of a write of `path`.
+export function removeStrayTmp(path: string): void {
+  const name = basename(path)
+  const dir = dirname(path)
+  let names: string[]
+  try {
+    names = readdirSync(dir)
+  } catch {
+    // no folder yet
+    return
+  }
+  for (const n of names)
+    if (n.startsWith(name + '.') && n.endsWith('.tmp')) rmSync(join(dir, n), { force: true })
 }
 
 let tmpCount = 0
@@ -101,7 +153,10 @@ async function writeTmp(
 }
 
 // Saves the latest value a short while after the last change, one write at a time.
-// flushSync() is for quitting: it writes right away and drops any write still running.
+// flushSync() is for quitting: it writes the newest value right away, and an
+// async write still running skips its rename. That rename is sync on purpose:
+// an async rename already handed to the thread pool could not be called back,
+// and could land after flushSync's write with the older value.
 export class JsonFileWriter<T> {
   #timer: ReturnType<typeof setTimeout> | undefined
   #pending: { data: T } | undefined
@@ -137,7 +192,7 @@ export class JsonFileWriter<T> {
         // a newer value is already queued behind this one
         if (version !== this.#version) return
         return writeTmp(this.path, pending.data, this.space, async (tmp) => {
-          if (version === this.#version) await rename(tmp, this.path)
+          if (version === this.#version) renameSync(tmp, this.path)
           else await rm(tmp, { force: true })
         })
       })

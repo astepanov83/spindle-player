@@ -90,32 +90,63 @@ export function parseFolders(v: unknown): string[] {
   return out
 }
 
-// The file may be old, hand-edited or half written. Every field that is wrong
-// falls back to its default on its own, so one bad value doesn't reset the rest.
-export function parseStoredSettings(raw: unknown): StoredSettings {
-  const d = defaultSettings()
+export function defaultStoredSettings(): StoredSettings {
+  return { ...defaultSettings(), windowSizes: {}, folders: [] }
+}
+
+// The file may be old, hand-edited or half written, and a message from the page
+// may be wrong too. Every field that is wrong falls back to the same field of
+// `base` on its own, so one bad value doesn't reset the rest.
+export function parseStoredSettings(
+  raw: unknown,
+  base: StoredSettings = defaultStoredSettings()
+): StoredSettings {
   const r = isObject(raw) ? raw : {}
   const rawQueue = isObject(r.queue) ? r.queue : {}
-  const rawSizes = isObject(r.windowSizes) ? r.windowSizes : {}
+  const rawSizes = isObject(r.windowSizes) ? r.windowSizes : undefined
 
-  const queue = { ...d.queue }
-  const windowSizes: StoredSettings['windowSizes'] = {}
+  const queue = { ...base.queue }
+  const windowSizes: StoredSettings['windowSizes'] = rawSizes ? {} : { ...base.windowSizes }
   for (const id of templateIds) {
     const t = templates[id]
-    queue[id] = oneOf(rawQueue[id], t.queueOptions, d.queue[id])
-    const size = parseSize(rawSizes[id], t)
+    queue[id] = oneOf(rawQueue[id], t.queueOptions, base.queue[id])
+    const size = rawSizes && parseSize(rawSizes[id], t)
     if (size) windowSizes[id] = size
   }
 
   return {
-    template: oneOf(r.template, templateIds, d.template),
+    template: oneOf(r.template, templateIds, base.template),
     queue,
-    visualizer: oneOf(r.visualizer, visualizerStyles, d.visualizer),
-    theme: oneOf(r.theme, themeChoices, d.theme),
-    volume: parseVolume(r.volume, d.volume),
+    visualizer: oneOf(r.visualizer, visualizerStyles, base.visualizer),
+    theme: oneOf(r.theme, themeChoices, base.theme),
+    volume: parseVolume(r.volume, base.volume),
     windowSizes,
-    folders: parseFolders(r.folders)
+    folders: Array.isArray(r.folders) ? parseFolders(r.folders) : [...base.folders]
   }
+}
+
+const storedKeys = Object.keys(defaultStoredSettings())
+
+// True when every field the file has is one this version reads as it is.
+// Otherwise the next save would drop something, so the file is copied first.
+export function isKnownSettingsFile(raw: unknown): boolean {
+  if (!isObject(raw)) return false
+  // a field from a newer version would be dropped by the next save
+  if (Object.keys(raw).some((k) => !storedKeys.includes(k))) return false
+  const has = (k: string): boolean => raw[k] !== undefined
+  if (has('template') && !templateIds.includes(raw.template as TemplateId)) return false
+  if (has('visualizer') && !visualizerStyles.includes(raw.visualizer as VisualizerStyle))
+    return false
+  if (has('theme') && !themeChoices.includes(raw.theme as ThemeChoice)) return false
+  if (has('volume') && (typeof raw.volume !== 'number' || !Number.isFinite(raw.volume)))
+    return false
+  if (has('queue') && !isObject(raw.queue)) return false
+  if (has('windowSizes') && !isObject(raw.windowSizes)) return false
+  if (has('folders')) {
+    if (!Array.isArray(raw.folders)) return false
+    if (parseFolders(raw.folders).length !== new Set(raw.folders).size) return false
+  }
+  return true
 }
 
 // The part of the stored settings the page gets.

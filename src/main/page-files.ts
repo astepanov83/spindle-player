@@ -2,17 +2,43 @@
 // page sends like a file read, keeps the latest, and writes it a bit later.
 import { join } from 'path'
 import { app } from 'electron'
-import { parsePlaylists, playlistsFile, type Playlist } from '../shared/playlists'
-import { parseSavedQueue, type SavedQueue } from '../shared/saved-queue'
-import { JsonFileWriter, readJsonFileKeepBroken } from './json-file'
+import {
+  isKnownPlaylistsFile,
+  parsePlaylists,
+  playlistsFile,
+  type Playlist
+} from '../shared/playlists'
+import {
+  applyPlace,
+  isKnownQueueFile,
+  parseSavedQueue,
+  type SavedQueue
+} from '../shared/saved-queue'
+import { JsonFileWriter, openJsonFile, removeStrayTmp } from './json-file'
+
+// Reads the file at start. A file that can't be read gets no writer, so it is
+// never replaced this session (see openJsonFile).
+function open<T>(
+  path: string,
+  what: string,
+  known: (v: unknown) => boolean,
+  delayMs: number,
+  space = 2
+): { value: unknown; writer: JsonFileWriter<T> | undefined } {
+  removeStrayTmp(path)
+  const file = openJsonFile(path, what, known)
+  const writer = file.canWrite ? new JsonFileWriter<T>(path, delayMs, undefined, space) : undefined
+  return { value: file.value, writer }
+}
 
 export class PlaylistFile {
   #data: Playlist[]
-  #writer: JsonFileWriter<unknown>
+  #writer: JsonFileWriter<unknown> | undefined
 
   constructor(readonly path = join(app.getPath('userData'), 'playlists.json')) {
-    this.#data = parsePlaylists(readJsonFileKeepBroken(path, 'Playlists file'))
-    this.#writer = new JsonFileWriter(path, 500)
+    const f = open<unknown>(path, 'Playlists file', isKnownPlaylistsFile, 500)
+    this.#data = parsePlaylists(f.value)
+    this.#writer = f.writer
   }
 
   get(): Playlist[] {
@@ -24,22 +50,23 @@ export class PlaylistFile {
     if (!Array.isArray(raw)) return
     // the page sends the list itself; the file wraps it
     this.#data = parsePlaylists(playlistsFile(raw))
-    this.#writer.schedule(playlistsFile(this.#data))
+    this.#writer?.schedule(playlistsFile(this.#data))
   }
 
   flushSync(): void {
-    this.#writer.flushSync()
+    this.#writer?.flushSync()
   }
 }
 
 export class QueueFile {
   #data: SavedQueue
-  #writer: JsonFileWriter<SavedQueue>
+  #writer: JsonFileWriter<SavedQueue> | undefined
 
   constructor(readonly path = join(app.getPath('userData'), 'queue.json')) {
-    this.#data = parseSavedQueue(readJsonFileKeepBroken(path, 'Queue file'))
     // one line: a queue made from a big song table holds thousands of ids
-    this.#writer = new JsonFileWriter(path, 1000, undefined, 0)
+    const f = open<SavedQueue>(path, 'Queue file', isKnownQueueFile, 1000, 0)
+    this.#data = parseSavedQueue(f.value)
+    this.#writer = f.writer
   }
 
   get(): SavedQueue {
@@ -48,18 +75,18 @@ export class QueueFile {
 
   setFromPage(raw: unknown): void {
     this.#data = parseSavedQueue(raw)
-    this.#writer.schedule(this.#data)
+    this.#writer?.schedule(this.#data)
   }
 
-  // The position comes on its own and more often, without the whole list.
-  setPos(raw: unknown): void {
-    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) return
-    if (!this.#data.items.length || this.#data.pos === raw) return
-    this.#data = { ...this.#data, pos: raw }
-    this.#writer.schedule(this.#data)
+  // The current song and position come on their own and more often, without the whole list.
+  setPlace(raw: unknown): void {
+    const next = applyPlace(this.#data, raw)
+    if (next === this.#data) return
+    this.#data = next
+    this.#writer?.schedule(this.#data)
   }
 
   flushSync(): void {
-    this.#writer.flushSync()
+    this.#writer?.flushSync()
   }
 }

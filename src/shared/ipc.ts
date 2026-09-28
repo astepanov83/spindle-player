@@ -1,6 +1,6 @@
 import type { ScanStatus } from './library'
 import type { Playlist } from './playlists'
-import type { SavedQueue } from './saved-queue'
+import type { QueuePlace, SavedQueue } from './saved-queue'
 import type { Settings } from './settings'
 
 // Channel names used by both main and preload, so a typo is a type error.
@@ -76,7 +76,7 @@ export interface PlaylistsApi {
 export const PlaybackChannel = {
   loadQueue: 'queue:load',
   saveQueue: 'queue:save',
-  savePos: 'queue:save-pos',
+  savePlace: 'queue:save-place',
   log: 'playback:log'
 } as const
 
@@ -84,9 +84,10 @@ export const PlaybackChannel = {
 export interface PlaybackApi {
   // the queue and position from the last run
   loadQueue(): Promise<SavedQueue>
+  // the whole list; sent only when the list changes
   saveQueue(queue: SavedQueue): void
-  // seconds into the current song; sent more often than the list
-  savePos(pos: number): void
+  // the current song and seconds into it; sent on every song change and while playing
+  savePlace(place: QueuePlace): void
   // a song that would not play, written to main's log
   log(text: string): void
 }

@@ -524,7 +524,9 @@ const ready = (async () => {
   await removeStrayTemp()
   await loadCached()
   const r = readJsonFile(start.indexPath)
-  if (r.kind === 'broken') log(`Library index is broken, scanning again: ${start.indexPath}`)
+  // the index is only a cache of the music files, so it is made again either way
+  if (r.kind === 'broken' || r.kind === 'unreadable')
+    log(`Library index is ${r.kind}, scanning again: ${start.indexPath}`)
   ix = parseIndex(r.kind === 'ok' ? r.value : undefined)
   build()
 })()

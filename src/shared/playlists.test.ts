@@ -3,6 +3,7 @@ import {
   addTracks,
   cleanName,
   create,
+  isKnownPlaylistsFile,
   newName,
   parsePlaylists,
   remove,
@@ -94,5 +95,28 @@ describe('edits', () => {
       't1',
       't3'
     ])
+  })
+})
+
+describe('isKnownPlaylistsFile', () => {
+  it('knows a file the next save writes back the same', () => {
+    expect(isKnownPlaylistsFile({ version: 1, playlists: [] })).toBe(true)
+    expect(isKnownPlaylistsFile({ version: 1, playlists: [pl('a', 'Mix', ['t1', 't2'])] })).toBe(
+      true
+    )
+  })
+
+  it('does not know another version, a wrong shape, or a file the save would cut', () => {
+    for (const raw of [
+      { version: 2, playlists: [pl('a', 'Mix')] },
+      { playlists: [] },
+      { version: 1, playlists: {} },
+      [],
+      'x',
+      { version: 1, playlists: [pl('a', 'Mix'), { id: 'b' }] },
+      { version: 1, playlists: [pl('a', 'Mix', ['t1', 't1'])] },
+      { version: 1, playlists: [{ ...pl('a', 'Mix'), smart: true }] }
+    ])
+      expect(isKnownPlaylistsFile(raw)).toBe(false)
   })
 })

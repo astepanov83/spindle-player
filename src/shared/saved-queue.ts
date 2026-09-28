@@ -30,3 +30,27 @@ export function parseSavedQueue(raw: unknown): SavedQueue {
   const from = typeof raw.from === 'string' ? raw.from.slice(0, 500) : ''
   return { items, index, from, pos }
 }
+
+// The file is only a list and a place in it, so any object with a list is known.
+export function isKnownQueueFile(raw: unknown): boolean {
+  return isObject(raw) && Array.isArray(raw.items)
+}
+
+// Where the queue is: the current song and seconds into it. Sent on every song
+// change and every few seconds, without the list, which can hold 50k ids.
+export interface QueuePlace {
+  index: number
+  pos: number
+}
+
+// Moves the saved queue to a new place. Returns the same object when nothing
+// changed or the message is bad (an index outside the list, a broken position).
+export function applyPlace(q: SavedQueue, raw: unknown): SavedQueue {
+  if (!isObject(raw) || !q.items.length) return q
+  const { index, pos } = raw
+  if (typeof index !== 'number' || !Number.isInteger(index)) return q
+  if (index < 0 || index >= q.items.length) return q
+  if (typeof pos !== 'number' || !Number.isFinite(pos) || pos < 0) return q
+  if (index === q.index && pos === q.pos) return q
+  return { ...q, index, pos }
+}

@@ -38,6 +38,16 @@ export function parsePlaylists(raw: unknown): Playlist[] {
   return out
 }
 
+// True when the next save would write the file back as it is. Anything else (a
+// newer version, a playlist this version drops) is copied before it is replaced.
+export function isKnownPlaylistsFile(raw: unknown): boolean {
+  if (!isObject(raw) || raw.version !== 1 || !Array.isArray(raw.playlists)) return false
+  const again = playlistsFile(parsePlaylists(raw))
+  return (
+    JSON.stringify(again) === JSON.stringify({ version: raw.version, playlists: raw.playlists })
+  )
+}
+
 // What the file holds.
 export function playlistsFile(list: Playlist[]): { version: 1; playlists: Playlist[] } {
   return { version: 1, playlists: list }

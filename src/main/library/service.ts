@@ -152,6 +152,12 @@ export class LibraryService {
 
   // A scan already running stops; what it read stays.
   scan(): void {
+    // The folder list on disk is unknown, and a scan of the defaults (no
+    // folders) would empty the index and delete the covers.
+    if (!this.store.readable) {
+      console.error('Library: settings.json could not be read, so the folders are not scanned')
+      return
+    }
     this.#post({ type: 'scan', folders: this.store.get().folders })
   }
 

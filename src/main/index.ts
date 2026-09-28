@@ -65,7 +65,7 @@ ipcMain.handle(PlaylistChannel.load, () => playlists.get())
 ipcMain.on(PlaylistChannel.save, (_, raw: unknown) => playlists.setFromPage(raw))
 ipcMain.handle(PlaybackChannel.loadQueue, () => savedQueue.get())
 ipcMain.on(PlaybackChannel.saveQueue, (_, raw: unknown) => savedQueue.setFromPage(raw))
-ipcMain.on(PlaybackChannel.savePos, (_, raw: unknown) => savedQueue.setPos(raw))
+ipcMain.on(PlaybackChannel.savePlace, (_, raw: unknown) => savedQueue.setPlace(raw))
 ipcMain.on(PlaybackChannel.log, (_, text: unknown) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
 })

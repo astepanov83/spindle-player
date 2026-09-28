@@ -62,12 +62,16 @@ class QueueStore {
     })
   }
 
+  // The list can hold 50k ids, so it goes to main only when it changes.
+  // A new current song alone goes with the position.
   #set(s: QueueState): void {
-    const changed = s.items !== this.items || s.index !== this.index || s.from !== this.from
+    const listChanged = s.items !== this.items || s.from !== this.from
+    const indexChanged = s.index !== this.index
     this.items = s.items
     this.index = s.index
     this.from = s.from
-    if (changed) this.#saveList()
+    if (listChanged) this.#saveList()
+    else if (indexChanged) this.savePos()
   }
 
   // Loads the current song at `at` seconds, and plays it if `andPlay`.
@@ -224,9 +228,10 @@ class QueueStore {
     window.playbackApi.saveQueue({ ...this.#state(), pos: player.pos })
   }
 
+  // The current song and position, without the list.
   savePos(): void {
     this.#savedPos = player.pos
-    window.playbackApi.savePos(player.pos)
+    window.playbackApi.savePlace({ index: this.index, pos: player.pos })
   }
 }
 

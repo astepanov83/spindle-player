@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { defaultSettings, pageSettings, parseStoredSettings } from './settings'
+import {
+  defaultSettings,
+  isKnownSettingsFile,
+  pageSettings,
+  parseStoredSettings,
+  type StoredSettings
+} from './settings'
 
 const defaults = { ...defaultSettings(), windowSizes: {}, folders: [] }
 
@@ -97,5 +103,62 @@ describe('pageSettings', () => {
     expect(page).toEqual(defaultSettings())
     page.queue.studio = 'col'
     expect(stored.queue.studio).toBe('tab')
+  })
+})
+
+describe('parseStoredSettings with a base', () => {
+  const current: StoredSettings = {
+    template: 'focus',
+    queue: { studio: 'col', classic: 'col', focus: 'drawer' },
+    visualizer: 'wave',
+    theme: 'light',
+    volume: 35,
+    windowSizes: { focus: { width: 500, height: 700 } },
+    folders: ['/m']
+  }
+
+  it('keeps the current value of each bad field, not the default', () => {
+    const s = parseStoredSettings(
+      {
+        template: 'mini',
+        queue: { studio: 'tab', focus: 9 },
+        visualizer: 1,
+        theme: 'dark',
+        volume: 'x'
+      },
+      current
+    )
+    expect(s).toEqual({ ...current, theme: 'dark', queue: { ...current.queue, studio: 'tab' } })
+  })
+
+  it('gives the base for junk', () => {
+    expect(parseStoredSettings('junk', current)).toEqual(current)
+  })
+})
+
+describe('isKnownSettingsFile', () => {
+  it('knows a good file, a partial one and an empty one', () => {
+    expect(isKnownSettingsFile({})).toBe(true)
+    expect(isKnownSettingsFile({ theme: 'dark', folders: ['/m', '/n'] })).toBe(true)
+    expect(isKnownSettingsFile({ ...defaultSettings(), windowSizes: {}, folders: [] })).toBe(true)
+  })
+
+  it('does not know a file the next save would lose something from', () => {
+    for (const raw of [
+      [],
+      'x',
+      null,
+      { theme: 'blue' },
+      { template: 'mini' },
+      { visualizer: 'bars' },
+      { volume: '50' },
+      { queue: [] },
+      { windowSizes: 'big' },
+      { folders: '/m' },
+      { folders: ['relative/path'] },
+      { folders: ['/m', 7] },
+      { eq: [1, 2] }
+    ])
+      expect(isKnownSettingsFile(raw)).toBe(false)
   })
 })

@@ -80,7 +80,7 @@ const playlistsApi: PlaylistsApi = {
 const playbackApi: PlaybackApi = {
   loadQueue: () => savedQueue,
   saveQueue: (q) => ipcRenderer.send(PlaybackChannel.saveQueue, q),
-  savePos: (pos) => ipcRenderer.send(PlaybackChannel.savePos, pos),
+  savePlace: (place) => ipcRenderer.send(PlaybackChannel.savePlace, place),
   log: (text) => ipcRenderer.send(PlaybackChannel.log, text)
 }
 

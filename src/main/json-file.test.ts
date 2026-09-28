@@ -1,8 +1,15 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { JsonFileWriter, readJsonFile, writeJsonFile, writeJsonFileSync } from './json-file'
+import {
+  JsonFileWriter,
+  openJsonFile,
+  readJsonFile,
+  removeStrayTmp,
+  writeJsonFile,
+  writeJsonFileSync
+} from './json-file'
 
 let dir: string
 let file: string
@@ -13,6 +20,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -25,6 +33,74 @@ describe('readJsonFile', () => {
     expect(readJsonFile(file).kind).toBe('broken')
     writeFileSync(file, '{"theme": "dark"}')
     expect(readJsonFile(file)).toEqual({ kind: 'ok', value: { theme: 'dark' } })
+  })
+})
+
+describe('readJsonFile errors', () => {
+  it('calls a file it cannot read unreadable, not broken', () => {
+    mkdirSync(file)
+    expect(readJsonFile(file).kind).toBe('unreadable')
+  })
+})
+
+describe('openJsonFile', () => {
+  const known = (v: unknown): boolean => (v as { version?: number }).version === 1
+  const quiet = (): void => void vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  it('reads a good file and a missing one', () => {
+    expect(openJsonFile(file, 'Test', known)).toEqual({ value: undefined, canWrite: true })
+    writeFileSync(file, '{"version":1}')
+    expect(openJsonFile(file, 'Test', known)).toEqual({ value: { version: 1 }, canWrite: true })
+    expect(readdirSync(dir)).toEqual(['settings.json'])
+  })
+
+  it('never lets a file it could not read be written', () => {
+    quiet()
+    mkdirSync(file)
+    expect(openJsonFile(file, 'Test', known)).toEqual({ value: undefined, canWrite: false })
+  })
+
+  it('keeps a copy of a file that is not JSON', () => {
+    quiet()
+    writeFileSync(file, '{"vers')
+    expect(openJsonFile(file, 'Test', known)).toEqual({ value: undefined, canWrite: true })
+    expect(readFileSync(`${file}.broken`, 'utf8')).toBe('{"vers')
+  })
+
+  it('keeps a copy of JSON in a shape or version it does not know', () => {
+    quiet()
+    writeFileSync(file, '{"version":2}')
+    expect(openJsonFile(file, 'Test', known)).toEqual({ value: { version: 2 }, canWrite: true })
+    expect(readFileSync(`${file}.unknown`, 'utf8')).toBe('{"version":2}')
+  })
+
+  it('does not write a file whose copy could not be made', () => {
+    quiet()
+    writeFileSync(file, '{"version":2}')
+    // the copy's name is taken by a folder, so the copy fails
+    mkdirSync(`${file}.unknown`)
+    expect(openJsonFile(file, 'Test', known).canWrite).toBe(false)
+  })
+})
+
+describe('removeStrayTmp', () => {
+  it('removes temp files of that file only', () => {
+    for (const n of [
+      'settings.json',
+      'settings.json.12.3.tmp',
+      'settings.json.broken',
+      'queue.json.1.1.tmp',
+      'other.tmp'
+    ])
+      writeFileSync(join(dir, n), '')
+    removeStrayTmp(file)
+    expect(readdirSync(dir).sort()).toEqual([
+      'other.tmp',
+      'queue.json.1.1.tmp',
+      'settings.json',
+      'settings.json.broken'
+    ])
+    removeStrayTmp(join(dir, 'no', 'such.json'))
   })
 })
 

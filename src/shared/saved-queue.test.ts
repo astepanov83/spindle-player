@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emptyQueue, parseSavedQueue } from './saved-queue'
+import { applyPlace, emptyQueue, isKnownQueueFile, parseSavedQueue } from './saved-queue'
 
 describe('parseSavedQueue', () => {
   it('gives an empty queue for no file or a wrong one', () => {
@@ -25,5 +25,39 @@ describe('parseSavedQueue', () => {
 
   it('drops ids that are not strings', () => {
     expect(parseSavedQueue({ items: ['a', 3, '', 'b'] }).items).toEqual(['a', 'b'])
+  })
+})
+
+describe('applyPlace', () => {
+  const q = { items: ['a', 'b', 'c'], index: 0, from: 'X', pos: 3 }
+
+  it('moves to a new song and position, keeping the list', () => {
+    const next = applyPlace(q, { index: 2, pos: 0 })
+    expect(next).toEqual({ ...q, index: 2, pos: 0 })
+    expect(next.items).toBe(q.items)
+  })
+
+  it('returns the same queue for no change or a bad message', () => {
+    for (const raw of [
+      { index: 0, pos: 3 },
+      { index: 3, pos: 0 },
+      { index: -1, pos: 0 },
+      { index: 1.5, pos: 0 },
+      { index: 1, pos: -1 },
+      { index: 1, pos: NaN },
+      { index: 1 },
+      5,
+      null
+    ])
+      expect(applyPlace(q, raw)).toBe(q)
+    expect(applyPlace(emptyQueue(), { index: 0, pos: 1 })).toEqual(emptyQueue())
+  })
+})
+
+describe('isKnownQueueFile', () => {
+  it('knows any object with a list', () => {
+    expect(isKnownQueueFile({ items: [] })).toBe(true)
+    expect(isKnownQueueFile({ items: 'a' })).toBe(false)
+    expect(isKnownQueueFile([])).toBe(false)
   })
 })

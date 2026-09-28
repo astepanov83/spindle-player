@@ -11,7 +11,8 @@
 //
 // Needs git and GNU tar. Not run by npm install: it downloads about 100 MB.
 // Writes ffmpeg-source/ (git-ignored): files/ holds each download, and
-// ffmpeg-7.0.2-linux-x64-source.tar is the archive to publish.
+// ffmpeg-7.0.2-linux-x64-source.tar (about 170 MB) is the archive to publish.
+// It holds a copy of SOURCE.txt, so run this again after its link is filled in.
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- plain JS, run by node */
 import { spawnSync } from 'child_process'
 import { createHash } from 'crypto'
@@ -53,9 +54,10 @@ const sources = [
   {
     what: 'libaom 3.2.0-393-g402e264b94',
     how: 'exact',
-    file: 'aom-402e264b94fd.tar.gz',
+    file: 'aom-402e264b94fd.tar',
     git: 'https://aomedia.googlesource.com/aom',
-    commit: '402e264b94fd74bdf66837da216b6251805b4ae4'
+    commit: '402e264b94fd74bdf66837da216b6251805b4ae4',
+    sha256: '286eb0c08bc26ea5b01ad3adcd9cecd3c1fc1370586e4255157afe7315162395'
   },
   {
     what: 'libass 0.17.3',
@@ -81,9 +83,10 @@ const sources = [
   {
     what: 'libvpx 1.11.0-30-g888bafc78',
     how: 'exact',
-    file: 'libvpx-888bafc78d8b.tar.gz',
+    file: 'libvpx-888bafc78d8b.tar',
     git: 'https://chromium.googlesource.com/webm/libvpx',
-    commit: '888bafc78d8bddb5cfc4262c93f456c812763571'
+    commit: '888bafc78d8bddb5cfc4262c93f456c812763571',
+    sha256: '6a319f0bc7fd16b996c6ff753482102b6a88ebe43d63f0169719f684197f4ea6'
   },
   {
     what: 'libvmaf 2.3.0',
@@ -95,16 +98,18 @@ const sources = [
   {
     what: 'libx264 0.164.3191 (commit 3191 of x264)',
     how: 'exact',
-    file: 'x264-4613ac3c15fd.tar.gz',
+    file: 'x264-4613ac3c15fd.tar',
     git: 'https://code.videolan.org/videolan/x264.git',
-    commit: '4613ac3c15fd75cebc4b9f65b7fb95e70a3acce1'
+    commit: '4613ac3c15fd75cebc4b9f65b7fb95e70a3acce1',
+    sha256: '27b3720a366399c8864719b9cd92ee132fbd5b51976824bab4a9bd17fe904d95'
   },
   {
     what: 'libx265 3.5+1-f0c1022b6',
     how: 'exact',
-    file: 'x265-f0c1022b6be1.tar.gz',
+    file: 'x265-f0c1022b6be1.tar',
     git: 'https://bitbucket.org/multicoreware/x265_git.git',
-    commit: 'f0c1022b6be121a753ff02853fbe33da71988656'
+    commit: 'f0c1022b6be121a753ff02853fbe33da71988656',
+    sha256: '9c504f4d116835a2e393e693d330efae79e2389ca4718fa58bd0da2836f7f75e'
   },
   {
     what: 'libxvid 1.3.7',
@@ -153,9 +158,10 @@ const sources = [
     // configure.ac there says 1.2.0alpha1+git
     what: 'libtheora 1.2.0alpha1+git',
     how: 'likely',
-    file: 'theora-7180717276af.tar.gz',
+    file: 'theora-7180717276af.tar',
     git: 'https://gitlab.xiph.org/xiph/theora.git',
-    commit: '7180717276af1ebc7da15c83162d6c5d6203aabf'
+    commit: '7180717276af1ebc7da15c83162d6c5d6203aabf',
+    sha256: '3331c6db8823d04aa776e38f8f3bd89d04aa98c6c71e97239ad3c095efa4b115'
   },
   {
     what: 'libfrei0r 1.6.1-2 (Debian source package, headers only: plugins load at run time)',
@@ -407,12 +413,15 @@ function tool(bin, args, opts = {}) {
   return r.stdout
 }
 
+// a stalled server must not hang the script for ever
+const fetchTimeoutMs = 5 * 60 * 1000
+
 async function download(s, path) {
   let body
   // some of these servers are slow or drop a download now and then
   for (let tries = 1; !body; tries++) {
     try {
-      const res = await fetch(s.url)
+      const res = await fetch(s.url, { signal: AbortSignal.timeout(fetchTimeoutMs) })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       body = Buffer.from(await res.arrayBuffer())
     } catch (e) {
@@ -425,48 +434,58 @@ async function download(s, path) {
   renameSync(`${path}.tmp`, path)
 }
 
-// A git commit's files as a .tar.gz. The commit id is the check: git
-// verifies every object it fetches against its hash.
+// A git commit's files as a plain .tar. git checks every object it fetches
+// against its hash, so the commit id is the real check; the tar's sha256 is
+// pinned too, so a snapshot already on disk can be checked like a download.
+// git archive's output has been stable for years; a newer git that writes
+// other bytes fails here, and the hash then needs a look.
 function gitArchive(s, path) {
   const repo = join(outDir, 'git-tmp')
   rmSync(repo, { recursive: true, force: true })
   tool('git', ['init', '-q', '--bare', repo])
+  // the project's own .gitattributes could leave files out or rewrite them
+  writeFileSync(join(repo, 'info', 'attributes'), '* -export-ignore -export-subst\n')
   tool('git', ['-C', repo, 'fetch', '-q', '--depth', '1', s.git, s.commit])
   const got = tool('git', ['-C', repo, 'rev-parse', 'FETCH_HEAD']).toString().trim()
   if (got !== s.commit) fail(`${s.git} gave ${got}, not ${s.commit}`)
-  const prefix = s.file.replace(/\.tar\.gz$/, '')
+  const prefix = s.file.replace(/\.tar$/, '')
   tool('git', [
     '-C',
     repo,
     'archive',
-    '--format=tar.gz',
+    '--format=tar',
     `--prefix=${prefix}/`,
     `--output=${path}.tmp`,
     s.commit
   ])
-  renameSync(`${path}.tmp`, path)
   rmSync(repo, { recursive: true, force: true })
+  const sum = sha256(readFileSync(`${path}.tmp`))
+  if (sum !== s.sha256)
+    fail(`${s.file} (commit checked) has sha256 ${sum}, not the pinned ${s.sha256}`)
+  renameSync(`${path}.tmp`, path)
 }
 
 mkdirSync(filesDir, { recursive: true })
 const hashes = new Map()
 for (const s of sources) {
   const path = join(filesDir, s.file)
-  const have = existsSync(path)
-  if (s.git) {
-    if (!have) gitArchive(s, path)
-  } else if (!have || sha256(readFileSync(path)) !== s.sha256) await download(s, path)
-  hashes.set(s.file, sha256(readFileSync(path)))
-  if (!have) console.log(`fetch-ffmpeg-source: ${s.file}`)
+  const good = existsSync(path) && sha256(readFileSync(path)) === s.sha256
+  if (!good) {
+    if (s.git) gitArchive(s, path)
+    else await download(s, path)
+    console.log(`fetch-ffmpeg-source: ${s.file}`)
+  }
+  hashes.set(s.file, s.sha256)
 }
 
 // The build's own README.txt and LICENSE.txt, and the written offer
 const ffmpegDir = join(root, 'resources', 'ffmpeg')
-for (const [name, as] of [
+const extras = [
   ['README.txt', 'BUILD-README.txt'],
   ['LICENSE.txt', 'LICENSE.txt'],
   ['SOURCE.txt', 'SOURCE.txt']
-]) {
+]
+for (const [name, as] of extras) {
   if (!existsSync(join(ffmpegDir, name)))
     fail(`resources/ffmpeg/${name} is missing (run npm run fetch-ffmpeg)`)
   copyFileSync(join(ffmpegDir, name), join(filesDir, as))
@@ -523,7 +542,11 @@ tool('tar', [
   '--transform=s,^\\.,ffmpeg-7.0.2-linux-x64-source,',
   '-C',
   filesDir,
-  '.'
+  '--',
+  // only these files: anything else left in files/ stays out
+  ...['SOURCES.txt', ...extras.map(([, as]) => as), ...sources.map((s) => s.file)].map(
+    (f) => `./${f}`
+  )
 ])
 renameSync(`${archive}.tmp`, archive)
 const sum = sha256(readFileSync(archive))

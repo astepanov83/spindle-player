@@ -4,7 +4,7 @@
 // never blocks it. Its own process means its own libuv pool: slow NAS reads here
 // can't hold up main's audio requests and saves.
 import { hash } from 'crypto'
-import { readdir, readFile, realpath, rm, stat } from 'fs/promises'
+import { readdir, readFile, rm, stat } from 'fs/promises'
 import { basename, dirname, join } from 'path'
 import type { ScanStatus } from '../../shared/library'
 import { JsonFileWriter, readJsonFile } from '../json-file'
@@ -30,7 +30,8 @@ import {
   serializeIndex,
   usedCovers
 } from './merge'
-import { extOf, frontCover, isAudioFile, isCueFile, normalizeTags, pickFolderImage } from './tags'
+import { extOf, frontCover, normalizeTags } from './tags'
+import { walk } from './walk'
 import {
   readerVersion,
   type CueEntry,
@@ -274,67 +275,6 @@ function checkGen(gen: number): void {
   if (gen !== scanGen) throw new Stopped()
 }
 
-interface Listing {
-  files: string[]
-  cues: string[]
-  images: string[]
-  skipped: string[]
-}
-
-async function walk(roots: string[], gen: number): Promise<Listing> {
-  const out: Listing = { files: [], cues: [], images: [], skipped: [] }
-  const seenFiles = new Set<string>()
-  // real paths, so a symlink loop is walked once
-  const seenDirs = new Set<string>()
-  let queue = [...roots]
-  while (queue.length) {
-    const next: string[] = []
-    await eachPaced(queue, dirPace, async (dir) => {
-      checkGen(gen)
-      let entries
-      try {
-        const real = await realpath(dir)
-        if (seenDirs.has(real)) return
-        seenDirs.add(real)
-        entries = await readdir(dir, { withFileTypes: true })
-      } catch {
-        out.skipped.push(dir)
-        return
-      }
-      const names: string[] = []
-      for (const d of entries) {
-        if (d.name.startsWith('.')) continue
-        const path = join(dir, d.name)
-        let isDir = d.isDirectory()
-        let isFile = d.isFile()
-        if (d.isSymbolicLink()) {
-          try {
-            const s = await stat(path)
-            isDir = s.isDirectory()
-            isFile = s.isFile()
-          } catch {
-            continue
-          }
-        }
-        if (isDir) next.push(path)
-        else if (isFile) {
-          names.push(d.name)
-          const audio = isAudioFile(d.name)
-          if ((audio || isCueFile(d.name)) && !seenFiles.has(path)) {
-            seenFiles.add(path)
-            ;(audio ? out.files : out.cues).push(path)
-          }
-        }
-      }
-      const image = pickFolderImage(names)
-      if (image) out.images.push(join(dir, image))
-      progress('walk', out.files.length, 0)
-    })
-    queue = next
-  }
-  return out
-}
-
 async function readFileEntry(
   path: string,
   mtime: number,
@@ -417,7 +357,12 @@ async function scan(folders: string[], retryFailed: boolean, gen: number): Promi
     setStatus({ folders, phase: 'walk', done: 0, total: 0, missing: [] })
     scannedDevs = await devicesOf(folders)
     setPace()
-    const listing = await walk(folders, gen)
+    const listing = await walk(
+      folders,
+      dirPace,
+      () => checkGen(gen),
+      (files) => progress('walk', files, 0)
+    )
     lap()
     progress('walk', listing.files.length, 0, true)
 

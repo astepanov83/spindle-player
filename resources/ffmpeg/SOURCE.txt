@@ -16,40 +16,42 @@ libraries built into it.
 Where to get the source
 -----------------------
 
-The Corresponding Source for these two programs, as far as it can be found
-(see "What is not included" below), is one archive:
+The source we have for these two programs is one archive,
 
     ffmpeg-7.0.2-linux-x64-source.tar
 
-It is published next to each Spindle release that ships these programs:
+published in the same place as each Spindle release that ships them, and
+kept there for as long as that release is offered:
 
     <SOURCE ARCHIVE URL: put the release download link here before publishing>
 
-The archive holds the FFmpeg 7.0.2 source, the source of each library linked
-into the build, the build's configure line, and SOURCES.txt, which says where
-each file came from and gives its sha256.
+It holds the FFmpeg 7.0.2 source, the source of each library linked into the
+build whose version is known, the build's configure line, and SOURCES.txt,
+which says where each file came from, how sure we are that it is what was
+built, and its sha256.
+
+
+What is not in it
+-----------------
+
+This is not the full Corresponding Source the GPL describes, because not all
+of it is public. John Van Sickle's build scripts are not published, and the
+build does not record the versions of a few libraries linked into it: GMP,
+Nettle, libtasn1, Fontconfig, libogg, and the GNU C Library (linked
+statically). For libtheora and libvidstab the version is known but not the
+exact commit; the archive holds the most likely one and says so. Some
+libraries may have been built with Debian's patches, which the archive
+does not have. SOURCES.txt lists each case.
 
 
 Written offer
 -------------
 
-For at least three years after the last time we distribute a version of
-Spindle that includes these programs, we will give anyone who has a copy of
-them a copy of the Corresponding Source, either as access to copy it from a
-network server at no charge, or on a physical medium customarily used for
-software interchange for no more than the reasonable cost of physically
-making and sending that copy.
+For at least three years after we last distribute a Spindle release that
+includes these programs, we will give anyone who has a copy of them the
+source listed in SOURCES.txt, at no charge, by download. If we find the
+missing parts, we will add them.
 
 To ask for it, open an issue at
 https://github.com/astepanov83/spindle-player/issues
 and say which Spindle version you have.
-
-
-What is not included
---------------------
-
-John Van Sickle's build scripts are not published, and the build does not
-record the versions of a few libraries linked into it: GMP, Nettle, libtasn1,
-Fontconfig, libogg, and the GNU C Library (linked statically). For libtheora
-and libvidstab the version is known but not the exact commit; the archive
-holds the most likely one and says so. SOURCES.txt lists each case.

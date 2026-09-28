@@ -63,6 +63,8 @@ The packaged app also ships ffmpeg and ffprobe as separate programs, which Spind
 
 ### Source for ffmpeg and ffprobe
 
-The GPL asks that anyone who gets these programs can also get their source. [`resources/ffmpeg/SOURCE.txt`](resources/ffmpeg/SOURCE.txt) says where it is (an archive next to each release), with a written offer to provide it for at least three years. It is shipped next to the programs.
+The GPL asks that anyone who gets these programs can also get their source. [`resources/ffmpeg/SOURCE.txt`](resources/ffmpeg/SOURCE.txt), shipped next to the programs, says where it is: an archive published with each release, kept as long as that release is. It also has a written offer to provide that archive for at least three years. The archive is not the full Corresponding Source: the build's own scripts are not public, and a few linked libraries have no known version. `SOURCE.txt` says so.
 
-`node scripts/fetch-ffmpeg-source.mjs` makes that archive: it downloads the FFmpeg 7.0.2 source and the source of each library linked into the build (about 100 MB, needs git and GNU tar), checks each file's sha256 or git commit, and packs them into `ffmpeg-source/ffmpeg-7.0.2-linux-x64-source.tar`. Attach that file to the release and put its link in `SOURCE.txt` before publishing. `SOURCES.txt` in the archive lists what each file is, and the few libraries whose exact version the build does not record.
+`node scripts/fetch-ffmpeg-source.mjs` makes that archive. It downloads the FFmpeg 7.0.2 source and the source of each library linked into the build whose version is known (about 100 MB, needs git and GNU tar), checks each file's sha256 and each git snapshot's commit, and packs them into `ffmpeg-source/ffmpeg-7.0.2-linux-x64-source.tar` (about 170 MB). `SOURCES.txt` in the archive lists what each file is, and what is missing.
+
+To publish: put the archive's release link in `SOURCE.txt`, then run the script again (the archive holds a copy of `SOURCE.txt`), and attach the new archive to the release.

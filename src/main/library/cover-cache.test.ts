@@ -1,0 +1,122 @@
+// CoverCache with a fake hidden window: what happens when a send throws, when
+// the window never loads, and after the app window closed.
+import { mkdtempSync, readdirSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const fake = vi.hoisted(() => ({
+  windows: [] as FakeWindow[],
+  // how the next window's load goes
+  load: 'ok' as 'ok' | 'hang',
+  sendThrows: false,
+  onDone: undefined as undefined | ((e: unknown, r: unknown) => void)
+}))
+
+interface FakeWindow {
+  destroyed: boolean
+  sent: { id: number }[]
+  webContents: unknown
+}
+
+vi.mock('electron', () => {
+  class BrowserWindow {
+    destroyed = false
+    sent: { id: number }[] = []
+    webContents = {
+      on: () => {},
+      setWindowOpenHandler: () => {},
+      send: (_: string, job: { id: number }) => {
+        if (fake.sendThrows) throw new Error('send failed')
+        this.sent.push(job)
+      }
+    }
+    constructor() {
+      fake.windows.push(this)
+    }
+    on(): this {
+      return this
+    }
+    isDestroyed(): boolean {
+      return this.destroyed
+    }
+    destroy(): void {
+      this.destroyed = true
+    }
+    loadURL(): Promise<void> {
+      return fake.load === 'ok' ? Promise.resolve() : new Promise(() => {})
+    }
+  }
+  return {
+    BrowserWindow,
+    ipcMain: { on: (_: string, fn: (e: unknown, r: unknown) => void) => (fake.onDone = fn) }
+  }
+})
+
+const { CoverCache } = await import('./cover-cache')
+
+let dir: string
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'spindle-covers-'))
+  fake.windows = []
+  fake.load = 'ok'
+  fake.sendThrows = false
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+})
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+  rmSync(dir, { recursive: true, force: true })
+})
+
+const hash = 'a'.repeat(40)
+const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
+
+describe('CoverCache', () => {
+  it('ends a job as retry when the send throws, and keeps the window', async () => {
+    vi.useFakeTimers()
+    const covers = new CoverCache(dir, 'preload.js')
+    fake.sendThrows = true
+    const done = covers.add(hash, new Uint8Array([1]))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(await done).toEqual({ result: 'retry' })
+    // the job's 20s timeout must not fire later and drop a window that is fine
+    await vi.advanceTimersByTimeAsync(25000)
+    expect(fake.windows).toHaveLength(1)
+    expect(fake.windows[0].destroyed).toBe(false)
+    covers.close()
+  })
+
+  it('drops a window whose load hangs, and makes a new one for the next job', async () => {
+    vi.useFakeTimers()
+    const covers = new CoverCache(dir, 'preload.js')
+    fake.load = 'hang'
+    const first = covers.add(hash, new Uint8Array([1]))
+    await vi.advanceTimersByTimeAsync(11000)
+    expect(await first).toEqual({ result: 'retry' })
+    expect(fake.windows[0].destroyed).toBe(true)
+    fake.load = 'ok'
+    const second = covers.palette(hash, new Uint8Array([1]))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.windows).toHaveLength(2)
+    const job = fake.windows[1].sent[0]
+    fake.onDone!({ sender: fake.windows[1].webContents }, { id: job.id, bad: true })
+    expect(await second).toEqual({ result: 'rebuild' })
+    covers.close()
+  })
+
+  it('opens no window after the app window closed, until allowed again', async () => {
+    const covers = new CoverCache(dir, 'preload.js')
+    covers.shutDown()
+    expect(await covers.add(hash, new Uint8Array([1]))).toEqual({ result: 'retry' })
+    expect(await covers.large(hash, async () => new Uint8Array([1]))).toBeUndefined()
+    expect(fake.windows).toHaveLength(0)
+    expect(readdirSync(dir)).toEqual([])
+    covers.allow()
+    const p = covers.palette(hash, new Uint8Array([1]))
+    await tick()
+    expect(fake.windows).toHaveLength(1)
+    covers.close()
+    expect(await p).toEqual({ result: 'retry' })
+  })
+})

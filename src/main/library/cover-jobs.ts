@@ -57,3 +57,21 @@ export class PendingJobs {
     for (const id of [...this.#jobs.keys()]) this.settle(id, { kind: 'retry' })
   }
 }
+
+// Rejects if `p` hasn't settled after `ms`, so a window load that hangs doesn't
+// hold every cover job behind it.
+export function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${what} took over ${ms} ms`)), ms)
+    p.then(
+      (v) => {
+        clearTimeout(timer)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(timer)
+        reject(e)
+      }
+    )
+  })
+}

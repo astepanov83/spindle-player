@@ -15,7 +15,7 @@ import { BrowserWindow, ipcMain } from 'electron'
 import { CoverChannel, type CoverJob, type CoverResult } from '../../shared/cover-job'
 import type { ThemePalettes } from '../../shared/palette'
 import { blockNavigation } from '../web-guard'
-import { outcomeOf, PendingJobs, type Outcome } from './cover-jobs'
+import { outcomeOf, PendingJobs, withTimeout, type Outcome } from './cover-jobs'
 
 export const smallSide = 320
 export const largeSide = 1000
@@ -26,12 +26,20 @@ const idleMs = 30000
 // A job with no answer after this long ends as "retry", and the window is dropped.
 // A 3000px picture takes well under a second.
 const jobTimeoutMs = 20000
+// An empty page loads in a few ms; one that hangs is dropped and made again on the next job.
+const loadTimeoutMs = 10000
 
 // What a job for the library worker ended as. rebuild: the cached small cover
 // can't be decoded and was deleted, so the next scan makes it again from the source.
 export interface CoverDone {
   result: 'ok' | 'bad' | 'retry' | 'rebuild'
   palette?: ThemePalettes
+}
+
+class ShutDown extends Error {
+  constructor() {
+    super('covers are shut down')
+  }
 }
 
 export function isCoverHash(s: string): boolean {
@@ -55,6 +63,9 @@ export class CoverCache {
   #nextId = 0
   #idle: ReturnType<typeof setTimeout> | undefined
   #large = new Map<string, Promise<string | undefined>>()
+  // Set when the app window closed: no new hidden window may open, or it would
+  // keep the app running with no window to show.
+  #shutDown = false
 
   constructor(
     readonly dir: string,
@@ -73,6 +84,7 @@ export class CoverCache {
 
   // The hidden window, made on first use and again after it closed, crashed or failed to load.
   #window(): Promise<BrowserWindow> {
+    if (this.#shutDown) return Promise.reject(new ShutDown())
     const win0 = this.#win
     if (win0 && !win0.isDestroyed() && this.#loaded) return this.#loaded.then(() => win0)
     const win = new BrowserWindow({
@@ -99,7 +111,7 @@ export class CoverCache {
     win.webContents.on('render-process-gone', (_, d) => {
       if (this.#win === win) this.#drop(`the cover window stopped (${d.reason})`)
     })
-    const loaded = win.loadURL('about:blank')
+    const loaded = withTimeout(win.loadURL('about:blank'), loadTimeoutMs, 'The cover window load')
     this.#loaded = loaded
     // a failed load is not kept: the next job makes a new window
     loaded.catch(() => {
@@ -129,11 +141,17 @@ export class CoverCache {
       const id = ++this.#nextId
       const result = this.#jobs.wait(id)
       const job: CoverJob = { id, data, ...want }
-      win.webContents.send(CoverChannel.job, job)
+      try {
+        win.webContents.send(CoverChannel.job, job)
+      } catch (e) {
+        // settled now, so its timeout can't later drop a window that is fine
+        this.#jobs.settle(id, { kind: 'retry' })
+        throw e
+      }
       return await result
     } catch (e) {
       // the window went away or never loaded: nothing is known about the picture
-      console.error('Could not resize a cover', e)
+      if (!(e instanceof ShutDown)) console.error('Could not resize a cover', e)
       return { kind: 'retry' }
     } finally {
       this.#running--
@@ -207,6 +225,17 @@ export class CoverCache {
       console.error('Could not make a large cover', e)
       return undefined
     }
+  }
+
+  // The app window closed: close the hidden window and open no new one until
+  // allow() (macOS keeps the app running and can make a new app window).
+  shutDown(): void {
+    this.#shutDown = true
+    this.close()
+  }
+
+  allow(): void {
+    this.#shutDown = false
   }
 
   close(): void {

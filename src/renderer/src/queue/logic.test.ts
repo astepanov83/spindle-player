@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { advance, afterFailure, back, jump, onEnded, prune, type QueueState } from './logic'
+import type { Track } from '../../../shared/library'
+import {
+  advance,
+  afterFailure,
+  back,
+  follows,
+  jump,
+  onEnded,
+  prune,
+  type QueueState
+} from './logic'
 
 const q = (index: number, items = ['a/0', 'a/1', 'a/2']): QueueState => ({
   items,
@@ -141,5 +151,35 @@ describe('afterFailure', () => {
   it('stops once a short queue has failed all the way round', () => {
     expect(afterFailure(3, 3)).toBe('skip')
     expect(afterFailure(4, 3)).toBe('stop')
+  })
+})
+
+describe('follows', () => {
+  const t = (id: string, part?: Track['part']): Track => ({
+    id,
+    title: id,
+    duration: 1,
+    albumId: 'a',
+    artist: '',
+    album: '',
+    no: 1,
+    disc: 1,
+    codec: '',
+    ...(part ? { part } : {})
+  })
+
+  it('is true for the next stretch of the same file', () => {
+    expect(
+      follows(t('1', { file: 'f', start: 0, end: 10.5 }), t('2', { file: 'f', start: 10.5 }))
+    ).toBe(true)
+  })
+
+  it('is false for a gap, another file, the last track, or whole files', () => {
+    const a = t('1', { file: 'f', start: 0, end: 10 })
+    expect(follows(a, t('2', { file: 'f', start: 12, end: 20 }))).toBe(false)
+    expect(follows(a, t('2', { file: 'g', start: 10 }))).toBe(false)
+    expect(follows(t('1', { file: 'f', start: 0 }), t('2', { file: 'f', start: 0 }))).toBe(false)
+    expect(follows(t('1'), t('2'))).toBe(false)
+    expect(follows(undefined, a)).toBe(false)
   })
 })

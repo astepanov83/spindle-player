@@ -1,5 +1,6 @@
 // Queue moves as plain functions. See work/specs/queue.md.
 // stores/queue.svelte.ts plays what they pick.
+import type { Track } from '../../../shared/library'
 
 export interface QueueState {
   items: string[]
@@ -76,4 +77,18 @@ export function prune(q: QueueState, has: (id: string) => boolean): QueueState {
   if (items.length === q.items.length) return q
   if (index < 0) index = Math.max(0, items.length - 1)
   return { ...q, items, index }
+}
+
+// `b` starts where `a` ends in the same file (the next track of a disc image),
+// so playback can run on from one to the other without a reload.
+export function follows(a: Track | undefined, b: Track | undefined): boolean {
+  const pa = a?.part
+  const pb = b?.part
+  return (
+    !!pa &&
+    !!pb &&
+    pa.file === pb.file &&
+    pa.end !== undefined &&
+    Math.abs(pb.start - pa.end) < 0.001
+  )
 }

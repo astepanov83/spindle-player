@@ -7,6 +7,7 @@ import {
   advance,
   afterFailure,
   back,
+  follows,
   jump,
   onEnded,
   prune,
@@ -84,9 +85,19 @@ class QueueStore {
       return
     }
     player.duration = t.duration
-    engine.load(mediaUrl(t.id), at)
+    engine.load(mediaUrl(t.part?.file ?? t.id), at, t.part)
     if (andPlay) play()
     else player.playing = false
+  }
+
+  // The new current song is the next part of the file playing (the next
+  // track of a disc image): the sound goes on, with no reload and no gap.
+  #carryOn(): void {
+    const t = this.current!
+    player.pos = 0
+    player.duration = t.duration
+    engine.continueWith(t.part!)
+    this.savePos()
   }
 
   // Replaces the queue with a list and plays the clicked song.
@@ -132,8 +143,10 @@ class QueueStore {
       engine.seek(0)
       play()
     } else if (step.kind === 'play') {
+      const before = this.current
       this.#set(step.state)
-      this.#start()
+      if (player.playing && follows(before, this.current)) this.#carryOn()
+      else this.#start()
     } else this.#stop()
   }
 

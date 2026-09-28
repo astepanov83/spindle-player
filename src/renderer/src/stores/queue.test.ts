@@ -21,10 +21,12 @@ vi.mock('../audio/engine', () => ({
     get loaded() {
       return fake.loaded
     },
-    load: (url: string) => {
+    load: (url: string, at = 0, part?: { start: number; end?: number }) => {
       fake.loaded = true
-      fake.calls.push(`load ${url}`)
+      fake.calls.push(`load ${url}` + (part ? ` ${part.start}-${part.end ?? 'end'} at ${at}` : ''))
     },
+    continueWith: (part: { start: number; end?: number }) =>
+      fake.calls.push(`continue ${part.start}-${part.end ?? 'end'}`),
     play: () => fake.calls.push('play'),
     pause: () => fake.calls.push('pause'),
     seek: (p: number) => fake.calls.push(`seek ${p}`),
@@ -255,5 +257,75 @@ describe('saving', () => {
     library.load(l)
     queue.prune()
     expect(saveQueue).toHaveBeenLastCalledWith(expect.objectContaining({ index: 1 }))
+  })
+})
+
+// A disc image with a cue sheet: three tracks of one file, then a normal album.
+function imageLib(): LibraryData {
+  const l = lib(['c', 3], ['d', 1])
+  const bounds = [0, 100, 250]
+  l.tracks.forEach((t) => {
+    if (t.albumId !== 'c') return
+    const i = t.no - 1
+    t.part = { file: 'img', start: bounds[i], end: bounds[i + 1] }
+    if (t.part.end === undefined) delete t.part.end
+  })
+  return l
+}
+
+describe('tracks of a disc image', () => {
+  beforeEach(() => {
+    library.load(imageLib())
+    queue.playAlbum('c', 0)
+    fake.reset()
+  })
+
+  it('load the image by its id, at the track', () => {
+    queue.playAlbum('c', 1)
+    expect(fake.calls).toEqual(['load media/img 100-250 at 0', 'play'])
+  })
+
+  it('run on into the next track with no reload', () => {
+    fake.on.ended!()
+    expect(playing()).toBe('c1')
+    expect(fake.calls).toEqual(['continue 100-250'])
+    expect(player.pos).toBe(0)
+    expect(savePlace).toHaveBeenLastCalledWith({ index: 1, pos: 0 })
+  })
+
+  it('load the next album after the last track', () => {
+    queue.jump(2)
+    fake.reset()
+    fake.on.ended!()
+    expect(playing()).toBe('d0')
+    expect(fake.calls).toEqual(['load media/d0', 'play'])
+  })
+
+  it('load when shuffle picks a track that is not the next one', () => {
+    player.shuffle = true
+    queue.jump(2)
+    fake.reset()
+    fake.on.ended!()
+    expect(fake.calls[0]).toMatch(/^load media\/img 0-100|^load media\/img 100-250/)
+  })
+
+  it('replay the track with repeat on', () => {
+    player.repeat = true
+    fake.on.ended!()
+    expect(fake.calls).toEqual(['seek 0', 'play'])
+  })
+
+  it('restart on Previous after 3 seconds of the track, not of the image', () => {
+    queue.jump(1)
+    fake.reset()
+    player.pos = 2
+    queue.prev()
+    expect(playing()).toBe('c0')
+    expect(fake.calls).toEqual(['load media/img 0-100 at 0', 'play'])
+  })
+
+  it('come back at the saved place in the track', () => {
+    queue.restore({ items: ['c0', 'c1', 'c2'], index: 1, from: 'Album c', pos: 30 })
+    expect(fake.calls).toEqual(['load media/img 100-250 at 30'])
   })
 })

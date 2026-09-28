@@ -11,6 +11,7 @@
   import {
     setupMediaSession,
     showInMediaSession,
+    showPositionInMediaSession,
     showStateInMediaSession
   } from './stores/media-session'
   import { togglePlay, player } from './stores/player.svelte'
@@ -42,6 +43,7 @@
   setupMediaSession()
   $effect(() => showInMediaSession(queue.current, queue.currentAlbum))
   $effect(() => showStateInMediaSession())
+  $effect(() => showPositionInMediaSession(player.pos, player.duration))
 
   // Every change goes to main, which saves it and applies the window size and theme.
   $effect(() => {

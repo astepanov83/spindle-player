@@ -38,3 +38,16 @@ export function showStateInMediaSession(): void {
       : 'paused'
     : 'none'
 }
+
+// Without this, Chromium tells the system the element's own time and length,
+// which for a track of a disc image is the whole image.
+export function showPositionInMediaSession(pos: number, duration: number): void {
+  const ms = navigator.mediaSession
+  if (!ms?.setPositionState) return
+  try {
+    if (!queue.current || !(duration > 0)) ms.setPositionState()
+    else ms.setPositionState({ duration, position: Math.min(pos, duration), playbackRate: 1 })
+  } catch {
+    // a bad value must not stop the page; the next update tries again
+  }
+}

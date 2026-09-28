@@ -4,6 +4,11 @@
 //
 // Ticket 008 reads `engine.analyser` from its own requestAnimationFrame loop.
 // Nothing per frame goes through the stores (decision 17).
+//
+// A song can be a part of its file (a CUE sheet's track in a disc image,
+// ticket 012). Times in and out of the engine are then from the part's start,
+// and `ended` comes at the part's end. The next part of the same file carries
+// on without a reload (continueWith), so there is no gap between them.
 
 export type EngineError = {
   // MediaError code: 2 network, 3 decode, 4 format not supported
@@ -14,7 +19,7 @@ export type EngineError = {
 export interface EngineEvents {
   // about 4 times a second while playing, and after a seek
   time(pos: number): void
-  // the file's own length, once known
+  // the song's length from the file, once known
   duration(seconds: number): void
   ended(): void
   // sound is coming out
@@ -30,9 +35,19 @@ export interface EngineEvents {
 import { gain } from './volume'
 
 // Song URLs: main serves indexed files by id (src/main/library/protocol.ts).
-export function mediaUrl(trackId: string): string {
-  return `spindle://media/${trackId}`
+export function mediaUrl(fileId: string): string {
+  return `spindle://media/${fileId}`
 }
+
+// Where a song lies in its file, in seconds; no end: to the end of the file.
+export interface Part {
+  start: number
+  end?: number
+}
+
+const wholeFile: Part = { start: 0 }
+// how close to a part's end counts as there
+const endSlack = 0.005
 
 class AudioEngine {
   readonly el: HTMLAudioElement
@@ -42,8 +57,18 @@ class AudioEngine {
   // levels at any volume. The element itself stays at full volume.
   readonly #gain: GainNode
   #on: Partial<EngineEvents> = {}
-  // where to go once the new file's length is known
+  // where to go once the new file's length is known, in file time
   #startAt = 0
+  // the file loaded, without ?decode
+  #url = ''
+  // main is decoding it with ffmpeg: Chromium could not play it as it is
+  #decoding = false
+  #part: Part = wholeFile
+  // the part's end was reported; not again until it moves or changes
+  #endSent = false
+  #endTimer: ReturnType<typeof setTimeout> | undefined
+  // play() was asked for last, not pause()
+  #wantPlay = false
 
   constructor() {
     const el = new Audio()
@@ -72,27 +97,72 @@ class AudioEngine {
     addEventListener('pointerdown', wake, true)
     addEventListener('keydown', wake, true)
 
-    el.addEventListener('timeupdate', () => this.#on.time?.(el.currentTime))
-    el.addEventListener('durationchange', () => {
-      if (Number.isFinite(el.duration)) this.#on.duration?.(el.duration)
+    el.addEventListener('timeupdate', () => {
+      this.#on.time?.(this.#pos())
+      this.#watchEnd()
     })
+    el.addEventListener('durationchange', () => this.#sendDuration())
     el.addEventListener('loadedmetadata', () => {
       if (this.#startAt > 0) el.currentTime = Math.min(this.#startAt, el.duration || this.#startAt)
       this.#startAt = 0
     })
-    el.addEventListener('ended', () => this.#on.ended?.())
-    el.addEventListener('playing', () => this.#on.playing?.())
+    el.addEventListener('ended', () => {
+      if (!this.#endSent) this.#on.ended?.()
+    })
+    el.addEventListener('playing', () => {
+      this.#on.playing?.()
+      this.#watchEnd()
+    })
     // at the end of a song 'pause' comes just before 'ended'; that one is not a pause
     el.addEventListener('pause', () => {
+      clearTimeout(this.#endTimer)
       if (!el.ended) this.#on.paused?.()
     })
-    el.addEventListener('seeked', () => this.#on.seeked?.())
+    el.addEventListener('seeked', () => {
+      this.#on.seeked?.()
+      this.#watchEnd()
+    })
     el.addEventListener('error', () => {
       // an error with no source is our own clear(), not a bad file
       if (!el.getAttribute('src')) return
       const e = el.error
+      // Chromium can't read it (3 decode, 4 format): once more, decoded by ffmpeg
+      if ((e?.code === 3 || e?.code === 4) && !this.#decoding && this.#url) {
+        this.#decoding = true
+        this.#startAt = this.#startAt || el.currentTime
+        el.src = `${this.#url}?decode`
+        if (this.#wantPlay) this.#playElement()
+        return
+      }
       this.#on.error?.({ code: e?.code ?? 0, message: e?.message ?? '' })
     })
+  }
+
+  // seconds into the part
+  #pos(): number {
+    return Math.max(0, this.el.currentTime - this.#part.start)
+  }
+
+  #sendDuration(): void {
+    const { start, end } = this.#part
+    if (end !== undefined) this.#on.duration?.(end - start)
+    else if (Number.isFinite(this.el.duration)) this.#on.duration?.(this.el.duration - start)
+  }
+
+  // A part that ends before its file does: 'timeupdate' comes only 4 times a
+  // second, so a timer stops it on time.
+  #watchEnd(): void {
+    clearTimeout(this.#endTimer)
+    const end = this.#part.end
+    if (end === undefined || this.#endSent || this.el.paused) return
+    const left = end - this.el.currentTime
+    if (left <= endSlack) {
+      this.#endSent = true
+      this.#on.ended?.()
+      return
+    }
+    const ms = (left * 1000) / (this.el.playbackRate || 1)
+    this.#endTimer = setTimeout(() => this.#watchEnd(), Math.min(ms, 1000))
   }
 
   on(events: Partial<EngineEvents>): void {
@@ -103,14 +173,45 @@ class AudioEngine {
     return !!this.el.getAttribute('src')
   }
 
-  // Starts loading a song; `at` seconds in. Call play() to hear it.
-  load(url: string, at = 0): void {
-    this.#startAt = at
+  // Starts loading a song, `at` seconds into it (into `part`, if it is a part
+  // of the file). Call play() to hear it. Another part of the file already
+  // loaded is only a seek.
+  load(url: string, at = 0, part: Part = wholeFile): void {
+    const same = url === this.#url && this.loaded && !this.el.error
+    this.#part = part
+    this.#endSent = false
+    if (same) {
+      this.#sendDuration()
+      this.seek(at)
+      this.#on.time?.(at)
+      return
+    }
+    this.#url = url
+    this.#decoding = false
+    this.#startAt = part.start + at
     this.el.src = url
+  }
+
+  // The song after the one playing is the next part of the same file: the
+  // sound goes on as it is, and times are from the new part from now on.
+  continueWith(part: Part): void {
+    this.#part = part
+    this.#endSent = false
+    this.#sendDuration()
+    this.#on.time?.(this.#pos())
+    this.#watchEnd()
   }
 
   play(): void {
     if (!this.loaded) return
+    this.#wantPlay = true
+    // like an ended file, a part played to its end starts again
+    const end = this.#part.end
+    if (end !== undefined && this.el.currentTime >= end - endSlack) this.seek(0)
+    this.#playElement()
+  }
+
+  #playElement(): void {
     void this.context.resume()
     this.el.play().catch((e: DOMException) => {
       // AbortError: a newer load() came first. NotSupportedError: the error event handles it.
@@ -120,14 +221,18 @@ class AudioEngine {
   }
 
   pause(): void {
+    this.#wantPlay = false
     this.el.pause()
   }
 
+  // `pos` seconds into the song
   seek(pos: number): void {
     if (!this.loaded) return
+    this.#endSent = false
+    const at = this.#part.start + pos
     // before the length is known, remember it for loadedmetadata
-    if (this.el.readyState < HTMLMediaElement.HAVE_METADATA) this.#startAt = pos
-    else this.el.currentTime = pos
+    if (this.el.readyState < HTMLMediaElement.HAVE_METADATA) this.#startAt = at
+    else this.el.currentTime = at
   }
 
   setVolume(volume: number): void {
@@ -136,6 +241,10 @@ class AudioEngine {
 
   // Nothing to play: drop the file so it stops loading.
   clear(): void {
+    this.#wantPlay = false
+    this.#url = ''
+    this.#part = wholeFile
+    clearTimeout(this.#endTimer)
     this.el.pause()
     this.el.removeAttribute('src')
     this.el.load()

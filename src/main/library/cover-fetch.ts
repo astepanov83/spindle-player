@@ -1,0 +1,192 @@
+// Looks up covers online for albums with none, one album at a time, after
+// each scan (ticket 014). Nothing is sent before main says the setting is on.
+import type { FetchStatus } from '../../shared/library'
+import { coverSources, type CoverSource } from '../../shared/settings'
+import { BusyError, NetError, type CoverHttp } from './cover-http'
+import { pickCandidates, type CoverQuery } from './cover-match'
+import { caaGroupUrl, caaReleaseUrl, parseAnswer, searchUrl } from './cover-sources'
+import { dropNotFound, isFresh, type Fetched } from './fetched-store'
+
+export interface FetcherDeps {
+  http: Pick<CoverHttp, 'json' | 'image'>
+  // puts a picture in the cover cache; ok once it is decoded and cached
+  addCover(data: Uint8Array): Promise<{ hash: string; ok: boolean }>
+  hasCover(hash: string): boolean
+  fetched: Fetched
+  // the results changed (save them); found: a new cover to show
+  changed(found: boolean): void
+  status(s: FetchStatus): void
+  now(): number
+  // resolves early when the signal aborts
+  sleep(ms: number, signal: AbortSignal): Promise<void>
+  log(text: string): void
+}
+
+// no connection: look again after this long
+const offlineWaitMs = 5 * 60 * 1000
+// matching results downloaded per source before going on to the next source
+const triesPerSource = 3
+
+type Outcome = { hash: string; source: CoverSource } | 'none'
+
+export class CoverFetcher {
+  #on = false
+  // held until the first scan ends, and while any scan runs
+  #held = true
+  // none until main first said, so the first setting drops no misses
+  #sources: Record<CoverSource, boolean> | undefined
+  #queries: CoverQuery[] = []
+  // aborted when turned off or held, so a wait or a request in flight ends
+  #stop = new AbortController()
+  #loop: Promise<void> = Promise.resolve()
+  #running = false
+
+  constructor(readonly d: FetcherDeps) {}
+
+  // Resolves when the loop has stopped or has nothing left to do.
+  get idle(): Promise<void> {
+    return this.#loop
+  }
+
+  setOptions(on: boolean, sources: Record<CoverSource, boolean>): void {
+    const before = this.#sources
+    // a source turned on may find what the others did not
+    if (
+      before &&
+      coverSources.some((s) => sources[s] && !before[s]) &&
+      dropNotFound(this.d.fetched)
+    )
+      this.d.changed(false)
+    this.#on = on
+    this.#sources = { ...sources }
+    this.#restart()
+  }
+
+  // The albums with no cover of their own, after each build of the library.
+  setQueries(queries: CoverQuery[]): void {
+    this.#queries = queries
+    this.#report()
+    // a running loop picks the new list up for its next album
+    if (!this.#running) this.#restart()
+  }
+
+  hold(): void {
+    this.#held = true
+    this.#restart()
+  }
+
+  release(): void {
+    this.#held = false
+    this.#restart()
+  }
+
+  #restart(): void {
+    this.#stop.abort()
+    this.#stop = new AbortController()
+    const signal = this.#stop.signal
+    this.#loop = this.#loop.then(() => this.#run(signal))
+  }
+
+  // done: albums looked up in this run, so a cover that is gone again at once
+  // (a full disk) can't make the loop ask for it over and over
+  #next(done: Set<string>): CoverQuery | undefined {
+    const now = this.d.now()
+    const f = this.d.fetched
+    return this.#queries.find(
+      (q) => !done.has(q.albumId) && !isFresh(f.get(q.albumId), q.key, now, this.d.hasCover)
+    )
+  }
+
+  async #run(signal: AbortSignal): Promise<void> {
+    if (!this.#on || this.#held || signal.aborted) return
+    this.#running = true
+    this.#report()
+    const done = new Set<string>()
+    try {
+      for (let q = this.#next(done); q && !signal.aborted; q = this.#next(done)) {
+        let out: Outcome
+        try {
+          out = await this.#find(q, signal)
+        } catch (e) {
+          if (signal.aborted) return
+          // the service's limiter waits before the next try
+          if (e instanceof BusyError) continue
+          if (e instanceof NetError) {
+            this.d.log(`Covers online: ${e.message}; looking again in 5 minutes`)
+            await this.d.sleep(offlineWaitMs, signal)
+            continue
+          }
+          throw e
+        }
+        if (signal.aborted) return
+        done.add(q.albumId)
+        const at = this.d.now()
+        this.d.fetched.set(
+          q.albumId,
+          out === 'none'
+            ? { source: 'none', at, key: q.key }
+            : { hash: out.hash, source: out.source, at, key: q.key }
+        )
+        this.d.changed(out !== 'none')
+        this.#report()
+      }
+    } catch (e) {
+      if (!signal.aborted) this.d.log(`Covers online stopped: ${e}`)
+    } finally {
+      this.#running = false
+      this.#report()
+    }
+  }
+
+  // Downloads a picture and puts it in the cache; undefined if it doesn't decode.
+  async #take(
+    url: string,
+    limiter: 'caa' | 'deezer' | 'itunes',
+    signal: AbortSignal
+  ): Promise<string | undefined> {
+    const img = await this.d.http.image(url, limiter, signal)
+    if (!img || signal.aborted) return undefined
+    const r = await this.d.addCover(img)
+    return r.ok ? r.hash : undefined
+  }
+
+  async #find(q: CoverQuery, signal: AbortSignal): Promise<Outcome> {
+    const s = this.#sources!
+    if (s.musicbrainz)
+      for (const url of [
+        q.mbReleaseGroup && caaGroupUrl(q.mbReleaseGroup),
+        q.mbRelease && caaReleaseUrl(q.mbRelease)
+      ]) {
+        if (!url) continue
+        const hash = await this.#take(url, 'caa', signal)
+        if (hash) return { hash, source: 'musicbrainz' }
+      }
+    // an album name alone matches too many wrong records
+    if (q.noArtist) return 'none'
+    for (const source of ['deezer', 'itunes', 'musicbrainz'] as const) {
+      if (!s[source]) continue
+      const json = await this.d.http.json(searchUrl(source, q), source, signal)
+      if (json === undefined) continue
+      const found = pickCandidates(q, parseAnswer(source, json)).slice(0, triesPerSource)
+      for (const c of found) {
+        const hash = await this.#take(c.image, source === 'musicbrainz' ? 'caa' : source, signal)
+        if (hash) return { hash, source }
+      }
+    }
+    return 'none'
+  }
+
+  #report(): void {
+    const now = this.d.now()
+    let found = 0
+    let notFound = 0
+    for (const q of this.#queries) {
+      const e = this.d.fetched.get(q.albumId)
+      if (!isFresh(e, q.key, now, this.d.hasCover)) continue
+      if (e?.hash) found++
+      else notFound++
+    }
+    const left = this.#queries.length - found - notFound
+    this.d.status({ found, notFound, left, running: this.#running })
+  }
+}

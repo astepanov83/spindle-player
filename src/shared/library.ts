@@ -58,6 +58,15 @@ export interface LibraryData {
 
 export type ScanPhase = 'idle' | 'walk' | 'read'
 
+// The online cover lookup (ticket 014): albums with a cover found, with none
+// found, and still to look up.
+export interface FetchStatus {
+  found: number
+  notFound: number
+  left: number
+  running: boolean
+}
+
 export interface ScanStatus {
   folders: string[]
   phase: ScanPhase
@@ -78,4 +87,6 @@ export interface ScanStatus {
   scanFailed?: boolean
   // settings.json could not be read, so the folders can't be changed or scanned this run
   settingsUnreadable?: boolean
+  // the online cover lookup; missing while it is off
+  fetch?: FetchStatus
 }

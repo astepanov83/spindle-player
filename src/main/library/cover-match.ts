@@ -43,15 +43,22 @@ function fold(s: string): string {
     .trim()
 }
 
+// The album's name without edition words and disc numbers, as written.
+export function stripEdition(s: string): string {
+  return (
+    s
+      // brackets holding edition words: "(Remastered 2009)", "[Deluxe Edition]"
+      .replace(/[([]([^)\]]*)[)\]]/g, (m, inner: string) => (edition.test(inner) ? ' ' : m))
+      // " - Remastered 2009" at the end
+      .replace(/\s[-–]\s[^-–]*$/, (m) => (edition.test(m) ? '' : m))
+      // "CD1", "(Disc 2)" at the end
+      .replace(/[\s([-]*\b(cd|dis[ck])\s*\d+[)\]]?\s*$/i, '')
+      .trim()
+  )
+}
+
 export function cleanAlbum(s: string): string {
-  const t = s
-    // brackets holding edition words: "(Remastered 2009)", "[Deluxe Edition]"
-    .replace(/[([]([^)\]]*)[)\]]/g, (m, inner: string) => (edition.test(inner) ? ' ' : m))
-    // " - Remastered 2009" at the end
-    .replace(/\s[-–]\s[^-–]*$/, (m) => (edition.test(m) ? '' : m))
-    // "CD1", "(Disc 2)" at the end
-    .replace(/[\s([-]*\b(cd|dis[ck])\s*\d+[)\]]?\s*$/i, '')
-  return fold(t)
+  return fold(stripEdition(s))
 }
 
 export function cleanArtist(s: string): string {

@@ -1,22 +1,24 @@
 // Where each service is asked for a cover, and what its answer means (ticket 014).
 import type { CoverSource } from '../../shared/settings'
-import { cleanAlbum, cleanArtist, type Candidate, type CoverQuery } from './cover-match'
+import { stripEdition, type Candidate, type CoverQuery } from './cover-match'
 
 export const caaGroupUrl = (id: string): string =>
   `https://coverartarchive.org/release-group/${id}/front-1200`
 export const caaReleaseUrl = (id: string): string =>
   `https://coverartarchive.org/release/${id}/front-1200`
 
-// Quotes are query syntax for Deezer and MusicBrainz, so names lose them.
-const term = (s: string): string => s.replace(/"/g, ' ').replace(/\s+/g, ' ').trim()
+// Names go as written, so the services know the words (cleanup is for
+// comparing only: it drops kana voicing marks). Quotes and backslashes are
+// query syntax for Deezer and MusicBrainz.
+const term = (s: string): string => s.replace(/["\\]/g, ' ').replace(/\s+/g, ' ').trim()
 
 const withParams = (base: string, params: Record<string, string>): string =>
   `${base}?${new URLSearchParams(params)}`
 
 export function searchUrl(source: CoverSource, q: CoverQuery): string {
-  const album = term(cleanAlbum(q.album))
+  const album = term(stripEdition(q.album))
   // Deezer and iTunes list compilations under many names, so the album alone
-  const artist = q.compilation ? '' : term(cleanArtist(q.artist))
+  const artist = q.compilation ? '' : term(q.artist)
   switch (source) {
     case 'deezer':
       return withParams('https://api.deezer.com/search/album', {

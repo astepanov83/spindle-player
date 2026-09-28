@@ -69,3 +69,29 @@ export async function pruneCoverFiles(o: PruneOptions): Promise<void> {
     }
   }
 }
+
+// Temp files a crash left in the cover cache, removed when the library process
+// starts. That may be a restart while main is still writing covers, so a young
+// one is left alone like in the prune; the next prune takes it if it stays.
+export async function removeOldTemp(
+  dir: string,
+  now: () => number = Date.now,
+  fs: PruneFs = nodeFs
+): Promise<void> {
+  let names: string[]
+  try {
+    names = await fs.readdir(dir)
+  } catch {
+    // no folder yet
+    return
+  }
+  for (const name of names) {
+    if (!name.endsWith('.tmp')) continue
+    const path = join(dir, name)
+    try {
+      if (now() - (await fs.mtimeMs(path)) >= tmpAgeMs) await fs.rm(path)
+    } catch {
+      // gone already
+    }
+  }
+}

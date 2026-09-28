@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pruneCoverFiles, tmpAgeMs, type PruneFs } from './cover-prune'
+import { pruneCoverFiles, removeOldTemp, tmpAgeMs, type PruneFs } from './cover-prune'
 
 const h1 = '1'.repeat(40)
 const h2 = '2'.repeat(40)
@@ -148,5 +148,29 @@ describe('pruneCoverFiles', () => {
         fs
       })
     ).resolves.toBeUndefined()
+  })
+})
+
+describe('removeOldTemp', () => {
+  it('removes old temp files and leaves ones main may still be writing', async () => {
+    const fs = fakeFs({
+      [`${h1}.jpg`]: 0,
+      [`${h1}.jpg.9.1.tmp`]: now - tmpAgeMs - 1,
+      [`${h2}-large.jpg.9.2.tmp`]: now - 1000,
+      'other.tmp': 0
+    })
+    await removeOldTemp('/c', () => now, fs)
+    expect(fs.left()).toEqual([`${h1}.jpg`, `${h2}-large.jpg.9.2.tmp`].sort())
+  })
+
+  it('does nothing when there is no folder', async () => {
+    const fs: PruneFs = {
+      readdir: async () => {
+        throw new Error('ENOENT')
+      },
+      mtimeMs: async () => 0,
+      rm: async () => {}
+    }
+    await expect(removeOldTemp('/c', () => now, fs)).resolves.toBeUndefined()
   })
 })

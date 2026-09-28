@@ -32,7 +32,7 @@ import {
 } from './merge'
 import { extOf, frontCover, normalizeTags } from './tags'
 import { walk } from './walk'
-import { pruneCoverFiles } from './cover-prune'
+import { pruneCoverFiles, removeOldTemp } from './cover-prune'
 import { ownCopy } from './bytes'
 import { pictureWithHash } from './cover-source'
 import { markerOf, smallName } from './cover-names'
@@ -586,20 +586,19 @@ port.on('message', (e: Electron.MessageEvent) => {
   }
 })
 
-// Temp files left by a quit or crash in the middle of a write.
+// Temp files left by a quit or crash in the middle of a write. Only this
+// process writes the index, and the one before it has ended. Main writes the
+// covers and may be at it now (a restart), so only old ones go there.
 async function removeStrayTemp(): Promise<void> {
   const dir = dirname(start.indexPath)
   const index = basename(start.indexPath)
-  for (const [d, match] of [
-    [dir, (n: string) => n.startsWith(index + '.') && n.endsWith('.tmp')],
-    [start.coversDir, (n: string) => n.endsWith('.tmp')]
-  ] as const) {
-    try {
-      for (const n of await readdir(d)) if (match(n)) await rm(join(d, n), { force: true })
-    } catch {
-      // no folder yet
-    }
+  try {
+    for (const n of await readdir(dir))
+      if (n.startsWith(index + '.') && n.endsWith('.tmp')) await rm(join(dir, n), { force: true })
+  } catch {
+    // no folder yet
   }
+  await removeOldTemp(start.coversDir)
 }
 
 // Reads the index and groups it once main sent the start data; main asks for

@@ -38,8 +38,6 @@ interface Stage extends StageView {
   coverEl: HTMLElement | null
   cssW: number
   cssH: number
-  // w and h came from the browser in device pixels, not worked out from dpr
-  exact: boolean
   // the cover's place must be read again
   measure: boolean
   // --bass as last set, in thousandths
@@ -115,7 +113,6 @@ export function addStage(
     grads: new Map(),
     cssW: 0,
     cssH: 0,
-    exact: false,
     measure: true,
     bass: -1
   }
@@ -124,7 +121,6 @@ export function addStage(
     resized(cssW, cssH, devW, devH) {
       s.cssW = cssW
       s.cssH = cssH
-      s.exact = devW !== undefined && devH !== undefined
       fitToDpr(s, devW, devH)
       s.measure = true
       wake()
@@ -159,10 +155,8 @@ function watchDpr(): void {
     () => {
       dpr = window.devicePixelRatio || 1
       for (const s of stages) {
-        // exact sizes come again from the ResizeObserver
-        if (!s.exact) fitToDpr(s)
-        else s.grads.clear()
-        s.dpr = dpr
+        // from dpr until the ResizeObserver gives device pixels again, if it does
+        fitToDpr(s)
         s.measure = true
       }
       watchDpr()

@@ -231,6 +231,8 @@ describe('the frame loop', () => {
 
   it('picks up a new devicePixelRatio while stopped', () => {
     const s = shownStage()
+    // device pixels from the browser; the new ratio doesn't wait for new ones
+    s.h.resized(200, 100, 200, 100)
     runOut()
     expect(queries.at(-1)).toBe('(resolution: 1dppx)')
     ;(window as { devicePixelRatio: number }).devicePixelRatio = 2

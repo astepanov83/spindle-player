@@ -1,6 +1,7 @@
-// What the online cover lookup found, by album id (ticket 014). Its own file,
-// not library.json: the index is thrown away and made again on a version
-// change, and this took up to an hour of requests to fill.
+// What the online cover lookup found, by album id (ticket 014), and the artist
+// photos it found, by artist key (ticket 021). Its own file, not
+// library.json: the index is thrown away and made again on a version change,
+// and this took up to an hour of requests to fill.
 import { coverSources, type CoverSource } from '../../shared/settings'
 import { isCoverHash } from './cover-names'
 
@@ -14,8 +15,12 @@ export interface FetchedEntry {
   key: string
 }
 
-// album id -> result
+// album id (or artist key) -> result
 export type Fetched = Map<string, FetchedEntry>
+
+// albums: covers; artists: photos, in the same file so they are kept and
+// pruned the same way
+export type FetchedSection = 'albums' | 'artists'
 
 const version = 1
 // a miss is looked up again after this long, since the services add albums
@@ -24,10 +29,10 @@ export const notFoundMs = 30 * 24 * 3600 * 1000
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
-export function parseFetched(raw: unknown): Fetched {
+export function parseFetched(raw: unknown, section: FetchedSection = 'albums'): Fetched {
   const out: Fetched = new Map()
-  if (!isObject(raw) || raw.version !== version || !isObject(raw.albums)) return out
-  for (const [id, v] of Object.entries(raw.albums)) {
+  if (!isObject(raw) || raw.version !== version || !isObject(raw[section])) return out
+  for (const [id, v] of Object.entries(raw[section])) {
     if (!isObject(v) || typeof v.key !== 'string') continue
     if (typeof v.at !== 'number' || !Number.isFinite(v.at)) continue
     if (v.source === 'none') out.set(id, { source: 'none', at: v.at, key: v.key })
@@ -41,8 +46,8 @@ export function parseFetched(raw: unknown): Fetched {
   return out
 }
 
-export function serializeFetched(f: Fetched): unknown {
-  return { version, albums: Object.fromEntries(f) }
+export function serializeFetched(albums: Fetched, artists: Fetched = new Map()): unknown {
+  return { version, albums: Object.fromEntries(albums), artists: Object.fromEntries(artists) }
 }
 
 // Still good: the album's names are the ones looked up, and a found cover is

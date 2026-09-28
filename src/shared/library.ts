@@ -62,23 +62,35 @@ export interface Album extends Art {
   trackIds: string[]
 }
 
+// An artist photo found online (ticket 021).
+export type ArtistPhoto = Pick<Art, 'cover' | 'coverLarge'>
+
 // What main sends the page. Albums and tracks are in library order. Folders
 // come parents first, music folders in settings order, subfolders by name.
 export interface LibraryData {
   albums: Album[]
   tracks: Track[]
   folders: Folder[]
+  // artist key (see shared/artists.ts) -> photo; only artists with one
+  artistPhotos?: Record<string, ArtistPhoto>
 }
 
 export type ScanPhase = 'idle' | 'walk' | 'read'
 
-// The online cover lookup (ticket 014): albums with a cover found, with none
-// found, and still to look up.
-export interface FetchStatus {
+// Things looked up online: with a picture found, with none found, and still
+// to look up.
+export interface FetchCounts {
   found: number
   notFound: number
   left: number
+}
+
+// The online cover lookup (ticket 014): the counts are albums. running is
+// true while it looks up covers or artist photos.
+export interface FetchStatus extends FetchCounts {
   running: boolean
+  // artist photos (ticket 021); missing while Deezer is off
+  artists?: FetchCounts
 }
 
 export interface ScanStatus {

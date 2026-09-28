@@ -404,6 +404,13 @@ describe('covers found online in the cache', () => {
     expect(usedCovers(emptyIndex()).has(h)).toBe(false)
   })
 
+  it('counts artist photos as used too', () => {
+    const g = 'e'.repeat(40)
+    const photos: Fetched = new Map([['queen', { hash: g, source: 'deezer', at: 0, key: 'q' }]])
+    expect([...usedCovers(emptyIndex(), f, photos)].sort()).toEqual([g, h])
+    expect(missingPalettes(emptyIndex(), () => true, f, photos).sort()).toEqual([g, h])
+  })
+
   it('gives them palettes when they have none', () => {
     expect(missingPalettes(emptyIndex(), () => true, f)).toEqual([h])
   })

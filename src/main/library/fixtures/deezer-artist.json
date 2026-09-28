@@ -1,0 +1,53 @@
+{
+  "data": [
+    {
+      "id": 2707,
+      "name": "Simon & Garfunkel",
+      "picture_xl": "https://cdn-images.dzcdn.net/images/artist/8af19eff0f0bc52edd24e0d19b6e0764/1000x1000-000000-80-0-0.jpg",
+      "nb_album": 18,
+      "nb_fan": 1167099,
+      "type": "artist"
+    },
+    {
+      "id": 412686381,
+      "name": "Simon & Garfunkel",
+      "picture_xl": "https://cdn-images.dzcdn.net/images/artist//1000x1000-000000-80-0-0.jpg",
+      "nb_album": 0,
+      "nb_fan": 0,
+      "type": "artist"
+    },
+    {
+      "id": 74334152,
+      "name": "Simon & Garfunkel Experience",
+      "picture_xl": "https://cdn-images.dzcdn.net/images/artist/3f5d211b66f7366f990b5f187ac41f1d/1000x1000-000000-80-0-0.jpg",
+      "nb_album": 2,
+      "nb_fan": 225,
+      "type": "artist"
+    },
+    {
+      "id": 450613,
+      "name": "Simon & Garfunkel Revival Band",
+      "picture_xl": "https://cdn-images.dzcdn.net/images/artist/08e9a3aecb683e98080ac916da2c82df/1000x1000-000000-80-0-0.jpg",
+      "nb_album": 1,
+      "nb_fan": 411,
+      "type": "artist"
+    },
+    {
+      "id": 439576,
+      "name": "Simon & Garfunkel;Paul Simon;Art Garfunkel",
+      "picture_xl": "https://cdn-images.dzcdn.net/images/artist//1000x1000-000000-80-0-0.jpg",
+      "nb_album": 0,
+      "nb_fan": 886,
+      "type": "artist"
+    },
+    {
+      "id": 4374081,
+      "name": "Paul Simon & Art Garfunkel",
+      "picture_xl": "https://cdn-images.dzcdn.net/images/artist//1000x1000-000000-80-0-0.jpg",
+      "nb_album": 0,
+      "nb_fan": 1243,
+      "type": "artist"
+    }
+  ],
+  "total": 10
+}

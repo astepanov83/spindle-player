@@ -1,8 +1,10 @@
 // Builds the albums and tracks the page shows from the index.
 import { basename } from 'path'
-import type { Album, LibraryData, Track, TrackPart } from '../../shared/library'
+import { artistKey, listArtists } from '../../shared/artists'
+import type { Album, ArtistPhoto, LibraryData, Track, TrackPart } from '../../shared/library'
 import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../shared/palette'
-import { searchKey, type CoverQuery } from './cover-match'
+import { checksPerArtist, lookUpArtist, type ArtistCheck, type ArtistQuery } from './artist-photo'
+import { cleanAlbum, cleanArtist, searchKey, type CoverQuery } from './cover-match'
 import { cueTracks } from './cue-tracks'
 import { fetchedCover, type Fetched } from './fetched-store'
 import { folderTable } from './folders'
@@ -19,6 +21,8 @@ export interface BuiltLibrary {
   // albums with no picture of their own and an album tag, in library order,
   // for the online lookup (ticket 014)
   queries: CoverQuery[]
+  // artists to find a photo for, in name order (ticket 021)
+  artists: ArtistQuery[]
 }
 
 export const unknownArtist = 'Unknown artist'
@@ -140,12 +144,61 @@ function withoutTracks(al: Album & { tracks: Track[] }): Album {
   return out
 }
 
-// `roots` are the music folders, for the Folders view.
+// A few of the artist's titles to check a found artist by: two of their
+// albums, then their songs on other albums, then their own songs. Deezer
+// lacks some albums in some countries but has a song of them elsewhere.
+function checksOf(albums: Album[], also: Track[], songs: Track[]): ArtistCheck[] {
+  const out: ArtistCheck[] = []
+  const seen = new Set<string>()
+  const add = (kind: ArtistCheck['kind'], title: string): void => {
+    const c = cleanAlbum(title)
+    if (!c || seen.has(kind + c) || out.length >= checksPerArtist) return
+    seen.add(kind + c)
+    out.push({ kind, title })
+  }
+  for (const al of albums.slice(0, 2)) add('album', al.title)
+  for (const t of [...also, ...songs]) add('song', t.title)
+  return out
+}
+
+// The artists of the Artists view to look up, and the photos found for them.
+function artistsOf(
+  albums: Album[],
+  tracks: Track[],
+  photos: Fetched,
+  hasCover: (hash: string) => boolean
+): { artists: ArtistQuery[]; artistPhotos: Record<string, ArtistPhoto> } {
+  const byId = new Map(tracks.map((t) => [t.id, t]))
+  const albumById = new Map(albums.map((a) => [a.id, a]))
+  const artists: ArtistQuery[] = []
+  const artistPhotos: Record<string, ArtistPhoto> = {}
+  for (const a of listArtists(albums, (id) => byId.get(id)!)) {
+    if (!lookUpArtist(a.name)) continue
+    const key = cleanArtist(a.name)
+    const photo = fetchedCover(photos, a.key, key, hasCover)
+    if (photo) artistPhotos[a.key] = coverUrls(photo)
+    const own = a.albums.map((id) => albumById.get(id)!)
+    const songs = own
+      .flatMap((al) => al.trackIds.map((id) => byId.get(id)!))
+      .filter((t) => artistKey(t.artist) === a.key)
+    const checks = checksOf(
+      own,
+      a.also.map((id) => byId.get(id)!),
+      songs
+    )
+    artists.push({ id: a.key, name: a.name, key, checks })
+  }
+  return { artists, artistPhotos }
+}
+
+// `roots` are the music folders, for the Folders view. `photos` are the
+// artist photos found online, by artist key.
 export function buildLibrary(
   ix: LibraryIndex,
   hasCover: (hash: string) => boolean,
   fetched: Fetched = new Map(),
-  roots: string[] = []
+  roots: string[] = [],
+  photos: Fetched = new Map()
 ): BuiltLibrary {
   const groups = new Map<string, Group>()
   const paths = new Map<string, string>()
@@ -251,9 +304,12 @@ export function buildLibrary(
   tracks.forEach((t, i) => (t.folder = index[i]))
   const order = new Map(albums.map((a, i) => [a.id, i]))
   queries.sort((a, b) => order.get(a.albumId)! - order.get(b.albumId)!)
+  const shown = albums.map(withoutTracks)
+  const { artists, artistPhotos } = artistsOf(shown, tracks, photos, hasCover)
   return {
-    data: { albums: albums.map(withoutTracks), tracks, folders },
+    data: { albums: shown, tracks, folders, artistPhotos },
     paths,
-    queries
+    queries,
+    artists
   }
 }

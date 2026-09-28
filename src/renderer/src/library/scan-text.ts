@@ -64,8 +64,28 @@ export function fetchLine(f: FetchStatus | undefined): string | undefined {
     return `Waiting: ${plural(f.left, 'album', 'albums')} to look up`
   const found = `${n(f.found)} of ${n(total)}`
   // "Found 3 of 40" alone did not say covers were still being fetched (ticket 019)
-  const parts = [f.running ? `Looking up covers: found ${found}` : `Found ${found}`]
+  const parts = [fetchBusy(f) === 'covers' ? `Looking up covers: found ${found}` : `Found ${found}`]
   if (f.notFound) parts.push(`${n(f.notFound)} not found`)
   if (f.left) parts.push(`${n(f.left)} left`)
+  return parts.join(' · ')
+}
+
+// Which line gets the spinner: albums are looked up first, then artist photos.
+export function fetchBusy(f: FetchStatus | undefined): 'covers' | 'photos' | undefined {
+  if (!f?.running) return undefined
+  return !f.left && f.artists?.left ? 'photos' : 'covers'
+}
+
+// The artist photos line under it (ticket 021); none while Deezer is off.
+export function photoLine(f: FetchStatus | undefined): string | undefined {
+  const a = f?.artists
+  const total = a ? a.found + a.notFound + a.left : 0
+  if (!a || !total) return undefined
+  const found = `found ${n(a.found)} of ${n(total)}`
+  const parts = [
+    fetchBusy(f) === 'photos' ? `Looking up artist photos: ${found}` : `Artist photos: ${found}`
+  ]
+  if (a.notFound) parts.push(`${n(a.notFound)} not found`)
+  if (a.left) parts.push(`${n(a.left)} left`)
   return parts.join(' · ')
 }

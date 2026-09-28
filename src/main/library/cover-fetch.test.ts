@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CoverFetcher, publishGapMs, type FetcherDeps } from './cover-fetch'
 import { BusyError, NetError } from './cover-http'
-import { searchKey, type CoverQuery } from './cover-match'
+import { cleanArtist, searchKey, type CoverQuery } from './cover-match'
+import type { ArtistQuery } from './artist-photo'
 import type { Fetched } from './fetched-store'
 
 const all = { musicbrainz: true, deezer: true, itunes: true }
@@ -45,9 +46,10 @@ const itunesHit = {
 function setup(
   json: (url: string) => unknown,
   image: (url: string) => Uint8Array | undefined = () => jpeg
-): { f: CoverFetcher; d: FetcherDeps; fetched: Fetched; calls: string[] } {
+): { f: CoverFetcher; d: FetcherDeps; fetched: Fetched; photos: Fetched; calls: string[] } {
   let t = 0
   const fetched: Fetched = new Map()
+  const photos: Fetched = new Map()
   const cached = new Set<string>()
   const calls: string[] = []
   const d: FetcherDeps = {
@@ -69,6 +71,7 @@ function setup(
     },
     hasCover: (x) => cached.has(x),
     fetched,
+    photos,
     changed: vi.fn(),
     status: vi.fn(),
     now: () => t,
@@ -85,7 +88,7 @@ function setup(
     ),
     log: () => {}
   }
-  return { f: new CoverFetcher(d), d, fetched, calls }
+  return { f: new CoverFetcher(d), d, fetched, photos, calls }
 }
 
 describe('CoverFetcher', () => {
@@ -117,7 +120,13 @@ describe('CoverFetcher', () => {
     expect(fetched.get('a')).toMatchObject({ hash: h, source: 'deezer', key: q('a').key })
     expect(calls.some((u) => u.includes('itunes') || u.includes('musicbrainz'))).toBe(false)
     expect(d.changed).toHaveBeenCalledWith(true)
-    expect(d.status).toHaveBeenLastCalledWith({ found: 1, notFound: 0, left: 0, running: false })
+    expect(d.status).toHaveBeenLastCalledWith({
+      found: 1,
+      notFound: 0,
+      left: 0,
+      running: false,
+      artists: { found: 0, notFound: 0, left: 0 }
+    })
   })
 
   it('tries the MusicBrainz id first, and falls through to the searches on a 404', async () => {
@@ -356,6 +365,133 @@ describe('CoverFetcher', () => {
     expect(fetched.has('a')).toBe(true)
     f.setOptions(true, all)
     expect(fetched.has('a')).toBe(false)
+    expect(d.changed).toHaveBeenCalledWith(false)
+  })
+})
+
+describe('artist photos', () => {
+  const photo = 'https://cdn-images.dzcdn.net/images/artist/8af19eff/1000x1000-000000-80-0-0.jpg'
+  const artist = (name = 'Queen', more: Partial<ArtistQuery> = {}): ArtistQuery => ({
+    id: name.toLowerCase(),
+    name,
+    key: cleanArtist(name),
+    checks: [{ kind: 'album', title: 'A Night at the Opera' }],
+    ...more
+  })
+  // Deezer lists two artists called Queen; the album tells which one it is
+  const found = {
+    data: [
+      { id: 7, name: 'Queen', picture_xl: photo.replace('8af19eff', '0000') },
+      { id: 412, name: 'Queen', picture_xl: photo }
+    ]
+  }
+  const album = { data: [{ title: 'A Night At The Opera', artist: { id: 412, name: 'Queen' } }] }
+  const deezer = (u: string): unknown =>
+    u.includes('/search/artist') ? found : u.includes('/search/album') ? album : nothing
+
+  it("looks up albums first, then artists, and keeps the checked artist's photo", async () => {
+    const { f, photos, calls, d } = setup(deezer)
+    f.setOptions(true, all)
+    f.setQueries([q('a')], [artist()])
+    f.release()
+    await f.idle
+    expect(photos.get('queen')).toMatchObject({ hash: h, source: 'deezer', key: 'queen' })
+    const artistAt = calls.findIndex((u) => u.includes('/search/artist'))
+    expect(artistAt).toBeGreaterThan(
+      calls.findIndex((u) => u.includes('abbey') || u.includes('Abbey'))
+    )
+    expect(calls.at(-1)).toBe(photo)
+    expect(d.status).toHaveBeenLastCalledWith(
+      expect.objectContaining({ artists: { found: 1, notFound: 0, left: 0 } })
+    )
+  })
+
+  it('asks nothing for artists with Deezer off, and reports no artist counts', async () => {
+    const { f, photos, calls, d } = setup(deezer)
+    f.setOptions(true, { musicbrainz: true, deezer: false, itunes: true })
+    f.setQueries([], [artist()])
+    f.release()
+    await f.idle
+    expect(calls).toEqual([])
+    expect(photos.size).toBe(0)
+    expect(vi.mocked(d.status).mock.lastCall?.[0].artists).toBeUndefined()
+  })
+
+  it('asks nothing while the lookup is off', async () => {
+    const { f, calls } = setup(deezer)
+    f.setOptions(false, all)
+    f.setQueries([], [artist()])
+    f.release()
+    await f.idle
+    expect(calls).toEqual([])
+  })
+
+  it('stores not found when no artist has the name, or no title checks out', async () => {
+    const { f, photos } = setup((u) =>
+      u.includes('/search/artist') ? found : { data: [{ title: 'Jazz', artist: { id: 412 } }] }
+    )
+    f.setOptions(true, all)
+    f.setQueries([], [artist(), artist('Blur')])
+    f.release()
+    await f.idle
+    expect(photos.get('queen')).toMatchObject({ source: 'none', key: 'queen' })
+    expect(photos.get('blur')).toMatchObject({ source: 'none', key: 'blur' })
+  })
+
+  it('stores not found for an artist with nothing to check by', async () => {
+    const { f, photos, calls } = setup(deezer)
+    f.setOptions(true, all)
+    f.setQueries([], [artist('Queen', { checks: [] })])
+    f.release()
+    await f.idle
+    expect(photos.get('queen')?.source).toBe('none')
+    expect(calls).toHaveLength(1)
+  })
+
+  it('stores nothing for a Deezer error answer or a failed check, and waits when offline', async () => {
+    const busy = setup((u) => (u.includes('/search/album') ? new BusyError('429') : deezer(u)))
+    busy.f.setOptions(true, all)
+    busy.f.setQueries([], [artist()])
+    busy.f.release()
+    await busy.f.idle
+    expect(busy.photos.size).toBe(0)
+    const quota = setup(() => ({ error: { code: 4 } }))
+    quota.f.setOptions(true, all)
+    quota.f.setQueries([], [artist()])
+    quota.f.release()
+    await quota.f.idle
+    expect(quota.photos.size).toBe(0)
+    const off = setup(() => new NetError('offline'))
+    off.f.setOptions(true, all)
+    off.f.setQueries([], [artist()])
+    off.f.release()
+    await vi.waitFor(() => expect(off.d.sleep).toHaveBeenCalledWith(300000, expect.anything()))
+    off.f.setOptions(false, all)
+    await off.f.idle
+    expect(off.photos.size).toBe(0)
+  })
+
+  it('skips an artist with a fresh result, and looks again when the name changes', async () => {
+    const { f, photos, calls } = setup(deezer)
+    photos.set('queen', { source: 'none', at: 0, key: 'queen' })
+    f.setOptions(true, all)
+    f.setQueries([], [artist()])
+    f.release()
+    await f.idle
+    expect(calls).toEqual([])
+    f.setQueries([], [artist('Queen', { key: 'queen ii' })])
+    await f.idle
+    expect(calls.length).toBeGreaterThan(0)
+  })
+
+  it('looks up missed photos again when Deezer is turned on', () => {
+    const { f, photos, d } = setup(deezer)
+    photos.set('queen', { source: 'none', at: 0, key: 'queen' })
+    f.setOptions(true, { musicbrainz: true, deezer: false, itunes: true })
+    f.setOptions(true, { musicbrainz: true, deezer: false, itunes: false })
+    expect(photos.has('queen')).toBe(true)
+    f.setOptions(true, all)
+    expect(photos.has('queen')).toBe(false)
     expect(d.changed).toHaveBeenCalledWith(false)
   })
 })

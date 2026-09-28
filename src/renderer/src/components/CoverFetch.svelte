@@ -1,7 +1,7 @@
 <!-- "Covers" in the settings sheet: the online lookup (ticket 014). Off, nothing is sent anywhere. -->
 <script lang="ts">
   import { coverSources, type CoverSource } from '../../../shared/settings'
-  import { fetchLine } from '../library/scan-text'
+  import { fetchBusy, fetchLine, photoLine } from '../library/scan-text'
   import Spinner from '../ui/Spinner.svelte'
   import { library } from '../stores/library.svelte'
   import { settings } from '../stores/settings.svelte'
@@ -12,7 +12,8 @@
     itunes: 'iTunes'
   }
   const line = $derived(settings.fetchCovers ? fetchLine(library.status.fetch) : undefined)
-  const running = $derived(!!library.status.fetch?.running)
+  const photos = $derived(settings.fetchCovers ? photoLine(library.status.fetch) : undefined)
+  const busy = $derived(fetchBusy(library.status.fetch))
 </script>
 
 <div class="set">
@@ -22,7 +23,9 @@
     Find missing covers online
   </label>
   {#if settings.fetchCovers}
-    <p class="hint">Sends artist and album names to the services below.</p>
+    <p class="hint">
+      Sends artist and album names to the services below. Artist photos come from Deezer.
+    </p>
     <div class="sources">
       {#each coverSources as s (s)}
         <label class="check">
@@ -33,8 +36,14 @@
     </div>
     {#if line}
       <p class="hint status" aria-live="polite">
-        {#if running}<Spinner />{/if}
+        {#if busy === 'covers'}<Spinner />{/if}
         <span>{line}</span>
+      </p>
+    {/if}
+    {#if photos}
+      <p class="hint status" aria-live="polite">
+        {#if busy === 'photos'}<Spinner />{/if}
+        <span>{photos}</span>
       </p>
     {/if}
   {/if}

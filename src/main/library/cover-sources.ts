@@ -10,7 +10,7 @@ export const caaReleaseUrl = (id: string): string =>
 // Names go as written, so the services know the words (cleanup is for
 // comparing only: it drops kana voicing marks). Quotes and backslashes are
 // query syntax for Deezer and MusicBrainz.
-const term = (s: string): string => s.replace(/["\\]/g, ' ').replace(/\s+/g, ' ').trim()
+export const term = (s: string): string => s.replace(/["\\]/g, ' ').replace(/\s+/g, ' ').trim()
 
 const withParams = (base: string, params: Record<string, string>): string =>
   `${base}?${new URLSearchParams(params)}`

@@ -1,6 +1,14 @@
-// Looks up covers online for albums with none, one album at a time, after
-// each scan (ticket 014). Nothing is sent before main says the setting is on.
-import type { FetchStatus } from '../../shared/library'
+// Looks up covers online for albums with none, a few albums at a time, after
+// each scan (ticket 014), then artist photos from Deezer (ticket 021).
+// Nothing is sent before main says the setting is on.
+import type { FetchCounts, FetchStatus } from '../../shared/library'
+import {
+  artistCandidates,
+  artistSearchUrl,
+  checkedArtist,
+  checkUrl,
+  type ArtistQuery
+} from './artist-photo'
 import { coverSources, type CoverSource } from '../../shared/settings'
 import { BusyError, NetError, type CoverHttp } from './cover-http'
 import { pickCandidates, type CoverQuery } from './cover-match'
@@ -13,6 +21,8 @@ export interface FetcherDeps {
   addCover(data: Uint8Array): Promise<{ hash: string; ok: boolean }>
   hasCover(hash: string): boolean
   fetched: Fetched
+  // artist photos, by artist key
+  photos: Fetched
   // the results changed (save them); found: a new cover to show
   changed(found: boolean): void
   status(s: FetchStatus): void
@@ -40,9 +50,13 @@ const albumsAtOnce = 5
 // so the next run asks again
 type Outcome = { hash: string; source: CoverSource } | 'none' | 'later'
 
+// What a loop looks up next: an album's cover, or an artist's photo.
+type Job = { album: CoverQuery; artist?: never } | { artist: ArtistQuery; album?: never }
+
 const failed = Symbol('failed')
 
 interface RunState {
+  // "al:<album id>" and "ar:<artist key>"
   taken: Set<string>
   // the 5 minute wait after no service answered, shared by the loops
   offline: Promise<void> | undefined
@@ -57,6 +71,7 @@ export class CoverFetcher {
   // none until main first said, so the first setting drops no misses
   #sources: Record<CoverSource, boolean> | undefined
   #queries: CoverQuery[] = []
+  #artists: ArtistQuery[] = []
   // aborted when turned off or held, so a wait or a request in flight ends
   #stop = new AbortController()
   #loop: Promise<void> = Promise.resolve()
@@ -75,20 +90,21 @@ export class CoverFetcher {
   setOptions(on: boolean, sources: Record<CoverSource, boolean>): void {
     const before = this.#sources
     // a source turned on may find what the others did not
-    if (
-      before &&
-      coverSources.some((s) => sources[s] && !before[s]) &&
-      dropNotFound(this.d.fetched)
-    )
-      this.d.changed(false)
+    if (before && coverSources.some((s) => sources[s] && !before[s])) {
+      // artist photos come from Deezer only
+      const photos = sources.deezer && !before.deezer && dropNotFound(this.d.photos)
+      if (dropNotFound(this.d.fetched) || photos) this.d.changed(false)
+    }
     this.#on = on
     this.#sources = { ...sources }
     this.#restart()
   }
 
-  // The albums with no cover of their own, after each build of the library.
-  setQueries(queries: CoverQuery[]): void {
+  // The albums with no cover of their own, and the artists, after each build
+  // of the library.
+  setQueries(queries: CoverQuery[], artists: ArtistQuery[] = []): void {
     this.#queries = queries
+    this.#artists = artists
     this.#report()
     // a running loop picks the new list up for its next album
     if (!this.#running) this.#restart()
@@ -111,15 +127,24 @@ export class CoverFetcher {
     this.#loop = this.#loop.then(() => this.#run(signal))
   }
 
-  // taken: albums looked up or being looked up in this run, so two loops never
-  // take the same one, and a cover that is gone again at once (a full disk)
-  // can't make the loop ask for it over and over
-  #next(taken: Set<string>): CoverQuery | undefined {
+  // Albums first, then artists: a cover shows in more places than a photo.
+  // taken: albums and artists looked up or being looked up in this run, so
+  // two loops never take the same one, and a cover that is gone again at once
+  // (a full disk) can't make the loop ask for it over and over
+  #next(taken: Set<string>): { job: Job; id: string } | undefined {
     const now = this.d.now()
     const f = this.d.fetched
-    return this.#queries.find(
-      (q) => !taken.has(q.albumId) && !isFresh(f.get(q.albumId), q.key, now, this.d.hasCover)
+    const album = this.#queries.find(
+      (q) =>
+        !taken.has('al:' + q.albumId) && !isFresh(f.get(q.albumId), q.key, now, this.d.hasCover)
     )
+    if (album) return { job: { album }, id: 'al:' + album.albumId }
+    if (!this.#sources?.deezer) return undefined
+    const p = this.d.photos
+    const artist = this.#artists.find(
+      (a) => !taken.has('ar:' + a.id) && !isFresh(p.get(a.id), a.key, now, this.d.hasCover)
+    )
+    return artist && { job: { artist }, id: 'ar:' + artist.id }
   }
 
   async #run(signal: AbortSignal): Promise<void> {
@@ -142,18 +167,21 @@ export class CoverFetcher {
         // no new album goes out while another loop waits out being offline
         while (run.offline) await run.offline
         if (signal.aborted || run.broken) return
-        const q = this.#next(run.taken)
-        if (!q) return
-        run.taken.add(q.albumId)
+        const next = this.#next(run.taken)
+        if (!next) return
+        const { job, id } = next
+        run.taken.add(id)
         let out: Outcome
         try {
-          out = await this.#find(q, signal)
+          out = job.album
+            ? await this.#find(job.album, signal)
+            : await this.#photo(job.artist, signal)
         } catch (e) {
           if (signal.aborted) return
           // no service answered: most likely offline
           if (e instanceof NetError) {
             // looked up again after the wait
-            run.taken.delete(q.albumId)
+            run.taken.delete(id)
             await this.#offlineWait(run, e, signal)
             continue
           }
@@ -162,11 +190,12 @@ export class CoverFetcher {
         if (signal.aborted) return
         if (out === 'later') continue
         const at = this.d.now()
-        this.d.fetched.set(
-          q.albumId,
+        const key = job.album ? job.album.key : job.artist.key
+        ;(job.album ? this.d.fetched : this.d.photos).set(
+          job.album ? job.album.albumId : job.artist.id,
           out === 'none'
-            ? { source: 'none', at, key: q.key }
-            : { hash: out.hash, source: out.source, at, key: q.key }
+            ? { source: 'none', at, key }
+            : { hash: out.hash, source: out.source, at, key }
         )
         this.d.changed(out !== 'none')
         this.#report()
@@ -203,23 +232,39 @@ export class CoverFetcher {
     return r.ok ? r.hash : undefined
   }
 
-  // Each step on its own: a service that fails or is busy doesn't keep the
-  // others from answering. Throws NetError when no service answered at all.
-  async #find(q: CoverQuery, signal: AbortSignal): Promise<Outcome> {
-    const s = this.#sources!
+  // Runs requests one step at a time and counts which answered, so a service
+  // that fails or is busy doesn't keep the others from answering.
+  #steps(signal: AbortSignal): {
+    step: <T>(f: () => Promise<T>) => Promise<T | typeof failed>
+    error: () => void
+    // throws NetError when no service answered at all
+    outcome: () => 'none' | 'later'
+  } {
     let answered = 0
     let errors = 0
-    const step = async <T>(f: () => Promise<T>): Promise<T | typeof failed> => {
-      try {
-        const r = await f()
-        answered++
-        return r
-      } catch (e) {
-        if (signal.aborted || !(e instanceof NetError || e instanceof BusyError)) throw e
-        errors++
-        return failed
+    return {
+      step: async (f) => {
+        try {
+          const r = await f()
+          answered++
+          return r
+        } catch (e) {
+          if (signal.aborted || !(e instanceof NetError || e instanceof BusyError)) throw e
+          errors++
+          return failed
+        }
+      },
+      error: () => void errors++,
+      outcome: () => {
+        if (errors && !answered) throw new NetError('no service answered')
+        return errors ? 'later' : 'none'
       }
     }
+  }
+
+  async #find(q: CoverQuery, signal: AbortSignal): Promise<Outcome> {
+    const s = this.#sources!
+    const { step, error, outcome } = this.#steps(signal)
     if (s.musicbrainz)
       for (const url of [
         q.mbReleaseGroup && caaGroupUrl(q.mbReleaseGroup),
@@ -236,7 +281,7 @@ export class CoverFetcher {
         const json = await step(() => this.d.http.json(searchUrl(source, q), source, signal))
         if (json === failed) continue
         if (answerError(source, json)) {
-          errors++
+          error()
           continue
         }
         const found = pickCandidates(q, parseAnswer(source, json)).slice(0, triesPerSource)
@@ -246,21 +291,59 @@ export class CoverFetcher {
           if (hash && hash !== failed) return { hash, source }
         }
       }
-    if (errors && !answered) throw new NetError('no service answered')
-    return errors ? 'later' : 'none'
+    return outcome()
   }
 
-  #report(): void {
+  // An artist's photo from Deezer: the artists with the same name, then one
+  // of their albums or songs to tell which of them it is.
+  async #photo(a: ArtistQuery, signal: AbortSignal): Promise<Outcome> {
+    const { step, error, outcome } = this.#steps(signal)
+    const json = await step(() => this.d.http.json(artistSearchUrl(a.name), 'deezer', signal))
+    if (json === failed) return outcome()
+    if (answerError('deezer', json)) {
+      error()
+      return outcome()
+    }
+    const candidates = artistCandidates(json, a.name)
+    if (!candidates.length) return 'none'
+    for (const c of a.checks) {
+      const found = await step(() => this.d.http.json(checkUrl(a.name, c), 'deezer', signal))
+      if (found === failed) continue
+      if (answerError('deezer', found)) {
+        error()
+        continue
+      }
+      const artist = checkedArtist(found, c, candidates)
+      if (!artist) continue
+      const hash = await step(() => this.#take(artist.image, 'deezer', signal))
+      if (hash && hash !== failed) return { hash, source: 'deezer' }
+      // the picture was not there or did not decode: nothing else to try
+      return outcome()
+    }
+    return outcome()
+  }
+
+  #counts(items: { id: string; key: string }[], f: Fetched): FetchCounts {
     const now = this.d.now()
     let found = 0
     let notFound = 0
-    for (const q of this.#queries) {
-      const e = this.d.fetched.get(q.albumId)
+    for (const q of items) {
+      const e = f.get(q.id)
       if (!isFresh(e, q.key, now, this.d.hasCover)) continue
       if (e?.hash) found++
       else notFound++
     }
-    const left = this.#queries.length - found - notFound
-    this.d.status({ found, notFound, left, running: this.#running })
+    return { found, notFound, left: items.length - found - notFound }
+  }
+
+  #report(): void {
+    const albums = this.#counts(
+      this.#queries.map((q) => ({ id: q.albumId, key: q.key })),
+      this.d.fetched
+    )
+    const s: FetchStatus = { ...albums, running: this.#running }
+    // artist photos are looked up only with Deezer on
+    if (this.#sources?.deezer) s.artists = this.#counts(this.#artists, this.d.photos)
+    this.d.status(s)
   }
 }

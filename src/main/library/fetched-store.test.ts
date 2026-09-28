@@ -23,6 +23,19 @@ describe('parseFetched', () => {
     expect(parseFetched(JSON.parse(JSON.stringify(serializeFetched(f))))).toEqual(f)
   })
 
+  it('keeps artist photos in their own section', () => {
+    const albums: Fetched = new Map([['al1', { hash: h, source: 'deezer', at: 5, key: 'x\0y' }]])
+    const artists: Fetched = new Map([
+      ['queen', { hash: h, source: 'deezer', at: 7, key: 'queen' }],
+      ['blur', { source: 'none', at: 8, key: 'blur' }]
+    ])
+    const raw = JSON.parse(JSON.stringify(serializeFetched(albums, artists)))
+    expect(parseFetched(raw)).toEqual(albums)
+    expect(parseFetched(raw, 'artists')).toEqual(artists)
+    // a file from before artist photos
+    expect(parseFetched({ version: 1, albums: {} }, 'artists').size).toBe(0)
+  })
+
   it('drops another version and bad entries', () => {
     const one = { source: 'none', at: 1, key: 'k' }
     expect(parseFetched({ version: 2, albums: { al1: one } }).size).toBe(0)

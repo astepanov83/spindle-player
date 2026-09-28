@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { ScanStatus } from '../../../shared/library'
 import {
   canRescan,
+  fetchBusy,
   fetchLine,
   libraryProblem,
+  photoLine,
   notLoadedText,
   scanFailedText,
   scanLine,
@@ -150,5 +152,47 @@ describe('fetchLine', () => {
     expect(fetchLine({ found: 0, notFound: 0, left: 1, running: false })).toBe(
       'Waiting: 1 album to look up'
     )
+  })
+})
+
+describe('artist photos in the lookup lines', () => {
+  const artists = { found: 12, notFound: 3, left: 25 }
+
+  it('shows no photo line while Deezer is off or there are no artists', () => {
+    expect(photoLine({ found: 1, notFound: 0, left: 0, running: false })).toBeUndefined()
+    expect(
+      photoLine({
+        found: 1,
+        notFound: 0,
+        left: 0,
+        running: false,
+        artists: { found: 0, notFound: 0, left: 0 }
+      })
+    ).toBeUndefined()
+  })
+
+  it('says covers are looked up while albums are left, then photos', () => {
+    const covers = { found: 2, notFound: 1, left: 4, running: true, artists }
+    expect(fetchBusy(covers)).toBe('covers')
+    expect(fetchLine(covers)).toBe('Looking up covers: found 2 of 7 · 1 not found · 4 left')
+    expect(photoLine(covers)).toBe('Artist photos: found 12 of 40 · 3 not found · 25 left')
+    const photos = { ...covers, notFound: 5, left: 0 }
+    expect(fetchBusy(photos)).toBe('photos')
+    expect(fetchLine(photos)).toBe('Found 2 of 7 · 5 not found')
+    expect(photoLine(photos)).toBe(
+      'Looking up artist photos: found 12 of 40 · 3 not found · 25 left'
+    )
+  })
+
+  it('shows totals when done', () => {
+    const done = {
+      found: 2,
+      notFound: 5,
+      left: 0,
+      running: false,
+      artists: { found: 30, notFound: 10, left: 0 }
+    }
+    expect(fetchBusy(done)).toBeUndefined()
+    expect(photoLine(done)).toBe('Artist photos: found 30 of 40 · 10 not found')
   })
 })

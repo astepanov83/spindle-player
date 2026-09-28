@@ -293,11 +293,12 @@ export function applyBatch(ix: LibraryIndex, entries: FileEntry[]): boolean {
 
 // Every cover hash the index points at, so the cache can drop the rest.
 // fetched: covers found online, kept even though no file points at them
-export function usedCovers(ix: LibraryIndex, fetched?: Fetched): Set<string> {
+// `fetched`: what the online lookup found (album covers, artist photos)
+export function usedCovers(ix: LibraryIndex, ...fetched: Fetched[]): Set<string> {
   const out = new Set<string>()
   for (const e of ix.files.values()) if (e.cover) out.add(e.cover)
   for (const im of ix.images.values()) if (im.cover) out.add(im.cover)
-  if (fetched) for (const f of fetched.values()) if (f.hash) out.add(f.hash)
+  for (const found of fetched) for (const f of found.values()) if (f.hash) out.add(f.hash)
   return out
 }
 
@@ -322,7 +323,7 @@ export function prunePalettes(ix: LibraryIndex, used: Set<string>): boolean {
 export function missingPalettes(
   ix: LibraryIndex,
   cached: (hash: string) => boolean,
-  fetched?: Fetched
+  ...fetched: Fetched[]
 ): string[] {
-  return [...usedCovers(ix, fetched)].filter((h) => cached(h) && !ix.palettes.has(h))
+  return [...usedCovers(ix, ...fetched)].filter((h) => cached(h) && !ix.palettes.has(h))
 }

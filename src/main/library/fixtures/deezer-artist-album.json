@@ -1,0 +1,45 @@
+{
+  "data": [
+    {
+      "title": "Bridge Over Troubled Water (feat. Walter Parks)",
+      "record_type": "single",
+      "artist": {
+        "id": 4351524,
+        "name": "Lynn O'Brien"
+      }
+    },
+    {
+      "title": "Bridge Over Troubled Water",
+      "record_type": "single",
+      "artist": {
+        "id": 240411361,
+        "name": "Caroline Joy Quinn"
+      }
+    },
+    {
+      "title": "Bridge Over Troubled Water",
+      "record_type": "album",
+      "artist": {
+        "id": 2707,
+        "name": "Simon & Garfunkel"
+      }
+    },
+    {
+      "title": "Mrs. Robinson / Bridge Over Troubled Water / the Boxer",
+      "record_type": "single",
+      "artist": {
+        "id": 74334152,
+        "name": "Simon & Garfunkel Experience"
+      }
+    },
+    {
+      "title": "Bridge Over Troubled Water",
+      "record_type": "single",
+      "artist": {
+        "id": 651632,
+        "name": "Sweet P"
+      }
+    }
+  ],
+  "total": 11
+}

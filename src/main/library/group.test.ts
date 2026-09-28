@@ -3,7 +3,8 @@ import { albumFolder, buildLibrary, shortHash, unknownArtist, variousArtists } f
 import { defaultPalettes, fallbackPalettes } from '../../shared/palette'
 import { emptyIndex } from './merge'
 import type { FileEntry, LibraryIndex } from './types'
-import { searchKey } from './cover-match'
+import { cleanArtist, searchKey } from './cover-match'
+import { artistKey } from '../../shared/artists'
 import type { Fetched } from './fetched-store'
 
 const entry = (path: string, more: Partial<FileEntry> = {}): FileEntry => ({
@@ -18,12 +19,13 @@ function build(
   files: FileEntry[],
   setup?: (ix: LibraryIndex) => void,
   has: (hash: string) => boolean = () => true,
-  fetched?: Fetched
+  fetched?: Fetched,
+  photos?: Fetched
 ): ReturnType<typeof buildLibrary> {
   const ix = emptyIndex()
   for (const f of files) ix.files.set(f.path, f)
   setup?.(ix)
-  return buildLibrary(ix, has, fetched)
+  return buildLibrary(ix, has, fetched, [], photos)
 }
 
 describe('buildLibrary', () => {
@@ -336,5 +338,58 @@ describe('covers found online', () => {
 
   it('still lists an album that shows a fetched cover, so a stale one is looked up again', () => {
     expect(build(files, undefined, () => true, fetched()).queries).toHaveLength(1)
+  })
+})
+
+describe('artist photos (ticket 021)', () => {
+  const h = 'b'.repeat(40)
+  const files = [
+    entry('/m/q/1.mp3', {
+      album: 'A Night at the Opera',
+      artist: 'Queen',
+      title: 'Death on Two Legs'
+    }),
+    entry('/m/q/2.mp3', {
+      album: 'A Night at the Opera',
+      artist: 'Queen',
+      title: 'Lazing on a Sunday'
+    }),
+    entry('/m/q2/1.mp3', { album: 'Jazz', artist: 'Queen', title: 'Mustapha' }),
+    entry('/m/va/1.mp3', { album: 'Hits', artist: 'Blur', title: 'Song 2' }),
+    entry('/m/va/2.mp3', { album: 'Hits', artist: 'Blur feat. Queen', title: 'Tender' }),
+    entry('/m/va/3.mp3', { album: 'Hits', artist: '!!!', title: 'Heart of Hearts' }),
+    entry('/m/u/1.mp3', { title: 'Nameless' })
+  ]
+  const photos = (key = cleanArtist('Queen')): Fetched =>
+    new Map([[artistKey('Queen'), { hash: h, source: 'deezer', at: 0, key }]])
+
+  it('lists artists to look up, with their albums then songs to check them by', () => {
+    const { artists } = build(files)
+    expect(artists.map((a) => a.name)).toEqual(['Blur', 'Blur feat. Queen', 'Queen'])
+    const queen = artists.find((a) => a.name === 'Queen')!
+    expect(queen).toMatchObject({ id: artistKey('Queen'), key: cleanArtist('Queen') })
+    expect(queen.checks).toEqual([
+      { kind: 'album', title: 'A Night at the Opera' },
+      { kind: 'album', title: 'Jazz' },
+      { kind: 'song', title: 'Death on Two Legs' }
+    ])
+    expect(artists.find((a) => a.name === 'Blur')!.checks).toEqual([
+      { kind: 'song', title: 'Song 2' }
+    ])
+  })
+
+  it('sends found photos by artist key, for the same name and in the cache only', () => {
+    expect(build(files, undefined, () => true, undefined, photos()).data.artistPhotos).toEqual({
+      [artistKey('Queen')]: {
+        cover: `spindle://cover/small/${h}`,
+        coverLarge: `spindle://cover/large/${h}`
+      }
+    })
+    expect(build(files, undefined, () => true, undefined, photos('x')).data.artistPhotos).toEqual(
+      {}
+    )
+    expect(build(files, undefined, (x) => x !== h, undefined, photos()).data.artistPhotos).toEqual(
+      {}
+    )
   })
 })

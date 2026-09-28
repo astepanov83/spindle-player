@@ -118,7 +118,8 @@ let ix: LibraryIndex = emptyIndex()
 let built: BuiltLibrary = {
   data: { albums: [], tracks: [], folders: [] },
   paths: new Map(),
-  queries: []
+  queries: [],
+  artists: []
 }
 // the index changed since the page last got the library
 let dirty = false
@@ -169,6 +170,8 @@ function markChanged(): void {
 // --- covers found online (ticket 014) ---
 
 let fetched: Fetched = new Map()
+// artist photos, by artist key (ticket 021); same file, own section
+let photos: Fetched = new Map()
 // none when the file could not be read: it may still be fine, so it is never replaced
 let fetchedWriter: JsonFileWriter<unknown> | undefined
 // bumped on every change to fetched, for the covers in use
@@ -181,7 +184,7 @@ let fetchSetting: { on: boolean; sources: Record<CoverSource, boolean> } | undef
 
 function saveFetched(): void {
   fetchedEdits++
-  fetchedWriter?.schedule(serializeFetched(fetched))
+  fetchedWriter?.schedule(serializeFetched(fetched, photos))
 }
 
 // A found cover shows at most this often while the lookup runs, so the page
@@ -225,6 +228,7 @@ async function startFetcher(s: WorkerStart): Promise<void> {
   if (r.kind === 'broken' || r.kind === 'unreadable')
     log(`Online covers file is ${r.kind}: ${s.fetchedPath}`)
   fetched = parseFetched(r.kind === 'ok' ? r.value : undefined)
+  photos = parseFetched(r.kind === 'ok' ? r.value : undefined, 'artists')
   if (r.kind !== 'unreadable')
     fetchedWriter = new JsonFileWriter<unknown>(
       s.fetchedPath,
@@ -243,6 +247,7 @@ async function startFetcher(s: WorkerStart): Promise<void> {
     // with no source picture there is no large cover, so it is downloaded again
     hasCover: (h) => cached.has(h) && sources.has(h),
     fetched,
+    photos,
     changed: (found) => {
       saveFetched()
       if (found) publishSoon()
@@ -261,11 +266,11 @@ async function startFetcher(s: WorkerStart): Promise<void> {
 // Groups albums, for the page and the lookups.
 function build(): void {
   dirty = false
-  built = buildLibrary(ix, (h) => cached.has(h), fetched, status.folders)
+  built = buildLibrary(ix, (h) => cached.has(h), fetched, status.folders, photos)
   let failed = 0
   for (const e of ix.files.values()) if (e.error) failed++
   setStatus({ tracks: built.data.tracks.length, albums: built.data.albums.length, failed })
-  fetcher?.setQueries(built.queries)
+  fetcher?.setQueries(built.queries, built.artists)
 }
 
 function encodeLibrary(): Uint8Array {
@@ -382,7 +387,7 @@ async function waitForSlot(h: string, check: () => void): Promise<void> {
 // quit before the index was saved) get one from the small cover, so no music
 // file is read again.
 async function fillPalettes(gen: number): Promise<void> {
-  for (const h of missingPalettes(ix, (x) => cached.has(x), fetched)) {
+  for (const h of missingPalettes(ix, (x) => cached.has(x), fetched, photos)) {
     if (claimed.has(h)) continue
     claimed.add(h)
     await waitForSlot(h, () => checkGen(gen))
@@ -402,7 +407,9 @@ async function fillPalettes(gen: number): Promise<void> {
 // Found covers whose small file is gone get it made again from the kept
 // picture, so they show even with the online lookup off.
 async function refillFetched(gen: number): Promise<void> {
-  for (const h of lostCovers(fetched, known, (x) => sources.has(x))) {
+  const kept = (x: string): boolean => sources.has(x)
+  const lost = new Set([...lostCovers(fetched, known, kept), ...lostCovers(photos, known, kept)])
+  for (const h of lost) {
     let data: Uint8Array
     try {
       data = await readSource(sourcesDir, h)
@@ -430,7 +437,7 @@ async function loadCached(): Promise<void> {
 let usedCache: { edits: string; used: Set<string> } | undefined
 function liveUsed(): Set<string> {
   const edits = `${ixEdits}.${fetchedEdits}`
-  if (usedCache?.edits !== edits) usedCache = { edits, used: usedCovers(ix, fetched) }
+  if (usedCache?.edits !== edits) usedCache = { edits, used: usedCovers(ix, fetched, photos) }
   return usedCache.used
 }
 
@@ -702,8 +709,12 @@ async function scan(
   firstFill.end()
   if (dirty) publish()
   saveIndex()
-  // results of albums that are gone; a failed scan may have missed some
-  if (!failed && dropGone(fetched, new Set(built.data.albums.map((a) => a.id)))) saveFetched()
+  // results of albums and artists that are gone; a failed scan may have missed some
+  if (!failed) {
+    const albums = dropGone(fetched, new Set(built.data.albums.map((a) => a.id)))
+    const artists = dropGone(photos, new Set(built.artists.map((a) => a.id)))
+    if (albums || artists) saveFetched()
+  }
   setStatus({ phase: 'idle', done: 0, total: 0, scanFailed: failed })
   post({ type: 'scanned', id })
   log(scanLogLine(Math.round(performance.now() - t0), took, read, status.tracks, status.albums))
@@ -741,7 +752,10 @@ port.on('message', (e: Electron.MessageEvent) => {
       break
     case 'scan':
       // a manual Rescan looks up every miss again
-      if (m.retryFailed && dropNotFound(fetched)) saveFetched()
+      if (m.retryFailed) {
+        const albums = dropNotFound(fetched)
+        if (dropNotFound(photos) || albums) saveFetched()
+      }
       void chain.request((gen) => scan(m.folders, m.retryFailed, gen, m.id))
       break
     case 'fetch-covers':

@@ -49,6 +49,20 @@ describe('resolveCueFile', () => {
     )
   })
 
+  it("never takes a file outside the sheet's folder", () => {
+    const other = has('/m/Other/x.flac', '/x.flac')
+    expect(resolveCueFile('/m/a/x.cue', '../Other/x.flac', [], other, true)).toBeUndefined()
+    expect(resolveCueFile('/m/a/x.cue', 'disc/../../Other/x.flac', [], other, true)).toBe(undefined)
+    expect(resolveCueFile('/m/a/x.cue', '..\\..\\..\\x.flac', [], other, true)).toBe(undefined)
+    // the usual fallbacks still look in its own folder
+    expect(resolveCueFile('/m/a/x.cue', '../Other/x.flac', ['/m/a/X.flac'], other, false)).toBe(
+      '/m/a/X.flac'
+    )
+    expect(resolveCueFile('/m/a/x.cue', '../Other/y.flac', ['/m/a/img.ape'], other, true)).toBe(
+      '/m/a/img.ape'
+    )
+  })
+
   it('takes the same name in another case', () => {
     expect(resolveCueFile('/m/a/x.cue', 'CDIMAGE.APE', ['/m/a/CDImage.ape'], has(), true)).toBe(
       '/m/a/CDImage.ape'
@@ -302,6 +316,25 @@ describe('cueTracks', () => {
     )
     const { items } = cueTracks(ix)
     expect(items.map((i) => i.entry.album)).toEqual(['A'])
+  })
+
+  it('leaves a song in another folder alone for a sheet that names it with ../', () => {
+    const ix = index(
+      [entry('/m/b/x.flac', { duration: 300 }), entry('/m/a/notes.mp3')],
+      [
+        [
+          '/m/a/a.cue',
+          sheet(
+            ['../b/x.flac', 'y.flac'],
+            [
+              [0, 0],
+              [0, 60]
+            ]
+          )
+        ]
+      ]
+    )
+    expect(cueTracks(ix)).toEqual({ items: [], images: new Set() })
   })
 
   it('does nothing for a sheet whose file is not there', () => {

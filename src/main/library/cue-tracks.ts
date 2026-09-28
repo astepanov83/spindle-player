@@ -3,7 +3,7 @@
 import { basename, join } from 'path'
 import type { TrackPart } from '../../shared/library'
 import type { CueSheet } from './cue'
-import { dirOf } from './merge'
+import { dirOf, isUnder } from './merge'
 import { shortHash } from './ids'
 import type { FileEntry, LibraryIndex } from './types'
 
@@ -24,7 +24,9 @@ const stem = (name: string): string => {
 
 // The audio file a cue's FILE line means. Sheets often name a file that isn't
 // there: a .wav that was packed to .flac or .ape later, or a renamed image.
-// - the name as written, then the same name in another case
+// - the name as written, if it is in the sheet's folder or below it (a
+//   "../Other/x.flac" must not take a song from another album)
+// - the same name in another case
 // - the same name with any audio extension, if only one file has it
 // - one FILE in the sheet: the file named like the sheet ("X.cue" or
 //   "X.ape.cue" for "X.ape"), else the only audio file in the folder
@@ -37,7 +39,7 @@ export function resolveCueFile(
 ): string | undefined {
   const dir = dirOf(cuePath)
   const wanted = join(dir, name.replace(/\\/g, '/'))
-  if (exists(wanted)) return wanted
+  if (wanted !== dir && isUnder(wanted, dir) && exists(wanted)) return wanted
   const only = (list: string[]): string | undefined => (list.length === 1 ? list[0] : undefined)
   const base = lower(basename(wanted))
   const found =

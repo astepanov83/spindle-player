@@ -4,6 +4,7 @@ import {
   dropNotFound,
   fetchedCover,
   isFresh,
+  lostCovers,
   notFoundMs,
   parseFetched,
   serializeFetched,
@@ -78,5 +79,23 @@ describe('dropping results', () => {
     expect(dropGone(f, new Set(['al1']))).toBe(false)
     expect(dropGone(f, new Set(['al3']))).toBe(true)
     expect(f.size).toBe(0)
+  })
+})
+
+describe('lostCovers', () => {
+  it('lists found covers with no small file but a kept picture, once each', () => {
+    const g = 'b'.repeat(40)
+    const k = 'c'.repeat(40)
+    const f: Fetched = new Map([
+      ['al1', { hash: g, source: 'deezer', at: 0, key: 'k' }],
+      ['al2', { hash: g, source: 'deezer', at: 0, key: 'k2' }],
+      // still in the cache
+      ['al3', { hash: h, source: 'itunes', at: 0, key: 'k' }],
+      // no picture kept: only a new download can bring it back
+      ['al4', { hash: k, source: 'itunes', at: 0, key: 'k' }],
+      ['al5', { source: 'none', at: 0, key: 'k' }]
+    ])
+    const kept = new Set([g, h])
+    expect(lostCovers(f, has, (x) => kept.has(x))).toEqual([g])
   })
 })

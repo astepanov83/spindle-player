@@ -46,6 +46,7 @@ import { CoverHttp, defaultLimits, NetError } from './cover-http'
 import {
   dropGone,
   dropNotFound,
+  lostCovers,
   parseFetched,
   serializeFetched,
   type Fetched
@@ -394,6 +395,22 @@ async function fillPalettes(gen: number): Promise<void> {
   }
 }
 
+// Found covers whose small file is gone get it made again from the kept
+// picture, so they show even with the online lookup off.
+async function refillFetched(gen: number): Promise<void> {
+  for (const h of lostCovers(fetched, known, (x) => sources.has(x))) {
+    let data: Uint8Array
+    try {
+      data = await readSource(sourcesDir, h)
+    } catch {
+      // gone meanwhile; the lookup downloads it again
+      continue
+    }
+    checkGen(gen)
+    await sendCover(data, gen)
+  }
+}
+
 async function loadCached(): Promise<void> {
   try {
     for (const name of await readdir(start.coversDir)) {
@@ -661,6 +678,7 @@ async function scan(
     }
     lap()
     await fillPalettes(gen)
+    await refillFetched(gen)
     // wait until main has every picture, so the covers are there for the albums
     while (sent.size > 0) {
       await new Promise<void>((r) => coverWaiters.push(r))

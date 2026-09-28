@@ -67,6 +67,19 @@ export function fetchedCover(
   return e?.hash && e.key === key && hasCover(e.hash) ? e.hash : undefined
 }
 
+// Found covers whose small file is gone (an older build pruned it, the cache
+// was cleared) but whose downloaded picture is kept: made again from that
+// picture, with no new download.
+export function lostCovers(
+  f: Fetched,
+  known: (hash: string) => boolean,
+  kept: (hash: string) => boolean
+): string[] {
+  const out = new Set<string>()
+  for (const e of f.values()) if (e.hash && !known(e.hash) && kept(e.hash)) out.add(e.hash)
+  return [...out]
+}
+
 // A manual Rescan, or a source turned on: every miss is looked up again.
 export function dropNotFound(f: Fetched): boolean {
   let changed = false

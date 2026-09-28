@@ -37,8 +37,15 @@ export function registerScheme(): void {
 
 const common = { 'Access-Control-Allow-Origin': '*' }
 
+// The file is gone, can't be read, or isn't in the index. The page tells
+// this apart from a format it can't play (decision 105).
 function notFound(): Response {
   return new Response('Not found', { status: 404, headers: common })
+}
+
+// The file is there, but ffmpeg can't read its format (or there is no ffmpeg).
+function cantDecode(): Response {
+  return new Response('Unsupported format', { status: 415, headers: common })
 }
 
 async function cover(lib: LibraryService, size: string, hash: string): Promise<Response> {
@@ -107,7 +114,7 @@ async function decoded(
   } catch (e) {
     console.error(`Could not read the format of ${m.path}: ${e}`)
   }
-  if (!ffmpeg || !plan) return notFound()
+  if (!ffmpeg || !plan) return cantDecode()
   const { format, duration } = plan
   const data = dataSize(format, duration)
   const header = wavHeader(format, data)

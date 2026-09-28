@@ -8,6 +8,7 @@ import {
   advance,
   afterFailure,
   back,
+  failNotice,
   follows,
   jump,
   onEnded,
@@ -194,11 +195,10 @@ class QueueStore {
     if (!t) return
     window.playbackApi.log(
       `Could not play track ${t.id} "${t.title}" (${t.codec || 'unknown codec'}): ` +
-        `error ${e.code} ${e.message}`
+        `error ${e.code} ${e.message}${e.gone ? ' (file gone or unreadable)' : ''}`
     )
-    // A format Chromium can't read and a file that is gone give the same error (4).
     if (!player.playing) {
-      notice.show(`Can't play "${t.title}".`)
+      notice.show(failNotice(t.title, e.gone, 'paused'))
       return
     }
     this.#fails++
@@ -207,8 +207,8 @@ class QueueStore {
       this.#fails = 0
       return this.#stop()
     }
-    if (this.#move(true, true)) notice.show(`Can't play "${t.title}". Skipped.`)
-    else notice.show(`Can't play "${t.title}". Stopped at the end of the list.`)
+    const moved = this.#move(true, true)
+    notice.show(failNotice(t.title, e.gone, moved ? 'skipped' : 'end'))
   }
 
   // After the library changed: songs that are gone leave the queue.

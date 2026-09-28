@@ -80,7 +80,7 @@ function lib(...albums: [string, number][]): LibraryData {
   return { albums: made.map((m) => m.album), tracks: made.flatMap((m) => m.tracks) }
 }
 
-const bad: EngineError = { code: 4, message: 'no supported streams' }
+const bad: EngineError = { code: 4, message: 'no supported streams', gone: false }
 const playing = (): string | undefined => queue.current?.id
 
 beforeEach(() => {
@@ -151,8 +151,15 @@ describe('a song fails', () => {
     fake.on.error!(bad)
     expect(playing()).toBe('a1')
     expect(fake.calls).toEqual(['load media/a1', 'play'])
-    expect(notice.text).toBe('Can\'t play "A 0". Skipped.')
+    expect(notice.text).toBe('Format can\'t be played, skipped: "A 0"')
     expect(log).toHaveBeenCalledOnce()
+  })
+
+  it('says when the file is gone instead of the format', () => {
+    fake.on.error!({ ...bad, gone: true })
+    expect(playing()).toBe('a1')
+    expect(notice.text).toBe('File is gone or can\'t be read, skipped: "A 0"')
+    expect(log.mock.calls[0][0]).toContain('(file gone or unreadable)')
   })
 
   it('stays put when paused, as after a restore', () => {
@@ -161,7 +168,7 @@ describe('a song fails', () => {
     fake.on.error!(bad)
     expect(playing()).toBe('a0')
     expect(fake.calls).toEqual([])
-    expect(notice.text).toBe('Can\'t play "A 0".')
+    expect(notice.text).toBe('Format can\'t be played: "A 0"')
   })
 
   it('does not add the same album again and again when every song fails', () => {
@@ -171,7 +178,7 @@ describe('a song fails', () => {
     for (let i = 0; i < 3; i++) fake.on.error!(bad)
     expect(queue.items).toEqual(['a0', 'a1', 'a2'])
     expect(player.playing).toBe(false)
-    expect(notice.text).toBe('Can\'t play "A 2". Stopped at the end of the list.')
+    expect(notice.text).toBe('Format can\'t be played, stopped at the end of the list: "A 2"')
   })
 
   it('stops after 20 failures in a row', () => {

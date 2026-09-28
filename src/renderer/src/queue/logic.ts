@@ -58,6 +58,23 @@ export function afterFailure(failsInARow: number, queueLength: number, max = 20)
   return failsInARow >= Math.min(max, queueLength + 1) ? 'stop' : 'skip'
 }
 
+// The notice for a song that won't play. The title goes last, so a long one
+// is what gets cut off, not the reason.
+export function failNotice(
+  title: string,
+  gone: boolean,
+  outcome: 'paused' | 'skipped' | 'end'
+): string {
+  const why = gone ? "File is gone or can't be read" : "Format can't be played"
+  const then =
+    outcome === 'skipped'
+      ? ', skipped'
+      : outcome === 'end'
+        ? ', stopped at the end of the list'
+        : ''
+  return `${why}${then}: "${title}"`
+}
+
 // Previous restarts the song after 3s, otherwise goes one back.
 export function back(q: QueueState, pos: number): { state: QueueState; restart: boolean } {
   if (pos > 3 || q.index === 0) return { state: q, restart: true }

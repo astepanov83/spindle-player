@@ -70,6 +70,13 @@ vi.stubGlobal('AudioContext', FakeContext)
 vi.stubGlobal('HTMLMediaElement', { HAVE_METADATA: 1 })
 vi.stubGlobal('addEventListener', () => {})
 vi.stubGlobal('removeEventListener', () => {})
+// main's answer to the HEAD that asks whether a failed file is still there
+let headStatus = 200
+const heads: string[] = []
+vi.stubGlobal('fetch', async (url: string, init: { method: string }) => {
+  heads.push(`${init.method} ${url}`)
+  return { status: headStatus }
+})
 
 const { AudioEngine } = await import('./engine')
 
@@ -82,11 +89,13 @@ beforeEach(() => {
   e = new AudioEngine()
   el = e.el as unknown as FakeAudio
   got = []
+  headStatus = 200
+  heads.length = 0
   e.on({
     time: (t) => got.push(`time ${t.toFixed(2)}`),
     duration: (d) => got.push(`duration ${d}`),
     ended: () => got.push('ended'),
-    error: (x) => got.push(`error ${x.code}`)
+    error: (x) => got.push(`error ${x.code}${x.gone ? ' gone' : ''}`)
   })
 })
 
@@ -227,19 +236,43 @@ describe('a file Chromium can’t read', () => {
     expect(got.filter((g) => g.startsWith('error'))).toEqual([])
   })
 
-  it('fails for real when the decoded file fails too', () => {
+  it('fails for real when the decoded file fails too: a format, when the file is there', async () => {
+    e.load('spindle://media/bad', 0)
+    el.error = { code: 4, message: '' }
+    el.fire('error')
+    el.error = { code: 4, message: '' }
+    el.fire('error')
+    await vi.runAllTimersAsync()
+    expect(got).toEqual(['error 4'])
+    // asked about the file itself, not the ?decode one
+    expect(heads).toEqual(['HEAD spindle://media/bad'])
+  })
+
+  it('says the file is gone when main answers 404', async () => {
+    headStatus = 404
     e.load('spindle://media/gone', 0)
     el.error = { code: 4, message: '' }
     el.fire('error')
     el.error = { code: 4, message: '' }
     el.fire('error')
-    expect(got).toEqual(['error 4'])
+    await vi.runAllTimersAsync()
+    expect(got).toEqual(['error 4 gone'])
   })
 
-  it('is not retried for a network error', () => {
+  it('drops the error of a song that is no longer loaded', async () => {
     e.load('spindle://media/x', 0)
     el.error = { code: 2, message: '' }
     el.fire('error')
+    e.load('spindle://media/y', 0)
+    await vi.runAllTimersAsync()
+    expect(got).toEqual([])
+  })
+
+  it('is not retried for a network error', async () => {
+    e.load('spindle://media/x', 0)
+    el.error = { code: 2, message: '' }
+    el.fire('error')
+    await vi.runAllTimersAsync()
     expect(el.loads).toEqual(['spindle://media/x'])
     expect(got).toEqual(['error 2'])
   })

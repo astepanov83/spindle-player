@@ -3,6 +3,7 @@ import type { Track } from '../../../shared/library'
 import {
   advance,
   afterFailure,
+  failNotice,
   back,
   follows,
   jump,
@@ -137,6 +138,16 @@ describe('jump', () => {
     const s = q(1)
     expect(jump(s, 5)).toBe(s)
     expect(jump(s, -1)).toBe(s)
+  })
+})
+
+describe('failNotice', () => {
+  it('tells a file that is gone from a format, with the title last', () => {
+    expect(failNotice('Song', true, 'paused')).toBe('File is gone or can\'t be read: "Song"')
+    expect(failNotice('Song', false, 'skipped')).toBe('Format can\'t be played, skipped: "Song"')
+    expect(failNotice('Song', true, 'end')).toBe(
+      'File is gone or can\'t be read, stopped at the end of the list: "Song"'
+    )
   })
 })
 

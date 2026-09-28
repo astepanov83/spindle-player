@@ -14,6 +14,9 @@ export type EngineError = {
   // MediaError code: 2 network, 3 decode, 4 format not supported
   code: number
   message: string
+  // Main answered 404: the file is gone or can't be read. Chromium gives
+  // error 4 for that too, so this is asked for apart.
+  gone: boolean
 }
 
 export interface EngineEvents {
@@ -37,6 +40,16 @@ import { gain } from './volume'
 // Song URLs: main serves indexed files by id (src/main/library/protocol.ts).
 export function mediaUrl(fileId: string): string {
   return `spindle://media/${fileId}`
+}
+
+// True when main has no readable file for a song URL (404). Any other answer,
+// or none, counts as there: the error is then about the format.
+export async function fileGone(url: string): Promise<boolean> {
+  try {
+    return (await fetch(url, { method: 'HEAD' })).status === 404
+  } catch {
+    return false
+  }
 }
 
 // Where a song lies in its file, in seconds; no end: to the end of the file.
@@ -134,7 +147,13 @@ export class AudioEngine {
         if (this.#wantPlay) this.#playElement()
         return
       }
-      this.#on.error?.({ code: e?.code ?? 0, message: e?.message ?? '' })
+      const url = this.#url
+      const code = e?.code ?? 0
+      const message = e?.message ?? ''
+      void fileGone(url).then((gone) => {
+        // a newer song came first
+        if (url === this.#url) this.#on.error?.({ code, message, gone })
+      })
     })
   }
 

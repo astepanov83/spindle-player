@@ -25,8 +25,8 @@ export interface CueSheet {
   tracks: CueTrack[]
 }
 
-// UTF-8 when it is valid UTF-8 (with or without a BOM), else Windows-1251,
-// which is what most non-UTF-8 sheets from Russian rips are.
+// UTF-8 when it is valid UTF-8 (with or without a BOM), UTF-16 with a BOM,
+// else the single-byte code page whose text looks most like real words.
 export function decodeCue(bytes: Uint8Array): string {
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)
     return new TextDecoder('utf-8').decode(bytes.subarray(3))
@@ -35,8 +35,76 @@ export function decodeCue(bytes: Uint8Array): string {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
   } catch {
-    return new TextDecoder('windows-1251').decode(bytes)
+    return decodeSingleByte(bytes)
   }
+}
+
+// Russian rips (cp1251) and Western ones (cp1252) are the non-UTF-8 sheets
+// seen in the wild. cp1251 comes first, so it wins a tie, as it was the only
+// choice before.
+const codePages = ['windows-1251', 'windows-1252']
+
+// cp1252's 0x80-0x9f. Node 22's TextDecoder gives C1 controls there (it
+// treats windows-1252 as latin1); Electron's Node gets them right. Holes stay
+// controls, as in the WHATWG table.
+const cp1252High = [
+  0x20ac, 0x81, 0x201a, 0x192, 0x201e, 0x2026, 0x2020, 0x2021, 0x2c6, 0x2030, 0x160, 0x2039, 0x152,
+  0x8d, 0x17d, 0x8f, 0x90, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014, 0x2dc, 0x2122,
+  0x161, 0x203a, 0x153, 0x9d, 0x17e, 0x178
+]
+
+export function decodePage(bytes: Uint8Array, page: string): string {
+  const text = new TextDecoder(page).decode(bytes)
+  if (page !== 'windows-1252') return text
+  return text.replace(/[\x80-\x9f]/g, (c) =>
+    String.fromCharCode(cp1252High[c.charCodeAt(0) - 0x80])
+  )
+}
+
+export function decodeSingleByte(bytes: Uint8Array): string {
+  let best = ''
+  let bestScore = -Infinity
+  for (const page of codePages) {
+    const text = decodePage(bytes, page)
+    const score = wordScore(text)
+    if (score > bestScore) [best, bestScore] = [text, score]
+  }
+  return best
+}
+
+// Punctuation a title may well have. Any other non-ASCII sign is likely a
+// letter read with the wrong code page.
+const fineSigns = new Set(
+  '\u00a0\u00ab\u00bb\u2013\u2014\u2018\u2019\u201c\u201d\u201e\u2026\u2022\u00a9\u00ae\u00b0\u2116\u00b7\u2122'
+)
+const cyrillic = /\p{Script=Cyrillic}/u
+
+// How much the non-ASCII part of a text looks like real words: +1 for each
+// non-ASCII letter in a likely word, -1 for each in an unlikely one and for
+// each odd sign. A likely word is all Cyrillic, or Latin with at most one
+// more accented letter than plain ones ("Café", "été"). Cyrillic mixed with
+// Latin ("Cafй") is what cp1251 makes of a Western name, and a run of
+// accented letters ("Äèñêîãðàôèÿ") is what cp1252 makes of a Russian one.
+export function wordScore(text: string): number {
+  let score = 0
+  for (const m of text.matchAll(/\p{L}+|[^\p{L}\p{ASCII}]/gu)) {
+    const w = m[0]
+    if (!/\p{L}/u.test(w)) {
+      if (!fineSigns.has(w)) score--
+      continue
+    }
+    let ascii = 0
+    let cyr = 0
+    for (const ch of w)
+      if (ch <= '\x7f') ascii++
+      else if (cyrillic.test(ch)) cyr++
+    const other = [...w].length - ascii - cyr
+    const nonAscii = cyr + other
+    if (nonAscii === 0) continue
+    const likely = (cyr > 0 && ascii === 0 && other === 0) || (cyr === 0 && other <= ascii + 1)
+    score += likely ? nonAscii : -nonAscii
+  }
+  return score
 }
 
 // "mm:ss:ff", with 75 frames a second. Minutes can go past 99.

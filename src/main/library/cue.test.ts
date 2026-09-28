@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cueTime, decodeCue, parseCue } from './cue'
+import { cueTime, decodeCue, decodePage, parseCue, wordScore } from './cue'
 
 const crlf = (lines: string[]): string => lines.join('\r\n') + '\r\n'
 
@@ -229,5 +229,91 @@ describe('decodeCue', () => {
 
   it('reads plain ASCII as it is', () => {
     expect(decodeCue(new TextEncoder().encode(slowDeep))).toBe(slowDeep)
+  })
+})
+
+// Text in a single-byte code page, from the table decodeSingleByte uses.
+function encode(text: string, page: string): Uint8Array {
+  const table = decodePage(
+    Uint8Array.from({ length: 256 }, (_, i) => i),
+    page
+  )
+  return Uint8Array.from([...text], (ch) => {
+    const b = table.indexOf(ch)
+    if (b < 0) throw new Error(`${ch} is not in ${page}`)
+    return b
+  })
+}
+
+const sheet = (performer: string, album: string, titles: string[]): string =>
+  crlf([
+    `PERFORMER "${performer}"`,
+    `TITLE "${album}"`,
+    'FILE "image.ape" WAVE',
+    ...titles.flatMap((t, i) => [
+      `  TRACK 0${i + 1} AUDIO`,
+      `    TITLE "${t}"`,
+      `    INDEX 01 0${i}:00:00`
+    ])
+  ])
+
+describe('decodeCue with a single-byte code page', () => {
+  const russian = [
+    sheet('Кино', 'Группа крови', [
+      'Группа крови',
+      'Закрой за мной дверь, я ухожу',
+      'Спокойная ночь'
+    ]),
+    sheet('ДДТ', 'Осень', ['Что такое осень?', 'Ёлка', 'Я получил эту роль']),
+    sheet('Ария', 'Герой асфальта', ['Улица роз', '«1100»', 'Я']),
+    sheet('Various', 'Сборник', ['Rock-n-roll мёртв', 'Hello', 'Звезда по имени Солнце'])
+  ]
+  const western = [
+    sheet('Mötley Crüe', 'Dr. Feelgood', ['Kickstart My Heart', 'Same Ol’ Situation']),
+    sheet('Sigur Rós', 'Ágætis byrjun', ['Svefn-g-englar', 'Starálfur', 'Olsen Olsen']),
+    sheet('Édith Piaf', 'Non, je ne regrette rien', ['La Vie en rose', 'Hymne à l’amour']),
+    sheet('Björk', 'Début', ['Human Behaviour', 'Venus as a Boy', 'Café']),
+    sheet('Motörhead', 'Ace of Spades', ['Ace of Spades']),
+    sheet('Beyoncé', 'Lemonade', ['Formation', 'Sorry']),
+    sheet('Various', 'Été', ['Señorita', 'Über alles', 'Crème brûlée']),
+    sheet('Various', 'Été 2', ['Jag är så glad', 'Øresund'])
+  ]
+
+  it('reads Russian sheets as Windows-1251', () => {
+    for (const text of russian) expect(decodeCue(encode(text, 'windows-1251'))).toBe(text)
+  })
+
+  it('reads Western sheets as Windows-1252', () => {
+    for (const text of western) expect(decodeCue(encode(text, 'windows-1252'))).toBe(text)
+  })
+
+  it('takes Windows-1251 on a tie, as before', () => {
+    // "Я" alone is "ß" in cp1252: one letter either way
+    const text = sheet('A', 'B', ['Я'])
+    expect(decodeCue(encode(text, 'windows-1251'))).toBe(text)
+  })
+})
+
+describe('decodePage', () => {
+  it("gives cp1252's letters and signs for 0x80-0x9f, not controls", () => {
+    expect(decodePage(Uint8Array.from([0x80, 0x8a, 0x92, 0x9f, 0x81]), 'windows-1252')).toBe(
+      '\u20ac\u0160\u2019\u0178\x81'
+    )
+    expect(decodePage(Uint8Array.from([0x80, 0xb8]), 'windows-1251')).toBe('\u0402\u0451')
+  })
+})
+
+describe('wordScore', () => {
+  it('likes whole Cyrillic words and Latin words with a few accents', () => {
+    expect(wordScore('Группа крови')).toBe(11)
+    expect(wordScore('Café été')).toBe(3)
+    expect(wordScore('plain ASCII')).toBe(0)
+  })
+
+  it('counts against mixed scripts, runs of accents and odd signs', () => {
+    expect(wordScore('Cafй')).toBe(-1)
+    expect(wordScore('Ãðóïïà')).toBe(-6)
+    expect(wordScore('a ÷ b ¸')).toBe(-2)
+    expect(wordScore('«a» \u2013 b')).toBe(0)
   })
 })

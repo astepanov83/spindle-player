@@ -15,6 +15,7 @@ import { orFallback } from './start'
 import { emptyQueue } from '../../shared/saved-queue'
 import { defaultSettings } from '../../shared/settings'
 import type { ScanStatus } from '../../shared/library'
+import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 
 // A file dropped on the window would replace the app (main blocks that too).
 // Nothing in the page takes drops yet.
@@ -56,7 +57,17 @@ function loadLibrary(bytes: Uint8Array): boolean {
   return true
 }
 
+// Ids that changed come just before the library that has the new ones. They
+// are renamed as it loads, so the queue doesn't drop those songs.
+let moves: IdMoves | undefined
+window.libraryApi.onIdsMoved((m) => (moves = moves ? mergeMoves(moves, m) : m))
+
 window.libraryApi.onChanged((bytes) => {
+  if (moves) {
+    queue.moveIds(moves)
+    playlists.moveIds(moves)
+    moves = undefined
+  }
   if (loadLibrary(bytes)) queue.prune()
 })
 window.libraryApi.onStatus((s) => (library.status = s))

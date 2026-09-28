@@ -14,6 +14,7 @@ import {
   type SettingsApi,
   type WinApi
 } from '../shared/ipc'
+import type { IdMoves } from '../shared/id-moves'
 import type { ScanStatus } from '../shared/library'
 
 // The window is sandboxed, so this file may only use contextBridge and ipcRenderer.
@@ -73,6 +74,7 @@ function latest<T>(channel: string): (listener: (value: T) => void) => () => voi
 
 const onLibraryChanged = latest<Uint8Array>(LibraryChannel.changed)
 const onScanStatus = latest<ScanStatus>(LibraryChannel.status)
+const onIdsMoved = latest<IdMoves>(LibraryChannel.idsMoved)
 
 const libraryApi: LibraryApi = {
   load: () => library,
@@ -80,7 +82,8 @@ const libraryApi: LibraryApi = {
   removeFolder: (path) => send(LibraryChannel.removeFolder, path),
   rescan: () => send(LibraryChannel.rescan),
   onChanged: onLibraryChanged,
-  onStatus: onScanStatus
+  onStatus: onScanStatus,
+  onIdsMoved
 }
 
 // Asked for early too, so the first paint has the playlists and the last queue.

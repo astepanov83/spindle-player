@@ -1,4 +1,5 @@
 // The library index on disk, and the messages between main and the library process.
+import type { IdMoves } from '../../shared/id-moves'
 import type { ScanStatus } from '../../shared/library'
 import type { ThemePalettes } from '../../shared/palette'
 import type { CueSheet } from './cue'
@@ -129,3 +130,6 @@ export type WorkerOut =
   | { type: 'flushed' }
   // a scan ran to the end or failed; a stopped one sends nothing
   | { type: 'scanned'; id: number }
+  // track ids that changed because their files are now reached by another
+  // path; sent once, before the library with the new ids
+  | { type: 'ids-moved'; moves: IdMoves }

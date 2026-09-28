@@ -1,5 +1,6 @@
 // The list you played from, and the song playing from it. See work/specs/queue.md.
 // The moves are plain functions in queue/logic.ts; this store plays what they pick.
+import { moveIds, type IdMoves } from '../../../shared/id-moves'
 import type { Album, Track } from '../../../shared/library'
 import type { SavedQueue } from '../../../shared/saved-queue'
 import { engine, mediaUrl, type EngineError } from '../audio/engine'
@@ -216,6 +217,13 @@ class QueueStore {
     const before = this.items[this.index]
     this.#set(prune(this.#state(), (id) => library.has(id)))
     if (this.items[this.index] !== before) this.#start(player.playing)
+  }
+
+  // Songs whose ids changed (see id-moves.ts). They are the same songs, so
+  // nothing restarts. Called just before the library with the new ids loads.
+  moveIds(moves: IdMoves): void {
+    const items = moveIds(this.items, moves)
+    if (items !== this.items) this.#set({ ...this.#state(), items })
   }
 
   // The queue from the last run, loaded paused where it was.

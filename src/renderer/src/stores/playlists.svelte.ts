@@ -1,6 +1,7 @@
 // The user's playlists. Every change goes to main, which checks and saves the list.
 import * as ops from '../../../shared/playlists'
 import type { Playlist } from '../../../shared/playlists'
+import { movePlaylists, type IdMoves } from '../../../shared/id-moves'
 import { library } from './library.svelte'
 import { notice } from './notice.svelte'
 
@@ -54,6 +55,12 @@ class PlaylistStore {
     const r = ops.addTracks(this.list, id, trackIds)
     if (r.added) this.#set(r.list)
     notice.show(r.added ? `Added ${songs(r.added)} to ${p.name}` : `Already in ${p.name}`)
+  }
+
+  // Songs whose ids changed (see id-moves.ts); main renames its copy too.
+  moveIds(moves: IdMoves): void {
+    const list = movePlaylists(this.list, moves)
+    if (list !== this.list) this.#set(list)
   }
 
   removeTracks(id: string, trackIds: string[]): void {

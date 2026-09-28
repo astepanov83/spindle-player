@@ -99,6 +99,23 @@ describe('PlaylistFile', () => {
     file.flushSync()
     expect(readdirSync(path)).toEqual([])
   })
+
+  it('renames songs whose ids changed and saves the file', () => {
+    const path = join(dir, 'playlists.json')
+    const file = new PlaylistFile(path)
+    file.setFromPage([
+      { id: 'p', name: 'Mix', trackIds: ['old', 'x'] },
+      { id: 'q', name: 'Other', trackIds: ['y'] }
+    ])
+    file.flushSync()
+    file.moveIds({ old: 'new' })
+    file.flushSync()
+    expect(JSON.parse(readFileSync(path, 'utf8')).playlists).toEqual([
+      { id: 'p', name: 'Mix', trackIds: ['new', 'x'] },
+      { id: 'q', name: 'Other', trackIds: ['y'] }
+    ])
+    expect(readdirSync(dir)).toEqual(['playlists.json'])
+  })
 })
 
 describe('QueueFile', () => {
@@ -114,6 +131,20 @@ describe('QueueFile', () => {
       index: 1,
       from: 'X',
       pos: 4
+    })
+  })
+
+  it('renames songs whose ids changed and keeps the place', () => {
+    const path = join(dir, 'queue.json')
+    const file = new QueueFile(path)
+    file.setFromPage({ items: ['a', 'old'], index: 1, from: 'X', pos: 7 })
+    file.moveIds({ old: 'new' })
+    file.flushSync()
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
+      items: ['a', 'new'],
+      index: 1,
+      from: 'X',
+      pos: 7
     })
   })
 })

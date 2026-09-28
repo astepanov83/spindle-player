@@ -14,6 +14,7 @@ import {
   parseSavedQueue,
   type SavedQueue
 } from '../shared/saved-queue'
+import { moveQueue, movePlaylists, type IdMoves } from '../shared/id-moves'
 import { JsonFileWriter, openJsonFile, removeStrayTmp } from './json-file'
 
 // Reads the file at start. A file that can't be read gets no writer, so it is
@@ -53,6 +54,14 @@ export class PlaylistFile {
     this.#writer?.schedule(playlistsFile(this.#data))
   }
 
+  // Songs whose ids changed (see id-moves.ts), checked like a file read.
+  moveIds(moves: IdMoves): void {
+    const moved = movePlaylists(this.#data, moves)
+    if (moved === this.#data) return
+    this.#data = parsePlaylists(playlistsFile(moved))
+    this.#writer?.schedule(playlistsFile(this.#data))
+  }
+
   flushSync(): void {
     this.#writer?.flushSync()
   }
@@ -75,6 +84,13 @@ export class QueueFile {
 
   setFromPage(raw: unknown): void {
     this.#data = parseSavedQueue(raw)
+    this.#writer?.schedule(this.#data)
+  }
+
+  moveIds(moves: IdMoves): void {
+    const moved = moveQueue(this.#data, moves)
+    if (moved === this.#data) return
+    this.#data = parseSavedQueue(moved)
     this.#writer?.schedule(this.#data)
   }
 

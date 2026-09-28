@@ -4,7 +4,7 @@ import { basename, join } from 'path'
 import type { TrackPart } from '../../shared/library'
 import type { CueSheet } from './cue'
 import { dirOf, isUnder } from './merge'
-import { shortHash } from './ids'
+import { cueTrackId, shortHash } from './ids'
 import type { FileEntry, LibraryIndex } from './types'
 
 // One cue track, ready for grouping: `entry` looks like a file with the
@@ -76,7 +76,7 @@ function imageTracks(
   const whole = tracks.length === 1
   const out: CueItem[] = []
   tracks.forEach((t, i) => {
-    const id = whole ? shortHash(image.path) : shortHash(`${image.path}#${t.no}`)
+    const id = whole ? shortHash(image.path) : cueTrackId(image.path, t.no)
     if (used.has(id)) return
     used.add(id)
     const end = tracks[i + 1]?.start

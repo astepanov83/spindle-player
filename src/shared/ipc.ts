@@ -1,3 +1,4 @@
+import type { IdMoves } from './id-moves'
 import type { ScanStatus } from './library'
 import type { Playlist } from './playlists'
 import type { QueuePlace, SavedQueue } from './saved-queue'
@@ -45,7 +46,9 @@ export const LibraryChannel = {
   // main to page: a new library after a scan changed something
   changed: 'library:changed',
   // main to page: scan progress and the folder list
-  status: 'library:status'
+  status: 'library:status',
+  // main to page: track ids that changed, sent before the library that has them
+  idsMoved: 'library:ids-moved'
 } as const
 
 // What the preload exposes to the page as `window.libraryApi`.
@@ -61,6 +64,7 @@ export interface LibraryApi {
   rescan(): void
   onChanged(listener: (library: Uint8Array) => void): () => void
   onStatus(listener: (status: ScanStatus) => void): () => void
+  onIdsMoved(listener: (moves: IdMoves) => void): () => void
 }
 
 export const PlaylistChannel = {

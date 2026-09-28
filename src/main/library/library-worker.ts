@@ -35,6 +35,8 @@ import { walk } from './walk'
 import { pruneCoverFiles, removeOldTemp } from './cover-prune'
 import { ownCopy } from './bytes'
 import { FirstFill, ScanChain, Stopped } from './scan-chain'
+import { fileKey, findMoves, idMoves, moveEntries } from './moves'
+import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
 import { markerOf, smallName } from './cover-names'
 import {
@@ -355,6 +357,61 @@ async function readImage(
   return { path, mtime: Math.floor(s.mtimeMs), size: s.size, cover }
 }
 
+// A file or cue sheet the scan found, and its key on disk (see moves.ts).
+interface Found {
+  path: string
+  mtime: number
+  size: number
+  key?: string
+}
+
+// Old id -> new id of songs whose path moved this run, so a song that was
+// playing under its old id still plays.
+let aliases: IdMoves = {}
+
+// Files the index has under a path the walk no longer took, found again
+// under another path (decision 87 picks one path for a folder reached two
+// ways). They keep what was read, and main and the page get the id changes
+// once, before the library with the new ids.
+async function followMoves(
+  gen: number,
+  folders: string[],
+  skipped: string[],
+  found: Found[]
+): Promise<void> {
+  const present = new Set(found.map((f) => f.path))
+  const added = new Map<string, string>()
+  for (const f of found)
+    if (f.key && !ix.files.has(f.path) && !ix.cues.has(f.path)) added.set(f.path, f.key)
+  if (!added.size) return
+  const gone = [...ix.files.keys(), ...ix.cues.keys()].filter(
+    (p) =>
+      !present.has(p) && folders.some((f) => isUnder(p, f)) && !skipped.some((s) => isUnder(p, s))
+  )
+  if (!gone.length) return
+  // the old path still reaches the file (a symlink); a deleted file has none
+  const goneKeys = new Map<string, string>()
+  await eachPaced(gone, statPace, async (path) => {
+    checkGen(gen)
+    try {
+      const key = fileKey(await stat(path))
+      if (key) goneKeys.set(path, key)
+    } catch {
+      // deleted or moved away
+    }
+  })
+  checkGen(gen)
+  const moves = findMoves(goneKeys, added)
+  if (!moves.size) return
+  const ids = idMoves(ix, moves)
+  moveEntries(ix, moves)
+  markChanged()
+  aliases = mergeMoves(aliases, ids)
+  log(`Library: ${moves.size} files are now reached by another path; their ids changed`)
+  post({ type: 'ids-moved', moves: ids })
+  publish()
+}
+
 // Only the phases that finished: a scan that failed part way has fewer.
 function phaseTimes(took: number[]): string {
   return took.map((ms, i) => `${['listing', 'sizes and images', 'tags'][i]} ${ms}`).join(', ')
@@ -394,8 +451,8 @@ async function scan(
     lap()
     progress(gen, 'walk', listing.files.length, 0, true)
 
-    const found: { path: string; mtime: number; size: number }[] = []
-    const cues: typeof found = []
+    const found: Found[] = []
+    const cues: Found[] = []
     const cueSet = new Set(listing.cues)
     await eachPaced([...listing.files, ...listing.cues], statPace, async (path) => {
       checkGen(gen)
@@ -404,7 +461,8 @@ async function scan(
         ;(cueSet.has(path) ? cues : found).push({
           path,
           mtime: Math.floor(s.mtimeMs),
-          size: s.size
+          size: s.size,
+          key: fileKey(s)
         })
       } catch {
         // gone since the walk
@@ -420,6 +478,8 @@ async function scan(
 
     lap()
     checkGen(gen)
+    const skipped = [...listing.skipped, ...emptiedFolders(ix, folders, listing.files)]
+    await followMoves(gen, folders, skipped, [...found, ...cues])
     // entries an older tag reader got wrong are read once more with ffprobe
     const newReader = !!start.ffprobe && ix.reader < readerVersion
     const toRead = planReads(
@@ -430,7 +490,6 @@ async function scan(
       newReader ? readAgainWithProbe : undefined
     )
     const cuesToRead = planCueReads(ix.cues, cues, retryFailed)
-    const skipped = [...listing.skipped, ...emptiedFolders(ix, folders, listing.files)]
     if (
       applyListing(ix, folders, {
         paths: found.map((f) => f.path),
@@ -510,7 +569,8 @@ function coverSource(h: string): Promise<Uint8Array | undefined> {
 
 // What main needs to serve a file by its id.
 function mediaInfo(id: string): MediaInfo | undefined {
-  const path = built.paths.get(id)
+  const path =
+    built.paths.get(id) ?? (Object.hasOwn(aliases, id) ? built.paths.get(aliases[id]) : undefined)
   const e = path ? ix.files.get(path) : undefined
   if (!e) return undefined
   const { codec, duration, sampleRate, channels, bits } = e

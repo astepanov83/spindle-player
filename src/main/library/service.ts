@@ -4,6 +4,7 @@
 import { join } from 'path'
 import { app, dialog, utilityProcess, type BrowserWindow } from 'electron'
 import { LibraryChannel } from '../../shared/ipc'
+import type { IdMoves } from '../../shared/id-moves'
 import type { ScanStatus } from '../../shared/library'
 import { ffmpegTool } from '../ffmpeg-path'
 import type { SettingsStore } from '../settings-store'
@@ -34,6 +35,8 @@ export class LibraryService {
   constructor(
     readonly store: SettingsStore,
     readonly send: (channel: string, data: unknown) => void,
+    // track ids that changed: main renames them in its playlists and queue files
+    readonly idsMoved: (moves: IdMoves) => void,
     coverPreload: string,
     readonly dir = app.getPath('userData')
   ) {
@@ -95,6 +98,11 @@ export class LibraryService {
         break
       case 'log':
         console.info(m.text)
+        break
+      case 'ids-moved':
+        this.idsMoved(m.moves)
+        // the page renames them too, as the library with the new ids comes
+        this.send(LibraryChannel.idsMoved, m.moves)
         break
     }
   }

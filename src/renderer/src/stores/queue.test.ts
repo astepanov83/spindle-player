@@ -226,6 +226,32 @@ describe('a rescan', () => {
   })
 })
 
+describe('ids that changed', () => {
+  it('renames the queue as the library with the new ids loads, and keeps playing', () => {
+    queue.jump(1)
+    fake.reset()
+    saveQueue.mockClear()
+    queue.moveIds({ a0: 'n0', a1: 'n1' })
+    const l = lib(['a', 3], ['b', 2])
+    for (const t of l.tracks) if (t.id === 'a0' || t.id === 'a1') t.id = t.id.replace('a', 'n')
+    l.albums[0].trackIds = ['n0', 'n1', 'a2']
+    library.load(l)
+    queue.prune()
+    expect(queue.items).toEqual(['n0', 'n1', 'a2'])
+    expect(playing()).toBe('n1')
+    expect(fake.calls).toEqual([])
+    expect(saveQueue).toHaveBeenCalledTimes(1)
+    expect(saveQueue).toHaveBeenLastCalledWith(
+      expect.objectContaining({ items: ['n0', 'n1', 'a2'] })
+    )
+  })
+
+  it('does nothing when no queued song moved', () => {
+    queue.moveIds({ zz: 'yy' })
+    expect(saveQueue).not.toHaveBeenCalled()
+  })
+})
+
 describe('saving', () => {
   it('sends the list only when it changes, and the place on every song change', () => {
     fake.on.ended!()

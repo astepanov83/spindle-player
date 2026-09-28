@@ -133,6 +133,10 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     (channel, data) => {
       if (main && !main.win.isDestroyed()) main.win.webContents.send(channel, data)
     },
+    (moves) => {
+      playlists.moveIds(moves)
+      savedQueue.moveIds(moves)
+    },
     join(__dirname, '../preload/covers.js')
   )
   handleProtocol(library)

@@ -15,16 +15,18 @@ const fake = vi.hoisted(() => ({
 
 interface FakeWindow {
   destroyed: boolean
-  sent: { id: number }[]
+  sent: { id: number; side?: number }[]
   webContents: unknown
+  handlers: Map<string, (...args: unknown[]) => void>
 }
 
 vi.mock('electron', () => {
   class BrowserWindow {
     destroyed = false
     sent: { id: number }[] = []
+    handlers = new Map<string, (...args: unknown[]) => void>()
     webContents = {
-      on: () => {},
+      on: (event: string, fn: (...args: unknown[]) => void) => this.handlers.set(event, fn),
       setWindowOpenHandler: () => {},
       send: (_: string, job: { id: number }) => {
         if (fake.sendThrows) throw new Error('send failed')
@@ -99,8 +101,12 @@ describe('CoverCache', () => {
     const second = covers.palette(hash, new Uint8Array([1]))
     await vi.advanceTimersByTimeAsync(0)
     expect(fake.windows).toHaveLength(2)
-    const job = fake.windows[1].sent[0]
-    fake.onDone!({ sender: fake.windows[1].webContents }, { id: job.id, bad: true })
+    // bad twice: with others, then alone
+    for (const n of [0, 1]) {
+      const job = fake.windows[1].sent[n]
+      fake.onDone!({ sender: fake.windows[1].webContents }, { id: job.id, bad: true })
+      await vi.advanceTimersByTimeAsync(0)
+    }
     expect(await second).toEqual({ result: 'rebuild' })
     covers.close()
   })
@@ -118,5 +124,58 @@ describe('CoverCache', () => {
     expect(fake.windows).toHaveLength(1)
     covers.close()
     expect(await p).toEqual({ result: 'retry' })
+  })
+
+  // answers every job the window has not answered yet
+  function answer(w: FakeWindow, done: Set<number>, r: (id: number) => object): void {
+    for (const job of w.sent)
+      if (!done.has(job.id)) {
+        done.add(job.id)
+        fake.onDone!({ sender: w.webContents }, { id: job.id, ...r(job.id) })
+      }
+  }
+
+  it('tries each picture alone after a crash, and marks only the one that crashes alone', async () => {
+    const covers = new CoverCache(dir, 'preload.js')
+    const hashes = ['1', '2', '3'].map((c) => c.repeat(40))
+    const results = hashes.map((h, i) => covers.add(h, new Uint8Array([i])))
+    await tick()
+    expect(fake.windows[0].sent).toHaveLength(3)
+    fake.windows[0].handlers.get('render-process-gone')!({}, { reason: 'crashed' })
+    // each one runs alone, one at a time; the window is new after each crash
+    const seen: number[] = []
+    const answered = new Set<number>()
+    for (let i = 0; i < 3; i++) {
+      await tick()
+      const w = fake.windows.at(-1)!
+      const open = w.sent.filter((j) => !answered.has(j.id))
+      expect(open).toHaveLength(1)
+      answered.add(open[0].id)
+      const pic = open[0] as unknown as { data: Uint8Array }
+      seen.push(pic.data[0])
+      if (pic.data[0] === 1) w.handlers.get('render-process-gone')!({}, { reason: 'crashed' })
+      else fake.onDone!({ sender: w.webContents }, { id: open[0].id, jpg: new Uint8Array([9]) })
+    }
+    expect(seen).toEqual([0, 1, 2])
+    expect((await Promise.all(results)).map((r) => r.result)).toEqual(['ok', 'bad', 'ok'])
+    expect(readdirSync(dir).sort()).toEqual(
+      [`${hashes[0]}.jpg`, `${hashes[1]}.bad`, `${hashes[2]}.jpg`].sort()
+    )
+    covers.close()
+  })
+
+  it('keeps a picture that decodes when tried alone', async () => {
+    const covers = new CoverCache(dir, 'preload.js')
+    const p = covers.add(hash, new Uint8Array([1]))
+    await tick()
+    const w = fake.windows[0]
+    const done = new Set<number>()
+    answer(w, done, () => ({ bad: true }))
+    await tick()
+    expect(w.sent).toHaveLength(2)
+    answer(w, done, () => ({ jpg: new Uint8Array([9]) }))
+    expect(await p).toEqual({ result: 'ok' })
+    expect(readdirSync(dir)).toEqual([`${hash}.jpg`])
+    covers.close()
   })
 })

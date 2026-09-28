@@ -195,6 +195,34 @@ describe('the frame loop', () => {
     expect(frame()).toBe(true)
   })
 
+  it('comes back from Off to Ring while stopped: draws while the cover resizes, then stops', () => {
+    shownStage()
+    setLook({ style: 'off', colors, playing: false })
+    runOut()
+    expect(frame()).toBe(false)
+    fake.log = []
+    setLook({ style: 'ring', colors, playing: false })
+    const n = runOut()
+    expect(n).toBeGreaterThanOrEqual(Math.floor(600 / 16))
+    expect(n).toBeLessThanOrEqual(Math.ceil(600 / 16) + 1)
+    expect(fake.log.filter((l) => l.startsWith('draw')).length).toBe(n)
+    expect(frame()).toBe(false)
+  })
+
+  it('starts again on play after it stopped for good', () => {
+    shownStage()
+    setLook({ style: 'ring', colors, playing: true })
+    runOut(10)
+    setLook({ style: 'ring', colors, playing: false })
+    runOut()
+    expect(frame()).toBe(false)
+    fake.log = []
+    setLook({ style: 'ring', colors, playing: true })
+    for (let i = 0; i < 30; i++) expect(frame()).toBe(true)
+    expect(fake.log.filter((l) => l.startsWith('draw')).length).toBe(30)
+    expect(meter.levels.some((v) => v > 0)).toBe(true)
+  })
+
   it('draws one frame for new colors while stopped', () => {
     shownStage()
     setLook({ style: 'ring', colors: { ...colors, c1: '#0000ff' }, playing: false })

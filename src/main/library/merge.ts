@@ -1,6 +1,6 @@
 // The index in memory: reading it from disk, and folding scan results into it.
 import { sep } from 'path'
-import { paletteVersion, parseThemePalettes } from '../../shared/palette'
+import { paletteVersion, parseThemePalettes, type ThemePalettes } from '../../shared/palette'
 import { isCoverHash } from './cover-names'
 import type { CueSheet, CueTrack } from './cue'
 import {
@@ -21,6 +21,7 @@ export function emptyIndex(): LibraryIndex {
     cues: new Map(),
     images: new Map(),
     palettes: new Map(),
+    stalePalettes: new Map(),
     pendingMoves: {}
   }
 }
@@ -114,12 +115,18 @@ export function parseIndex(raw: unknown): LibraryIndex {
   if (isObject(raw.pendingMoves))
     for (const [from, to] of Object.entries(raw.pendingMoves))
       if (isTrackId(from) && isTrackId(to)) ix.pendingMoves[from] = to
-  if (raw.paletteVersion === paletteVersion && isObject(raw.palettes))
-    for (const [hash, v] of Object.entries(raw.palettes)) {
-      const p = parseThemePalettes(v)
-      if (p && isCoverHash(hash)) ix.palettes.set(hash, p)
-    }
+  const current = raw.paletteVersion === paletteVersion
+  readPalettes(raw.palettes, current ? ix.palettes : ix.stalePalettes)
+  readPalettes(raw.stalePalettes, ix.stalePalettes)
   return ix
+}
+
+function readPalettes(raw: unknown, into: Map<string, ThemePalettes>): void {
+  if (!isObject(raw)) return
+  for (const [hash, v] of Object.entries(raw)) {
+    const p = parseThemePalettes(v)
+    if (p && isCoverHash(hash) && !into.has(hash)) into.set(hash, p)
+  }
 }
 
 export function serializeIndex(ix: LibraryIndex): unknown {
@@ -131,6 +138,10 @@ export function serializeIndex(ix: LibraryIndex): unknown {
     images: [...ix.images.values()],
     paletteVersion,
     palettes: Object.fromEntries(ix.palettes),
+    // kept across a restart until each cover is picked again
+    stalePalettes: Object.fromEntries(
+      [...ix.stalePalettes].filter(([hash]) => !ix.palettes.has(hash))
+    ),
     pendingMoves: ix.pendingMoves
   }
 }
@@ -268,12 +279,18 @@ export function usedCovers(ix: LibraryIndex): Set<string> {
   return out
 }
 
-// Drops palettes of covers nothing points at. Returns true if any went.
+// Drops palettes of covers nothing points at, and old-version stand-ins that
+// were picked again. Returns true if any went.
 export function prunePalettes(ix: LibraryIndex, used: Set<string>): boolean {
   let changed = false
   for (const hash of ix.palettes.keys())
     if (!used.has(hash)) {
       ix.palettes.delete(hash)
+      changed = true
+    }
+  for (const hash of ix.stalePalettes.keys())
+    if (!used.has(hash) || ix.palettes.has(hash)) {
+      ix.stalePalettes.delete(hash)
       changed = true
     }
   return changed

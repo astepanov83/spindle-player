@@ -106,10 +106,13 @@ function coverOf(
 }
 
 // The cover's colors. No cover: made-up colors from the album id, so albums
-// don't all look the same grey. A cover whose palette isn't picked yet (an
-// index from before palettes) stays neutral for the moment, not a random color.
+// don't all look the same grey. A cover whose palette isn't picked yet shows
+// the one an older paletteVersion picked, or stays neutral for the moment
+// (an index from before palettes), not a random color.
 function paletteOf(ix: LibraryIndex, cover: string | undefined, id: string): ThemePalettes {
-  const p = cover ? (ix.palettes.get(cover) ?? defaultPalettes) : fallbackPalettes(id)
+  const p = cover
+    ? (ix.palettes.get(cover) ?? ix.stalePalettes.get(cover) ?? defaultPalettes)
+    : fallbackPalettes(id)
   return { dark: [...p.dark], light: [...p.light] }
 }
 

@@ -40,6 +40,7 @@ describe('parseIndex', () => {
     const ix = indexOf([entry('/m/a.mp3', { title: 'A', track: 2, cover: 'abc' })])
     ix.images.set('/m', { path: '/m/cover.jpg', mtime: 5, size: 6, cover: 'def' })
     ix.palettes.set(h1, fallbackPalettes('a'))
+    ix.stalePalettes.set(h2, fallbackPalettes('b'))
     const back = parseIndex(JSON.parse(JSON.stringify(serializeIndex(ix))))
     expect(back).toEqual(ix)
   })
@@ -50,11 +51,14 @@ describe('parseIndex', () => {
     expect(ix.palettes.size).toBe(0)
   })
 
-  it('drops palettes of another palette version, and broken ones', () => {
+  it('keeps palettes of another palette version only as stand-ins, and drops broken ones', () => {
     const good = fallbackPalettes('a')
     const raw = { version: indexVersion, files: [entry('/a.mp3')], palettes: { [h1]: good } }
-    expect(parseIndex({ ...raw, paletteVersion: paletteVersion + 1 }).palettes.size).toBe(0)
+    const old = parseIndex({ ...raw, paletteVersion: paletteVersion - 1 })
+    expect(old.palettes.size).toBe(0)
+    expect(old.stalePalettes.get(h1)).toEqual(good)
     expect(parseIndex({ ...raw, paletteVersion }).palettes.get(h1)).toEqual(good)
+    expect(parseIndex({ ...raw, paletteVersion }).stalePalettes.size).toBe(0)
     const broken = parseIndex({
       ...raw,
       paletteVersion,
@@ -215,6 +219,23 @@ describe('helpers', () => {
     expect(prunePalettes(ix, usedCovers(ix))).toBe(true)
     expect([...ix.palettes.keys()]).toEqual([h1])
     expect(prunePalettes(ix, usedCovers(ix))).toBe(false)
+  })
+
+  it('stand-ins stay until their cover is picked again, also across a save', () => {
+    const ix = indexOf([entry('/m/a.mp3', { cover: h1 }), entry('/m/b.mp3', { cover: h2 })])
+    ix.stalePalettes.set(h1, fallbackPalettes('old1'))
+    ix.stalePalettes.set(h2, fallbackPalettes('old2'))
+    ix.palettes.set(h1, fallbackPalettes('new1'))
+    // not written once picked again
+    const saved = serializeIndex(ix) as { stalePalettes: Record<string, unknown> }
+    expect(Object.keys(saved.stalePalettes)).toEqual([h2])
+    expect(parseIndex(JSON.parse(JSON.stringify(saved))).stalePalettes.get(h2)).toEqual(
+      fallbackPalettes('old2')
+    )
+    // the cover still needs its new palette
+    expect(missingPalettes(ix, () => true)).toEqual([h2])
+    expect(prunePalettes(ix, usedCovers(ix))).toBe(true)
+    expect([...ix.stalePalettes.keys()]).toEqual([h2])
   })
 
   it('missingPalettes lists cached covers with no palette', () => {

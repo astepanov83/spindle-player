@@ -60,6 +60,9 @@ export interface LibraryIndex {
   images: Map<string, FolderImage>
   // cover hash -> the album colors picked from it
   palettes: Map<string, ThemePalettes>
+  // Colors picked by an older paletteVersion, shown until the cover's are
+  // picked again, so a version bump doesn't turn every album grey for a scan.
+  stalePalettes: Map<string, ThemePalettes>
   // Track ids that changed (moves.ts) and that main has not said are in
   // playlists.json and queue.json yet. Saved with the moved entries, so a
   // crash in between sends them again on the next start.

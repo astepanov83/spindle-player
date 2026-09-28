@@ -609,6 +609,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       }
       if (m.palette) {
         ix.palettes.set(m.hash, m.palette)
+        ix.stalePalettes.delete(m.hash)
         markChanged()
       }
       wakeCoverWaiters()

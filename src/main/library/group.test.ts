@@ -132,17 +132,25 @@ describe('buildLibrary', () => {
     expect(build([entry('/m/b/1.mp3')]).data.albums[0].cover).toBe('')
   })
 
-  it("takes the cover's palette, a neutral one while it is not picked yet, and made-up colors with no cover", () => {
+  it("takes the cover's palette, an old version's until it is picked again, a neutral one with neither, and made-up colors with no cover", () => {
     const salt = fallbackPalettes('salt')
+    const old = fallbackPalettes('old')
     const { data } = build(
       [
         entry('/m/a/1.mp3', { album: 'A', cover: 'withPalette' }),
         entry('/m/b/1.mp3', { album: 'B', cover: 'noPaletteYet' }),
-        entry('/m/c/1.mp3', { album: 'C' })
+        entry('/m/c/1.mp3', { album: 'C' }),
+        entry('/m/d/1.mp3', { album: 'D', cover: 'oldPalette' })
       ],
-      (ix) => ix.palettes.set('withPalette', salt)
+      (ix) => {
+        ix.palettes.set('withPalette', salt)
+        ix.stalePalettes.set('oldPalette', old)
+        // a new palette wins over the old one
+        ix.stalePalettes.set('withPalette', old)
+      }
     )
-    const [a, b, c] = data.albums
+    const [a, b, c, d] = data.albums
+    expect(d.palette).toEqual(old)
     expect(a.palette).toEqual(salt)
     expect(b.palette).toEqual(defaultPalettes)
     expect(c.palette).toEqual(fallbackPalettes(c.id))

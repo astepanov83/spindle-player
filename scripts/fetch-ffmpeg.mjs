@@ -13,23 +13,28 @@ import { fileURLToPath } from 'url'
 import { gunzipSync } from 'zlib'
 
 const release = 'https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1'
-// sha256 of each downloaded file (the .gz before unpacking)
+// Each file: its name here, the sha256 of the download (a .gz before
+// unpacking) and the sha256 of the file itself.
 const builds = {
   'linux-x64': {
     'ffmpeg-linux-x64.gz': [
       'ffmpeg',
-      'bfe8a8fc511530457b528c48d77b5737527b504a3797a9bc4866aeca69c2dffa'
+      'bfe8a8fc511530457b528c48d77b5737527b504a3797a9bc4866aeca69c2dffa',
+      'e7e7fb30477f717e6f55f9180a70386c62677ef8a4d4d1a5d948f4098aa3eb99'
     ],
     'ffprobe-linux-x64.gz': [
       'ffprobe',
-      '25d9b6ccb05e3d9de9e04e31e2506d8dd7f9f0418981965ac6df12e8d3afd067'
+      '25d9b6ccb05e3d9de9e04e31e2506d8dd7f9f0418981965ac6df12e8d3afd067',
+      '4f231a1960d83e403d08f7971e271707bec278a9ae18e21b8b5b03186668450d'
     ],
     'linux-x64.LICENSE': [
       'LICENSE.txt',
+      '8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903',
       '8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903'
     ],
     'linux-x64.README': [
       'README.txt',
+      '72f4b1b06d419d22ace6e7cc75f06826f90737345aa0b1736158929f4aacc537',
       '72f4b1b06d419d22ace6e7cc75f06826f90737345aa0b1736158929f4aacc537'
     ]
   }
@@ -52,20 +57,17 @@ function fail(text) {
 if (!files) fail(`no pinned ffmpeg build for ${key}`)
 
 const sha256 = (b) => createHash('sha256').update(b).digest('hex')
-// the pinned hash is kept next to each file, so a later install skips the download
-const stamp = (name) => join(dir, `.${name}.sha256`)
 
-function present(name, hash) {
-  try {
-    return existsSync(join(dir, name)) && readFileSync(stamp(name), 'utf8') === hash
-  } catch {
-    return false
-  }
+// No stamp files next to them: electron-builder packs this folder, and
+// leaving files out of it there broke app.asar.
+function present(name, fileHash) {
+  const path = join(dir, name)
+  return existsSync(path) && sha256(readFileSync(path)) === fileHash
 }
 
 mkdirSync(dir, { recursive: true })
-for (const [asset, [name, hash]] of Object.entries(files)) {
-  if (present(name, hash)) continue
+for (const [asset, [name, hash, fileHash]] of Object.entries(files)) {
+  if (present(name, fileHash)) continue
   let body
   try {
     const res = await fetch(`${release}/${asset}`)
@@ -76,10 +78,10 @@ for (const [asset, [name, hash]] of Object.entries(files)) {
   }
   if (sha256(body) !== hash) fail(`${asset} does not match its pinned sha256`)
   const out = asset.endsWith('.gz') ? gunzipSync(body) : body
+  if (sha256(out) !== fileHash) fail(`${name} does not match its pinned sha256`)
   const tmp = join(dir, `${name}.tmp`)
   writeFileSync(tmp, out)
   if (!name.endsWith('.txt')) chmodSync(tmp, 0o755)
   renameSync(tmp, join(dir, name))
-  writeFileSync(stamp(name), hash)
   console.log(`fetch-ffmpeg: ${name} (${(out.length / 1e6).toFixed(1)} MB)`)
 }

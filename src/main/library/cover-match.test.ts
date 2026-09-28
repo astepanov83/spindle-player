@@ -99,6 +99,30 @@ describe('pickCandidates', () => {
     expect(pickCandidates(q(), [c({ artist: 'Various Artists' })])).toEqual([])
   })
 
+  it('takes a compilation only when its track count or year agrees', () => {
+    const comp = q({
+      artist: 'Various Artists',
+      compilation: true,
+      album: 'Love Songs',
+      year: 1999,
+      tracks: 18
+    })
+    const va = (more: Partial<Candidate>): Candidate =>
+      c({
+        artist: 'Various Artists',
+        album: 'Love Songs',
+        year: undefined,
+        tracks: undefined,
+        ...more
+      })
+    expect(pickCandidates(comp, [va({ tracks: 16 })])).toEqual([])
+    expect(pickCandidates(comp, [va({ tracks: 18 })])).toHaveLength(1)
+    expect(pickCandidates(comp, [va({ year: 1999 })])).toHaveLength(1)
+    expect(pickCandidates(comp, [va({ year: 2005 })])).toEqual([])
+    expect(pickCandidates(comp, [va({})])).toEqual([])
+    expect(pickCandidates({ ...comp, year: 0 }, [va({ year: 1999 })])).toEqual([])
+  })
+
   it('puts the closest year first, then the closest track count', () => {
     const got = pickCandidates(q(), [
       c({ year: 2019, image: 'far' }),

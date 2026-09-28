@@ -96,6 +96,18 @@ function artistMatches(q: CoverQuery, found: string): boolean {
   return credits(found).includes(a) || credits(q.artist).includes(f)
 }
 
+// Many compilations share a title ("Love Songs"), so one is taken only when
+// its track count or year is known on both sides, and each known one is at
+// most 1 apart.
+function compilationAgrees(q: CoverQuery, c: Candidate): boolean {
+  const close = (a: number | undefined, b: number | undefined): boolean | undefined =>
+    a && b ? Math.abs(a - b) <= 1 : undefined
+  const tracks = close(q.tracks, c.tracks)
+  const year = close(q.year, c.year)
+  if (tracks === undefined && year === undefined) return false
+  return tracks !== false && year !== false
+}
+
 // Years or track counts apart; unknown counts as 1 apart.
 const gap = (a: number | undefined, b: number | undefined): number => (a && b ? Math.abs(a - b) : 1)
 
@@ -108,6 +120,7 @@ export function pickCandidates(q: CoverQuery, found: Candidate[]): Candidate[] {
   return found
     .filter((c) => cleanAlbum(c.album) === album && artistMatches(q, c.artist))
     .filter((c) => !(short(c) && q.tracks >= minAlbumTracks))
+    .filter((c) => !q.compilation || compilationAgrees(q, c))
     .map((c) => ({ c, y: gap(q.year, c.year), t: gap(q.tracks, c.tracks), k: Number(short(c)) }))
     .sort((a, b) => Number(a.y > 2) - Number(b.y > 2) || a.k - b.k || a.y - b.y || a.t - b.t)
     .map((x) => x.c)

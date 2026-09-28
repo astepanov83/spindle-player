@@ -2,9 +2,11 @@
 import { join } from 'path'
 import { app } from 'electron'
 import type { TemplateId } from '../shared/layout'
+import { templates } from '../shared/templates'
 import {
   isKnownSettingsFile,
   pageSettings,
+  parseSize,
   parseFolders,
   parseStoredSettings,
   type Settings,
@@ -56,7 +58,10 @@ export class SettingsStore {
     return { before, next: this.#live }
   }
 
-  setWindowSize(id: TemplateId, size: Size): void {
+  // Stored as the file parser would read it, so the file stays known.
+  setWindowSize(id: TemplateId, raw: Size): void {
+    const size = parseSize(raw, templates[id])
+    if (!size) return
     const old = this.#data.windowSizes[id]
     if (old && old.width === size.width && old.height === size.height) return
     this.#replace({ ...this.#data, windowSizes: { ...this.#data.windowSizes, [id]: size } })

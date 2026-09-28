@@ -56,7 +56,9 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], fallback: T)
   return allowed.includes(v as T) ? (v as T) : fallback
 }
 
-function parseSize(v: unknown, template: Template): Size | undefined {
+// Also what main stores: a size the window manager gave below the template's
+// minimum (a tiling one may) is saved as the minimum, so the file reads back as is.
+export function parseSize(v: unknown, template: Template): Size | undefined {
   if (!isObject(v)) return undefined
   const { width, height } = v
   if (typeof width !== 'number' || typeof height !== 'number') return undefined

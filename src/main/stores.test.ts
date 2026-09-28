@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { getPath: () => '/nowhere' } }))
 
 const { SettingsStore } = await import('./settings-store')
+const { isKnownSettingsFile } = await import('../shared/settings')
 const { PlaylistFile, QueueFile } = await import('./page-files')
 
 let dir: string
@@ -75,6 +76,34 @@ describe('SettingsStore', () => {
     store.setWindowSize('studio', { width: 1000, height: 700 })
     store.flushSync()
     expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject(saved)
+  })
+})
+
+describe('SettingsStore window sizes', () => {
+  it('stores every size so the file reads back as known', () => {
+    const path = join(dir, 'settings.json')
+    const store = new SettingsStore(path)
+    // a tiling window manager may ignore the minimum; odd and huge sizes too
+    const sizes = [
+      { width: 300, height: 200 },
+      { width: 1000.6, height: 700.2 },
+      { width: 99999, height: 99999 },
+      { width: 1200, height: 800 }
+    ]
+    for (const id of ['studio', 'classic', 'focus'] as const)
+      for (const size of sizes) {
+        store.setWindowSize(id, size)
+        store.flushSync()
+        expect(isKnownSettingsFile(JSON.parse(readFileSync(path, 'utf8')))).toBe(true)
+      }
+    expect(store.get().windowSizes.focus).toEqual({ width: 1200, height: 800 })
+    expect(readdirSync(dir)).toEqual(['settings.json'])
+  })
+
+  it('stores a size below the minimum as the minimum', () => {
+    const store = new SettingsStore(join(dir, 'settings.json'))
+    store.setWindowSize('studio', { width: 300, height: 200 })
+    expect(store.get().windowSizes.studio).toEqual({ width: 860, height: 560 })
   })
 })
 

@@ -110,12 +110,13 @@ export function lchToHex(c: Lch): string {
 }
 
 // color-mix(in oklch, a t, b), as the page mixes album colors into --bg:
-// lightness and chroma in a straight line, hue the short way round. A grey
-// has no hue, so it takes the other color's.
+// lightness and chroma in a straight line, hue the short way round. A color
+// with chroma under 0.02 counts as grey with no hue, so it takes the other
+// color's; Chromium does that too (checked in the app: --bg is such a grey).
 export function mixOklch(a: string, b: string, t: number): string {
   const [La, Ca, Ha] = hexToLch(a)
   const [Lb, Cb, Hb] = hexToLch(b)
-  const grey = 1e-4
+  const grey = 0.02
   const ha = Ca < grey ? Hb : Ha
   const hb = Cb < grey ? Ha : Hb
   let d = hb - ha

@@ -85,8 +85,10 @@ describe('color conversions', () => {
     expect(contrast('#777777', '#777777')).toBeCloseTo(1, 5)
   })
   it('mixes in oklch as color-mix does', () => {
-    expect(mixOklch('#d64545', '#111216', 1)).toBe('#d64545')
-    expect(mixOklch('#d64545', '#111216', 0)).toBe('#111216')
+    expect(mixOklch('#d64545', '#0050ff', 1)).toBe('#d64545')
+    expect(mixOklch('#d64545', '#0050ff', 0)).toBe('#0050ff')
+    // the numbers Chromium gave for color-mix(in oklch, #ff7a2f 70%, #111216)
+    expect(mixOklch('#ff7a2f', '#111216', 0.7)).toBe(lchToHex([0.562187, 0.130038, 46.0345]))
     // lightness halfway
     const [L] = hexToLch(mixOklch('#ffffff', '#000000', 0.5))
     expect(L).toBeCloseTo(0.5, 2)
@@ -126,7 +128,7 @@ describe('swatches', () => {
   // purpose, bump paletteVersion so stored palettes are made again.
   it('gives the same answer for a fixed picture', () => {
     expect(coverPalettes(covers.sunset)).toEqual({
-      dark: ['#f37436', '#ffaacd', '#432252'],
+      dark: ['#f37436', '#ffafd0', '#432252'],
       light: ['#f37436', '#c34e00', '#432252']
     })
   })

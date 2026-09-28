@@ -127,6 +127,33 @@ export function parseStoredSettings(
 
 const storedKeys = Object.keys(defaultStoredSettings())
 
+// Every template named is one this version has, with a mode it offers. A
+// template left out is fine: the save only adds it.
+function isKnownQueue(v: unknown): boolean {
+  if (!isObject(v)) return false
+  return Object.entries(v).every(
+    ([id, mode]) =>
+      templateIds.includes(id as TemplateId) &&
+      templates[id as TemplateId].queueOptions.includes(mode as QueueMode)
+  )
+}
+
+// Every size is for a known template and is kept as it is (not cut to the
+// template's minimum or the largest side, not rounded, no other fields).
+function isKnownSizes(v: unknown): boolean {
+  if (!isObject(v)) return false
+  return Object.entries(v).every(([id, size]) => {
+    if (!templateIds.includes(id as TemplateId) || !isObject(size)) return false
+    const parsed = parseSize(size, templates[id as TemplateId])
+    return (
+      !!parsed &&
+      Object.keys(size).length === 2 &&
+      parsed.width === size.width &&
+      parsed.height === size.height
+    )
+  })
+}
+
 // True when every field the file has is one this version reads as it is.
 // Otherwise the next save would drop something, so the file is copied first.
 export function isKnownSettingsFile(raw: unknown): boolean {
@@ -138,10 +165,9 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('visualizer') && !visualizerStyles.includes(raw.visualizer as VisualizerStyle))
     return false
   if (has('theme') && !themeChoices.includes(raw.theme as ThemeChoice)) return false
-  if (has('volume') && (typeof raw.volume !== 'number' || !Number.isFinite(raw.volume)))
-    return false
-  if (has('queue') && !isObject(raw.queue)) return false
-  if (has('windowSizes') && !isObject(raw.windowSizes)) return false
+  if (has('volume') && parseVolume(raw.volume, NaN) !== raw.volume) return false
+  if (has('queue') && !isKnownQueue(raw.queue)) return false
+  if (has('windowSizes') && !isKnownSizes(raw.windowSizes)) return false
   if (has('folders')) {
     if (!Array.isArray(raw.folders)) return false
     if (parseFolders(raw.folders).length !== new Set(raw.folders).size) return false

@@ -157,8 +157,34 @@ describe('isKnownSettingsFile', () => {
       { folders: '/m' },
       { folders: ['relative/path'] },
       { folders: ['/m', 7] },
-      { eq: [1, 2] }
+      { eq: [1, 2] },
+      { volume: 150 },
+      { volume: 40.5 }
     ])
       expect(isKnownSettingsFile(raw)).toBe(false)
+  })
+
+  it('checks the modes inside queue', () => {
+    expect(isKnownSettingsFile({ queue: { studio: 'col' } })).toBe(true)
+    expect(isKnownSettingsFile({ queue: { studio: 'col', classic: 'drawer', focus: 'tab' } })).toBe(
+      true
+    )
+    // classic does not offer tab; mini is no template; 7 is no mode
+    for (const queue of [{ classic: 'tab' }, { mini: 'tab' }, { studio: 7 }])
+      expect(isKnownSettingsFile({ queue })).toBe(false)
+  })
+
+  it('checks the sizes inside windowSizes', () => {
+    expect(isKnownSettingsFile({ windowSizes: { focus: { width: 500, height: 700 } } })).toBe(true)
+    for (const windowSizes of [
+      { focus: { width: 100, height: 700 } },
+      { focus: { width: 500.4, height: 700 } },
+      { focus: { width: 99999, height: 700 } },
+      { focus: { width: '500', height: 700 } },
+      { focus: { width: 500, height: 700, x: 3 } },
+      { focus: [500, 700] },
+      { mini: { width: 500, height: 700 } }
+    ])
+      expect(isKnownSettingsFile({ windowSizes })).toBe(false)
   })
 })

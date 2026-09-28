@@ -9,6 +9,7 @@
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
   import { placeholders } from './placeholders'
+  import { onSideButton } from './side-buttons'
   import { scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { songRows } from './views'
   import { library, type Section } from '../stores/library.svelte'
@@ -45,6 +46,8 @@
     () => [library.open, library.section]
   )
 </script>
+
+<svelte:window onmouseup={(e) => onSideButton(e, library.section === 'albums' ? 'open' : null)} />
 
 {#snippet item(sec: Section, icon: IconName, label: string)}
   <button class="sidebtn" aria-current={library.section === sec} onclick={() => pick(sec)}>

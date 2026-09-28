@@ -47,6 +47,7 @@ class PlaylistStore {
     if (library.section === `pl:${id}`) library.section = 'songs'
     if (library.openPlaylist === id) library.openPlaylist = null
     library.forgetPlaylistSort(id)
+    library.forgetClosed(id)
     if (p) notice.show(`Deleted ${p.name}`)
   }
 

@@ -23,3 +23,14 @@ describe('removing a playlist', () => {
     expect(library.playlistSort(a)).toBeNull()
   })
 })
+
+describe('removing a closed playlist', () => {
+  it('does not come back on mouse Forward', () => {
+    const a = playlists.create()
+    library.openPlaylist = a
+    library.back('openPlaylist')
+    playlists.remove(a)
+    library.forward('openPlaylist')
+    expect(library.openPlaylist).toBeNull()
+  })
+})

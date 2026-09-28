@@ -13,6 +13,8 @@ import {
 export type Chip = 'albums' | 'artists' | 'folders' | 'playlists'
 // sidebar sections; playlists are "pl:<id>"
 export type Section = 'songs' | 'albums' | 'artists' | 'folders' | `pl:${string}`
+// the pages the mouse Back and Forward buttons close and reopen
+export type Page = 'open' | 'openPlaylist'
 
 class LibraryStore {
   // plain arrays, not deep proxies: they can hold 50k+ songs
@@ -49,6 +51,8 @@ class LibraryStore {
   // Playlists show in their own order until a column is clicked. Each keeps
   // its sort while the app runs; it is not saved.
   playlistSorts: PlaylistSorts = $state.raw({})
+  // the page mouse Back last closed, for Forward to reopen
+  #closed: { page: Page; id: string } | null = null
 
   load(data: LibraryData): void {
     this.#tracks = new Map(data.tracks.map((t) => [t.id, t]))
@@ -73,6 +77,28 @@ class LibraryStore {
   forgetPlaylistSort(id: string): void {
     if (id in this.playlistSorts)
       this.playlistSorts = withPlaylistSort(this.playlistSorts, id, null)
+  }
+
+  // Mouse Back: from an album or playlist page to its list.
+  back(page: Page): void {
+    const id = this[page]
+    if (!id) return
+    this[page] = null
+    this.#closed = { page, id }
+  }
+
+  // Mouse Forward: reopens what Back closed, if it is still there.
+  forward(page: Page): void {
+    const c = this.#closed
+    if (!c || c.page !== page || this[page]) return
+    if (page === 'open' && !this.#albumIndex.has(c.id)) return
+    this[page] = c.id
+    this.#closed = null
+  }
+
+  // a deleted playlist must not come back on Forward
+  forgetClosed(id: string): void {
+    if (this.#closed?.id === id) this.#closed = null
   }
 
   has(id: string): boolean {

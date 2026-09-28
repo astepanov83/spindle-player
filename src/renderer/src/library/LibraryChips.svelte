@@ -7,8 +7,9 @@
   import PlaylistView from './PlaylistView.svelte'
   import SearchBox from './SearchBox.svelte'
   import { placeholders } from './placeholders'
+  import { onSideButton } from './side-buttons'
   import { scrollTopOnChange } from '../ui/scroll-top.svelte'
-  import { library, type Chip } from '../stores/library.svelte'
+  import { library, type Chip, type Page } from '../stores/library.svelte'
 
   const chips: [Chip, string][] = [
     ['albums', 'Albums'],
@@ -25,11 +26,17 @@
     library.openPlaylist = null
   }
 
+  const page: Page | null = $derived(
+    library.chip === 'albums' ? 'open' : library.chip === 'playlists' ? 'openPlaylist' : null
+  )
+
   scrollTopOnChange(
     () => scrollEl,
     () => [library.open, library.openPlaylist, library.chip]
   )
 </script>
+
+<svelte:window onmouseup={(e) => onSideButton(e, page)} />
 
 <div class="lib">
   <div class="top">

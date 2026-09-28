@@ -23,6 +23,8 @@ describe('parseStoredSettings', () => {
       visualizer: 'wave',
       theme: 'light',
       volume: 35,
+      fetchCovers: true,
+      coverSources: { musicbrainz: false, deezer: true, itunes: true },
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       folders: ['/home/me/Music', '/mnt/nas/music']
     }
@@ -113,6 +115,8 @@ describe('parseStoredSettings with a base', () => {
     visualizer: 'wave',
     theme: 'light',
     volume: 35,
+    fetchCovers: true,
+    coverSources: { musicbrainz: true, deezer: false, itunes: true },
     windowSizes: { focus: { width: 500, height: 700 } },
     folders: ['/m']
   }
@@ -186,5 +190,39 @@ describe('isKnownSettingsFile', () => {
       { mini: { width: 500, height: 700 } }
     ])
       expect(isKnownSettingsFile({ windowSizes })).toBe(false)
+  })
+})
+
+describe('cover fetch settings', () => {
+  it('is off with every source on by default', () => {
+    const s = parseStoredSettings(undefined)
+    expect(s.fetchCovers).toBe(false)
+    expect(s.coverSources).toEqual({ musicbrainz: true, deezer: true, itunes: true })
+  })
+
+  it('keeps each source on its own and drops unknown ones', () => {
+    const s = parseStoredSettings({
+      fetchCovers: true,
+      coverSources: { deezer: false, itunes: 'yes', lastfm: true }
+    })
+    expect(s.fetchCovers).toBe(true)
+    expect(s.coverSources).toEqual({ musicbrainz: true, deezer: false, itunes: true })
+  })
+
+  it('falls back on a wrong switch', () => {
+    expect(parseStoredSettings({ fetchCovers: 1 }).fetchCovers).toBe(false)
+  })
+
+  it('knows the new fields in a file', () => {
+    expect(isKnownSettingsFile({ fetchCovers: true, coverSources: { deezer: false } })).toBe(true)
+    expect(isKnownSettingsFile({ coverSources: { lastfm: true } })).toBe(false)
+    expect(isKnownSettingsFile({ coverSources: { deezer: 1 } })).toBe(false)
+    expect(isKnownSettingsFile({ fetchCovers: 'on' })).toBe(false)
+  })
+
+  it('gives the page both fields', () => {
+    const p = pageSettings(parseStoredSettings({ fetchCovers: true }))
+    expect(p.fetchCovers).toBe(true)
+    expect(p.coverSources.itunes).toBe(true)
   })
 })

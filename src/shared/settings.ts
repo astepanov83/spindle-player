@@ -3,6 +3,7 @@ import { templateIds, templates } from './templates'
 
 export type VisualizerStyle = 'ring' | 'spectrum' | 'wave' | 'off'
 export type ThemeChoice = 'system' | 'dark' | 'light'
+export type CoverSource = 'musicbrainz' | 'deezer' | 'itunes'
 
 export interface Settings {
   template: TemplateId
@@ -12,6 +13,9 @@ export interface Settings {
   theme: ThemeChoice
   // 0..100, as the slider shows it
   volume: number
+  // look up covers online for albums with none; off, nothing is sent anywhere
+  fetchCovers: boolean
+  coverSources: Record<CoverSource, boolean>
 }
 
 export interface Size {
@@ -29,6 +33,8 @@ export interface StoredSettings extends Settings {
 
 export const visualizerStyles: VisualizerStyle[] = ['ring', 'spectrum', 'wave', 'off']
 export const themeChoices: ThemeChoice[] = ['dark', 'light', 'system']
+// also the order they are tried in, after the MusicBrainz id lookup
+export const coverSources: CoverSource[] = ['musicbrainz', 'deezer', 'itunes']
 
 export function defaultSettings(): Settings {
   return {
@@ -36,7 +42,9 @@ export function defaultSettings(): Settings {
     queue: { studio: 'tab', classic: 'drawer', focus: 'tab' },
     visualizer: 'ring',
     theme: 'system',
-    volume: 70
+    volume: 70,
+    fetchCovers: false,
+    coverSources: { musicbrainz: true, deezer: true, itunes: true }
   }
 }
 
@@ -73,6 +81,16 @@ export function parseSize(v: unknown, template: Template): Size | undefined {
 function parseVolume(v: unknown, fallback: number): number {
   if (typeof v !== 'number' || !Number.isFinite(v)) return fallback
   return Math.min(100, Math.max(0, Math.round(v)))
+}
+
+function parseCoverSources(
+  v: unknown,
+  base: Record<CoverSource, boolean>
+): Record<CoverSource, boolean> {
+  const r = isObject(v) ? v : {}
+  const out = { ...base }
+  for (const s of coverSources) if (typeof r[s] === 'boolean') out[s] = r[s]
+  return out
 }
 
 // Absolute on Linux and macOS, or with a drive letter on Windows.
@@ -122,6 +140,8 @@ export function parseStoredSettings(
     visualizer: oneOf(r.visualizer, visualizerStyles, base.visualizer),
     theme: oneOf(r.theme, themeChoices, base.theme),
     volume: parseVolume(r.volume, base.volume),
+    fetchCovers: typeof r.fetchCovers === 'boolean' ? r.fetchCovers : base.fetchCovers,
+    coverSources: parseCoverSources(r.coverSources, base.coverSources),
     windowSizes,
     folders: Array.isArray(r.folders) ? parseFolders(r.folders) : [...base.folders]
   }
@@ -170,6 +190,15 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('volume') && parseVolume(raw.volume, NaN) !== raw.volume) return false
   if (has('queue') && !isKnownQueue(raw.queue)) return false
   if (has('windowSizes') && !isKnownSizes(raw.windowSizes)) return false
+  if (has('fetchCovers') && typeof raw.fetchCovers !== 'boolean') return false
+  if (
+    has('coverSources') &&
+    (!isObject(raw.coverSources) ||
+      Object.entries(raw.coverSources).some(
+        ([k, v]) => !coverSources.includes(k as CoverSource) || typeof v !== 'boolean'
+      ))
+  )
+    return false
   if (has('folders')) {
     if (!Array.isArray(raw.folders)) return false
     if (parseFolders(raw.folders).length !== new Set(raw.folders).size) return false
@@ -184,6 +213,8 @@ export function pageSettings(s: StoredSettings): Settings {
     queue: { ...s.queue },
     visualizer: s.visualizer,
     theme: s.theme,
-    volume: s.volume
+    volume: s.volume,
+    fetchCovers: s.fetchCovers,
+    coverSources: { ...s.coverSources }
   }
 }

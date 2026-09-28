@@ -5,9 +5,23 @@ import { defineConfig } from 'vitest/config'
 // Components are checked by running the app.
 export default defineConfig({
   plugins: [svelte()],
-  // the browser build of Svelte, so $state and $derived in stores react as in the app
-  resolve: { conditions: ['browser'] },
   test: {
-    include: ['src/**/*.test.ts']
+    projects: [
+      {
+        extends: true,
+        // the browser build of Svelte, so $state and $derived in stores react as in the app
+        resolve: { conditions: ['browser'] },
+        test: { name: 'renderer', include: ['src/renderer/**/*.test.ts'] }
+      },
+      {
+        // main, preload and shared code run in Node (shared also in the page, but it has no DOM)
+        extends: true,
+        test: {
+          name: 'node',
+          include: ['src/**/*.test.ts'],
+          exclude: ['src/renderer/**', '**/node_modules/**']
+        }
+      }
+    ]
   }
 })

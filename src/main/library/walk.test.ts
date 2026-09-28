@@ -119,4 +119,27 @@ describe('walk', () => {
     const out = await run([gone])
     expect(out.skipped).toEqual([gone])
   })
+
+  it('keeps the songs of a symlinked folder whose real path fails', async () => {
+    file('A/01.flac')
+    symlinkSync(join(root, 'A'), join(root, 'B'))
+    const fs: WalkFs = {
+      realpath: async (p) => {
+        if (p === join(root, 'B')) throw new Error('EACCES')
+        return realpath(p)
+      },
+      readdir: (p) => readdir(p, { withFileTypes: true }),
+      stat: (p) => stat(p)
+    }
+    const out = await run([root], fs)
+    expect(out.skipped).toEqual([join(root, 'B')])
+    expect(out.files).toEqual([join(root, 'A/01.flac')])
+  })
+
+  it('drops a symlink to nothing', async () => {
+    symlinkSync(join(root, 'nowhere'), join(root, 'dead'))
+    const out = await run([root])
+    expect(out.skipped).toEqual([])
+    expect(out.files).toEqual([])
+  })
 })

@@ -100,10 +100,18 @@ export async function walk(
             const s = await fs.stat(path)
             isDir = s.isDirectory()
             isFile = s.isFile()
-            if (isDir) real = await fs.realpath(path)
           } catch {
+            // a symlink to nothing
             continue
           }
+          if (isDir)
+            try {
+              real = await fs.realpath(path)
+            } catch {
+              // there, but can't be walked now: keep its songs, like a folder that can't be read
+              out.skipped.push(path)
+              continue
+            }
         }
         if (isDir)
           pending.push({ path, real, links: dir.links + (link ? 1 : 0), depth: dir.depth + 1 })

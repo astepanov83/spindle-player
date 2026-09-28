@@ -38,6 +38,7 @@ import { FirstFill, ScanChain, Stopped } from './scan-chain'
 import { confirmMoves, fileKey, findMoves, idMoves, moveEntries, movePlan } from './moves'
 import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
+import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from './cover-names'
 import {
   readerVersion,
@@ -411,11 +412,6 @@ async function followMoves(
   publish()
 }
 
-// Only the phases that finished: a scan that failed part way has fewer.
-function phaseTimes(took: number[]): string {
-  return took.map((ms, i) => `${['listing', 'sizes and images', 'tags'][i]} ${ms}`).join(', ')
-}
-
 async function scan(
   folders: string[],
   retryFailed: boolean,
@@ -547,11 +543,7 @@ async function scan(
   saveIndex()
   setStatus({ phase: 'idle', done: 0, total: 0, scanFailed: failed })
   post({ type: 'scanned', id })
-  log(
-    `Library scan: ${Math.round(performance.now() - t0)} ms (${phaseTimes(took)}), ` +
-      `${read} files read, ` +
-      `${status.tracks} songs in ${status.albums} albums`
-  )
+  log(scanLogLine(Math.round(performance.now() - t0), took, read, status.tracks, status.albums))
 }
 
 // --- lookups for the protocol ---

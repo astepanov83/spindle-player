@@ -3,6 +3,7 @@
   import AlbumGrid from './AlbumGrid.svelte'
   import AlbumPage from './AlbumPage.svelte'
   import Empty from './Empty.svelte'
+  import FolderView from './FolderView.svelte'
   import PlaylistList from './PlaylistList.svelte'
   import PlaylistView from './PlaylistView.svelte'
   import SearchBox from './SearchBox.svelte'
@@ -26,13 +27,16 @@
     library.openPlaylist = null
   }
 
-  const page: Page | null = $derived(
-    library.chip === 'albums' ? 'open' : library.chip === 'playlists' ? 'openPlaylist' : null
-  )
+  const pages: Partial<Record<Chip, Page>> = {
+    albums: 'open',
+    playlists: 'openPlaylist',
+    folders: 'folder'
+  }
+  const page: Page | null = $derived(pages[library.chip] ?? null)
 
   scrollTopOnChange(
     () => scrollEl,
-    () => [library.open, library.openPlaylist, library.chip]
+    () => [library.open, library.openPlaylist, library.chip, library.folder]
   )
 </script>
 
@@ -40,7 +44,9 @@
 
 <div class="lib">
   <div class="top">
-    <SearchBox placeholder="Search albums and artists" />
+    <SearchBox
+      placeholder={library.chip === 'folders' ? 'Search this folder' : 'Search albums and artists'}
+    />
     <div class="chips">
       {#each chips as [c, label] (c)}
         <button class="chip" aria-pressed={library.chip === c} onclick={() => pick(c)}
@@ -56,8 +62,10 @@
       {:else}
         <PlaylistList />
       {/if}
+    {:else if library.chip === 'folders'}
+      <FolderView {scrollEl} />
     {:else if library.chip !== 'albums'}
-      <Empty title={placeholders[library.chip][0]} text={placeholders[library.chip][1]} />
+      <Empty title={placeholders.artists[0]} text={placeholders.artists[1]} />
     {:else if library.open}
       <AlbumPage albumId={library.open} />
     {:else}

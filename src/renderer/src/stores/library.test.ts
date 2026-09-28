@@ -68,6 +68,38 @@ describe('mouse Back and Forward', () => {
     expect(library.openPlaylist).toBe('p')
   })
 
+  it('Back goes up a folder and Forward goes back down', () => {
+    const track = (id: string, folder: number): LibraryData['tracks'][number] => ({
+      id,
+      title: id,
+      duration: 1,
+      albumId: 'a',
+      artist: '',
+      album: '',
+      no: 1,
+      disc: 1,
+      codec: '',
+      folder
+    })
+    library.load({
+      ...lib('a'),
+      tracks: [track('x', 2)],
+      folders: [
+        { name: '/m', parent: -1 },
+        { name: 'A', parent: 0 },
+        { name: 'B', parent: 1 }
+      ]
+    })
+    const deep = library.folders.nodes[2].key
+    library.openFolder(deep)
+    library.back('folder')
+    expect(library.folder).toBe(library.folders.nodes[1].key)
+    // the album side is not touched
+    library.forward('open')
+    library.forward('folder')
+    expect(library.folder).toBe(deep)
+  })
+
   it('Forward skips an album a rescan removed', () => {
     library.open = 'b'
     library.back('open')

@@ -7,9 +7,9 @@
   function oninput(e: Event & { currentTarget: HTMLInputElement }): void {
     library.query = e.currentTarget.value
     library.open = null
-    // search results show as songs in the sidebar
+    // search results show as songs in the sidebar; Folders searches the open folder
     const s = library.section
-    if (s.startsWith('pl:') || s === 'artists' || s === 'folders') library.section = 'songs'
+    if (s.startsWith('pl:') || s === 'artists') library.section = 'songs'
   }
 </script>
 

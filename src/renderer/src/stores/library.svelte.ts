@@ -9,12 +9,22 @@ import {
   type Sort,
   type SortKey
 } from '../library/views'
+import {
+  emptyTree,
+  folderBack,
+  folderForward,
+  folderTree,
+  openFolder,
+  type FolderNav,
+  type FolderTree
+} from '../library/folders'
 
 export type Chip = 'albums' | 'artists' | 'folders' | 'playlists'
 // sidebar sections; playlists are "pl:<id>"
 export type Section = 'songs' | 'albums' | 'artists' | 'folders' | `pl:${string}`
-// the pages the mouse Back and Forward buttons close and reopen
-export type Page = 'open' | 'openPlaylist'
+// the pages the mouse Back and Forward buttons close and reopen; in
+// Folders they go up a folder and back down
+export type Page = 'open' | 'openPlaylist' | 'folder'
 
 class LibraryStore {
   // plain arrays, not deep proxies: they can hold 50k+ songs
@@ -22,6 +32,7 @@ class LibraryStore {
   #tracks = new Map<string, Track>()
   #order = new Map<string, number>()
   #albumIndex = new Map<string, number>()
+  folders: FolderTree = $state.raw(emptyTree())
   // The maps above are plain, so Svelte can't see them change. Every reader
   // touches this, so a $derived that looked up a track runs again after a load.
   #version = $state(0)
@@ -51,6 +62,11 @@ class LibraryStore {
   // Playlists show in their own order until a column is clicked. Each keeps
   // its sort while the app runs; it is not saved.
   playlistSorts: PlaylistSorts = $state.raw({})
+  // The open folder by key (see folders.ts), null for the top. Change it with
+  // openFolder, so Forward knows what Back left.
+  #folderNav: FolderNav = $state.raw({ folder: null, below: [] })
+  // Folders show songs in folder order until a column is clicked, like playlists.
+  folderSort: Sort | null = $state(null)
   // the page mouse Back last closed, for Forward to reopen
   #closed: { page: Page; id: string } | null = null
 
@@ -59,6 +75,10 @@ class LibraryStore {
     this.#order = new Map(data.tracks.map((t, i) => [t.id, i]))
     this.#albumIndex = new Map(data.albums.map((a, i) => [a.id, i]))
     this.albums = data.albums
+    this.folders = folderTree(data.folders ?? [], data.tracks, (id) => {
+      const i = this.#albumIndex.get(id)
+      return i === undefined ? '' : data.albums[i].cover
+    })
     this.#version++
     // the open album may be gone after a rescan
     if (this.open && !this.#albumIndex.has(this.open)) this.open = null
@@ -79,8 +99,24 @@ class LibraryStore {
       this.playlistSorts = withPlaylistSort(this.playlistSorts, id, null)
   }
 
-  // Mouse Back: from an album or playlist page to its list.
+  get folder(): string | null {
+    return this.#folderNav.folder
+  }
+
+  openFolder(key: string | null): void {
+    this.#folderNav = openFolder(this.#folderNav, key)
+  }
+
+  sortFolder(k: SortKey): void {
+    this.folderSort = nextPlaylistSort(this.folderSort, k)
+  }
+
+  // Mouse Back: from an album or playlist page to its list, or up a folder.
   back(page: Page): void {
+    if (page === 'folder') {
+      this.#folderNav = folderBack(this.folders, this.#folderNav)
+      return
+    }
     const id = this[page]
     if (!id) return
     this[page] = null
@@ -89,6 +125,10 @@ class LibraryStore {
 
   // Mouse Forward: reopens what Back closed, if it is still there.
   forward(page: Page): void {
+    if (page === 'folder') {
+      this.#folderNav = folderForward(this.folders, this.#folderNav)
+      return
+    }
     const c = this.#closed
     if (!c || c.page !== page || this[page]) return
     if (page === 'open' && !this.#albumIndex.has(c.id)) return

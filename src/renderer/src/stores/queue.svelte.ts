@@ -62,16 +62,14 @@ class QueueStore {
     })
   }
 
-  // The list can hold 50k ids, so it goes to main only when it changes.
-  // A new current song alone goes with the position.
+  // The list can hold 50k ids, so it goes to main only when it changes. A new
+  // current song alone goes from #start, which always follows, with its position.
   #set(s: QueueState): void {
     const listChanged = s.items !== this.items || s.from !== this.from
-    const indexChanged = s.index !== this.index
     this.items = s.items
     this.index = s.index
     this.from = s.from
     if (listChanged) this.#saveList()
-    else if (indexChanged) this.savePos()
   }
 
   // Loads the current song at `at` seconds, and plays it if `andPlay`.

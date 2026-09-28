@@ -231,6 +231,11 @@ describe('saving', () => {
     queue.next()
     expect(saveQueue).not.toHaveBeenCalled()
     expect(savePlace).toHaveBeenLastCalledWith({ index: 1, pos: 0 })
+    // the new song never goes with the old song's position
+    player.pos = 50
+    savePlace.mockClear()
+    queue.next()
+    expect(savePlace.mock.calls).toEqual([[{ index: 2, pos: 0 }]])
     queue.playAlbum('b', 1)
     expect(saveQueue).toHaveBeenCalledTimes(1)
     expect(saveQueue).toHaveBeenLastCalledWith({

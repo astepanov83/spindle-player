@@ -10,35 +10,29 @@ import type { ScanStatus } from '../../shared/library'
 import type { CoverSource } from '../../shared/settings'
 import { JsonFileWriter, readJsonFile } from '../json-file'
 import { buildLibrary, type BuiltLibrary } from './group'
-import { eachPaced, Lane, Pacer, scanSlow } from './pacer'
+import { Pacer, scanSlow, Turns } from './pacer'
 import { decodeCue, parseCue } from './cue'
 import { probeTags } from './probe'
 import { readTags } from './read-tags'
 import {
-  applyBatch,
-  applyCue,
-  applyListing,
   dirOf,
   dropOutside,
-  emptiedFolders,
   emptyIndex,
   isUnder,
-  knownDirs,
   missingPalettes,
   parseIndex,
-  planCueReads,
-  planReads,
   prunePalettes,
   readAgain,
   serializeIndex,
   usedCovers
 } from './merge'
 import { extOf, frontCover, normalizeTags } from './tags'
-import { walk, type Found as Listed, type ListedImage } from './walk'
+import type { ListedImage } from './walk'
+import { scanFiles } from './scan-files'
 import { pruneCoverFiles, removeOldTemp } from './cover-prune'
 import { ownCopy } from './bytes'
 import { ScanChain, Stopped } from './scan-chain'
-import { confirmMoves, fileKey, findMoves, idMoves, moveEntries, movePlan } from './moves'
+import { confirmMoves } from './moves'
 import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
 import { scanLogLine } from './scan-log'
@@ -75,11 +69,12 @@ let start: WorkerStart
 
 // Disk jobs at once: folder listings, stats, and tag or image reads. Reading is
 // mostly waiting on the disk, so a few at once is faster when nothing plays.
-// While a song plays, one at a time, and reads rest after each, so a NAS link
-// is left for the audio.
-const dirPace = new Pacer(8, 1, false)
-const statPace = new Pacer(16, 2, false)
-const readPace = new Pacer(4, 1, true)
+// While a song plays, one job at a time of all three kinds, and reads rest
+// after each, so a NAS link is left for the audio.
+const turns = new Turns()
+const dirPace = new Pacer(8, 1, false, undefined, undefined, turns)
+const statPace = new Pacer(16, 2, false, undefined, undefined, turns)
+const readPace = new Pacer(4, 1, true, undefined, undefined, turns)
 
 let playing = false
 let playingDev: number | undefined
@@ -550,52 +545,19 @@ async function readImage(
   return im
 }
 
-// A file or cue sheet the scan found, and its key on disk (see moves.ts).
-interface Seen {
-  path: string
-  mtime: number
-  size: number
-  key?: string
-}
-
 // Old id -> new id of songs whose path moved this run, so a song that was
 // playing under its old id still plays.
 let aliases: IdMoves = {}
 
-// Files the index has under a path the walk no longer took, found again
-// under another path (decision 87 picks one path for a folder reached two
-// ways). They keep what was read, and main and the page get the id changes
-// once, before the library with the new ids.
-async function followMoves(
-  gen: number,
-  folders: string[],
-  skipped: string[],
-  found: Seen[],
-  had: Set<string>
-): Promise<void> {
-  const { added, gone } = movePlan(ix, found, folders, skipped, (p) => had.has(p))
-  if (!added.size || !gone.length) return
-  // the old path still reaches the file (a symlink); a deleted file has none
-  const goneKeys = new Map<string, string>()
-  await eachPaced(gone, statPace, async (path) => {
-    checkGen(gen)
-    try {
-      const key = fileKey(await stat(path, { bigint: true }))
-      if (key) goneKeys.set(path, key)
-    } catch {
-      // deleted or moved away
-    }
-  })
-  checkGen(gen)
-  const moves = findMoves(goneKeys, added)
-  if (!moves.size) return
-  const ids = idMoves(ix, moves)
-  moveEntries(ix, moves)
+// Files found under a new path (decision 104) moved in the index with what
+// was read; main and the page get the id changes once, before the library
+// with the new ids.
+function movedIds(ids: IdMoves, files: number): void {
   markChanged()
   aliases = mergeMoves(aliases, ids)
   // kept in the index until main says the files have them
   ix.pendingMoves = mergeMoves(ix.pendingMoves, ids)
-  log(`Library: ${moves.size} files are now reached by another path; their ids changed`)
+  log(`Library: ${files} files are now reached by another path; their ids changed`)
   // On disk before main renames its files: a crash in between must not leave
   // new ids in the queue and old paths in the index. If this write fails the
   // map is still sent, so this run stays right.
@@ -605,11 +567,8 @@ async function followMoves(
   publisher.now()
 }
 
-// The walk hands over each folder as it lists it, and its files are stat'ed
-// and read at once (ticket 022), so the first songs show a few seconds in,
-// not after a walk of the whole tree. New and changed songs reach the page as
-// they are read (publish.ts); songs whose files are gone leave only at the end,
-// so a partial scan never hides any.
+// Walks, stats and reads the music folders (see scan-files.ts). New and
+// changed songs reach the page as they are read (publish.ts).
 async function scan(
   folders: string[],
   retryFailed: boolean,
@@ -621,30 +580,9 @@ async function scan(
   firstSent = undefined
   // when the walk, the stats and the reads ended, for the log
   const ends: number[] = []
-  const lap = (): void => void ends.push(Math.round(performance.now() - t0))
   const saving = setInterval(saveIndex, saveMs)
   let failed = false
-  // files listed, files to read, and files read
-  let listed = 0
-  let planned = 0
   let read = 0
-  let walking = true
-  const statLane = new Lane(statPace)
-  const readLane = new Lane(readPace)
-  const lanes = [statLane, readLane]
-  // a stopped scan, or a job that failed, stops the walk and the other lane
-  const check = (): void => {
-    checkGen(gen)
-    for (const l of lanes) l.check()
-  }
-  const show = (force = false): void =>
-    progress(
-      gen,
-      walking
-        ? { phase: 'walk', done: listed, total: 0, read }
-        : { phase: 'read', done: read, total: planned, read: undefined },
-      force
-    )
   // the online lookup waits for the scan and its prune (see the chain below)
   fetcher?.hold()
   try {
@@ -663,145 +601,38 @@ async function scan(
     scannedDevs = await devicesOf(folders)
     setPace()
 
-    // what the index had before this scan read anything, to find moves and new folders
-    const had = new Set([...ix.files.keys(), ...ix.cues.keys()])
-    const oldDirs = knownDirs(ix)
     // files an older tag reader read are read once more (readTags falls back to ffprobe)
     const oldReader = ix.reader < readerVersion
-    const again = readAgain(ix.reader)
-    const toRead = (f: Seen): boolean =>
-      planReads(ix.files, [f], known, retryFailed, again).length > 0
-    const files: Seen[] = []
-    const cues: Seen[] = []
-    const images = new Map<string, FolderImage>()
-
-    const statOf = async (path: string): Promise<Seen | undefined> => {
-      check()
-      let s
-      try {
-        s = await stat(path, { bigint: true })
-      } catch {
-        // gone since the walk
-        return undefined
-      }
-      check()
-      // whole ms, as the index keeps them
-      return { path, mtime: Number(s.mtimeMs), size: Number(s.size), key: fileKey(s) }
-    }
-
-    const readOne = async (f: Seen): Promise<void> => {
-      check()
-      // moved here from its old path meanwhile (followMoves): it keeps what was read
-      if (toRead(f)) {
-        const entry = await readFileEntry(f.path, f.mtime, f.size, gen)
-        check()
-        if (applyBatch(ix, [entry])) markChanged()
-      }
-      read++
-      show()
-    }
-
-    const statFile = async (path: string): Promise<void> => {
-      const f = await statOf(path)
-      if (!f) return
-      files.push(f)
-      if (toRead(f)) {
-        planned++
-        readLane.push(() => readOne(f))
-      }
-    }
-
-    // A file the index doesn't have is read anyway, so it skips the stats of
-    // known files (50k of them on a Rescan): a folder just added shows at once.
-    const newFile = async (path: string): Promise<void> => {
-      const f = await statOf(path)
-      if (!f) {
-        planned--
-        return
-      }
-      files.push(f)
-      await readOne(f)
-    }
-
-    const takeFile = (path: string): void => {
-      if (had.has(path)) statLane.push(() => statFile(path))
-      else {
-        planned++
-        readLane.push(() => newFile(path))
-      }
-    }
-
-    // A folder's cue sheets are read before its files, so a disc image shows
-    // as its tracks from the start, not as one song first.
-    const cueFolder = async (found: Listed): Promise<void> => {
-      for (const path of found.cues) {
-        const c = await statOf(path)
-        if (!c) continue
-        cues.push(c)
-        if (!planCueReads(ix.cues, [c], retryFailed).length) continue
-        const entry = await readPace.run(() => readCue(c))
-        check()
-        if (applyCue(ix, entry)) markChanged()
-      }
-      for (const path of found.files) takeFile(path)
-    }
-
-    const readFolderImage = async (listed: ListedImage): Promise<void> => {
-      check()
-      const im = await readImage(listed, ix.images.get(listed.dir), gen)
-      check()
-      if (!im) return
-      images.set(listed.dir, im)
-      const old = ix.images.get(listed.dir)
-      ix.images.set(listed.dir, im)
-      // a new time alone changes only the file, not what the page shows
-      if (old?.path !== im.path || old.cover !== im.cover) markChanged()
-      else if (old !== im) unsaved = true
-    }
-
-    const listing = await walk(
+    ;({ read } = await scanFiles({
+      ix,
       folders,
-      dirPace,
-      check,
-      (found) => {
-        listed += found.files.length
-        for (const im of found.images) readLane.push(() => readFolderImage(im))
-        if (found.cues.length) statLane.push(() => cueFolder(found))
-        else for (const path of found.files) takeFile(path)
-        show()
-      },
-      undefined,
-      (dir) => !oldDirs.has(dir)
-    )
-    lap()
-    await statLane.idle()
-    lap()
-    check()
-    walking = false
-    show(true)
-
-    const skipped = [...listing.skipped, ...emptiedFolders(ix, folders, listing.files)]
-    setStatus({ missing: folders.filter((f) => skipped.some((s) => isUnder(f, s))) })
-    await followMoves(gen, folders, skipped, [...files, ...cues], had)
-    await readLane.idle()
-    check()
-    show(true)
-    lap()
+      retryFailed,
+      known,
+      again: readAgain(ix.reader),
+      pace: { dir: dirPace, stat: statPace, read: readPace },
+      check: () => checkGen(gen),
+      changed: markChanged,
+      unsaved: () => (unsaved = true),
+      count: (c, force) =>
+        progress(
+          gen,
+          c.walking
+            ? { phase: 'walk', done: c.listed, total: 0, read: c.read }
+            : { phase: 'read', done: c.read, total: c.planned, read: undefined },
+          force
+        ),
+      lap: () => void ends.push(Math.round(performance.now() - t0)),
+      walked: (skipped) =>
+        setStatus({ missing: folders.filter((f) => skipped.some((s) => isUnder(f, s))) }),
+      moved: movedIds,
+      readFile: (path, mtime, size) => readFileEntry(path, mtime, size, gen),
+      readCue,
+      readImage: (listed, old) => readImage(listed, old, gen)
+    }))
     if (oldReader) {
       ix.reader = readerVersion
       unsaved = true
     }
-    // Only now that every file was seen: songs whose files are gone leave,
-    // and folder images the walk no longer found
-    if (
-      applyListing(ix, folders, {
-        paths: files.map((f) => f.path),
-        cues: cues.map((c) => c.path),
-        images: [...images.values()],
-        skipped
-      })
-    )
-      markChanged()
     await fillPalettes(gen)
     await refillFetched(gen)
     // wait until main has every picture, so the covers are there for the albums
@@ -810,10 +641,6 @@ async function scan(
       checkGen(gen)
     }
   } catch (error) {
-    // Jobs still running end before the scan does, so none of them touches
-    // the index after the next scan started.
-    for (const l of lanes) l.stop(error)
-    await Promise.allSettled(lanes.map((l) => l.idle()))
     // a stopped scan keeps what it read; the next one carries on from there
     if (error instanceof Stopped) {
       saveIndex()

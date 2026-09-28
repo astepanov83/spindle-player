@@ -32,6 +32,7 @@ import {
 } from './merge'
 import { extOf, frontCover, normalizeTags } from './tags'
 import { walk } from './walk'
+import { pruneCoverFiles } from './cover-prune'
 import {
   readerVersion,
   type CueEntry,
@@ -124,7 +125,11 @@ function progress(phase: 'walk' | 'read', done: number, total: number, force = f
 // the index changed since it was last handed to the writer
 let unsaved = false
 
+// bumped on every change to the index
+let ixEdits = 0
+
 function markChanged(): void {
+  ixEdits++
   dirty = true
   unsaved = true
 }
@@ -243,27 +248,37 @@ async function loadCached(): Promise<void> {
   }
 }
 
-// Deletes covers nothing points at any more, and their palettes.
-async function pruneCovers(): Promise<void> {
-  const used = usedCovers(ix)
+// The covers the index uses, made again only after the index changed.
+let usedCache: { edits: number; used: Set<string> } | undefined
+function liveUsed(): Set<string> {
+  if (usedCache?.edits !== ixEdits) usedCache = { edits: ixEdits, used: usedCovers(ix) }
+  return usedCache.used
+}
+
+// The last prune. A scan starts only once it is done, so a prune never deletes
+// a cover that a newer scan made or is making.
+let pruning: Promise<void> = Promise.resolve()
+
+// Deletes covers nothing points at any more, and their palettes. It stops when
+// a newer scan is asked for; that scan prunes when it ends.
+async function pruneCovers(gen: number): Promise<void> {
+  const stale = (): boolean => gen !== scanGen
+  if (stale()) return
   // palettes don't change what the page shows, so only the file needs saving
-  if (prunePalettes(ix, used)) {
+  if (prunePalettes(ix, liveUsed())) {
     unsaved = true
     saveIndex()
   }
-  let names: string[]
-  try {
-    names = await readdir(start.coversDir)
-  } catch {
-    return
-  }
-  for (const name of names) {
-    const h = name.slice(0, 40)
-    if (!/^[0-9a-f]{40}$/.test(h) || used.has(h) || claimed.has(h)) continue
-    cached.delete(h)
-    bad.delete(h)
-    await rm(join(start.coversDir, name), { force: true })
-  }
+  await pruneCoverFiles({
+    dir: start.coversDir,
+    used: liveUsed,
+    busy: (h) => claimed.has(h),
+    stale,
+    forget: (h) => {
+      cached.delete(h)
+      bad.delete(h)
+    }
+  })
 }
 
 // --- scan ---
@@ -462,7 +477,8 @@ async function scan(folders: string[], retryFailed: boolean, gen: number): Promi
       `${read} files read, ` +
       `${status.tracks} songs in ${status.albums} albums`
   )
-  await pruneCovers()
+  pruning = pruneCovers(gen).catch((e) => log(`Could not prune covers: ${e}`))
+  await pruning
 }
 
 // --- lookups for the protocol ---
@@ -498,6 +514,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       // let a stopped scan's waits wake up and see the new number
       wakeCoverWaiters()
       ready
+        .then(() => pruning)
         .then(() => scan(m.folders, m.retryFailed, gen))
         .catch((e) => log(`Library scan failed: ${e}`))
       break
@@ -590,5 +607,6 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   if (r.kind === 'broken' || r.kind === 'unreadable')
     log(`Library index is ${r.kind}, scanning again: ${start.indexPath}`)
   ix = parseIndex(r.kind === 'ok' ? r.value : undefined)
+  ixEdits++
   build()
 })

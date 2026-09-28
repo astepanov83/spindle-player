@@ -1,0 +1,70 @@
+// Deletes cached covers nothing points at any more. Runs in the library
+// process after a scan; the next scan waits for it, so the two never overlap.
+import { readdir, rm, stat } from 'fs/promises'
+import { join } from 'path'
+
+// A temp file younger than this may still be written by main (a large cover the
+// stage asked for). Older ones were left by a crash.
+export const tmpAgeMs = 60000
+
+export interface PruneFs {
+  readdir(dir: string): Promise<string[]>
+  mtimeMs(path: string): Promise<number>
+  rm(path: string): Promise<void>
+}
+
+const nodeFs: PruneFs = {
+  readdir: (d) => readdir(d),
+  mtimeMs: async (p) => (await stat(p)).mtimeMs,
+  rm: (p) => rm(p, { force: true })
+}
+
+export interface PruneOptions {
+  dir: string
+  // the covers the index uses now; asked again after every wait
+  used: () => Set<string>
+  // sent to main and not written yet
+  busy: (hash: string) => boolean
+  // a newer scan was asked for: stop, its own prune comes after it
+  stale: () => boolean
+  // called before a file of this hash is deleted
+  forget?: (hash: string) => void
+  now?: () => number
+  fs?: PruneFs
+}
+
+export async function pruneCoverFiles(o: PruneOptions): Promise<void> {
+  const fs = o.fs ?? nodeFs
+  const now = o.now ?? Date.now
+  const keep = (h: string): boolean => o.used().has(h) || o.busy(h)
+  if (o.stale()) return
+  let names: string[]
+  try {
+    names = await fs.readdir(o.dir)
+  } catch {
+    return
+  }
+  for (const name of names) {
+    const h = name.slice(0, 40)
+    if (!/^[0-9a-f]{40}$/.test(h)) continue
+    if (o.stale()) return
+    if (keep(h)) continue
+    const path = join(o.dir, name)
+    if (name.endsWith('.tmp')) {
+      try {
+        if (now() - (await fs.mtimeMs(path)) < tmpAgeMs) continue
+      } catch {
+        continue
+      }
+      // things may have changed during the wait
+      if (o.stale()) return
+      if (keep(h)) continue
+    }
+    o.forget?.(h)
+    try {
+      await fs.rm(path)
+    } catch {
+      // tried again after the next scan
+    }
+  }
+}

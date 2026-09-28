@@ -1,8 +1,10 @@
-// The cover for the system's media controls. Chromium can't hand MPRIS a
+// The picture for the system's media controls. Chromium can't hand MPRIS a
 // spindle:// picture (it gives no mpris:artUrl), but from a blob: URL it
 // writes a temp file and gives MPRIS that (checked under Xvfb with gdbus). So
 // the cover is fetched here and handed over as a blob, with the type main
-// gave it. Only one blob is kept; the one before is freed.
+// gave it. A song with no cover gets a made-up tile instead, since Chromium
+// would keep showing the last picture. Only one blob is kept; the one before
+// is freed.
 
 export interface Artwork {
   src: string
@@ -10,45 +12,50 @@ export interface Artwork {
 }
 
 export interface BlobIo {
-  fetch(url: string): Promise<{ ok: boolean; blob(): Promise<Blob> }>
   create(blob: Blob): string
   revoke(url: string): void
 }
 
 export class CoverBlob {
-  // the cover asked for last, and what it gave
-  #src = ''
+  // the picture asked for last, and what it gave
+  #key = ''
   #result: Promise<Artwork | undefined> = Promise.resolve(undefined)
   #art: Artwork | undefined
 
   constructor(readonly io: BlobIo) {}
 
-  // The artwork for a cover URL, or undefined if it can't be had or a newer
-  // cover was asked for in the meantime. The same cover again costs nothing.
-  load(src: string): Promise<Artwork | undefined> {
-    if (src !== this.#src) {
-      this.#src = src
-      this.#result = this.#fetch(src)
+  // The artwork for a picture, made by `make` (a fetch, a drawing) and named
+  // by `key`, or undefined if it can't be had or a newer one was asked for in
+  // the meantime. The same key again costs nothing.
+  load(key: string, make: () => Promise<Blob | undefined>): Promise<Artwork | undefined> {
+    if (key !== this.#key) {
+      this.#key = key
+      this.#result = this.#make(key, make)
     }
     return this.#result
   }
 
-  async #fetch(src: string): Promise<Artwork | undefined> {
+  async #make(key: string, make: () => Promise<Blob | undefined>): Promise<Artwork | undefined> {
     let blob: Blob | undefined
     try {
-      const res = await this.io.fetch(src)
-      if (res.ok) blob = await res.blob()
+      blob = await make()
     } catch {
-      // no cover in the media controls this time
+      // no picture in the media controls this time
     }
-    if (src !== this.#src) return undefined
+    if (key !== this.#key) return undefined
     if (!blob) {
       // try again next time it is asked for
-      this.#src = ''
+      this.#key = ''
       return undefined
     }
     if (this.#art) this.io.revoke(this.#art.src)
     this.#art = { src: this.io.create(blob), ...(blob.type ? { type: blob.type } : {}) }
     return this.#art
   }
+}
+
+// A cover from main, or undefined when main has none.
+export async function fetchBlob(url: string): Promise<Blob | undefined> {
+  const res = await fetch(url)
+  return res.ok ? res.blob() : undefined
 }

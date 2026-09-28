@@ -99,7 +99,7 @@
   }
   .winbtns button.close:hover {
     background: var(--close-hover);
-    color: #fff;
+    color: var(--on-danger);
   }
   .winbtns svg {
     width: 11px;

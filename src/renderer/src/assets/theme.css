@@ -24,6 +24,9 @@
   --close-hover: #c42b1c;
   /* text on --close-hover, the same in both themes */
   --on-danger: #fff;
+  /* marks drawn on a cover picture (the eq on a thumbnail), the same in both themes */
+  --on-cover: #fff;
+  --on-cover-shadow: rgba(0, 0, 0, 0.8);
   /* album color strength: tint areas and the Focus wash */
   --tint: 70%;
   --wash-top: 20%;

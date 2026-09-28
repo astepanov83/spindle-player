@@ -22,13 +22,12 @@
     overflow: hidden;
     flex: none;
   }
-  /* sits on the cover image, not on the theme */
   .on-cover {
     position: absolute;
     inset: 0;
     display: grid;
     place-items: center;
-    color: #fff;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+    color: var(--on-cover);
+    filter: drop-shadow(0 1px 2px var(--on-cover-shadow));
   }
 </style>

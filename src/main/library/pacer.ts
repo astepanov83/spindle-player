@@ -7,6 +7,26 @@
 // so the scan uses the disk at most half the time.
 const minRestMs = 250
 
+// Pacers that take turns while slow: one disk job at a time across all of
+// them, a read's rest included. The walk, the stats and the reads run at the
+// same time since ticket 022; before, they came one after another, so a song
+// never shared the disk with more than one kind (decision 78).
+export class Turns {
+  held = false
+  #waiting: (() => void)[] = []
+
+  wait(wake: () => void): void {
+    this.#waiting.push(wake)
+  }
+
+  give(): void {
+    this.held = false
+    const w = this.#waiting
+    this.#waiting = []
+    for (const f of w) f()
+  }
+}
+
 export class Pacer {
   #busy = 0
   #slow = false
@@ -17,7 +37,8 @@ export class Pacer {
     readonly slow: number,
     readonly rests: boolean,
     readonly sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)),
-    readonly now = (): number => performance.now()
+    readonly now = (): number => performance.now(),
+    readonly turns?: Turns
   ) {}
 
   get limit(): number {
@@ -34,14 +55,22 @@ export class Pacer {
   }
 
   async run<T>(job: () => Promise<T>): Promise<T> {
-    while (this.#busy >= this.limit) await new Promise<void>((r) => this.#waiting.push(r))
+    while (this.#busy >= this.limit || (this.#slow && this.turns?.held))
+      await new Promise<void>((r) => {
+        this.#waiting.push(r)
+        if (this.#slow) this.turns?.wait(r)
+      })
     this.#busy++
+    // kept to the end even if playback stops meanwhile, so the turn is given back
+    const turn = this.#slow ? this.turns : undefined
+    if (turn) turn.held = true
     const t0 = this.now()
     try {
       return await job()
     } finally {
       if (this.#slow && this.rests) await this.sleep(Math.max(minRestMs, this.now() - t0))
       this.#busy--
+      turn?.give()
       this.#wake()
     }
   }

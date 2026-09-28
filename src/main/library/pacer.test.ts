@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { eachPaced, Lane, Pacer, scanSlow } from './pacer'
+import { eachPaced, Lane, Pacer, scanSlow, Turns } from './pacer'
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
 
@@ -88,6 +88,123 @@ describe('Pacer', () => {
     p.setSlow(true)
     await p.run(async () => {})
     expect(rests[0]).toBe(250)
+  })
+})
+
+describe('Turns', () => {
+  // listings, stats and reads sharing turns, as in a scan
+  function pacers(): {
+    dir: Pacer
+    stat: Pacer
+    read: Pacer
+    rests: number[]
+    endRest: () => void
+    setSlow: (slow: boolean) => void
+  } {
+    const turns = new Turns()
+    const rests: number[] = []
+    let end = (): void => {}
+    const sleep = (ms: number): Promise<void> => {
+      rests.push(ms)
+      return new Promise((r) => (end = r))
+    }
+    const dir = new Pacer(8, 1, false, sleep, () => 0, turns)
+    const stat = new Pacer(16, 2, false, sleep, () => 0, turns)
+    const read = new Pacer(4, 1, true, sleep, () => 0, turns)
+    return {
+      dir,
+      stat,
+      read,
+      rests,
+      endRest: () => end(),
+      setSlow: (slow) => {
+        for (const p of [dir, stat, read]) p.setSlow(slow)
+      }
+    }
+  }
+
+  it('runs one disk job at a time in all of them while a song plays', async () => {
+    const p = pacers()
+    p.setSlow(true)
+    const j = jobs()
+    const started: string[] = []
+    const job = (name: string) => () => {
+      started.push(name)
+      return j.job()
+    }
+    void p.read.run(job('read'))
+    void p.dir.run(job('dir'))
+    void p.stat.run(job('stat 1'))
+    void p.stat.run(job('stat 2'))
+    await tick()
+    expect(started).toEqual(['read'])
+    j.finishOne()
+    await tick()
+    // the read rests, and nothing else runs meanwhile
+    expect(p.rests).toEqual([250])
+    expect(j.running()).toBe(0)
+    p.endRest()
+    await tick()
+    await tick()
+    expect(started).toEqual(['read', 'dir'])
+    j.finishOne()
+    await tick()
+    await tick()
+    // listings and stats don't rest
+    expect(started).toEqual(['read', 'dir', 'stat 1'])
+    expect(j.running()).toBe(1)
+    j.finishOne()
+    await tick()
+    await tick()
+    expect(started).toEqual(['read', 'dir', 'stat 1', 'stat 2'])
+    expect(j.running()).toBe(1)
+  })
+
+  it('gives turns in the order they were asked for, whatever the kind', async () => {
+    const p = pacers()
+    p.setSlow(true)
+    const j = jobs()
+    const started: string[] = []
+    const job = (name: string) => () => {
+      started.push(name)
+      return j.job()
+    }
+    void p.stat.run(job('stat 1'))
+    await tick()
+    void p.stat.run(job('stat 2'))
+    void p.dir.run(job('dir'))
+    void p.stat.run(job('stat 3'))
+    for (let i = 0; i < 3; i++) {
+      j.finishOne()
+      await tick()
+      await tick()
+    }
+    expect(started).toEqual(['stat 1', 'stat 2', 'dir', 'stat 3'])
+  })
+
+  it('runs them all at once when nothing plays', async () => {
+    const p = pacers()
+    const j = jobs()
+    void p.read.run(j.job)
+    void p.dir.run(j.job)
+    void p.stat.run(j.job)
+    void p.stat.run(j.job)
+    await tick()
+    expect(j.running()).toBe(4)
+  })
+
+  it('lets jobs waiting for a turn start when playback stops', async () => {
+    const p = pacers()
+    p.setSlow(true)
+    const j = jobs()
+    void p.read.run(j.job)
+    void p.dir.run(j.job)
+    void p.stat.run(j.job)
+    await tick()
+    expect(j.running()).toBe(1)
+    p.setSlow(false)
+    await tick()
+    expect(j.running()).toBe(3)
   })
 })
 

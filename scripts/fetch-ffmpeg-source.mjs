@@ -57,7 +57,7 @@ const sources = [
     file: 'aom-402e264b94fd.tar',
     git: 'https://aomedia.googlesource.com/aom',
     commit: '402e264b94fd74bdf66837da216b6251805b4ae4',
-    sha256: '286eb0c08bc26ea5b01ad3adcd9cecd3c1fc1370586e4255157afe7315162395'
+    sha256: '687d52401d70744fa94273e1618d67a1dad7117084d0e4c20b919bcaf034413e'
   },
   {
     what: 'libass 0.17.3',
@@ -86,7 +86,7 @@ const sources = [
     file: 'libvpx-888bafc78d8b.tar',
     git: 'https://chromium.googlesource.com/webm/libvpx',
     commit: '888bafc78d8bddb5cfc4262c93f456c812763571',
-    sha256: '6a319f0bc7fd16b996c6ff753482102b6a88ebe43d63f0169719f684197f4ea6'
+    sha256: 'df2ffb8d33e6b6814e91630e25bfbcf8dd5b3b5c0173f0c22671bdc8198f04f1'
   },
   {
     what: 'libvmaf 2.3.0',
@@ -101,7 +101,7 @@ const sources = [
     file: 'x264-4613ac3c15fd.tar',
     git: 'https://code.videolan.org/videolan/x264.git',
     commit: '4613ac3c15fd75cebc4b9f65b7fb95e70a3acce1',
-    sha256: '27b3720a366399c8864719b9cd92ee132fbd5b51976824bab4a9bd17fe904d95'
+    sha256: 'f123ed9dd16f1814cdec2a923c0e3a03bf8ed8b3c0a8c65ec0e82c2bb9b57619'
   },
   {
     what: 'libx265 3.5+1-f0c1022b6',
@@ -109,7 +109,7 @@ const sources = [
     file: 'x265-f0c1022b6be1.tar',
     git: 'https://bitbucket.org/multicoreware/x265_git.git',
     commit: 'f0c1022b6be121a753ff02853fbe33da71988656',
-    sha256: '9c504f4d116835a2e393e693d330efae79e2389ca4718fa58bd0da2836f7f75e'
+    sha256: '4446259c5b98aff0362f6747fee8e790e63ba670bdb9059472164d85442ffa89'
   },
   {
     what: 'libxvid 1.3.7',
@@ -161,7 +161,7 @@ const sources = [
     file: 'theora-7180717276af.tar',
     git: 'https://gitlab.xiph.org/xiph/theora.git',
     commit: '7180717276af1ebc7da15c83162d6c5d6203aabf',
-    sha256: '3331c6db8823d04aa776e38f8f3bd89d04aa98c6c71e97239ad3c095efa4b115'
+    sha256: 'e43d3e4c49b60c098568468bded64fcdbf80e7c70848eb94926234fc7999292e'
   },
   {
     what: 'libfrei0r 1.6.1-2 (Debian source package, headers only: plugins load at run time)',
@@ -437,19 +437,30 @@ async function download(s, path) {
 // A git commit's files as a plain .tar. git checks every object it fetches
 // against its hash, so the commit id is the real check; the tar's sha256 is
 // pinned too, so a snapshot already on disk can be checked like a download.
-// git archive's output has been stable for years; a newer git that writes
-// other bytes fails here, and the hash then needs a look.
+// Line-ending, filter and umask settings are fixed below so the local git
+// config can't change the bytes. The hash still depends on the git version:
+// git archive's output has been stable for years, but a git that writes other
+// bytes fails here, and the hash then needs a look.
 function gitArchive(s, path) {
   const repo = join(outDir, 'git-tmp')
   rmSync(repo, { recursive: true, force: true })
   tool('git', ['init', '-q', '--bare', repo])
   // the project's own .gitattributes could leave files out or rewrite them
-  writeFileSync(join(repo, 'info', 'attributes'), '* -export-ignore -export-subst\n')
+  writeFileSync(
+    join(repo, 'info', 'attributes'),
+    '* -export-ignore -export-subst -text -filter -eol\n'
+  )
   tool('git', ['-C', repo, 'fetch', '-q', '--depth', '1', s.git, s.commit])
   const got = tool('git', ['-C', repo, 'rev-parse', 'FETCH_HEAD']).toString().trim()
   if (got !== s.commit) fail(`${s.git} gave ${got}, not ${s.commit}`)
   const prefix = s.file.replace(/\.tar$/, '')
   tool('git', [
+    '-c',
+    'core.autocrlf=false',
+    '-c',
+    'core.eol=lf',
+    '-c',
+    'tar.umask=0022',
     '-C',
     repo,
     'archive',

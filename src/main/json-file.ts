@@ -109,7 +109,12 @@ function toText(data: unknown, space: number): string {
 // Write to a temp file, flush it to disk, then rename over the old file.
 // A crash leaves either the old file or the new one, never half of one.
 export async function writeJsonFile(path: string, data: unknown, space = 2): Promise<void> {
-  await writeTmp(path, data, space, async (tmp) => rename(tmp, path))
+  await writeFileAtomic(path, toText(data, space))
+}
+
+// The same for any file, like the covers.
+export async function writeFileAtomic(path: string, data: string | Uint8Array): Promise<void> {
+  await writeTmp(path, data, async (tmp) => rename(tmp, path))
 }
 
 export function writeJsonFileSync(path: string, data: unknown, space = 2): void {
@@ -132,15 +137,14 @@ export function writeJsonFileSync(path: string, data: unknown, space = 2): void 
 // Writes the temp file, then lets the caller decide whether to rename it.
 async function writeTmp(
   path: string,
-  data: unknown,
-  space: number,
+  data: string | Uint8Array,
   commit: (tmp: string) => Promise<void>
 ): Promise<void> {
   const tmp = tmpPath(path)
   try {
     const fh = await open(tmp, 'w')
     try {
-      await fh.writeFile(toText(data, space))
+      await fh.writeFile(data)
       await fh.sync()
     } finally {
       await fh.close()
@@ -191,7 +195,7 @@ export class JsonFileWriter<T> {
       .then(() => {
         // a newer value is already queued behind this one
         if (version !== this.#version) return
-        return writeTmp(this.path, pending.data, this.space, async (tmp) => {
+        return writeTmp(this.path, toText(pending.data, this.space), async (tmp) => {
           if (version === this.#version) renameSync(tmp, this.path)
           else await rm(tmp, { force: true })
         })

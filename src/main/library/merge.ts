@@ -1,6 +1,7 @@
 // The index in memory: reading it from disk, and folding scan results into it.
 import { sep } from 'path'
 import { paletteVersion, parseThemePalettes } from '../../shared/palette'
+import { isCoverHash } from './cover-names'
 import type { CueSheet, CueTrack } from './cue'
 import {
   indexVersion,
@@ -112,7 +113,7 @@ export function parseIndex(raw: unknown): LibraryIndex {
   if (raw.paletteVersion === paletteVersion && isObject(raw.palettes))
     for (const [hash, v] of Object.entries(raw.palettes)) {
       const p = parseThemePalettes(v)
-      if (p && /^[0-9a-f]{40}$/.test(hash)) ix.palettes.set(hash, p)
+      if (p && isCoverHash(hash)) ix.palettes.set(hash, p)
     }
   return ix
 }

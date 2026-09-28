@@ -2,6 +2,7 @@
 // process after a scan; the next scan waits for it, so the two never overlap.
 import { readdir, rm, stat } from 'fs/promises'
 import { join } from 'path'
+import { hashOfName } from './cover-names'
 
 // A temp file younger than this may still be written by main (a large cover the
 // stage asked for). Older ones were left by a crash.
@@ -45,8 +46,8 @@ export async function pruneCoverFiles(o: PruneOptions): Promise<void> {
     return
   }
   for (const name of names) {
-    const h = name.slice(0, 40)
-    if (!/^[0-9a-f]{40}$/.test(h)) continue
+    const h = hashOfName(name)
+    if (!h) continue
     if (o.stale()) return
     if (keep(h)) continue
     const path = join(o.dir, name)

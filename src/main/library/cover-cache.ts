@@ -9,12 +9,14 @@
 // nativeImage. sharp is out too: on Linux it clashes with the glib Electron
 // loads, in main, in a worker and in a utilityProcess alike.
 import { mkdirSync } from 'fs'
-import { rename, rm, stat, writeFile } from 'fs/promises'
+import { rm, stat } from 'fs/promises'
 import { join } from 'path'
 import { BrowserWindow, ipcMain } from 'electron'
 import { CoverChannel, type CoverJob, type CoverResult } from '../../shared/cover-job'
 import type { ThemePalettes } from '../../shared/palette'
+import { writeFileAtomic } from '../json-file'
 import { blockNavigation } from '../web-guard'
+import { badName, largeName, smallName } from './cover-names'
 import { outcomeOf, PendingJobs, withTimeout, type Outcome } from './cover-jobs'
 
 export const smallSide = 320
@@ -42,18 +44,6 @@ class ShutDown extends Error {
   }
 }
 
-export function isCoverHash(s: string): boolean {
-  return /^[0-9a-f]{40}$/.test(s)
-}
-
-let tmpCount = 0
-async function writeAtomic(path: string, data: Uint8Array | string): Promise<void> {
-  // unique per write, so two writes of one file never share a temp file
-  const tmp = `${path}.${process.pid}.${++tmpCount}.tmp`
-  await writeFile(tmp, data)
-  await rename(tmp, path)
-}
-
 export class CoverCache {
   #win: BrowserWindow | undefined
   #loaded: Promise<void> | undefined
@@ -79,7 +69,7 @@ export class CoverCache {
   }
 
   smallPath(hash: string): string {
-    return join(this.dir, `${hash}.jpg`)
+    return join(this.dir, smallName(hash))
   }
 
   // The hidden window, made on first use and again after it closed, crashed or failed to load.
@@ -166,10 +156,10 @@ export class CoverCache {
     try {
       const o = await this.#run(data, { side: smallSide, palette: true })
       if (o.kind === 'ok' && o.jpg) {
-        await writeAtomic(this.smallPath(hash), o.jpg)
+        await writeFileAtomic(this.smallPath(hash), o.jpg)
         return { result: 'ok', palette: o.palette }
       }
-      if (o.kind === 'bad') await writeAtomic(join(this.dir, `${hash}.bad`), '')
+      if (o.kind === 'bad') await writeFileAtomic(join(this.dir, badName(hash)), '')
       return { result: o.kind === 'bad' ? 'bad' : 'retry' }
     } catch (e) {
       console.error('Could not save a cover', e)
@@ -208,7 +198,7 @@ export class CoverCache {
     hash: string,
     source: () => Promise<Uint8Array | undefined>
   ): Promise<string | undefined> {
-    const path = join(this.dir, `${hash}-large.jpg`)
+    const path = join(this.dir, largeName(hash))
     try {
       await stat(path)
       return path
@@ -219,7 +209,7 @@ export class CoverCache {
       const data = await source()
       const o = data && (await this.#run(data, { side: largeSide }))
       if (!o || o.kind !== 'ok' || !o.jpg) return undefined
-      await writeAtomic(path, o.jpg)
+      await writeFileAtomic(path, o.jpg)
       return path
     } catch (e) {
       console.error('Could not make a large cover', e)

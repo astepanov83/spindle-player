@@ -33,6 +33,8 @@ import {
 import { extOf, frontCover, normalizeTags } from './tags'
 import { walk } from './walk'
 import { pruneCoverFiles } from './cover-prune'
+import { ownCopy } from './bytes'
+import { markerOf, smallName } from './cover-names'
 import {
   readerVersion,
   type CueEntry,
@@ -198,8 +200,7 @@ async function sendCover(data: Uint8Array, gen: number): Promise<string> {
   claimed.add(h)
   await waitForSlot(h, gen)
   sent.add(h)
-  // a copy of just this picture: a view into a bigger buffer would send all of it
-  post({ type: 'cover', hash: h, data: data.slice() })
+  post({ type: 'cover', hash: h, data: ownCopy(data) })
   return h
 }
 
@@ -226,7 +227,7 @@ async function fillPalettes(gen: number): Promise<void> {
     await waitForSlot(h, gen)
     let data: Uint8Array
     try {
-      data = new Uint8Array(await readFile(join(start.coversDir, `${h}.jpg`)))
+      data = new Uint8Array(await readFile(join(start.coversDir, smallName(h))))
     } catch {
       // pruned or deleted meanwhile; the file is read again when its cover is missing
       claimed.delete(h)
@@ -240,8 +241,8 @@ async function fillPalettes(gen: number): Promise<void> {
 async function loadCached(): Promise<void> {
   try {
     for (const name of await readdir(start.coversDir)) {
-      const m = /^([0-9a-f]{40})\.(jpg|bad)$/.exec(name)
-      if (m) (m[2] === 'jpg' ? cached : bad).add(m[1])
+      const m = markerOf(name)
+      if (m) (m.bad ? bad : cached).add(m.hash)
     }
   } catch {
     // no cache yet
@@ -570,7 +571,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       ready
         .then(() => coverSource(m.hash))
         .then(
-          (data) => post({ type: 'reply', req: m.req, data: data?.slice() }),
+          (data) => post({ type: 'reply', req: m.req, data: data && ownCopy(data) }),
           () => post({ type: 'reply', req: m.req })
         )
       break

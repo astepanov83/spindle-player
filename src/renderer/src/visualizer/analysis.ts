@@ -106,9 +106,9 @@ export function rest(m: Meter): void {
   for (let k = 0; k < WAVE_N; k++) m.wave[k] *= WAVE_FADE
 }
 
-// True once nothing moves any more. Snaps the last bits to zero, so the
-// resting look is drawn exactly.
-export function settled(m: Meter): boolean {
+// Once nothing moves any more, snaps the last bits to zero, so the resting
+// look is drawn exactly, and says true. Otherwise leaves the meter alone.
+export function settle(m: Meter): boolean {
   for (let i = 0; i < BANDS; i++) if (m.levels[i] > REST || m.peaks[i] > REST) return false
   for (let k = 0; k < WAVE_N; k++) if (Math.abs(m.wave[k]) > REST) return false
   clear(m)

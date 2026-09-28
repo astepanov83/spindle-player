@@ -6,7 +6,7 @@
 // the window is hidden or minimized, with the style Off, or with no stage on screen.
 import type { VisualizerStyle } from '../../../shared/settings'
 import { engine } from '../audio/engine'
-import { analyse, bandEdges, bassLevel, clear, rest, sampleWave, settled } from './analysis'
+import { analyse, bandEdges, bassLevel, clear, rest, sampleWave, settle } from './analysis'
 import type { BarColors } from './colors'
 import { drawStage } from './draw'
 import { meter } from './levels'
@@ -85,7 +85,7 @@ function frame(now: number): void {
   const on = style !== 'off'
   if (on && playing) readAnalyser()
   else if (on) rest(meter)
-  const still = !playing && settled(meter)
+  const still = !playing && settle(meter)
   const bass = on ? bassLevel(meter.levels).toFixed(3) : '0'
 
   let shown = false

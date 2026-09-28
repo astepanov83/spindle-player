@@ -21,7 +21,7 @@ import {
   rest,
   ringAngle,
   sampleWave,
-  settled,
+  settle,
   stepLevels
 } from './analysis'
 
@@ -137,14 +137,14 @@ describe('analyse', () => {
   })
 })
 
-describe('rest and settled', () => {
+describe('rest and settle', () => {
   it('falls to zero, then reports settled with everything exactly zero', () => {
     const m = createMeter()
     stepLevels(m, new Float32Array(BANDS).fill(1))
     m.wave.fill(0.5)
-    expect(settled(m)).toBe(false)
+    expect(settle(m)).toBe(false)
     let frames = 0
-    while (!settled(m)) {
+    while (!settle(m)) {
       rest(m)
       frames++
       expect(frames).toBeLessThan(400)

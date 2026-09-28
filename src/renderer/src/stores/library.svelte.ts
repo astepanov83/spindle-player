@@ -66,8 +66,11 @@ class LibraryStore {
   // artist key -> photo found online
   photos: Readonly<Record<string, ArtistPhoto>> = $state.raw({})
   // The maps above are plain, so Svelte can't see them change. Every reader
-  // touches this, so a $derived that looked up a track runs again after a load.
+  // touches this, so a $derived that looked up a track runs again after a
+  // load. Not bumped by a patch with only photos: the song lists sort 50k rows.
   #version = $state(0)
+  // bumped by every library and patch, photos alone too (see revision)
+  #loads = $state(0)
 
   status: ScanStatus = $state.raw({
     folders: [],
@@ -163,7 +166,8 @@ class LibraryStore {
       this.artists = listArtists(albums, (id) => this.#tracks.get(id)!)
       this.#artistIndex = new Map(this.artists.map((a, i) => [a.key, i]))
     }
-    this.#version++
+    if (songs) this.#version++
+    this.#loads++
     // the open album or artist may be gone after a rescan
     if (this.open && !this.#albumIndex.has(this.open)) this.open = null
     if (this.artist && !this.#artistIndex.has(this.artist)) this.artist = null
@@ -271,7 +275,7 @@ class LibraryStore {
   // failed to show tries again after one, since a scan can make its small
   // file again at the same URL.
   get revision(): number {
-    return this.#version
+    return this.#loads
   }
 
   has(id: string): boolean {

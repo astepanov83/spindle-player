@@ -11,7 +11,22 @@ export default defineConfig({
         extends: true,
         // the browser build of Svelte, so $state and $derived in stores react as in the app
         resolve: { conditions: ['browser'] },
-        test: { name: 'renderer', include: ['src/renderer/**/*.test.ts'] }
+        test: {
+          name: 'renderer',
+          include: ['src/renderer/**/*.test.ts'],
+          exclude: ['src/renderer/**/*.svelte.test.ts', '**/node_modules/**']
+        }
+      },
+      {
+        // Tests that watch $derived and $effect run: modules are built for the
+        // page, as in the app, so effects run and flushSync works.
+        extends: true,
+        resolve: { conditions: ['browser'] },
+        test: {
+          name: 'renderer-effects',
+          include: ['src/renderer/**/*.svelte.test.ts'],
+          environment: './src/renderer/client-env.ts'
+        }
       },
       {
         // main, preload and shared code run in Node (shared also in the page, but it has no DOM)

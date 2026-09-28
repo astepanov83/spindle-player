@@ -1,0 +1,95 @@
+// Name cleanup and the rules for taking a cover found online (ticket 014).
+// Strict on purpose: an album with no cover is fine, a wrong cover is not.
+
+// An album with no picture of its own, to look up.
+export interface CoverQuery {
+  albumId: string
+  // the album's artist as shown ("Various Artists" for a compilation)
+  artist: string
+  // the album tag
+  album: string
+  // 0 when unknown
+  year: number
+  tracks: number
+  compilation: boolean
+  // "Unknown artist": only the MusicBrainz id lookup
+  noArtist: boolean
+  // searchKey(artist, album): a stored result counts only for the same names
+  key: string
+  mbReleaseGroup?: string
+  mbRelease?: string
+}
+
+// One album a service found.
+export interface Candidate {
+  artist: string
+  album: string
+  year?: number
+  tracks?: number
+  image: string
+}
+
+const edition =
+  /\b(deluxe|remaster(ed)?|edition|bonus|expanded|anniversary|mono|stereo|version|reissue)\b/i
+
+// Lowercase, no accents, "&" as "and", anything but letters and digits as one space.
+function fold(s: string): string {
+  return s
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+}
+
+export function cleanAlbum(s: string): string {
+  const t = s
+    // brackets holding edition words: "(Remastered 2009)", "[Deluxe Edition]"
+    .replace(/[([]([^)\]]*)[)\]]/g, (m, inner: string) => (edition.test(inner) ? ' ' : m))
+    // " - Remastered 2009" at the end
+    .replace(/\s[-–]\s[^-–]*$/, (m) => (edition.test(m) ? '' : m))
+    // "CD1", "(Disc 2)" at the end
+    .replace(/[\s([-]*\b(cd|dis[ck])\s*\d+[)\]]?\s*$/i, '')
+  return fold(t)
+}
+
+export function cleanArtist(s: string): string {
+  return fold(s).replace(/^the /, '')
+}
+
+export function searchKey(artist: string, album: string): string {
+  return cleanArtist(artist) + '\0' + cleanAlbum(album)
+}
+
+const various = new Set(['various artists', 'various', 'va'])
+
+// b's words are in a, in order and next to each other.
+function hasWords(a: string, b: string): boolean {
+  return (' ' + a + ' ').includes(' ' + b + ' ')
+}
+
+function artistMatches(q: CoverQuery, found: string): boolean {
+  const f = cleanArtist(found)
+  if (q.compilation) return various.has(f)
+  const a = cleanArtist(q.artist)
+  if (!a || !f) return false
+  if (a === f) return true
+  // a joint credit ("Jay-Z & Kanye West"); short names would match too much
+  return a.length >= 4 && f.length >= 4 && (hasWords(a, f) || hasWords(f, a))
+}
+
+// Years or track counts apart; unknown counts as 1 apart.
+const gap = (a: number | undefined, b: number | undefined): number => (a && b ? Math.abs(a - b) : 1)
+
+// The results that match, best first: within 2 years first, then the closest
+// year, then the closest track count.
+export function pickCandidates(q: CoverQuery, found: Candidate[]): Candidate[] {
+  const album = cleanAlbum(q.album)
+  if (!album) return []
+  return found
+    .filter((c) => cleanAlbum(c.album) === album && artistMatches(q, c.artist))
+    .map((c) => ({ c, y: gap(q.year, c.year), t: gap(q.tracks, c.tracks) }))
+    .sort((a, b) => Number(a.y > 2) - Number(b.y > 2) || a.y - b.y || a.t - b.t)
+    .map((x) => x.c)
+}

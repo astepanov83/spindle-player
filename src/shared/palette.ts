@@ -22,6 +22,10 @@ export const paletteVersion = 2
 // Accent against what it is drawn on: 3:1, the minimum for marks that are not
 // text (WCAG 1.4.11).
 export const accentContrast = 3
+// What the fit aims for: a little over the target, since Chromium's own mix
+// of the tint can land one step off the picking's (seen: 3.00 here, 2.99
+// there). 3.05 already turned a light orange accent purple, so 3.04.
+export const accentFitContrast = 3.04
 
 // --- color conversions (sRGB, OKLab, OKLCH) ---
 
@@ -271,7 +275,7 @@ function pickDark(sw: Swatch[], main: Lch): Lch {
 // Moves lightness away from the backgrounds until the contrast target is met
 // on all of them. Dark theme: lighter. Light theme: darker. The first
 // background says which.
-export function fitAccent(c: Lch, bg: string | string[], target = accentContrast): Lch {
+export function fitAccent(c: Lch, bg: string | string[], target = accentFitContrast): Lch {
   const bgs = typeof bg === 'string' ? [bg] : bg
   const ys = bgs.map((b) => luminance(linearOf(hexToLch(b))))
   const up = hexToLch(bgs[0])[0] < 0.5

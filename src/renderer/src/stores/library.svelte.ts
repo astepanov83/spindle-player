@@ -116,6 +116,11 @@ class LibraryStore {
     if (this.artist && !this.#artistIndex.has(this.artist)) this.artist = null
   }
 
+  // counts loads, for a picture that failed to show to try again after one
+  get loads(): number {
+    return this.#version
+  }
+
   playlistSort(id: string): Sort | null {
     return this.playlistSorts[id] ?? null
   }

@@ -121,6 +121,12 @@ describe('Artists', () => {
     expect(library.photos).toEqual({})
   })
 
+  it('counts loads, so a photo that failed to show tries again after a scan', () => {
+    const before = library.loads
+    library.load(lib('a'))
+    expect(library.loads).toBe(before + 1)
+  })
+
   it('Back goes from an album to its artist to the grid, and Forward back down', () => {
     library.openArtist('x')
     library.openArtistAlbum('a')

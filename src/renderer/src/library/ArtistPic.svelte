@@ -3,22 +3,25 @@
      grey record. -->
 <script lang="ts">
   import Cover from '../ui/Cover.svelte'
+  import { library } from '../stores/library.svelte'
 
   let { photo, covers }: { photo: string | undefined; covers: string[] } = $props()
 
-  // a photo the cache lost shows the covers, not a broken image
-  let failed = $state('')
+  // a photo the cache lost shows the covers, not a broken image. Only until
+  // the next load: a scan can make its small file again at the same URL.
+  let failed = $state({ url: '', load: -1 })
+  const broken = $derived(failed.url === photo && failed.load === library.loads)
 </script>
 
 <span class="pic">
-  {#if photo && failed !== photo}
+  {#if photo && !broken}
     <img
       src={photo}
       alt=""
       loading="lazy"
       decoding="async"
       draggable="false"
-      onerror={() => (failed = photo ?? '')}
+      onerror={() => (failed = { url: photo ?? '', load: library.loads })}
     />
   {:else if covers.length >= 4}
     <span class="four">

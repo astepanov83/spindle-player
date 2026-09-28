@@ -1,7 +1,5 @@
-<!-- An album cover that fills its box, or a plain tile with a note when there is none. -->
+<!-- An album cover that fills its box, or a grey record when there is none. -->
 <script lang="ts">
-  import { icons } from './icons'
-
   let { src }: { src: string | undefined } = $props()
 
   // a cover the cache lost shows the plain tile, not a broken image
@@ -20,7 +18,14 @@
   />
 {:else}
   <span class="cover none">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d={icons.note} /></svg>
+    <!-- the record from build/icon.svg, in the theme's inks -->
+    <svg viewBox="78 78 356 356" aria-hidden="true">
+      <circle cx="256" cy="256" r="178" fill="currentColor" opacity="0.35" />
+      <circle cx="256" cy="256" r="150" fill="none" stroke="var(--field)" stroke-width="4" />
+      <circle cx="256" cy="256" r="122" fill="none" stroke="var(--field)" stroke-width="4" />
+      <circle cx="256" cy="256" r="72" fill="currentColor" opacity="0.6" />
+      <circle cx="256" cy="256" r="16" fill="var(--field)" />
+    </svg>
   </span>
 {/if}
 
@@ -38,9 +43,7 @@
     color: var(--ink-3);
   }
   svg {
-    width: 36%;
-    height: 36%;
-    fill: currentColor;
-    opacity: 0.7;
+    width: 70%;
+    height: 70%;
   }
 </style>

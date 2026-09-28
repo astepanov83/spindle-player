@@ -30,6 +30,16 @@ const deezerHit = {
   ]
 }
 const nothing = { data: [], results: [], 'release-groups': [] }
+const itunesHit = {
+  results: [
+    {
+      collectionName: 'Abbey Road',
+      artistName: 'The Beatles',
+      trackCount: 17,
+      artworkUrl100: 'https://is1-ssl.mzstatic.com/x/100x100bb.jpg'
+    }
+  ]
+}
 
 // json and image stand in for the services: return an answer, or an Error to throw.
 function setup(
@@ -155,7 +165,41 @@ describe('CoverFetcher', () => {
     expect(fetched.has('a')).toBe(false)
   })
 
-  it('looks the album up again after a 429, storing nothing for it', async () => {
+  it('asks the other services when one fails, and keeps what they find', async () => {
+    const { f, fetched } = setup((u) =>
+      u.includes('deezer') ? new NetError('blocked') : u.includes('itunes') ? itunesHit : nothing
+    )
+    f.setOptions(true, all)
+    f.setQueries([q('a')])
+    f.release()
+    await f.idle
+    expect(fetched.get('a')?.source).toBe('itunes')
+  })
+
+  it('stores nothing when a service failed and the others found nothing, and goes on', async () => {
+    const { f, fetched, calls, d } = setup((u) =>
+      u.includes('deezer') ? new BusyError('429') : nothing
+    )
+    f.setOptions(true, all)
+    f.setQueries([q('a'), q('b', { album: 'Help', key: searchKey('The Beatles', 'Help') })])
+    f.release()
+    await f.idle
+    expect(fetched.size).toBe(0)
+    // both albums were asked for, with no 5 minute wait in between
+    expect(calls.filter((u) => u.includes('itunes'))).toHaveLength(2)
+    expect(d.sleep).not.toHaveBeenCalledWith(300000, expect.anything())
+  })
+
+  it('counts a Deezer error answer as no answer, not as not found', async () => {
+    const { f, fetched } = setup((u) => (u.includes('deezer') ? { error: { code: 4 } } : nothing))
+    f.setOptions(true, all)
+    f.setQueries([q('a')])
+    f.release()
+    await f.idle
+    expect(fetched.has('a')).toBe(false)
+  })
+
+  it('looks the album up again on the next run after a 429, storing nothing for it', async () => {
     let n = 0
     const { f, fetched } = setup((u) =>
       u.includes('deezer') ? (n++ === 0 ? new BusyError('429') : deezerHit) : nothing
@@ -163,6 +207,9 @@ describe('CoverFetcher', () => {
     f.setOptions(true, all)
     f.setQueries([q('a')])
     f.release()
+    await f.idle
+    expect(fetched.has('a')).toBe(false)
+    f.setQueries([q('a')])
     await f.idle
     expect(fetched.get('a')?.source).toBe('deezer')
   })

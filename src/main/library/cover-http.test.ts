@@ -42,12 +42,20 @@ describe('CoverHttp.json', () => {
     expect(fetch.mock.calls[0][1].headers).toMatchObject({ 'User-Agent': 'Spindle/test' })
   })
 
-  it('gives undefined for a 404 and throws BusyError for a 429 or 503', async () => {
-    expect(await http(async () => answer('', 404)).h.json(api, 'deezer', signal)).toBeUndefined()
+  it('throws BusyError for a 429 or 503', async () => {
     for (const status of [429, 503])
       await expect(
         http(async () => answer('', status)).h.json(api, 'deezer', signal)
       ).rejects.toBeInstanceOf(BusyError)
+  })
+
+  it('counts a refused search as busy or failed, never as nothing found', async () => {
+    await expect(
+      http(async () => answer('', 403)).h.json(api, 'itunes', signal)
+    ).rejects.toBeInstanceOf(BusyError)
+    await expect(
+      http(async () => answer('', 400)).h.json(api, 'deezer', signal)
+    ).rejects.toBeInstanceOf(NetError)
   })
 
   it('counts no connection, a 500 and a page that is not JSON as a network error', async () => {

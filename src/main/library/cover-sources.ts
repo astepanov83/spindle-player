@@ -80,6 +80,12 @@ function musicbrainz(json: Record<string, unknown>): Candidate[] {
   })
 }
 
+// An answer that is an error, not a list: Deezer reports a quota or a
+// broken query in a 200 answer.
+export function answerError(source: CoverSource, json: unknown): boolean {
+  return source === 'deezer' && isObject(json) && json.error !== undefined
+}
+
 export function parseAnswer(source: CoverSource, json: unknown): Candidate[] {
   if (!isObject(json)) return []
   if (source === 'deezer') return deezer(json)

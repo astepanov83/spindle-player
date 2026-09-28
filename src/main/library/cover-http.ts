@@ -97,7 +97,7 @@ export class CoverHttp {
       if (signal.aborted) throw e
       throw new NetError(`${limiter}: ${e}`)
     }
-    if (res.status === 429 || res.status === 503) {
+    if (res.status === 429 || res.status === 503 || (res.status === 403 && limiter === 'itunes')) {
       limit.tooMany()
       throw new BusyError(`${limiter}: ${res.status}`)
     }
@@ -116,7 +116,9 @@ export class CoverHttp {
 
   async json(url: string, limiter: Limiter, signal: AbortSignal): Promise<unknown> {
     const res = await this.#get(url, limiter, signal)
-    if (!res) return undefined
+    // A search always exists, so a 4xx is a refusal, not "nothing found":
+    // iTunes answers 403 when it throttles.
+    if (!res) throw new NetError(`${limiter}: search refused`)
     const bytes = await this.#body(res, maxJson, limiter)
     try {
       if (!bytes) throw new Error('too big')

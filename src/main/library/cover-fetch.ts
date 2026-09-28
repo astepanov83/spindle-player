@@ -4,7 +4,7 @@ import type { FetchStatus } from '../../shared/library'
 import { coverSources, type CoverSource } from '../../shared/settings'
 import { BusyError, NetError, type CoverHttp } from './cover-http'
 import { pickCandidates, type CoverQuery } from './cover-match'
-import { caaGroupUrl, caaReleaseUrl, parseAnswer, searchUrl } from './cover-sources'
+import { answerError, caaGroupUrl, caaReleaseUrl, parseAnswer, searchUrl } from './cover-sources'
 import { dropNotFound, isFresh, type Fetched } from './fetched-store'
 
 export interface FetcherDeps {
@@ -27,7 +27,11 @@ const offlineWaitMs = 5 * 60 * 1000
 // matching results downloaded per source before going on to the next source
 const triesPerSource = 3
 
-type Outcome = { hash: string; source: CoverSource } | 'none'
+// later: a service failed and the others found nothing; stored as nothing,
+// so the next run asks again
+type Outcome = { hash: string; source: CoverSource } | 'none' | 'later'
+
+const failed = Symbol('failed')
 
 export class CoverFetcher {
   #on = false
@@ -109,8 +113,7 @@ export class CoverFetcher {
           out = await this.#find(q, signal)
         } catch (e) {
           if (signal.aborted) return
-          // the service's limiter waits before the next try
-          if (e instanceof BusyError) continue
+          // no service answered: most likely offline
           if (e instanceof NetError) {
             this.d.log(`Covers online: ${e.message}; looking again in 5 minutes`)
             await this.d.sleep(offlineWaitMs, signal)
@@ -120,6 +123,7 @@ export class CoverFetcher {
         }
         if (signal.aborted) return
         done.add(q.albumId)
+        if (out === 'later') continue
         const at = this.d.now()
         this.d.fetched.set(
           q.albumId,
@@ -150,30 +154,51 @@ export class CoverFetcher {
     return r.ok ? r.hash : undefined
   }
 
+  // Each step on its own: a service that fails or is busy doesn't keep the
+  // others from answering. Throws NetError when no service answered at all.
   async #find(q: CoverQuery, signal: AbortSignal): Promise<Outcome> {
     const s = this.#sources!
+    let answered = 0
+    let errors = 0
+    const step = async <T>(f: () => Promise<T>): Promise<T | typeof failed> => {
+      try {
+        const r = await f()
+        answered++
+        return r
+      } catch (e) {
+        if (signal.aborted || !(e instanceof NetError || e instanceof BusyError)) throw e
+        errors++
+        return failed
+      }
+    }
     if (s.musicbrainz)
       for (const url of [
         q.mbReleaseGroup && caaGroupUrl(q.mbReleaseGroup),
         q.mbRelease && caaReleaseUrl(q.mbRelease)
       ]) {
         if (!url) continue
-        const hash = await this.#take(url, 'caa', signal)
-        if (hash) return { hash, source: 'musicbrainz' }
+        const hash = await step(() => this.#take(url, 'caa', signal))
+        if (hash && hash !== failed) return { hash, source: 'musicbrainz' }
       }
     // an album name alone matches too many wrong records
-    if (q.noArtist) return 'none'
-    for (const source of ['deezer', 'itunes', 'musicbrainz'] as const) {
-      if (!s[source]) continue
-      const json = await this.d.http.json(searchUrl(source, q), source, signal)
-      if (json === undefined) continue
-      const found = pickCandidates(q, parseAnswer(source, json)).slice(0, triesPerSource)
-      for (const c of found) {
-        const hash = await this.#take(c.image, source === 'musicbrainz' ? 'caa' : source, signal)
-        if (hash) return { hash, source }
+    if (!q.noArtist)
+      for (const source of ['deezer', 'itunes', 'musicbrainz'] as const) {
+        if (!s[source]) continue
+        const json = await step(() => this.d.http.json(searchUrl(source, q), source, signal))
+        if (json === failed) continue
+        if (answerError(source, json)) {
+          errors++
+          continue
+        }
+        const found = pickCandidates(q, parseAnswer(source, json)).slice(0, triesPerSource)
+        for (const c of found) {
+          const limiter = source === 'musicbrainz' ? 'caa' : source
+          const hash = await step(() => this.#take(c.image, limiter, signal))
+          if (hash && hash !== failed) return { hash, source }
+        }
       }
-    }
-    return 'none'
+    if (errors && !answered) throw new NetError('no service answered')
+    return errors ? 'later' : 'none'
   }
 
   #report(): void {

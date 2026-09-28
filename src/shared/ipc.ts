@@ -32,7 +32,9 @@ export interface WinApi {
 export interface SettingsApi {
   // the settings as they were when the page loaded
   load(): Promise<Settings>
-  save(settings: Settings): void
+  // toFile false: the page could not load them, so main applies them to the
+  // window but doesn't save them over the user's file
+  save(settings: Settings, toFile: boolean): void
 }
 
 export const LibraryChannel = {

@@ -52,10 +52,29 @@ describe('SettingsStore', () => {
     const path = join(dir, 'settings.json')
     writeFileSync(path, JSON.stringify({ theme: 'dark', visualizer: 'wave', folders: ['/m'] }))
     const store = new SettingsStore(path)
-    const next = store.setFromPage({ theme: 'blue', visualizer: 'spectrum', folders: [] })
+    const { next } = store.setFromPage({ theme: 'blue', visualizer: 'spectrum', folders: [] })
     expect(next.theme).toBe('dark')
     expect(next.visualizer).toBe('spectrum')
-    expect(next.folders).toEqual(['/m'])
+    expect(store.get().folders).toEqual(['/m'])
+  })
+
+  it("applies the page's choices without saving them when the page could not load the file", () => {
+    const path = join(dir, 'settings.json')
+    const saved = { template: 'classic', theme: 'dark', volume: 30, folders: ['/m'] }
+    writeFileSync(path, JSON.stringify(saved))
+    const store = new SettingsStore(path)
+    // the page runs on defaults and sends a change
+    const r = store.setFromPage({ template: 'focus', theme: 'system', volume: 70 }, false)
+    expect(r.before.template).toBe('classic')
+    expect(r.next).toMatchObject({ template: 'focus', theme: 'system' })
+    expect(store.live().template).toBe('focus')
+    // the next change starts from what the window shows now
+    expect(store.setFromPage({ template: 'studio' }, false).before.template).toBe('focus')
+    // the file and what main saves keep the user's own choices
+    expect(store.get()).toMatchObject(saved)
+    store.setWindowSize('studio', { width: 1000, height: 700 })
+    store.flushSync()
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toMatchObject(saved)
   })
 })
 

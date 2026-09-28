@@ -4,8 +4,10 @@ import { app } from 'electron'
 import type { TemplateId } from '../shared/layout'
 import {
   isKnownSettingsFile,
+  pageSettings,
   parseFolders,
   parseStoredSettings,
+  type Settings,
   type Size,
   type StoredSettings
 } from '../shared/settings'
@@ -17,6 +19,9 @@ export class SettingsStore {
   #writer: JsonFileWriter<StoredSettings> | undefined
   // false when the folder list on disk is unknown, so a scan must not act on the defaults
   readonly readable: boolean
+  // What the window shows: the saved choices, or the page's when the page
+  // could not load them and runs on defaults (they are never saved then).
+  #live: Settings
 
   constructor(readonly path = join(app.getPath('userData'), 'settings.json')) {
     removeStrayTmp(path)
@@ -24,20 +29,31 @@ export class SettingsStore {
     this.#data = parseStoredSettings(file.value)
     this.readable = file.canWrite
     if (file.canWrite) this.#writer = new JsonFileWriter(path, 500)
+    this.#live = pageSettings(this.#data)
   }
 
   get(): Readonly<StoredSettings> {
     return this.#data
   }
 
+  live(): Readonly<Settings> {
+    return this.#live
+  }
+
   // Checks the value like a file read, so a bad message can't store junk; a bad
   // field keeps its current value. Window sizes and folders stay main's own.
-  setFromPage(raw: unknown): StoredSettings {
-    const next = parseStoredSettings(raw, this.#data)
-    next.windowSizes = this.#data.windowSizes
-    next.folders = this.#data.folders
-    this.#replace(next)
-    return next
+  // toFile false: the page could not load the settings, so its choices only
+  // reach the window (size per template, theme), never the file.
+  setFromPage(raw: unknown, toFile = true): { before: Settings; next: Settings } {
+    const before = this.#live
+    const next = parseStoredSettings(raw, { ...this.#data, ...before })
+    this.#live = pageSettings(next)
+    if (toFile) {
+      next.windowSizes = this.#data.windowSizes
+      next.folders = this.#data.folders
+      this.#replace(next)
+    }
+    return { before, next: this.#live }
   }
 
   setWindowSize(id: TemplateId, size: Size): void {

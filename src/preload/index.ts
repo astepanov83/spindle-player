@@ -47,7 +47,7 @@ const saved = invoke(SettingsChannel.load)
 
 const settingsApi: SettingsApi = {
   load: () => saved,
-  save: (settings) => send(SettingsChannel.save, settings)
+  save: (settings, toFile) => send(SettingsChannel.save, settings, toFile)
 }
 
 // Asked for early too: the first paint shows the library from the index.

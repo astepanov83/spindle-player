@@ -45,10 +45,11 @@
   $effect(() => showStateInMediaSession())
   $effect(() => showPositionInMediaSession(player.pos, player.duration))
 
-  // Every change goes to main, which saves it and applies the window size and theme.
+  // Every change goes to main, which saves it and applies the window size and
+  // theme. Settings that failed to load are applied but not saved.
   $effect(() => {
     const s = $state.snapshot(settings)
-    if (settingsState.canSave) window.settingsApi.save(s)
+    window.settingsApi.save(s, settingsState.canSave)
   })
 
   // Keys from the prototype: Space play, V visualizer, Q queue, Escape closes.

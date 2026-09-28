@@ -75,11 +75,11 @@ export class MainWindow {
       this.#resizedAt = Date.now()
       clearTimeout(this.#resizeTimer)
       this.#resizeTimer = setTimeout(
-        () => this.#rememberSize(this.store.get().template),
+        () => this.#rememberSize(this.store.live().template),
         resizeQuietMs
       )
     })
-    win.on('close', () => this.#rememberSize(this.store.get().template))
+    win.on('close', () => this.#rememberSize(this.store.live().template))
 
     blockNavigation(win.webContents)
     win.webContents.setWindowOpenHandler((details) => {

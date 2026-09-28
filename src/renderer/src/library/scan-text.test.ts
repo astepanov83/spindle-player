@@ -142,7 +142,7 @@ describe('fetchLine', () => {
 
   it('says when there is nothing to look up, or it waits for a scan', () => {
     expect(fetchLine({ found: 0, notFound: 0, left: 0, running: false })).toBe(
-      'Every album has a cover'
+      'No albums to look up'
     )
     expect(fetchLine({ found: 0, notFound: 0, left: 1, running: false })).toBe(
       'Waiting: 1 album to look up'

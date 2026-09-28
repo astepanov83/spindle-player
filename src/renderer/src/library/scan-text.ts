@@ -57,7 +57,8 @@ export function canRescan(s: ScanStatus, pageFailed: boolean): boolean {
 export function fetchLine(f: FetchStatus | undefined): string | undefined {
   if (!f) return undefined
   const total = f.found + f.notFound + f.left
-  if (!total) return 'Every album has a cover'
+  // not "every album has a cover": albums with no album tag are never looked up
+  if (!total) return 'No albums to look up'
   // held until the scan ends
   if (!f.running && !f.found && !f.notFound)
     return `Waiting: ${plural(f.left, 'album', 'albums')} to look up`

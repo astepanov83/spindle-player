@@ -1,38 +1,55 @@
 <!--
   Where the visualizer draws: a canvas, plus the cover on the big stage.
-  The frame loop (loop.ts) does the drawing; this only tells it the stage is
-  there and when its size changed.
+  The frame loop (loop.ts) does the drawing; this tells it the stage is there,
+  its size, and when the cover moved.
 -->
 <script lang="ts">
   import Cover from '../ui/Cover.svelte'
   import { layout } from '../stores/layout.svelte'
   import { queue } from '../stores/queue.svelte'
   import { settings } from '../stores/settings.svelte'
-  import { addStage, wake } from './loop'
+  import { addStage } from './loop'
 
   let { cover = true }: { cover?: boolean } = $props()
 
   const names = { ring: 'Ring', spectrum: 'Spectrum', wave: 'Wave', off: 'Visualizer off' }
 
   let stage: HTMLDivElement
+  let canvas: HTMLCanvasElement
+  let coverEl: HTMLDivElement | undefined = $state()
+  let handle: ReturnType<typeof addStage> | undefined
 
   $effect(() => {
-    const remove = addStage(stage)
-    // also fires when a hidden tab with the stage in it shows again
-    const ro = new ResizeObserver(() => wake())
-    ro.observe(stage)
+    const h = addStage(stage, canvas, cover ? (coverEl ?? null) : null)
+    handle = h
+    // Also fires with a zero size when a tab hides the stage, and again when it
+    // shows. Device pixels, where the browser gives them, so the canvas is sharp.
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const dev = e.devicePixelContentBoxSize?.[0]
+        const { width, height } = e.contentRect
+        if (dev) h.resized(width, height, dev.inlineSize, dev.blockSize)
+        else h.resized(width, height)
+      }
+    })
+    try {
+      ro.observe(canvas, { box: 'device-pixel-content-box' })
+    } catch {
+      ro.observe(canvas)
+    }
     return () => {
       ro.disconnect()
-      remove()
+      h.remove()
+      handle = undefined
     }
   })
 </script>
 
 <div class="vstage" bind:this={stage}>
-  <canvas></canvas>
+  <canvas bind:this={canvas}></canvas>
   {#if cover}
     <!-- the cover changes size with the style, so draw again when it settles -->
-    <div class="cover" ontransitionend={() => wake()}>
+    <div class="cover" bind:this={coverEl} ontransitionend={() => handle?.moved()}>
       <div class="img"><Cover src={queue.currentAlbum?.coverLarge} /></div>
     </div>
   {/if}

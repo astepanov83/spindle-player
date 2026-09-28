@@ -22,9 +22,9 @@ describe('barColors', () => {
       fade: 0.4
     })
   })
-  it('light: the light accent and main darkened, bars mostly solid', () => {
+  it('light: the light accent as is, main darkened, bars mostly solid', () => {
     expect(barColors(p, true)).toEqual({
-      c1: mixHex('#b8412b', '#000000', 0.2),
+      c1: '#b8412b',
       c2: mixHex('#f2a541', '#000000', 0.4),
       fade: 0.7
     })

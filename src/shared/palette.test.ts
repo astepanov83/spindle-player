@@ -2,18 +2,19 @@ import { describe, expect, it } from 'vitest'
 import {
   accentContrast,
   accentRange,
+  accentSurfaces,
   contrast,
   coverPalettes,
   defaultPalettes,
   fallbackPalettes,
   hexToLch,
   lchToHex,
+  mixOklch,
   parseThemePalettes,
   shiftHue,
   swatches,
   type ThemePalettes
 } from './palette'
-import { windowBackground } from './theme'
 
 // An RGBA sample made of flat parts: [color, number of pixels].
 function image(parts: [string, number][]): Uint8Array {
@@ -83,6 +84,16 @@ describe('color conversions', () => {
     expect(contrast('#000000', '#ffffff')).toBeCloseTo(21, 1)
     expect(contrast('#777777', '#777777')).toBeCloseTo(1, 5)
   })
+  it('mixes in oklch as color-mix does', () => {
+    expect(mixOklch('#d64545', '#111216', 1)).toBe('#d64545')
+    expect(mixOklch('#d64545', '#111216', 0)).toBe('#111216')
+    // lightness halfway
+    const [L] = hexToLch(mixOklch('#ffffff', '#000000', 0.5))
+    expect(L).toBeCloseTo(0.5, 2)
+    // a grey has no hue of its own, so the mix keeps the color's hue
+    const h = hexToLch('#0050ff')[2]
+    expect(hexToLch(mixOklch('#0050ff', '#808080', 0.5))[2]).toBeCloseTo(h, 0)
+  })
   it('brings out-of-gamut colors back into sRGB', () => {
     expect(lchToHex([0.7, 0.5, 150])).toMatch(/^#[0-9a-f]{6}$/)
   })
@@ -115,8 +126,8 @@ describe('swatches', () => {
   // purpose, bump paletteVersion so stored palettes are made again.
   it('gives the same answer for a fixed picture', () => {
     expect(coverPalettes(covers.sunset)).toEqual({
-      dark: ['#f37436', '#d0727b', '#432252'],
-      light: ['#f37436', '#d75b12', '#432252']
+      dark: ['#f37436', '#ffaacd', '#432252'],
+      light: ['#f37436', '#c34e00', '#432252']
     })
   })
 })
@@ -126,8 +137,10 @@ describe('coverPalettes', () => {
     it(`${name}: accents are readable and in the theme's range`, () => {
       const p = coverPalettes(px)
       for (const theme of ['dark', 'light'] as const) {
-        const accent = p[theme][1]
-        expect(contrast(accent, windowBackground[theme])).toBeGreaterThanOrEqual(accentContrast)
+        const [main, accent, dark] = p[theme]
+        // on every area it is drawn on, the album tints included
+        for (const ground of accentSurfaces(main, dark, theme))
+          expect(contrast(accent, ground)).toBeGreaterThanOrEqual(accentContrast)
         const [lo, hi] = accentRange[theme]
         const L = hexToLch(accent)[0]
         expect(L).toBeGreaterThanOrEqual(lo - 0.01)
@@ -202,15 +215,19 @@ describe('fallbackPalettes', () => {
       const p = fallbackPalettes(seed)
       expect(hexToLch(p.dark[0])[1]).toBeGreaterThan(0.06)
       for (const theme of ['dark', 'light'] as const)
-        expect(contrast(p[theme][1], windowBackground[theme])).toBeGreaterThanOrEqual(3)
+        for (const ground of accentSurfaces(p[theme][0], p[theme][2], theme))
+          expect(contrast(p[theme][1], ground)).toBeGreaterThanOrEqual(3)
     }
   })
 })
 
 describe('defaultPalettes', () => {
   it('accents are readable', () => {
-    for (const theme of ['dark', 'light'] as const)
-      expect(contrast(defaultPalettes[theme][1], windowBackground[theme])).toBeGreaterThanOrEqual(3)
+    for (const theme of ['dark', 'light'] as const) {
+      const [main, accent, dark] = defaultPalettes[theme]
+      for (const ground of accentSurfaces(main, dark, theme))
+        expect(contrast(accent, ground)).toBeGreaterThanOrEqual(3)
+    }
   })
 })
 

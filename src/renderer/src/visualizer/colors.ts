@@ -26,15 +26,13 @@ export interface BarColors {
   fade: number
 }
 
-// Dark: the accent as the theme's palette has it, main pushed toward white, and
-// quiet bars fade into the background.
-// Light: the stage sits on the album tint, not on --bg, where the fitted accent
-// (3:1 on --bg) drops to about 2.5:1. So both colors go darker (about 3.4:1 on
-// the tints of the test covers) and bars stay mostly solid, since fading
+// The accent (bar tips and peak caps) is used as the theme's palette has it:
+// it is picked with 3:1 on every area a stage sits on, the album tint included.
+// Dark: main pushed toward white, and quiet bars fade into the background.
+// Light: main pushed toward black, and bars stay mostly solid, since fading
 // toward a pale tint washes them out.
 export function barColors(palettes: ThemePalettes, light: boolean): BarColors {
   const [main, accent] = palettes[light ? 'light' : 'dark']
-  if (light)
-    return { c1: mixHex(accent, '#000000', 0.2), c2: mixHex(main, '#000000', 0.4), fade: 0.7 }
+  if (light) return { c1: accent, c2: mixHex(main, '#000000', 0.4), fade: 0.7 }
   return { c1: accent, c2: mixHex(main, '#ffffff', 0.3), fade: 0.4 }
 }

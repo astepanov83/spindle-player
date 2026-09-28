@@ -5,7 +5,7 @@
 // Each cover gets one per theme. They share main and dark; the accent is picked
 // and fitted for each background, since a pale accent that shows on dark turns
 // khaki when it is darkened for light (see specs/themes.md).
-import { windowBackground } from './theme'
+import { accentGround, windowBackground, type ThemeName } from './theme'
 
 export type Palette = [string, string, string]
 
@@ -16,9 +16,11 @@ export interface ThemePalettes {
 
 // Bump when the picking changes, so palettes in the index are made again
 // (from the cached small covers; no music file is read again).
-export const paletteVersion = 1
+// 2: the accent is fitted to every area it is drawn on, not only --bg.
+export const paletteVersion = 2
 
-// Accent against --bg: 3:1, the minimum for marks that are not text (WCAG 1.4.11).
+// Accent against what it is drawn on: 3:1, the minimum for marks that are not
+// text (WCAG 1.4.11).
 export const accentContrast = 3
 
 // --- color conversions (sRGB, OKLab, OKLCH) ---
@@ -105,6 +107,21 @@ export function lchToHex(c: Lch): string {
       )
       .join('')
   )
+}
+
+// color-mix(in oklch, a t, b), as the page mixes album colors into --bg:
+// lightness and chroma in a straight line, hue the short way round. A grey
+// has no hue, so it takes the other color's.
+export function mixOklch(a: string, b: string, t: number): string {
+  const [La, Ca, Ha] = hexToLch(a)
+  const [Lb, Cb, Hb] = hexToLch(b)
+  const grey = 1e-4
+  const ha = Ca < grey ? Hb : Ha
+  const hb = Cb < grey ? Ha : Hb
+  let d = hb - ha
+  if (d > 180) d -= 360
+  if (d < -180) d += 360
+  return lchToHex([La * t + Lb * (1 - t), Ca * t + Cb * (1 - t), (ha + d * (1 - t) + 360) % 360])
 }
 
 // WCAG relative luminance and contrast ratio.
@@ -250,14 +267,16 @@ function pickDark(sw: Swatch[], main: Lch): Lch {
   return toGamut([clamp(L, 0.2, 0.32), Math.min(C, 0.09), H])
 }
 
-// Moves lightness away from the background until the contrast target is met.
-// Dark background: lighter. Light background: darker.
-export function fitAccent(c: Lch, bg: string, target = accentContrast): Lch {
-  const bgLch = hexToLch(bg)
-  const bgY = luminance(linearOf(bgLch))
-  const up = bgLch[0] < 0.5
+// Moves lightness away from the backgrounds until the contrast target is met
+// on all of them. Dark theme: lighter. Light theme: darker. The first
+// background says which.
+export function fitAccent(c: Lch, bg: string | string[], target = accentContrast): Lch {
+  const bgs = typeof bg === 'string' ? [bg] : bg
+  const ys = bgs.map((b) => luminance(linearOf(hexToLch(b))))
+  const up = hexToLch(bgs[0])[0] < 0.5
+  const worst = (x: Lch): number => Math.min(...ys.map((y) => contrastLch(x, y)))
   let out = toGamut(c)
-  for (let i = 0; i < 100 && contrastLch(out, bgY) < target; i++) {
+  for (let i = 0; i < 100 && worst(out) < target; i++) {
     const L = out[0] + (up ? 0.01 : -0.01)
     if (L < 0 || L > 1) break
     out = toGamut([L, c[1], shiftHue(c[2], c[0] - L)])
@@ -287,20 +306,38 @@ export const accentRange = {
   light: [0.42, 0.62]
 } as const
 
-// Moves a color into the theme's lightness range, then fits it for contrast.
-export function accentFor(c: Lch, theme: 'dark' | 'light'): Lch {
+// Everything the accent is drawn on, for a cover with these main and dark
+// colors: the theme's flat areas, and the album tint (Studio's player column)
+// at its top and its middle, worked out as the page mixes them (Node.svelte).
+// Focus's blurred color blobs are left out: they move under the bars, one of
+// them is the accent itself, and fitting to the main one turned dark accents
+// white and light ones to another hue (decision 106).
+export function accentSurfaces(main: string, dark: string, theme: ThemeName): string[] {
+  const g = accentGround[theme]
+  const bg = windowBackground[theme]
+  return [...g.flat, mixOklch(main, bg, g.tint), mixOklch(dark, bg, g.tint / 2)]
+}
+
+// Moves a color into the theme's lightness range, then fits it for contrast
+// on `surfaces` (just --bg when not given).
+export function accentFor(
+  c: Lch,
+  theme: ThemeName,
+  surfaces: string[] = [windowBackground[theme]]
+): Lch {
   const [lo, hi] = accentRange[theme]
   const L = clamp(c[0], lo, hi)
-  return fitAccent(toGamut([L, c[1], shiftHue(c[2], c[0] - L)]), windowBackground[theme])
+  return fitAccent(toGamut([L, c[1], shiftHue(c[2], c[0] - L)]), surfaces)
 }
 
 // The accent for one theme: colorful and apart from main, as it is after fitting.
-function pickAccent(sw: Swatch[], main: Lch, theme: 'dark' | 'light'): Lch {
+function pickAccent(sw: Swatch[], main: Lch, dark: Lch, theme: ThemeName): Lch {
   let best: Lch | undefined
   let bestScore = -1
   const mainLab = labOf(main)
+  const surfaces = accentSurfaces(lchToHex(main), lchToHex(dark), theme)
   for (const s of accentCandidates(sw, main)) {
-    const fit = accentFor(s.lch, theme)
+    const fit = accentFor(s.lch, theme, surfaces)
     // dark: an accent that looks like main adds nothing. Light: main is only a
     // faint tint there, so main itself makes a good mark.
     const apart = dist(labOf(s.lch), mainLab)
@@ -313,7 +350,7 @@ function pickAccent(sw: Swatch[], main: Lch, theme: 'dark' | 'light'): Lch {
       best = fit
     }
   }
-  return best ?? accentFor(main, theme)
+  return best ?? accentFor(main, theme, surfaces)
 }
 
 // Both palettes from a list of swatches. An empty list gives the neutral grey set.
@@ -324,8 +361,8 @@ export function palettesFromSwatches(sw: Swatch[]): ThemePalettes {
   const mainHex = lchToHex(main)
   const darkHex = lchToHex(dark)
   return {
-    dark: [mainHex, lchToHex(pickAccent(sw, main, 'dark')), darkHex],
-    light: [mainHex, lchToHex(pickAccent(sw, main, 'light')), darkHex]
+    dark: [mainHex, lchToHex(pickAccent(sw, main, dark, 'dark')), darkHex],
+    light: [mainHex, lchToHex(pickAccent(sw, main, dark, 'light')), darkHex]
   }
 }
 

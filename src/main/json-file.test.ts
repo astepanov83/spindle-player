@@ -13,7 +13,7 @@ import {
 
 // Holds an async write inside its fsync, after the temp file is written and
 // before the rename, so a test can act while a write is really running.
-const gate = vi.hoisted(() => ({
+const writeHold = vi.hoisted(() => ({
   hold: undefined as Promise<void> | undefined,
   entered: undefined as (() => void) | undefined
 }))
@@ -23,9 +23,9 @@ vi.mock('fs/promises', async (importOriginal) => {
     const fh = await fs.open(...args)
     const sync = fh.sync.bind(fh)
     fh.sync = async () => {
-      const hold = gate.hold
+      const hold = writeHold.hold
       if (hold) {
-        gate.entered?.()
+        writeHold.entered?.()
         await hold
       }
       return sync()
@@ -38,13 +38,13 @@ vi.mock('fs/promises', async (importOriginal) => {
 // Starts holding writes; `inside` resolves once a write is held, `release` lets it go.
 function holdWrites(): { inside: Promise<void>; release: () => void } {
   let release!: () => void
-  gate.hold = new Promise<void>((r) => (release = r))
-  const inside = new Promise<void>((r) => (gate.entered = r))
+  writeHold.hold = new Promise<void>((r) => (release = r))
+  const inside = new Promise<void>((r) => (writeHold.entered = r))
   return {
     inside,
     release: () => {
-      gate.hold = undefined
-      gate.entered = undefined
+      writeHold.hold = undefined
+      writeHold.entered = undefined
       release()
     }
   }

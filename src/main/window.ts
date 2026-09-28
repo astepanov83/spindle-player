@@ -30,6 +30,8 @@ export class MainWindow {
   #resizedAt = -Infinity
   // a page that keeps crashing is loaded again a few times, not forever
   #reloads = new RestartBudget(3, 60000)
+  // ms to wait before showing, so the start banner doesn't flicker (splash.ts)
+  showDelay: () => number = () => 0
 
   constructor(readonly store: SettingsStore) {
     const s = store.get()
@@ -57,9 +59,12 @@ export class MainWindow {
     const win = this.win
 
     win.on('ready-to-show', () => {
-      // the window manager may change the size as the window is first shown
-      this.#applied.settle(Date.now())
-      win.show()
+      setTimeout(() => {
+        if (win.isDestroyed()) return
+        // the window manager may change the size as the window is first shown
+        this.#applied.settle(Date.now())
+        win.show()
+      }, this.showDelay())
     })
     // A crashed page leaves a blank window; load it again. Main has the
     // settings, playlists and queue, so little is lost.

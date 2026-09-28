@@ -64,7 +64,7 @@ function gradient(
   return g
 }
 
-function drawRing(v: StageView, spot: CoverSpot, pad: number, col: BarColors): void {
+function drawRing(v: StageView, spot: CoverSpot, pad: number, col: BarColors, caps: boolean): void {
   const { ctx: x, w: W, h: H, dpr } = v
   const { cx, cy, inner } = spot
   const maxLen = Math.min(cx, W - cx, cy, H - cy) - inner - pad
@@ -93,7 +93,7 @@ function drawRing(v: StageView, spot: CoverSpot, pad: number, col: BarColors): v
       x.moveTo(0, 0)
       x.lineTo(0, len)
       x.stroke()
-      if (pad > 4 * dpr) {
+      if (caps && pad > 4 * dpr) {
         x.strokeStyle = col.c1
         x.globalAlpha = 0.55 + peaks[i] * 0.45
         x.beginPath()
@@ -216,13 +216,14 @@ function drawWave(v: StageView, cy: number, compact: boolean, col: BarColors): v
   x.globalAlpha = 1
 }
 
-// Draws one stage. Called from the frame loop (loop.ts).
-export function drawStage(v: StageView, style: VisualizerStyle, col: BarColors): void {
+// Draws one stage. Called from the frame loop (loop.ts). `caps` false leaves
+// out the ring's peak caps (the start banner).
+export function drawStage(v: StageView, style: VisualizerStyle, col: BarColors, caps = true): void {
   v.ctx.clearRect(0, 0, v.w, v.h)
   if (style === 'off' || !v.w || !v.h) return
   const spot = v.cover
   if (style === 'ring') {
-    if (spot) drawRing(v, spot, 8 * v.dpr, col)
+    if (spot) drawRing(v, spot, 8 * v.dpr, col, caps)
     else drawMirror(v, col)
   } else if (style === 'spectrum') drawSpectrum(v, !spot, col)
   else drawWave(v, spot ? spot.cy : v.h / 2, !spot, col)

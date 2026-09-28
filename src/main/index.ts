@@ -17,6 +17,7 @@ import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
 import { PlaylistFile, QueueFile } from './page-files'
 import { SettingsStore } from './settings-store'
+import { Splash } from './splash'
 import { devRetryData, isDevRetry, takeLock } from './single-instance'
 import { currentBackground, MainWindow } from './window'
 
@@ -45,9 +46,10 @@ let started = false
 let quitting = false
 app.on('before-quit', () => (quitting = true))
 
-function createWindow(): void {
+function createWindow(splash?: Splash): void {
   library.resume()
   main = new MainWindow(store)
+  splash?.endWith(main)
   // a crashed page sends no pause; a reloaded one sends its state again
   main.win.webContents.on('render-process-gone', () => library.setPlaying(false))
   main.win.on('closed', () => {
@@ -133,6 +135,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   // Read before the window exists, so it opens at the saved template's size and theme.
   store = new SettingsStore()
   nativeTheme.themeSource = store.get().theme
+  // Only at start: a window made again later (the dock, a second copy) is quick.
+  const splash = new Splash()
   playlists = new PlaylistFile()
   savedQueue = new QueueFile()
 
@@ -163,7 +167,7 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     for (const win of BrowserWindow.getAllWindows()) win.setBackgroundColor(currentBackground())
   })
 
-  createWindow()
+  createWindow(splash)
 
   // macOS: the dock icon makes a new app window. The hidden cover window doesn't count.
   app.on('activate', () => {

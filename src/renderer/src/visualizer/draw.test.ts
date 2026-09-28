@@ -2,11 +2,12 @@
 // warmed up. A fake 2D context counts what they ask for.
 import { describe, expect, it } from 'vitest'
 import { drawStage, type StageView } from './draw'
-import { levels, peaks, wave } from './levels'
+import { BANDS, levels, peaks, wave } from './levels'
 import type { VisualizerStyle } from '../../../shared/settings'
 
-function view(cover: boolean): StageView & { made: () => number } {
+function view(cover: boolean): StageView & { made: () => number; strokes: () => number } {
   let made = 0
+  let strokes = 0
   const noop = (): void => {}
   const ctx = {
     createLinearGradient: () => {
@@ -21,7 +22,7 @@ function view(cover: boolean): StageView & { made: () => number } {
     beginPath: noop,
     moveTo: noop,
     lineTo: noop,
-    stroke: noop,
+    stroke: () => strokes++,
     fillRect: noop
   }
   return {
@@ -31,7 +32,8 @@ function view(cover: boolean): StageView & { made: () => number } {
     dpr: 1,
     cover: cover ? { cx: 200, cy: 150, inner: 60 } : null,
     grads: new Map(),
-    made: () => made
+    made: () => made,
+    strokes: () => strokes
   }
 }
 
@@ -62,6 +64,17 @@ describe('drawStage', () => {
     levels.fill(0.501)
     drawStage(v, 'ring', colors)
     expect(v.made()).toBe(1)
+  })
+
+  it('the ring draws a peak cap past each bar, unless caps are off', () => {
+    levels.fill(0.5)
+    const v = view(true)
+    drawStage(v, 'ring', colors)
+    // bar and cap, on both sides
+    expect(v.strokes()).toBe(BANDS * 4)
+    const bare = view(true)
+    drawStage(bare, 'ring', colors, false)
+    expect(bare.strokes()).toBe(BANDS * 2)
   })
 
   it('draws nothing with the style Off or no size', () => {

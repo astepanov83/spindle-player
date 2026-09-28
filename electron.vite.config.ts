@@ -21,6 +21,15 @@ export default defineConfig({
     }
   },
   renderer: {
-    plugins: [svelte()]
+    plugins: [svelte()],
+    build: {
+      rollupOptions: {
+        // the app page, and the start banner (src/main/splash.ts)
+        input: {
+          index: resolve('src/renderer/index.html'),
+          splash: resolve('src/renderer/splash.html')
+        }
+      }
+    }
   }
 })

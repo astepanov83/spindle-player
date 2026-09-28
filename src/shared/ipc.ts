@@ -57,7 +57,8 @@ export interface LibraryApi {
   // The library as it was when the page loaded (from the index on disk).
   // Libraries come as UTF-8 JSON of LibraryData: main passes the bytes on without
   // reading them, and copying bytes is much cheaper than copying 50k objects.
-  load(): Promise<{ library: Uint8Array; status: ScanStatus }>
+  // `moves`: track ids that changed this run (see id-moves.ts)
+  load(): Promise<{ library: Uint8Array; status: ScanStatus; moves: IdMoves }>
   // opens the folder picker; resolves once the choice is saved
   addFolder(): Promise<void>
   removeFolder(path: string): void

@@ -34,7 +34,7 @@ for (const type of ['dragover', 'drop'] as const)
 // to load are not saved this run, so the defaults can't replace the user's files.
 const [saved, lib, lists, lastQueue] = await Promise.all([
   orFallback(() => window.settingsApi.load(), defaultSettings(), 'the settings'),
-  orFallback<{ library?: Uint8Array; status: ScanStatus }>(
+  orFallback<{ library?: Uint8Array; status: ScanStatus; moves?: IdMoves }>(
     () => window.libraryApi.load(),
     { status: library.status },
     'the library'
@@ -48,9 +48,10 @@ library.loadFailed = !lib.ok
 if (lib.value.library) loadLibrary(lib.value.library)
 
 // Ids that changed come just before the library that has the new ones, and
-// are renamed as it loads, so the queue doesn't drop those songs. A map that
-// came before now (sent again at start) may be for this library already.
-let moves: IdMoves | undefined
+// are renamed as it loads, so the queue doesn't drop those songs. The maps of
+// this run so far come with the load (one sent at start can come before the
+// page listens); those may be for this library already.
+let moves: IdMoves | undefined = lib.value.moves
 window.libraryApi.onIdsMoved((m) => (moves = moves ? mergeMoves(moves, m) : m))
 let startLists = lists.value
 let startQueue = lastQueue.value

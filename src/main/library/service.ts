@@ -110,14 +110,15 @@ export class LibraryService {
   }
 
   // The library as it is now, for the page's first paint or a reload.
-  async load(): Promise<{ library: Uint8Array; status: ScanStatus }> {
+  async load(): Promise<{ library: Uint8Array; status: ScanStatus; moves: IdMoves }> {
     const library = await this.#client.library()
     // after the reply is on its way, so the scan doesn't delay the first paint
     if (!this.#scannedOnStart) {
       this.#scannedOnStart = true
       setTimeout(() => this.scan(false), 0)
     }
-    return { library, status: this.#client.status }
+    // every id map of the run: one sent at start may have come before the page listened
+    return { library, status: this.#client.status, moves: this.#client.aliases }
   }
 
   // A scan already running stops; what it read stays. Files that failed last

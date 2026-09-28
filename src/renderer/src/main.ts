@@ -11,6 +11,10 @@ import { decodeLibrary, library } from './stores/library.svelte'
 import { playlists } from './stores/playlists.svelte'
 import { queue } from './stores/queue.svelte'
 import { loadSettings } from './stores/settings.svelte'
+import { orFallback } from './start'
+import { emptyQueue } from '../../shared/saved-queue'
+import { defaultSettings } from '../../shared/settings'
+import type { ScanStatus } from '../../shared/library'
 
 // A file dropped on the window would replace the app (main blocks that too).
 // Nothing in the page takes drops yet.
@@ -19,18 +23,29 @@ for (const type of ['dragover', 'drop'] as const)
 
 // Settings and the library first, so the first paint already shows the saved
 // template and the albums. The window stays hidden until then, so the wait doesn't show.
+// A failed ask shows the app with defaults. Settings and playlists that failed
+// to load are not saved this run, so the defaults can't replace the user's files.
 const [saved, lib, lists, lastQueue] = await Promise.all([
-  window.settingsApi.load(),
-  window.libraryApi.load(),
-  window.playlistsApi.load(),
-  window.playbackApi.loadQueue()
+  orFallback(() => window.settingsApi.load(), defaultSettings(), 'the settings'),
+  orFallback<{ library?: Uint8Array; status: ScanStatus }>(
+    () => window.libraryApi.load(),
+    { status: { ...library.status, unavailable: true } },
+    'the library'
+  ),
+  orFallback(() => window.playlistsApi.load(), [], 'the playlists'),
+  orFallback(() => window.playbackApi.loadQueue(), emptyQueue(), 'the queue')
 ])
-loadSettings(saved)
-library.load(decodeLibrary(lib.library))
-library.status = lib.status
-playlists.load(lists)
+loadSettings(saved.value, saved.ok)
+try {
+  if (lib.value.library) library.load(decodeLibrary(lib.value.library))
+  library.status = lib.value.status
+} catch (e) {
+  console.error('Could not read the library', e)
+  library.status = { ...lib.value.status, unavailable: true }
+}
+playlists.load(lists.value, lists.ok)
 // paused where it was; songs no longer in the library leave the queue
-queue.restore(lastQueue)
+queue.restore(lastQueue.value)
 
 window.libraryApi.onChanged((bytes) => {
   library.load(decodeLibrary(bytes))

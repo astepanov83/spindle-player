@@ -9,13 +9,18 @@ class PlaylistStore {
   // the playlist whose name is being edited; set right after "New playlist"
   editing: string | null = $state(null)
 
-  load(list: Playlist[]): void {
+  // false when main could not give the playlists: an edit then must not
+  // replace the user's file with this run's list
+  #canSave = true
+
+  load(list: Playlist[], ok = true): void {
     this.list = list
+    this.#canSave = ok
   }
 
   #set(list: Playlist[]): void {
     this.list = list
-    window.playlistsApi.save(list)
+    if (this.#canSave) window.playlistsApi.save(list)
   }
 
   get(id: string): Playlist | undefined {

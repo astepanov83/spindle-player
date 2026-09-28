@@ -15,6 +15,12 @@ const status = (s: Partial<ScanStatus>): ScanStatus => ({
 })
 
 describe('scanLine', () => {
+  it('says so when the library could not be loaded', () => {
+    expect(scanLine(status({ unavailable: true, tracks: 0 }))).toBe(
+      'The library could not be loaded. Restart Spindle to try again.'
+    )
+  })
+
   it('shows progress while scanning', () => {
     expect(scanLine(status({ phase: 'walk', done: 1234 }))).toBe('Looking for files: 1,234 found')
     expect(scanLine(status({ phase: 'read', done: 12, total: 5000 }))).toBe(

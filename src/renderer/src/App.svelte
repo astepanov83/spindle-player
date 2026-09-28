@@ -15,7 +15,7 @@
   } from './stores/media-session'
   import { togglePlay, player } from './stores/player.svelte'
   import { queue } from './stores/queue.svelte'
-  import { settings } from './stores/settings.svelte'
+  import { settings, settingsState } from './stores/settings.svelte'
   import { theme } from './stores/theme.svelte'
   import { barColors } from './visualizer/colors'
   import { setLook } from './visualizer/loop'
@@ -41,7 +41,10 @@
   $effect(() => showStateInMediaSession())
 
   // Every change goes to main, which saves it and applies the window size and theme.
-  $effect(() => window.settingsApi.save($state.snapshot(settings)))
+  $effect(() => {
+    const s = $state.snapshot(settings)
+    if (settingsState.canSave) window.settingsApi.save(s)
+  })
 
   // Keys from the prototype: Space play, V visualizer, Q queue, Escape closes.
   // Not while typing, and not with Ctrl, Alt or Meta held.

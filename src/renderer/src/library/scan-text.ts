@@ -4,7 +4,10 @@ import type { ScanStatus } from '../../../shared/library'
 const n = (x: number): string => x.toLocaleString('en-US')
 const plural = (x: number, one: string, many: string): string => `${n(x)} ${x === 1 ? one : many}`
 
+export const unavailableText = 'The library could not be loaded. Restart Spindle to try again.'
+
 export function scanLine(s: ScanStatus): string {
+  if (s.unavailable) return unavailableText
   if (s.phase === 'walk') return `Looking for files: ${n(s.done)} found`
   if (s.phase === 'read') return `Reading tags: ${n(s.done)} of ${n(s.total)}`
   if (!s.folders.length) return 'No music folders yet.'

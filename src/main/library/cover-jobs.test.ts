@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fallbackPalettes } from '../../shared/palette'
 import { outcomeOf, PendingJobs } from './cover-jobs'
 
 describe('outcomeOf', () => {
@@ -7,6 +8,13 @@ describe('outcomeOf', () => {
     expect(outcomeOf({ id: 1, jpg })).toEqual({ kind: 'ok', jpg })
     expect(outcomeOf({ id: 1, bad: true })).toEqual({ kind: 'bad' })
     expect(outcomeOf({ id: 1 })).toEqual({ kind: 'retry' })
+  })
+
+  it('passes the palette on, with or without a JPEG', () => {
+    const jpg = new Uint8Array([1])
+    const palette = fallbackPalettes('x')
+    expect(outcomeOf({ id: 1, palette })).toEqual({ kind: 'ok', palette })
+    expect(outcomeOf({ id: 1, jpg, palette })).toEqual({ kind: 'ok', jpg, palette })
   })
 })
 

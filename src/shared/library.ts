@@ -1,4 +1,5 @@
 // Library types, as the page sees them. Main builds them from the index (ticket 006).
+import type { ThemePalettes } from './palette'
 
 export interface Track {
   id: string
@@ -22,8 +23,8 @@ export interface Album {
   artist: string
   // 0 when unknown
   year: number
-  // [--c1, --c2, --c3]: main, accent, dark
-  palette: [string, string, string]
+  // [--c1, --c2, --c3] (main, accent, dark) for each theme, from the cover (ticket 009)
+  palette: ThemePalettes
   // small cover URL for grids and lists, or '' when there is none
   cover: string
   // big cover URL for the stage, or ''
@@ -42,9 +43,6 @@ export interface LibraryData {
   albums: Album[]
   tracks: Track[]
 }
-
-// Until 009 picks colors from covers, every album gets this neutral set.
-export const defaultPalette: [string, string, string] = ['#6f7787', '#a3adc2', '#232733']
 
 export type ScanPhase = 'idle' | 'walk' | 'read'
 

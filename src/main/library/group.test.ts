@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { albumFolder, buildLibrary, shortHash, unknownArtist, variousArtists } from './group'
+import { defaultPalettes, fallbackPalettes } from '../../shared/palette'
 import { emptyIndex } from './merge'
 import type { FileEntry, LibraryIndex } from './types'
 
@@ -129,6 +130,25 @@ describe('buildLibrary', () => {
     expect(cached.data.albums[0].cover).toBe('spindle://cover/small/folder')
 
     expect(build([entry('/m/b/1.mp3')]).data.albums[0].cover).toBe('')
+  })
+
+  it("takes the cover's palette, a neutral one while it is not picked yet, and made-up colors with no cover", () => {
+    const salt = fallbackPalettes('salt')
+    const { data } = build(
+      [
+        entry('/m/a/1.mp3', { album: 'A', cover: 'withPalette' }),
+        entry('/m/b/1.mp3', { album: 'B', cover: 'noPaletteYet' }),
+        entry('/m/c/1.mp3', { album: 'C' })
+      ],
+      (ix) => ix.palettes.set('withPalette', salt)
+    )
+    const [a, b, c] = data.albums
+    expect(a.palette).toEqual(salt)
+    expect(b.palette).toEqual(defaultPalettes)
+    expect(c.palette).toEqual(fallbackPalettes(c.id))
+    expect(c.palette).not.toEqual(defaultPalettes)
+    // a copy, so the page's data never shares arrays with the index
+    expect(a.palette.dark).not.toBe(salt.dark)
   })
 
   it('finds a folder image next to disc folders', () => {

@@ -4,12 +4,18 @@ import {
   applyListing,
   emptyIndex,
   isUnder,
+  missingPalettes,
   parseIndex,
   planReads,
+  prunePalettes,
   serializeIndex,
   usedCovers
 } from './merge'
+import { fallbackPalettes, paletteVersion } from '../../shared/palette'
 import { indexVersion, type FileEntry, type LibraryIndex } from './types'
+
+const h1 = '1'.repeat(40)
+const h2 = '2'.repeat(40)
 
 const entry = (path: string, more: Partial<FileEntry> = {}): FileEntry => ({
   path,
@@ -29,8 +35,29 @@ describe('parseIndex', () => {
   it('reads back what serializeIndex wrote', () => {
     const ix = indexOf([entry('/m/a.mp3', { title: 'A', track: 2, cover: 'abc' })])
     ix.images.set('/m', { path: '/m/cover.jpg', mtime: 5, size: 6, cover: 'def' })
+    ix.palettes.set(h1, fallbackPalettes('a'))
     const back = parseIndex(JSON.parse(JSON.stringify(serializeIndex(ix))))
     expect(back).toEqual(ix)
+  })
+
+  it('reads an index from before palettes, keeping its files', () => {
+    const ix = parseIndex({ version: indexVersion, files: [entry('/a.mp3')], images: [] })
+    expect(ix.files.size).toBe(1)
+    expect(ix.palettes.size).toBe(0)
+  })
+
+  it('drops palettes of another palette version, and broken ones', () => {
+    const good = fallbackPalettes('a')
+    const raw = { version: indexVersion, files: [entry('/a.mp3')], palettes: { [h1]: good } }
+    expect(parseIndex({ ...raw, paletteVersion: paletteVersion + 1 }).palettes.size).toBe(0)
+    expect(parseIndex({ ...raw, paletteVersion }).palettes.get(h1)).toEqual(good)
+    const broken = parseIndex({
+      ...raw,
+      paletteVersion,
+      palettes: { [h1]: { dark: good.dark }, [h2]: good, 'not-a-hash': good }
+    })
+    expect([...broken.palettes.keys()]).toEqual([h2])
+    expect(broken.files.size).toBe(1)
   })
 
   it('starts empty for another version or junk', () => {
@@ -147,5 +174,26 @@ describe('helpers', () => {
     const ix = indexOf([entry('/m/a.mp3', { cover: 'a' }), entry('/m/b.mp3')])
     ix.images.set('/m', { path: '/m/cover.jpg', mtime: 1, size: 1, cover: 'f' })
     expect([...usedCovers(ix)].sort()).toEqual(['a', 'f'])
+  })
+
+  it('prunePalettes drops palettes of covers nothing uses', () => {
+    const ix = indexOf([entry('/m/a.mp3', { cover: h1 })])
+    ix.palettes.set(h1, fallbackPalettes('a'))
+    ix.palettes.set(h2, fallbackPalettes('b'))
+    expect(prunePalettes(ix, usedCovers(ix))).toBe(true)
+    expect([...ix.palettes.keys()]).toEqual([h1])
+    expect(prunePalettes(ix, usedCovers(ix))).toBe(false)
+  })
+
+  it('missingPalettes lists cached covers with no palette', () => {
+    const h3 = '3'.repeat(40)
+    const ix = indexOf([
+      entry('/m/a.mp3', { cover: h1 }),
+      entry('/m/b.mp3', { cover: h2 }),
+      entry('/n/c.mp3', { cover: h3 })
+    ])
+    ix.palettes.set(h1, fallbackPalettes('a'))
+    // h3 is not in the cache (bad or not made yet)
+    expect(missingPalettes(ix, (h) => h !== h3)).toEqual([h2])
   })
 })

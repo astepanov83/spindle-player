@@ -4,11 +4,12 @@
   the requestAnimationFrame loop that calls drawStage every frame.
 -->
 <script lang="ts">
-  import { defaultPalette } from '../../../shared/library'
+  import { defaultPalettes } from '../../../shared/palette'
   import Cover from '../ui/Cover.svelte'
   import { layout } from '../stores/layout.svelte'
   import { queue } from '../stores/queue.svelte'
   import { settings } from '../stores/settings.svelte'
+  import { theme } from '../stores/theme.svelte'
   import { barColors } from './colors'
   import { drawStage } from './draw'
 
@@ -17,17 +18,12 @@
   const names = { ring: 'Ring', spectrum: 'Spectrum', wave: 'Wave', off: 'Visualizer off' }
 
   let stage: HTMLDivElement
-  let light = $state(matchMedia('(prefers-color-scheme: light)').matches)
   let size = $state(0)
 
   $effect(() => {
-    const mq = matchMedia('(prefers-color-scheme: light)')
-    const onChange = (): void => void (light = mq.matches)
-    mq.addEventListener('change', onChange)
     const ro = new ResizeObserver(() => size++)
     ro.observe(stage)
     return () => {
-      mq.removeEventListener('change', onChange)
       ro.disconnect()
     }
   })
@@ -36,7 +32,7 @@
     drawStage(
       stage,
       settings.visualizer,
-      barColors(queue.currentAlbum?.palette ?? defaultPalette, light)
+      barColors(queue.currentAlbum?.palette ?? defaultPalettes, theme.light)
     )
   }
 

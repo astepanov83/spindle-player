@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { ThemePalettes } from '../../../shared/palette'
 import { barColors, mixHex } from './colors'
 
 describe('mixHex', () => {
@@ -10,14 +11,14 @@ describe('mixHex', () => {
 })
 
 describe('barColors', () => {
-  const p: [string, string, string] = ['#f2a541', '#c8553d', '#2d3047']
-  it('dark: accent as is, main lightened', () => {
-    expect(barColors(p, false)).toEqual({ c1: '#c8553d', c2: mixHex('#f2a541', '#ffffff', 0.3) })
+  const p: ThemePalettes = {
+    dark: ['#f2a541', '#e0735c', '#2d3047'],
+    light: ['#f2a541', '#b8412b', '#2d3047']
+  }
+  it('dark: the dark accent as is, main lightened', () => {
+    expect(barColors(p, false)).toEqual({ c1: '#e0735c', c2: mixHex('#f2a541', '#ffffff', 0.3) })
   })
-  it('light: both darkened', () => {
-    expect(barColors(p, true)).toEqual({
-      c1: mixHex('#c8553d', '#000000', 0.25),
-      c2: mixHex('#f2a541', '#000000', 0.3)
-    })
+  it('light: the light accent as is, main darkened', () => {
+    expect(barColors(p, true)).toEqual({ c1: '#b8412b', c2: mixHex('#f2a541', '#000000', 0.3) })
   })
 })

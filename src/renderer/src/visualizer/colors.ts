@@ -1,4 +1,5 @@
 // The canvas can't read CSS colors, so the bar colors are worked out here.
+import type { ThemePalettes } from '../../../shared/palette'
 
 export function mixHex(hex: string, to: string, t: number): string {
   const rgb = (s: string): number[] => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16))
@@ -21,9 +22,9 @@ export interface BarColors {
   c2: string
 }
 
-// Push the album colors away from the background: toward white on dark, black on light.
-export function barColors(palette: [string, string, string], light: boolean): BarColors {
-  return light
-    ? { c1: mixHex(palette[1], '#000000', 0.25), c2: mixHex(palette[0], '#000000', 0.3) }
-    : { c1: palette[1], c2: mixHex(palette[0], '#ffffff', 0.3) }
+// The accent as the theme's palette has it (already readable on that background),
+// and main pushed away from the background: toward white on dark, black on light.
+export function barColors(palettes: ThemePalettes, light: boolean): BarColors {
+  const [main, accent] = palettes[light ? 'light' : 'dark']
+  return { c1: accent, c2: mixHex(main, light ? '#000000' : '#ffffff', 0.3) }
 }

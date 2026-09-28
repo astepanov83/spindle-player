@@ -1,4 +1,6 @@
 // Messages between main and the hidden window that resizes covers.
+import type { ThemePalettes } from './palette'
+
 export const CoverChannel = {
   job: 'cover:job',
   done: 'cover:done'
@@ -8,14 +10,17 @@ export interface CoverJob {
   id: number
   // the source picture (JPEG, PNG, WebP...)
   data: Uint8Array
-  // the shorter side of the result, in px
-  side: number
+  // the shorter side of the resized JPEG, in px; left out when only the palette is wanted
+  side?: number
+  // also pick the album colors from the picture
+  palette?: boolean
 }
 
 export interface CoverResult {
   id: number
   // JPEG bytes
   jpg?: Uint8Array
+  palette?: ThemePalettes
   // set when the picture itself could not be decoded
   bad?: boolean
 }

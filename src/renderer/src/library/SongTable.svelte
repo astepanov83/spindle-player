@@ -167,8 +167,8 @@
     background: var(--hover);
   }
   .tr.cur-row {
-    background: color-mix(in srgb, var(--c2-mark) 26%, var(--hover));
-    box-shadow: inset 3px 0 0 var(--c2-mark);
+    background: color-mix(in srgb, var(--c2) 26%, var(--hover));
+    box-shadow: inset 3px 0 0 var(--c2);
   }
   .tr > span {
     white-space: nowrap;

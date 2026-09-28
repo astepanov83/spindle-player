@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Album, Track } from '../../../shared/library'
+import { defaultPalettes } from '../../../shared/palette'
 import { chunk, filterAlbums, gridColumns, nextSort, songRows, sortRows } from './views'
 
 function lib(): { albums: Album[]; tracks: Map<string, Track> } {
@@ -25,7 +26,7 @@ function lib(): { albums: Album[]; tracks: Map<string, Track> } {
       title,
       artist,
       year: 2020,
-      palette: ['#000000', '#000000', '#000000'],
+      palette: defaultPalettes,
       cover: '',
       coverLarge: '',
       trackIds: ids

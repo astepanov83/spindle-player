@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { defaultPalette } from '../../shared/library'
+  import { defaultPalettes } from '../../shared/palette'
   import TitleBar from './components/TitleBar.svelte'
   import Settings from './components/Settings.svelte'
   import Node from './layout/Node.svelte'
@@ -8,8 +8,12 @@
   import { togglePlay, player } from './stores/player.svelte'
   import { queue } from './stores/queue.svelte'
   import { settings } from './stores/settings.svelte'
+  import { theme } from './stores/theme.svelte'
 
-  const palette = $derived(queue.currentAlbum?.palette ?? defaultPalette)
+  // each cover has a palette per theme; the light one has a darker accent
+  const palette = $derived(
+    (queue.currentAlbum?.palette ?? defaultPalettes)[theme.light ? 'light' : 'dark']
+  )
 
   $effect(() => startFakeClock())
 
@@ -55,8 +59,6 @@
 
 <style>
   .app {
-    /* --c2 with lightness capped and chroma raised in light, so pale covers still show as a bar or highlight */
-    --c2-mark: oklch(from var(--c2) min(l, var(--mark-l)) max(c, var(--mark-c)) h);
     height: 100%;
     display: flex;
     flex-direction: column;

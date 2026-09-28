@@ -1,7 +1,8 @@
 // Builds the albums and tracks the page shows from the index.
 import { hash } from 'crypto'
 import { basename } from 'path'
-import { defaultPalette, type Album, type LibraryData, type Track } from '../../shared/library'
+import type { Album, LibraryData, Track } from '../../shared/library'
+import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../shared/palette'
 import { dirOf } from './merge'
 import { discFolderNumber, isDiscFolder, titleFromFileName } from './tags'
 import type { FileEntry, LibraryIndex } from './types'
@@ -105,6 +106,14 @@ function coverOf(
   return undefined
 }
 
+// The cover's colors. No cover: made-up colors from the album id, so albums
+// don't all look the same grey. A cover whose palette isn't picked yet (an
+// index from before palettes) stays neutral for the moment, not a random color.
+function paletteOf(ix: LibraryIndex, cover: string | undefined, id: string): ThemePalettes {
+  const p = cover ? (ix.palettes.get(cover) ?? defaultPalettes) : fallbackPalettes(id)
+  return { dark: [...p.dark], light: [...p.light] }
+}
+
 function withoutTracks(al: Album & { tracks: Track[] }): Album {
   const out: Album & { tracks?: Track[] } = { ...al }
   delete out.tracks
@@ -158,7 +167,7 @@ export function buildLibrary(ix: LibraryIndex, hasCover: (hash: string) => boole
       title,
       artist,
       year: yearOf(entries),
-      palette: [...defaultPalette],
+      palette: paletteOf(ix, cover, id),
       ...(cover ? coverUrls(cover) : { cover: '', coverLarge: '' }),
       trackIds: tracks.map((t) => t.id),
       tracks

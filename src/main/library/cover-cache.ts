@@ -1,7 +1,8 @@
 // Resized covers on disk, named by the hash of the source picture.
 // "<hash>.jpg" is the small one made at scan time, "<hash>-large.jpg" is made
 // the first time the stage asks for it, and "<hash>.bad" marks a picture that
-// could not be decoded, so it is not tried again on every scan.
+// could not be decoded, so it is not tried again on every scan. The album
+// colors are picked in the same window while the picture is decoded.
 //
 // Decoding happens in a hidden window (Chromium decodes images off its main
 // thread), not in main: a 3000px cover took about 50ms of main's time with
@@ -12,6 +13,7 @@ import { rename, stat, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { BrowserWindow, ipcMain } from 'electron'
 import { CoverChannel, type CoverJob, type CoverResult } from '../../shared/cover-job'
+import type { ThemePalettes } from '../../shared/palette'
 import { outcomeOf, PendingJobs, type Outcome } from './cover-jobs'
 
 export const smallSide = 320
@@ -23,6 +25,12 @@ const idleMs = 30000
 // A job with no answer after this long ends as "retry", and the window is dropped.
 // A 3000px picture takes well under a second.
 const jobTimeoutMs = 20000
+
+// What a job for the library worker ended as.
+export interface CoverDone {
+  result: 'ok' | 'bad' | 'retry'
+  palette?: ThemePalettes
+}
 
 export function isCoverHash(s: string): boolean {
   return /^[0-9a-f]{40}$/.test(s)
@@ -106,8 +114,9 @@ export class CoverCache {
     if (win && !win.isDestroyed()) win.destroy()
   }
 
-  // Scales so the shorter side is `side`, never up, as JPEG.
-  async resize(data: Uint8Array, side: number): Promise<Outcome> {
+  // Runs one job in the hidden window: a JPEG scaled so the shorter side is
+  // `side` (never up), the palette, or both.
+  async #run(data: Uint8Array, want: Omit<CoverJob, 'id' | 'data'>): Promise<Outcome> {
     if (this.#running >= jobsAtOnce) await new Promise<void>((r) => this.#queue.push(r))
     this.#running++
     clearTimeout(this.#idle)
@@ -115,7 +124,7 @@ export class CoverCache {
       const win = await this.#window()
       const id = ++this.#nextId
       const result = this.#jobs.wait(id)
-      const job: CoverJob = { id, data, side }
+      const job: CoverJob = { id, data, ...want }
       win.webContents.send(CoverChannel.job, job)
       return await result
     } catch (e) {
@@ -129,17 +138,29 @@ export class CoverCache {
     }
   }
 
-  // Makes the small cover. A "bad" marker is written only when the picture itself can't be decoded.
-  async add(hash: string, data: Uint8Array): Promise<Outcome['kind']> {
+  // Makes the small cover and picks its palette. A "bad" marker is written
+  // only when the picture itself can't be decoded.
+  async add(hash: string, data: Uint8Array): Promise<CoverDone> {
     try {
-      const o = await this.resize(data, smallSide)
-      if (o.kind === 'ok') await writeAtomic(this.smallPath(hash), o.jpg)
-      else if (o.kind === 'bad') await writeAtomic(join(this.dir, `${hash}.bad`), '')
-      return o.kind
+      const o = await this.#run(data, { side: smallSide, palette: true })
+      if (o.kind === 'ok' && o.jpg) {
+        await writeAtomic(this.smallPath(hash), o.jpg)
+        return { result: 'ok', palette: o.palette }
+      }
+      if (o.kind === 'bad') await writeAtomic(join(this.dir, `${hash}.bad`), '')
+      return { result: o.kind === 'bad' ? 'bad' : 'retry' }
     } catch (e) {
       console.error('Could not save a cover', e)
-      return 'retry'
+      return { result: 'retry' }
     }
+  }
+
+  // Only the palette, for a cover cached before palettes were picked.
+  async palette(data: Uint8Array): Promise<CoverDone> {
+    const o = await this.#run(data, { palette: true })
+    if (o.kind === 'ok' && o.palette) return { result: 'ok', palette: o.palette }
+    // tried again on the next scan
+    return { result: 'retry' }
   }
 
   // The big cover's path, made from `source` the first time.
@@ -167,8 +188,8 @@ export class CoverCache {
     }
     try {
       const data = await source()
-      const o = data && (await this.resize(data, largeSide))
-      if (!o || o.kind !== 'ok') return undefined
+      const o = data && (await this.#run(data, { side: largeSide }))
+      if (!o || o.kind !== 'ok' || !o.jpg) return undefined
       await writeAtomic(path, o.jpg)
       return path
     } catch (e) {

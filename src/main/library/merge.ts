@@ -1,9 +1,10 @@
 // The index in memory: reading it from disk, and folding scan results into it.
 import { sep } from 'path'
+import { paletteVersion, parseThemePalettes } from '../../shared/palette'
 import { indexVersion, type FileEntry, type FolderImage, type LibraryIndex } from './types'
 
 export function emptyIndex(): LibraryIndex {
-  return { version: indexVersion, files: new Map(), images: new Map() }
+  return { version: indexVersion, files: new Map(), images: new Map(), palettes: new Map() }
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -40,6 +41,8 @@ function parseImage(v: unknown): FolderImage | undefined {
 }
 
 // A file from another version starts empty, so every file is read again.
+// Palettes from another palette version are dropped; they are made again from
+// the cached small covers, without reading any music file.
 export function parseIndex(raw: unknown): LibraryIndex {
   const ix = emptyIndex()
   if (!isObject(raw) || raw.version !== indexVersion) return ix
@@ -53,11 +56,22 @@ export function parseIndex(raw: unknown): LibraryIndex {
       const im = parseImage(v)
       if (im) ix.images.set(dirOf(im.path), im)
     }
+  if (raw.paletteVersion === paletteVersion && isObject(raw.palettes))
+    for (const [hash, v] of Object.entries(raw.palettes)) {
+      const p = parseThemePalettes(v)
+      if (p && /^[0-9a-f]{40}$/.test(hash)) ix.palettes.set(hash, p)
+    }
   return ix
 }
 
 export function serializeIndex(ix: LibraryIndex): unknown {
-  return { version: ix.version, files: [...ix.files.values()], images: [...ix.images.values()] }
+  return {
+    version: ix.version,
+    files: [...ix.files.values()],
+    images: [...ix.images.values()],
+    paletteVersion,
+    palettes: Object.fromEntries(ix.palettes)
+  }
 }
 
 export function dirOf(path: string): string {
@@ -148,4 +162,20 @@ export function usedCovers(ix: LibraryIndex): Set<string> {
   for (const e of ix.files.values()) if (e.cover) out.add(e.cover)
   for (const im of ix.images.values()) if (im.cover) out.add(im.cover)
   return out
+}
+
+// Drops palettes of covers nothing points at. Returns true if any went.
+export function prunePalettes(ix: LibraryIndex, used: Set<string>): boolean {
+  let changed = false
+  for (const hash of ix.palettes.keys())
+    if (!used.has(hash)) {
+      ix.palettes.delete(hash)
+      changed = true
+    }
+  return changed
+}
+
+// Covers in the cache that have no palette yet, e.g. from an index made before 009.
+export function missingPalettes(ix: LibraryIndex, cached: (hash: string) => boolean): string[] {
+  return [...usedCovers(ix)].filter((h) => cached(h) && !ix.palettes.has(h))
 }

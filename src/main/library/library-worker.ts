@@ -15,8 +15,10 @@ import {
   dirOf,
   emptyIndex,
   isUnder,
+  missingPalettes,
   parseIndex,
   planReads,
+  prunePalettes,
   serializeIndex,
   usedCovers
 } from './merge'
@@ -155,6 +157,16 @@ async function sendCover(data: Uint8Array, gen: number): Promise<string> {
   const h = hash('sha1', data)
   if (known(h) || claimed.has(h)) return h
   claimed.add(h)
+  await waitForSlot(h, gen)
+  sent.add(h)
+  // a copy of its own, so the buffer can move to main without a second copy
+  const copy = data.slice()
+  post({ type: 'cover', hash: h, data: copy }, [copy.buffer])
+  return h
+}
+
+// Waits for a free slot to send a picture to main. The hash must be claimed first.
+async function waitForSlot(h: string, gen: number): Promise<void> {
   try {
     while (sent.size >= coversAtOnce) {
       await new Promise<void>((r) => coverWaiters.push(r))
@@ -164,11 +176,27 @@ async function sendCover(data: Uint8Array, gen: number): Promise<string> {
     claimed.delete(h)
     throw e
   }
-  sent.add(h)
-  // a copy of its own, so the buffer can move to main without a second copy
-  const copy = data.slice()
-  post({ type: 'cover', hash: h, data: copy }, [copy.buffer])
-  return h
+}
+
+// Covers cached before palettes were picked (an index from before 009, or a
+// quit before the index was saved) get one from the small cover, so no music
+// file is read again.
+async function fillPalettes(gen: number): Promise<void> {
+  for (const h of missingPalettes(ix, (x) => cached.has(x))) {
+    if (claimed.has(h)) continue
+    claimed.add(h)
+    await waitForSlot(h, gen)
+    let data: Uint8Array
+    try {
+      data = new Uint8Array(await readFile(join(start.coversDir, `${h}.jpg`)))
+    } catch {
+      // pruned or deleted meanwhile; the file is read again when its cover is missing
+      claimed.delete(h)
+      continue
+    }
+    sent.add(h)
+    post({ type: 'cover', hash: h, data, paletteOnly: true }, [data.buffer as ArrayBuffer])
+  }
 }
 
 async function loadCached(): Promise<void> {
@@ -368,11 +396,14 @@ async function scan(folders: string[], gen: number): Promise<void> {
       progress('read', read, toRead.length)
     })
     progress('read', read, toRead.length, true)
+    await fillPalettes(gen)
     // wait until main has every picture, so the covers are there for the albums
     while (sent.size > 0) {
       await new Promise<void>((r) => coverWaiters.push(r))
       checkGen(gen)
     }
+    // they don't change what the page shows, so only the file needs saving
+    if (prunePalettes(ix, usedCovers(ix))) unsaved = true
   } catch (error) {
     if (!(error instanceof Stopped)) log(`Library scan failed: ${error}`)
     // a stopped scan keeps what it read; the next one carries on from there
@@ -420,6 +451,10 @@ port.on('message', (m: WorkerIn) => {
       // "retry" stays unknown, so the next scan reads that file again
       if (m.result === 'ok') cached.add(m.hash)
       else if (m.result === 'bad') bad.add(m.hash)
+      if (m.palette) {
+        ix.palettes.set(m.hash, m.palette)
+        markChanged()
+      }
       wakeCoverWaiters()
       break
     case 'find-track':

@@ -1,5 +1,6 @@
 // The library index on disk, and the messages between main and the library worker.
 import type { ScanStatus } from '../../shared/library'
+import type { ThemePalettes } from '../../shared/palette'
 
 // One audio file. Tags are already cleaned up (see tags.ts); a missing tag is left out.
 export interface FileEntry {
@@ -39,6 +40,8 @@ export interface LibraryIndex {
   files: Map<string, FileEntry>
   // folder path -> its cover image
   images: Map<string, FolderImage>
+  // cover hash -> the album colors picked from it
+  palettes: Map<string, ThemePalettes>
 }
 
 // Bump to make every file be read again (for example when a new tag is added).
@@ -58,7 +61,7 @@ export type WorkerIn =
   | { type: 'scan'; folders: string[] }
   // a picture sent with 'cover' is written (ok), can't be decoded (bad),
   // or went unanswered (retry: try again on a later scan)
-  | { type: 'cover-done'; hash: string; result: 'ok' | 'bad' | 'retry' }
+  | { type: 'cover-done'; hash: string; result: 'ok' | 'bad' | 'retry'; palette?: ThemePalettes }
   // the page's library as it is now, as JSON bytes in the reply
   | { type: 'get-library'; req: number }
   // quitting: save the index now, then set the flush flag
@@ -72,7 +75,8 @@ export type WorkerOut =
   // a changed library as JSON bytes: main passes them on without reading them
   | { type: 'library'; bytes: Uint8Array }
   | { type: 'status'; status: ScanStatus }
-  // a picture main should resize into the cover cache
-  | { type: 'cover'; hash: string; data: Uint8Array }
+  // a picture main should resize into the cover cache and pick the palette of;
+  // with paletteOnly, a cached small cover that only needs its palette
+  | { type: 'cover'; hash: string; data: Uint8Array; paletteOnly?: boolean }
   | { type: 'reply'; req: number; path?: string; data?: Uint8Array }
   | { type: 'log'; text: string }

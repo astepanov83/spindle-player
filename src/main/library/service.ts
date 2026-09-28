@@ -1,14 +1,15 @@
 // Main's side of the library. The library process owns the index and does the
 // heavy work; main passes messages on, runs the folder dialog, and makes covers.
 import { join } from 'path'
-import { app, dialog, utilityProcess, type BrowserWindow, type UtilityProcess } from 'electron'
+import { app, dialog, utilityProcess, type BrowserWindow } from 'electron'
 import { LibraryChannel } from '../../shared/ipc'
 import type { ScanStatus } from '../../shared/library'
 import type { SettingsStore } from '../settings-store'
 import { CoverCache } from './cover-cache'
+import { LibraryProcess } from './library-process'
 import { RestartBudget } from './restart'
 import libraryProcessPath from './library-worker?modulePath'
-import type { WorkerIn, WorkerOut, WorkerStart } from './types'
+import type { WorkerIn, WorkerOut } from './types'
 
 type Reply = Extract<WorkerOut, { type: 'reply' }>
 type Ask =
@@ -27,20 +28,15 @@ const libraryPoolSize = '8'
 
 export class LibraryService {
   readonly covers: CoverCache
-  #worker: UtilityProcess | undefined
-  // set once quitting asked for the last save; called when it is done
-  #flushed: (() => void) | undefined
-  #flushing = Promise.resolve()
+  #proc: LibraryProcess
   #playing = false
   // device of the last audio file the page opened
   #playingDev: number | undefined
-  // a library process that dies is started again a few times, then left dead
-  #restarts = new RestartBudget(3, 60000)
-  #quitting = false
   #status: ScanStatus
   #scannedOnStart = false
   #nextReq = 0
   #replies = new Map<number, (m: Reply) => void>()
+  #quitting = false
 
   constructor(
     readonly store: SettingsStore,
@@ -59,48 +55,47 @@ export class LibraryService {
       failed: 0,
       missing: []
     }
-    this.#start()
+    this.#proc = new LibraryProcess(
+      () =>
+        utilityProcess.fork(libraryProcessPath, [], {
+          serviceName: 'Spindle library',
+          env: { ...process.env, UV_THREADPOOL_SIZE: libraryPoolSize }
+        }),
+      () => ({
+        indexPath: join(this.dir, 'library.json'),
+        coversDir: this.covers.dir,
+        folders: this.store.get().folders
+      }),
+      // a library process that dies is started again a few times, then left dead
+      new RestartBudget(3, 60000),
+      {
+        message: (m) => this.#onMessage(m),
+        exit: (code, restarted) => this.#onExit(code, restarted),
+        // a new process starts at full speed; tell it if a song is playing
+        started: () => {
+          if (this.#playing) this.#sendPlaying()
+        }
+      },
+      flushWaitMs
+    )
+    this.#proc.start()
   }
 
-  #start(): void {
-    const start: WorkerStart = {
-      indexPath: join(this.dir, 'library.json'),
-      coversDir: this.covers.dir,
-      folders: this.store.get().folders
+  #onExit(code: number, restarted: boolean): void {
+    // requests to the dead process get an empty answer (a 404 for the page)
+    for (const [req, done] of this.#replies) done({ type: 'reply', req })
+    this.#replies.clear()
+    if (this.#quitting) return
+    this.#setStatus({ phase: 'idle', done: 0, total: 0 })
+    if (restarted) console.error(`Library process stopped (code ${code}), starting it again`)
+    else {
+      console.error(`Library process stopped (code ${code}) too often; the library stays empty`)
+      this.#setStatus({ unavailable: true })
     }
-    const worker = utilityProcess.fork(libraryProcessPath, [JSON.stringify(start)], {
-      serviceName: 'Spindle library',
-      env: { ...process.env, UV_THREADPOOL_SIZE: libraryPoolSize }
-    })
-    this.#worker = worker
-    worker.on('message', (m: WorkerOut) => {
-      if (this.#worker === worker) this.#onMessage(m)
-    })
-    worker.on('exit', (code) => {
-      if (this.#worker !== worker) return
-      this.#worker = undefined
-      // requests to the dead process get an empty answer (a 404 for the page)
-      for (const [req, done] of this.#replies) done({ type: 'reply', req })
-      this.#replies.clear()
-      this.#flushed?.()
-      if (this.#quitting) return
-      this.#setStatus({ phase: 'idle', done: 0, total: 0 })
-      if (this.#restarts.take(Date.now())) {
-        console.error(`Library process stopped (code ${code}), starting it again`)
-        this.#start()
-      } else {
-        console.error(`Library process stopped (code ${code}) too often; the library stays empty`)
-        this.#setStatus({ unavailable: true })
-      }
-    })
-    // a new process starts at full speed; tell it if a song is playing
-    if (this.#playing) this.#sendPlaying()
   }
 
   #post(m: WorkerIn): boolean {
-    if (!this.#worker) return false
-    this.#worker.postMessage(m)
-    return true
+    return this.#proc.post(m)
   }
 
   #setStatus(change: Partial<ScanStatus>): void {
@@ -129,9 +124,6 @@ export class LibraryService {
         break
       case 'log':
         console.info(m.text)
-        break
-      case 'flushed':
-        this.#flushed?.()
         break
     }
   }
@@ -241,21 +233,9 @@ export class LibraryService {
   }
 
   // Quitting: lets the library process write the index, waiting a short while
-  // at most. Resolves at once when there is nothing to wait for.
+  // at most (see LibraryProcess).
   flush(): Promise<void> {
     this.#quitting = true
-    if (this.#flushed) return this.#flushing
-    this.#flushing = new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        console.error('Library index: the library process did not save in time')
-        resolve()
-      }, flushWaitMs)
-      this.#flushed = () => {
-        clearTimeout(timer)
-        resolve()
-      }
-      if (!this.#post({ type: 'flush' })) this.#flushed()
-    })
-    return this.#flushing
+    return this.#proc.flush()
   }
 }

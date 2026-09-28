@@ -16,7 +16,8 @@ export class Pacer {
     readonly full: number,
     readonly slow: number,
     readonly rests: boolean,
-    readonly sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+    readonly sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)),
+    readonly now = (): number => performance.now()
   ) {}
 
   get limit(): number {
@@ -35,11 +36,11 @@ export class Pacer {
   async run<T>(job: () => Promise<T>): Promise<T> {
     while (this.#busy >= this.limit) await new Promise<void>((r) => this.#waiting.push(r))
     this.#busy++
-    const t0 = performance.now()
+    const t0 = this.now()
     try {
       return await job()
     } finally {
-      if (this.#slow && this.rests) await this.sleep(Math.max(minRestMs, performance.now() - t0))
+      if (this.#slow && this.rests) await this.sleep(Math.max(minRestMs, this.now() - t0))
       this.#busy--
       this.#wake()
     }

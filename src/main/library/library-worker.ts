@@ -36,8 +36,8 @@ import type {
 } from './types'
 
 const port = process.parentPort
-// main passes the start data as the last argument
-const start = JSON.parse(process.argv[process.argv.length - 1]) as WorkerStart
+// from main's first message; nothing else runs before it comes
+let start: WorkerStart
 
 // Disk jobs at once: folder listings, stats, and tag or image reads. Reading is
 // mostly waiting on the disk, so a few at once is faster when nothing plays.
@@ -89,7 +89,7 @@ let built: BuiltLibrary = { data: { albums: [], tracks: [] }, paths: new Map() }
 // the index changed since the page last got the library
 let dirty = false
 let status: ScanStatus = {
-  folders: start.folders,
+  folders: [],
   phase: 'idle',
   done: 0,
   total: 0,
@@ -141,18 +141,20 @@ function publish(): void {
 
 // One line, since the index can be tens of MB. The writer keeps one write at a
 // time and drops a write that a newer one replaced; flushSync is for quitting.
-const writer = new JsonFileWriter<unknown>(
-  start.indexPath,
-  1000,
-  (e) => log(`Could not save the library index: ${e}`),
-  0
-)
+let writer: JsonFileWriter<unknown> | undefined
+const makeWriter = (): JsonFileWriter<unknown> =>
+  new JsonFileWriter<unknown>(
+    start.indexPath,
+    1000,
+    (e) => log(`Could not save the library index: ${e}`),
+    0
+  )
 
 // set once main asked for the last save before quitting
 let closing = false
 
 function saveIndex(): void {
-  if (!unsaved || closing) return
+  if (!unsaved || closing || !writer) return
   unsaved = false
   writer.schedule(serializeIndex(ix))
 }
@@ -362,6 +364,11 @@ async function readImage(
   return { path, mtime: Math.floor(s.mtimeMs), size: s.size, cover }
 }
 
+// Only the phases that finished: a scan that failed part way has fewer.
+function phaseTimes(took: number[]): string {
+  return took.map((ms, i) => `${['listing', 'sizes and images', 'tags'][i]} ${ms}`).join(', ')
+}
+
 async function scan(folders: string[], retryFailed: boolean, gen: number): Promise<void> {
   const t0 = performance.now()
   // ms spent listing, getting sizes, and reading, for the log
@@ -443,8 +450,8 @@ async function scan(folders: string[], retryFailed: boolean, gen: number): Promi
   saveIndex()
   setStatus({ phase: 'idle', done: 0, total: 0 })
   log(
-    `Library scan: ${Math.round(performance.now() - t0)} ms (listing ${took[0]}, ` +
-      `sizes and images ${took[1]}, tags ${took[2]}), ${read} files read, ` +
+    `Library scan: ${Math.round(performance.now() - t0)} ms (${phaseTimes(took)}), ` +
+      `${read} files read, ` +
       `${status.tracks} songs in ${status.albums} albums`
   )
   await pruneCovers()
@@ -465,6 +472,9 @@ async function coverSource(h: string): Promise<Uint8Array | undefined> {
 port.on('message', (e: Electron.MessageEvent) => {
   const m = e.data as WorkerIn
   switch (m.type) {
+    case 'start':
+      started(m.start)
+      break
     case 'scan': {
       if (closing) break
       const gen = ++scanGen
@@ -516,7 +526,7 @@ port.on('message', (e: Electron.MessageEvent) => {
     case 'flush':
       // quitting: main waits for the answer a short while, then this process ends
       saveIndex()
-      writer.flushSync()
+      writer?.flushSync()
       closing = true
       ++scanGen
       wakeCoverWaiters()
@@ -549,8 +559,13 @@ async function removeStrayTemp(): Promise<void> {
   }
 }
 
-// Reads the index and groups it; main asks for the library with 'get-library'.
-const ready = (async () => {
+// Reads the index and groups it once main sent the start data; main asks for
+// the library with 'get-library'.
+let started: (s: WorkerStart) => void
+const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
+  start = s
+  writer = makeWriter()
+  status = { ...status, folders: s.folders }
   await removeStrayTemp()
   await loadCached()
   const r = readJsonFile(start.indexPath)
@@ -559,4 +574,4 @@ const ready = (async () => {
     log(`Library index is ${r.kind}, scanning again: ${start.indexPath}`)
   ix = parseIndex(r.kind === 'ok' ? r.value : undefined)
   build()
-})()
+})

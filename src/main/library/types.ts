@@ -56,6 +56,8 @@ export interface WorkerStart {
 
 // main to the library process
 export type WorkerIn =
+  // always the first message; the process waits for it
+  | { type: 'start'; start: WorkerStart }
   // retryFailed: read files that failed last time again (a manual Rescan)
   | { type: 'scan'; folders: string[]; retryFailed: boolean }
   // a picture sent with 'cover' is written (ok), can't be decoded (bad),

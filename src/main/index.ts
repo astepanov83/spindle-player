@@ -29,6 +29,8 @@ registerScheme()
 function createWindow(): void {
   library.resume()
   main = new MainWindow(store)
+  // a crashed page sends no pause; a reloaded one sends its state again
+  main.win.webContents.on('render-process-gone', () => library.setPlaying(false))
   main.win.on('closed', () => {
     main = null
     // a hidden cover window would keep the app running with no window

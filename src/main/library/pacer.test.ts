@@ -29,21 +29,27 @@ describe('Pacer', () => {
   it('runs one at a time with a rest after each while a song plays', async () => {
     const rests: number[] = []
     let endRest = (): void => {}
-    const p = new Pacer(4, 1, true, (ms) => {
-      rests.push(ms)
-      return new Promise((r) => (endRest = r))
-    })
+    let clock = 0
+    const p = new Pacer(
+      4,
+      1,
+      true,
+      (ms) => {
+        rests.push(ms)
+        return new Promise((r) => (endRest = r))
+      },
+      () => clock
+    )
     p.setSlow(true)
     const j = jobs()
     for (let i = 0; i < 3; i++) void p.run(j.job)
     await tick()
     expect(j.running()).toBe(1)
-    await new Promise((r) => setTimeout(r, 300))
+    clock += 300
     j.finishOne()
     await tick()
     // resting as long as the job took: the next job waits
-    expect(rests).toHaveLength(1)
-    expect(rests[0]).toBeGreaterThanOrEqual(290)
+    expect(rests).toEqual([300])
     expect(j.running()).toBe(0)
     endRest()
     await tick()
@@ -72,7 +78,13 @@ describe('Pacer', () => {
 
   it('rests a short while after a quick job', async () => {
     const rests: number[] = []
-    const p = new Pacer(4, 1, true, async (ms) => void rests.push(ms))
+    const p = new Pacer(
+      4,
+      1,
+      true,
+      async (ms) => void rests.push(ms),
+      () => 0
+    )
     p.setSlow(true)
     await p.run(async () => {})
     expect(rests[0]).toBe(250)

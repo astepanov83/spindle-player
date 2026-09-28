@@ -27,9 +27,20 @@
     off: 'Off'
   }
   const themeNames: Record<ThemeChoice, string> = { dark: 'Dark', light: 'Light', system: 'System' }
+
+  let el: HTMLDivElement | undefined = $state()
+
+  // A click outside closes the sheet. The gear is skipped, since its own click toggles it.
+  function onpointerdown(e: PointerEvent): void {
+    const t = e.target as Element
+    if (el?.contains(t) || t.closest('[data-settings-toggle]')) return
+    layout.settingsOpen = false
+  }
 </script>
 
-<div class="settings" role="dialog" aria-label="Settings">
+<svelte:window onpointerdowncapture={onpointerdown} />
+
+<div class="settings" role="dialog" aria-label="Settings" bind:this={el}>
   <h3>Settings</h3>
   <div class="set">
     <span class="label">Layout</span>

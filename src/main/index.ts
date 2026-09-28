@@ -1,7 +1,7 @@
 // first, so main's libuv pool is made at this size
 import './pool-size'
 import { join } from 'path'
-import { app, BrowserWindow, nativeTheme } from 'electron'
+import { app, BrowserWindow, nativeTheme, session } from 'electron'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import {
   LibraryChannel,
@@ -124,6 +124,10 @@ app.on('second-instance', (_e, _argv, _cwd, data) => {
 void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   if (!ok) return
   started = true
+  // On, Chromium downloads a dictionary from Google at start; the app works
+  // offline (decision 24) and has no text worth checking.
+  session.defaultSession.setSpellCheckerEnabled(false)
+  session.defaultSession.setSpellCheckerLanguages([])
   electronApp.setAppUserModelId('io.github.astepanov83.spindle')
 
   // Read before the window exists, so it opens at the saved template's size and theme.

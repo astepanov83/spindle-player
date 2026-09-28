@@ -54,7 +54,12 @@ async function run(job: CoverJob): Promise<CoverResult> {
   try {
     const result: CoverResult = { id: job.id }
     if (job.side) result.jpg = await resize(full, job.side)
-    if (job.palette) result.palette = await palette(full)
+    if (job.palette)
+      try {
+        result.palette = await palette(full)
+      } catch {
+        // keep the JPEG; the next scan picks the palette from the small cover
+      }
     return result
   } finally {
     full.close()

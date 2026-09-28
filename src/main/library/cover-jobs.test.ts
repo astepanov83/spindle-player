@@ -10,6 +10,14 @@ describe('outcomeOf', () => {
     expect(outcomeOf({ id: 1 })).toEqual({ kind: 'retry' })
   })
 
+  it('drops a junk palette from the window', () => {
+    const jpg = new Uint8Array([1])
+    const junk = { dark: ['red', '#000000', '#000000'], light: 'x' } as never
+    expect(outcomeOf({ id: 1, jpg, palette: junk })).toEqual({ kind: 'ok', jpg })
+    // nothing good left: nothing is known about the picture
+    expect(outcomeOf({ id: 1, palette: junk })).toEqual({ kind: 'retry' })
+  })
+
   it('passes the palette on, with or without a JPEG', () => {
     const jpg = new Uint8Array([1])
     const palette = fallbackPalettes('x')

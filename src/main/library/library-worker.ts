@@ -210,9 +210,14 @@ async function loadCached(): Promise<void> {
   }
 }
 
-// Deletes covers nothing points at any more.
+// Deletes covers nothing points at any more, and their palettes.
 async function pruneCovers(): Promise<void> {
   const used = usedCovers(ix)
+  // palettes don't change what the page shows, so only the file needs saving
+  if (prunePalettes(ix, used)) {
+    unsaved = true
+    saveIndex()
+  }
   let names: string[]
   try {
     names = await readdir(start.coversDir)
@@ -402,8 +407,6 @@ async function scan(folders: string[], gen: number): Promise<void> {
       await new Promise<void>((r) => coverWaiters.push(r))
       checkGen(gen)
     }
-    // they don't change what the page shows, so only the file needs saving
-    if (prunePalettes(ix, usedCovers(ix))) unsaved = true
   } catch (error) {
     if (!(error instanceof Stopped)) log(`Library scan failed: ${error}`)
     // a stopped scan keeps what it read; the next one carries on from there
@@ -451,6 +454,11 @@ port.on('message', (m: WorkerIn) => {
       // "retry" stays unknown, so the next scan reads that file again
       if (m.result === 'ok') cached.add(m.hash)
       else if (m.result === 'bad') bad.add(m.hash)
+      else if (m.result === 'rebuild') {
+        // the next scan reads the file or image again, since its cover is gone
+        cached.delete(m.hash)
+        markChanged()
+      }
       if (m.palette) {
         ix.palettes.set(m.hash, m.palette)
         markChanged()

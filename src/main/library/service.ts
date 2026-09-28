@@ -110,9 +110,9 @@ export class LibraryService {
         this.send(LibraryChannel.status, m.status)
         break
       case 'cover':
-        void (m.paletteOnly ? this.covers.palette(m.data) : this.covers.add(m.hash, m.data)).then(
-          (done) => this.#post({ type: 'cover-done', hash: m.hash, ...done })
-        )
+        void (
+          m.paletteOnly ? this.covers.palette(m.hash, m.data) : this.covers.add(m.hash, m.data)
+        ).then((done) => this.#post({ type: 'cover-done', hash: m.hash, ...done }))
         break
       case 'reply':
         this.#replies.get(m.req)?.(m)

@@ -111,8 +111,13 @@ describe('swatches', () => {
     expect(swatches(new Uint8Array())).toEqual([])
     expect(coverPalettes(new Uint8Array())).toEqual(defaultPalettes)
   })
-  it('gives the same answer every time', () => {
-    expect(coverPalettes(covers.sunset)).toEqual(coverPalettes(covers.sunset))
+  // Pinned, so a change to the picking shows up here. When it changes on
+  // purpose, bump paletteVersion so stored palettes are made again.
+  it('gives the same answer for a fixed picture', () => {
+    expect(coverPalettes(covers.sunset)).toEqual({
+      dark: ['#f37436', '#d0727b', '#432252'],
+      light: ['#f37436', '#d75b12', '#432252']
+    })
   })
 })
 

@@ -61,7 +61,13 @@ export type WorkerIn =
   | { type: 'scan'; folders: string[] }
   // a picture sent with 'cover' is written (ok), can't be decoded (bad),
   // or went unanswered (retry: try again on a later scan)
-  | { type: 'cover-done'; hash: string; result: 'ok' | 'bad' | 'retry'; palette?: ThemePalettes }
+  // rebuild: a cached small cover that can't be decoded was deleted; make it again
+  | {
+      type: 'cover-done'
+      hash: string
+      result: 'ok' | 'bad' | 'retry' | 'rebuild'
+      palette?: ThemePalettes
+    }
   // the page's library as it is now, as JSON bytes in the reply
   | { type: 'get-library'; req: number }
   // quitting: save the index now, then set the flush flag

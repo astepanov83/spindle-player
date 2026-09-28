@@ -9,7 +9,7 @@
 // nativeImage. sharp is out too: on Linux it clashes with the glib Electron
 // loads, in main, in a worker and in a utilityProcess alike.
 import { mkdirSync } from 'fs'
-import { rename, stat, writeFile } from 'fs/promises'
+import { rename, rm, stat, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { BrowserWindow, ipcMain } from 'electron'
 import { CoverChannel, type CoverJob, type CoverResult } from '../../shared/cover-job'
@@ -26,9 +26,10 @@ const idleMs = 30000
 // A 3000px picture takes well under a second.
 const jobTimeoutMs = 20000
 
-// What a job for the library worker ended as.
+// What a job for the library worker ended as. rebuild: the cached small cover
+// can't be decoded and was deleted, so the next scan makes it again from the source.
 export interface CoverDone {
-  result: 'ok' | 'bad' | 'retry'
+  result: 'ok' | 'bad' | 'retry' | 'rebuild'
   palette?: ThemePalettes
 }
 
@@ -156,9 +157,16 @@ export class CoverCache {
   }
 
   // Only the palette, for a cover cached before palettes were picked.
-  async palette(data: Uint8Array): Promise<CoverDone> {
+  async palette(hash: string, data: Uint8Array): Promise<CoverDone> {
     const o = await this.#run(data, { palette: true })
     if (o.kind === 'ok' && o.palette) return { result: 'ok', palette: o.palette }
+    if (o.kind === 'bad')
+      try {
+        await rm(this.smallPath(hash), { force: true })
+        return { result: 'rebuild' }
+      } catch (e) {
+        console.error('Could not delete a broken cover', e)
+      }
     // tried again on the next scan
     return { result: 'retry' }
   }

@@ -1,7 +1,7 @@
 // Jobs sent to the hidden cover window, waiting for their answer.
 // Plain TS, so the "what happens when the window goes away" rules are tested.
 import type { CoverResult } from '../../shared/cover-job'
-import type { ThemePalettes } from '../../shared/palette'
+import { parseThemePalettes, type ThemePalettes } from '../../shared/palette'
 
 // ok: the resized JPEG and/or the palette, as the job asked. bad: the picture
 // can't be decoded, so don't try again. retry: nothing is known about the
@@ -9,11 +9,13 @@ import type { ThemePalettes } from '../../shared/palette'
 export type Outcome =
   { kind: 'ok'; jpg?: Uint8Array; palette?: ThemePalettes } | { kind: 'bad' } | { kind: 'retry' }
 
+// The window is a renderer, so its palette is checked like a file read; junk is dropped.
 export function outcomeOf(r: CoverResult): Outcome {
-  if (r.jpg || r.palette) {
+  const palette = parseThemePalettes(r.palette)
+  if (r.jpg || palette) {
     const o: Outcome = { kind: 'ok' }
     if (r.jpg) o.jpg = r.jpg
-    if (r.palette) o.palette = r.palette
+    if (palette) o.palette = palette
     return o
   }
   return r.bad ? { kind: 'bad' } : { kind: 'retry' }

@@ -16,7 +16,7 @@ function lib(...ids: string[]): LibraryData {
     coverLarge: '',
     trackIds: []
   }))
-  return { albums, tracks: [] }
+  return { albums, tracks: [], folders: [] }
 }
 
 // a fresh store each time, so nothing Back closed carries over

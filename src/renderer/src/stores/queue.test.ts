@@ -58,7 +58,8 @@ function album(id: string, n: number): { album: Album; tracks: Track[] } {
     album: id,
     no: i + 1,
     disc: 1,
-    codec: ''
+    codec: '',
+    folder: 0
   }))
   return {
     album: {
@@ -77,7 +78,11 @@ function album(id: string, n: number): { album: Album; tracks: Track[] } {
 
 function lib(...albums: [string, number][]): LibraryData {
   const made = albums.map(([id, n]) => album(id, n))
-  return { albums: made.map((m) => m.album), tracks: made.flatMap((m) => m.tracks) }
+  return {
+    albums: made.map((m) => m.album),
+    tracks: made.flatMap((m) => m.tracks),
+    folders: [{ name: '/m', parent: -1 }]
+  }
 }
 
 const bad: EngineError = { code: 4, message: 'no supported streams', gone: false }

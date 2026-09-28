@@ -26,7 +26,8 @@ function lib(): { albums: Album[]; tracks: Map<string, Track> } {
         album: title,
         no: i + 1,
         disc: 1,
-        codec: ''
+        codec: '',
+        folder: 0
       }
       tracks.set(t.id, t)
       return t.id

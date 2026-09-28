@@ -5,6 +5,7 @@ import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../sha
 import { searchKey, type CoverQuery } from './cover-match'
 import { cueTracks } from './cue-tracks'
 import { fetchedCover, type Fetched } from './fetched-store'
+import { folderTable } from './folders'
 import { shortHash } from './ids'
 import { dirOf } from './merge'
 import { discFolderNumber, isDiscFolder, titleFromFileName } from './tags'
@@ -54,6 +55,8 @@ interface Item {
   no: number
   fromName: string
   part?: TrackPart
+  // the folder the Folders view lists it in
+  dir: string
 }
 
 interface Group {
@@ -137,14 +140,16 @@ function withoutTracks(al: Album & { tracks: Track[] }): Album {
   return out
 }
 
+// `roots` are the music folders, for the Folders view.
 export function buildLibrary(
   ix: LibraryIndex,
   hasCover: (hash: string) => boolean,
-  fetched: Fetched = new Map()
+  fetched: Fetched = new Map(),
+  roots: string[] = []
 ): BuiltLibrary {
   const groups = new Map<string, Group>()
   const paths = new Map<string, string>()
-  const add = (e: FileEntry, id: string, part?: TrackPart): void => {
+  const add = (e: FileEntry, id: string, part?: TrackPart, dir = dirOf(e.path)): void => {
     const key = albumKey(e)
     let g = groups.get(key)
     if (!g) groups.set(key, (g = { key, items: [] }))
@@ -157,7 +162,8 @@ export function buildLibrary(
       disc: discOf(e),
       no: e.track ?? fromName?.no ?? 0,
       fromName: fromName?.title ?? '',
-      part
+      part,
+      dir
     })
   }
   // a disc image with a cue sheet is served by its own id, but listed as the sheet's tracks
@@ -167,7 +173,7 @@ export function buildLibrary(
     paths.set(id, e.path)
     if (!cues.images.has(e.path)) add(e, id)
   }
-  for (const c of cues.items) add(c.entry, c.id, c.part)
+  for (const c of cues.items) add(c.entry, c.id, c.part, c.dir)
 
   const albums: (Album & { tracks: Track[] })[] = []
   const queries: CoverQuery[] = []
@@ -205,7 +211,9 @@ export function buildLibrary(
         album: title,
         no,
         disc,
-        codec: e.codec ?? ''
+        codec: e.codec ?? '',
+        // set below, once all folders are known
+        folder: -1
       }
       if (part) t.part = part
       if (e.cover && e.cover !== cover && hasCover(e.cover))
@@ -234,10 +242,17 @@ export function buildLibrary(
 
   const tracks: Track[] = []
   for (const al of albums) for (const t of al.tracks) tracks.push(t)
+  const dirs = new Map<string, string>()
+  for (const g of groups.values()) for (const it of g.items) dirs.set(it.id, it.dir)
+  const { folders, index } = folderTable(
+    tracks.map((t) => dirs.get(t.id)!),
+    roots
+  )
+  tracks.forEach((t, i) => (t.folder = index[i]))
   const order = new Map(albums.map((a, i) => [a.id, i]))
   queries.sort((a, b) => order.get(a.albumId)! - order.get(b.albumId)!)
   return {
-    data: { albums: albums.map(withoutTracks), tracks },
+    data: { albums: albums.map(withoutTracks), tracks, folders },
     paths,
     queries
   }

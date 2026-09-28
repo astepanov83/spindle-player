@@ -115,7 +115,11 @@ function log(text: string): void {
 // --- state ---
 
 let ix: LibraryIndex = emptyIndex()
-let built: BuiltLibrary = { data: { albums: [], tracks: [] }, paths: new Map(), queries: [] }
+let built: BuiltLibrary = {
+  data: { albums: [], tracks: [], folders: [] },
+  paths: new Map(),
+  queries: []
+}
 // the index changed since the page last got the library
 let dirty = false
 let status: ScanStatus = {
@@ -257,7 +261,7 @@ async function startFetcher(s: WorkerStart): Promise<void> {
 // Groups albums, for the page and the lookups.
 function build(): void {
   dirty = false
-  built = buildLibrary(ix, (h) => cached.has(h), fetched)
+  built = buildLibrary(ix, (h) => cached.has(h), fetched, status.folders)
   let failed = 0
   for (const e of ix.files.values()) if (e.error) failed++
   setStatus({ tracks: built.data.tracks.length, albums: built.data.albums.length, failed })

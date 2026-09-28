@@ -20,6 +20,18 @@ export interface Track {
   // the song's own picture, set only when it differs from its album's
   // (compilations, singles folders); else the album's is shown
   art?: Art
+  // index in LibraryData.folders: the folder the file is in (a cue track's
+  // is the sheet's folder)
+  folder: number
+}
+
+// A folder on disk that holds songs, or a folder above one. A number per
+// song and one table of folders keep the JSON small (no path per song).
+export interface Folder {
+  // a music folder has its full path; the others their own name
+  name: string
+  // index of the parent in LibraryData.folders; -1 for a music folder
+  parent: number
 }
 
 // A cover and the colors picked from it. An Album is one too.
@@ -50,10 +62,12 @@ export interface Album extends Art {
   trackIds: string[]
 }
 
-// What main sends the page. Albums and tracks are in library order.
+// What main sends the page. Albums and tracks are in library order. Folders
+// come parents first, music folders in settings order, subfolders by name.
 export interface LibraryData {
   albums: Album[]
   tracks: Track[]
+  folders: Folder[]
 }
 
 export type ScanPhase = 'idle' | 'walk' | 'read'

@@ -1,27 +1,43 @@
 <script lang="ts">
-  import { player } from '../stores/player.svelte'
-  import { queue } from '../stores/queue.svelte'
+  import { player, seek } from '../stores/player.svelte'
 
   let el: HTMLDivElement
-  const duration = $derived(queue.current?.duration ?? 0)
-  const pct = $derived((duration ? (player.pos / duration) * 100 : 0) + '%')
+  // while dragging, the knob follows the mouse and the song jumps on release
+  let drag: number | null = $state(null)
+  const shown = $derived(drag ?? player.pos)
+  const pct = $derived((player.duration ? Math.min(100, (shown / player.duration) * 100) : 0) + '%')
 
-  function seekTo(e: PointerEvent): void {
+  function at(e: PointerEvent): number {
     const r = el.getBoundingClientRect()
-    player.pos = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * duration
+    return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * player.duration
   }
 
   function onpointerdown(e: PointerEvent): void {
+    if (!player.duration) return
     el.setPointerCapture(e.pointerId)
-    seekTo(e)
+    drag = at(e)
   }
 
   function onpointermove(e: PointerEvent): void {
-    if (el.hasPointerCapture(e.pointerId)) seekTo(e)
+    if (drag !== null && el.hasPointerCapture(e.pointerId)) drag = at(e)
+  }
+
+  function onpointerup(e: PointerEvent): void {
+    if (drag === null) return
+    seek(at(e))
+    drag = null
   }
 </script>
 
-<div class="seek" bind:this={el} {onpointerdown} {onpointermove} role="presentation">
+<div
+  class="seek"
+  bind:this={el}
+  {onpointerdown}
+  {onpointermove}
+  {onpointerup}
+  onpointercancel={() => (drag = null)}
+  role="presentation"
+>
   <div class="track">
     <div class="fill" style:width={pct}></div>
     <div class="knob" style:left={pct}></div>

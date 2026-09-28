@@ -7,9 +7,5 @@ export const placeholders = {
   folders: [
     'Folders',
     'Browse music by the folders on disk. Useful if your files are not tagged well. Not designed yet.'
-  ],
-  playlists: [
-    'Playlists',
-    'Your own playlists, maybe smart ones too. Not designed yet in this template. Classic shows one way to do them.'
   ]
 } as const

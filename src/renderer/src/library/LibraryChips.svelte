@@ -3,6 +3,8 @@
   import AlbumGrid from './AlbumGrid.svelte'
   import AlbumPage from './AlbumPage.svelte'
   import Empty from './Empty.svelte'
+  import PlaylistList from './PlaylistList.svelte'
+  import PlaylistView from './PlaylistView.svelte'
   import SearchBox from './SearchBox.svelte'
   import { placeholders } from './placeholders'
   import { library, type Chip } from '../stores/library.svelte'
@@ -19,11 +21,13 @@
   function pick(c: Chip): void {
     library.chip = c
     library.open = null
+    library.openPlaylist = null
   }
 
   // a new view starts at the top
   $effect(() => {
     void library.open
+    void library.openPlaylist
     void library.chip
     if (scrollEl) scrollEl.scrollTop = 0
   })
@@ -41,7 +45,13 @@
     </div>
   </div>
   <div class="scroll" bind:this={scrollEl}>
-    {#if library.chip !== 'albums'}
+    {#if library.chip === 'playlists'}
+      {#if library.openPlaylist}
+        <PlaylistView id={library.openPlaylist} {scrollEl} back />
+      {:else}
+        <PlaylistList />
+      {/if}
+    {:else if library.chip !== 'albums'}
       <Empty title={placeholders[library.chip][0]} text={placeholders[library.chip][1]} />
     {:else if library.open}
       <AlbumPage albumId={library.open} />
@@ -81,6 +91,7 @@
     color: var(--bg);
   }
   .scroll {
+    --scroll-pad-top: 4px;
     flex: 1;
     overflow: auto;
     padding: 4px 22px 22px;

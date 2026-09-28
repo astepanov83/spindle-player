@@ -1,4 +1,6 @@
 import type { ScanStatus } from './library'
+import type { Playlist } from './playlists'
+import type { SavedQueue } from './saved-queue'
 import type { Settings } from './settings'
 
 // Channel names used by both main and preload, so a typo is a type error.
@@ -57,4 +59,34 @@ export interface LibraryApi {
   rescan(): void
   onChanged(listener: (library: Uint8Array) => void): () => void
   onStatus(listener: (status: ScanStatus) => void): () => void
+}
+
+export const PlaylistChannel = {
+  load: 'playlists:load',
+  save: 'playlists:save'
+} as const
+
+// What the preload exposes to the page as `window.playlistsApi`.
+// The page edits the list and sends all of it; main checks it and saves it.
+export interface PlaylistsApi {
+  load(): Promise<Playlist[]>
+  save(playlists: Playlist[]): void
+}
+
+export const PlaybackChannel = {
+  loadQueue: 'queue:load',
+  saveQueue: 'queue:save',
+  savePos: 'queue:save-pos',
+  log: 'playback:log'
+} as const
+
+// What the preload exposes to the page as `window.playbackApi`.
+export interface PlaybackApi {
+  // the queue and position from the last run
+  loadQueue(): Promise<SavedQueue>
+  saveQueue(queue: SavedQueue): void
+  // seconds into the current song; sent more often than the list
+  savePos(pos: number): void
+  // a song that would not play, written to main's log
+  log(text: string): void
 }

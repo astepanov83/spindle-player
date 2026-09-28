@@ -8,15 +8,24 @@ import './assets/theme.css'
 
 import App from './App.svelte'
 import { decodeLibrary, library } from './stores/library.svelte'
+import { playlists } from './stores/playlists.svelte'
 import { queue } from './stores/queue.svelte'
 import { loadSettings } from './stores/settings.svelte'
 
 // Settings and the library first, so the first paint already shows the saved
 // template and the albums. The window stays hidden until then, so the wait doesn't show.
-const [saved, lib] = await Promise.all([window.settingsApi.load(), window.libraryApi.load()])
+const [saved, lib, lists, lastQueue] = await Promise.all([
+  window.settingsApi.load(),
+  window.libraryApi.load(),
+  window.playlistsApi.load(),
+  window.playbackApi.loadQueue()
+])
 loadSettings(saved)
 library.load(decodeLibrary(lib.library))
 library.status = lib.status
+playlists.load(lists)
+// paused where it was; songs no longer in the library leave the queue
+queue.restore(lastQueue)
 
 window.libraryApi.onChanged((bytes) => {
   library.load(decodeLibrary(bytes))

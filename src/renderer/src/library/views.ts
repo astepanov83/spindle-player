@@ -40,7 +40,9 @@ const keyOf: Record<SortKey, (t: Track) => string | number> = {
 }
 
 // Ties keep library order (album, then track number), as in the prototype.
-export function sortRows(rows: Track[], sort: Sort, order: (t: Track) => number): Track[] {
+// No sort keeps the rows as they are (a playlist in its own order).
+export function sortRows(rows: Track[], sort: Sort | null, order: (t: Track) => number): Track[] {
+  if (!sort) return rows
   const key = keyOf[sort.k]
   return [...rows].sort((x, y) => {
     const u = key(x)
@@ -52,6 +54,23 @@ export function sortRows(rows: Track[], sort: Sort, order: (t: Track) => number)
 // Clicking the sorted column again reverses it.
 export function nextSort(sort: Sort, k: SortKey): Sort {
   return sort.k === k ? { k, dir: sort.dir === 1 ? -1 : 1 } : { k, dir: 1 }
+}
+
+// Playlists start in their own order. A third click on a column goes back to it.
+export function nextPlaylistSort(sort: Sort | null, k: SortKey): Sort | null {
+  if (!sort || sort.k !== k) return { k, dir: 1 }
+  return sort.dir === 1 ? { k, dir: -1 } : null
+}
+
+// A playlist's songs that are in the library. The others stay in the file
+// (a rescan may find them again) but are not shown or played.
+export function playlistRows(
+  ids: string[],
+  has: (id: string) => boolean,
+  track: (id: string) => Track
+): { rows: Track[]; missing: number } {
+  const rows = ids.filter(has).map(track)
+  return { rows, missing: ids.length - rows.length }
 }
 
 // Columns in the cover grid: tiles of at least `min` px with `gap` between them.

@@ -1,15 +1,24 @@
 import { join } from 'path'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { LibraryChannel, SettingsChannel, WinChannel } from '../shared/ipc'
+import {
+  LibraryChannel,
+  PlaybackChannel,
+  PlaylistChannel,
+  SettingsChannel,
+  WinChannel
+} from '../shared/ipc'
 import { pageSettings } from '../shared/settings'
 import { handleProtocol, registerScheme } from './library/protocol'
 import { LibraryService } from './library/service'
+import { PlaylistFile, QueueFile } from './page-files'
 import { SettingsStore } from './settings-store'
 import { currentBackground, MainWindow } from './window'
 
 let store: SettingsStore
 let library: LibraryService
+let playlists: PlaylistFile
+let savedQueue: QueueFile
 let main: MainWindow | null = null
 
 registerScheme()
@@ -52,12 +61,23 @@ ipcMain.handle(LibraryChannel.addFolder, (e) => library.addFolder(senderWindow(e
 ipcMain.on(LibraryChannel.removeFolder, (_, path: unknown) => library.removeFolder(path))
 ipcMain.on(LibraryChannel.rescan, () => library.scan())
 
+ipcMain.handle(PlaylistChannel.load, () => playlists.get())
+ipcMain.on(PlaylistChannel.save, (_, raw: unknown) => playlists.setFromPage(raw))
+ipcMain.handle(PlaybackChannel.loadQueue, () => savedQueue.get())
+ipcMain.on(PlaybackChannel.saveQueue, (_, raw: unknown) => savedQueue.setFromPage(raw))
+ipcMain.on(PlaybackChannel.savePos, (_, raw: unknown) => savedQueue.setPos(raw))
+ipcMain.on(PlaybackChannel.log, (_, text: unknown) => {
+  if (typeof text === 'string') console.warn(text.slice(0, 1000))
+})
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('io.github.astepanov83.spindle')
 
   // Read before the window exists, so it opens at the saved template's size and theme.
   store = new SettingsStore()
   nativeTheme.themeSource = store.get().theme
+  playlists = new PlaylistFile()
+  savedQueue = new QueueFile()
 
   // Starts reading the index now, while the window loads.
   library = new LibraryService(
@@ -90,6 +110,8 @@ app.whenReady().then(() => {
 // Last chance to write a change still waiting for its delay.
 app.on('will-quit', () => {
   store?.flushSync()
+  playlists?.flushSync()
+  savedQueue?.flushSync()
   library?.flushSync()
 })
 

@@ -10,6 +10,8 @@ export interface Settings {
   queue: Record<TemplateId, QueueMode>
   visualizer: VisualizerStyle
   theme: ThemeChoice
+  // 0..100, as the slider shows it
+  volume: number
 }
 
 export interface Size {
@@ -33,7 +35,8 @@ export function defaultSettings(): Settings {
     template: 'studio',
     queue: { studio: 'tab', classic: 'drawer', focus: 'tab' },
     visualizer: 'ring',
-    theme: 'system'
+    theme: 'system',
+    volume: 70
   }
 }
 
@@ -63,6 +66,11 @@ function parseSize(v: unknown, template: Template): Size | undefined {
     width: clamp(width, template.window.minWidth),
     height: clamp(height, template.window.minHeight)
   }
+}
+
+function parseVolume(v: unknown, fallback: number): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback
+  return Math.min(100, Math.max(0, Math.round(v)))
 }
 
 // Absolute on Linux and macOS, or with a drive letter on Windows.
@@ -104,6 +112,7 @@ export function parseStoredSettings(raw: unknown): StoredSettings {
     queue,
     visualizer: oneOf(r.visualizer, visualizerStyles, d.visualizer),
     theme: oneOf(r.theme, themeChoices, d.theme),
+    volume: parseVolume(r.volume, d.volume),
     windowSizes,
     folders: parseFolders(r.folders)
   }
@@ -111,5 +120,11 @@ export function parseStoredSettings(raw: unknown): StoredSettings {
 
 // The part of the stored settings the page gets.
 export function pageSettings(s: StoredSettings): Settings {
-  return { template: s.template, queue: { ...s.queue }, visualizer: s.visualizer, theme: s.theme }
+  return {
+    template: s.template,
+    queue: { ...s.queue },
+    visualizer: s.visualizer,
+    theme: s.theme,
+    volume: s.volume
+  }
 }

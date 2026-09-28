@@ -1,5 +1,14 @@
-// Small JSON files in userData (settings now, library index and playlists later).
-import { closeSync, fsyncSync, openSync, readFileSync, renameSync, rmSync, writeSync } from 'fs'
+// JSON files in userData: settings, the library index, playlists and the queue.
+import {
+  closeSync,
+  copyFileSync,
+  fsyncSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeSync
+} from 'fs'
 import { open, rename, rm } from 'fs/promises'
 
 export type ReadResult =
@@ -18,6 +27,20 @@ export function readJsonFile(path: string): ReadResult {
   } catch (error) {
     return { kind: 'broken', error }
   }
+}
+
+// Reads a file, and keeps a copy of a broken one for a look later, since the next save replaces it.
+export function readJsonFileKeepBroken(path: string, what: string): unknown {
+  const read = readJsonFile(path)
+  if (read.kind === 'broken') {
+    console.error(`${what} is broken, starting fresh: ${path}`, read.error)
+    try {
+      copyFileSync(path, `${path}.broken`)
+    } catch {
+      // nothing more to save
+    }
+  }
+  return read.kind === 'ok' ? read.value : undefined
 }
 
 let tmpCount = 0

@@ -40,9 +40,7 @@
     <div class="bc">
       <Transport />
       <div class="seekrow">
-        <span>{fmtTime(player.pos)}</span><Seek /><span
-          >{fmtTime(queue.current?.duration ?? 0)}</span
-        >
+        <span>{fmtTime(player.pos)}</span><Seek /><span>{fmtTime(player.duration)}</span>
       </div>
     </div>
     <div class="br">
@@ -57,7 +55,7 @@
     <div>
       <Seek />
       <div class="times">
-        <span>{fmtTime(player.pos)}</span><span>{fmtTime(queue.current?.duration ?? 0)}</span>
+        <span>{fmtTime(player.pos)}</span><span>{fmtTime(player.duration)}</span>
       </div>
     </div>
     <Transport />

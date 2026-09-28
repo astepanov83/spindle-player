@@ -1,9 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   LibraryChannel,
+  PlaybackChannel,
+  PlaylistChannel,
   SettingsChannel,
   WinChannel,
   type LibraryApi,
+  type PlaybackApi,
+  type PlaylistsApi,
   type SettingsApi,
   type WinApi
 } from '../shared/ipc'
@@ -64,6 +68,24 @@ const libraryApi: LibraryApi = {
   onStatus: onScanStatus
 }
 
+// Asked for early too, so the first paint has the playlists and the last queue.
+const playlists = ipcRenderer.invoke(PlaylistChannel.load)
+const savedQueue = ipcRenderer.invoke(PlaybackChannel.loadQueue)
+
+const playlistsApi: PlaylistsApi = {
+  load: () => playlists,
+  save: (list) => ipcRenderer.send(PlaylistChannel.save, list)
+}
+
+const playbackApi: PlaybackApi = {
+  loadQueue: () => savedQueue,
+  saveQueue: (q) => ipcRenderer.send(PlaybackChannel.saveQueue, q),
+  savePos: (pos) => ipcRenderer.send(PlaybackChannel.savePos, pos),
+  log: (text) => ipcRenderer.send(PlaybackChannel.log, text)
+}
+
 contextBridge.exposeInMainWorld('win', win)
+contextBridge.exposeInMainWorld('playlistsApi', playlistsApi)
+contextBridge.exposeInMainWorld('playbackApi', playbackApi)
 contextBridge.exposeInMainWorld('libraryApi', libraryApi)
 contextBridge.exposeInMainWorld('settingsApi', settingsApi)

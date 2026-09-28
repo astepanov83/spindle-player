@@ -6,7 +6,7 @@ The window takes its colors from the album cover, a visualizer plays around the 
 
 ## Status
 
-Early. The app shows the three layout templates (Studio, Classic, Focus). Add your music folders under the gear (Settings, Music folders): Spindle reads the tags and covers, keeps an index, and checks the folders again on each start or when you press Rescan. Each album takes its colors from its cover, with a separate accent for dark and light. It doesn't play the files yet. Settings are saved, and each template remembers its window size.
+Early. The app shows the three layout templates (Studio, Classic, Focus). Add your music folders under the gear (Settings, Music folders): Spindle reads the tags and covers, keeps an index, and checks the folders again on each start or when you press Rescan. Each album takes its colors from its cover, with a separate accent for dark and light. It plays your music from an album, the song table or a playlist, and carries on with the next album when the list runs out. Formats Chromium can't play (ALAC, WMA, APE, WavPack, AIFF) are listed but skipped. Settings, volume, playlists and the queue are saved, and each template remembers its window size.
 
 ## Run it
 

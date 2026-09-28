@@ -68,8 +68,25 @@ export function normalizeTags(raw: RawTags): Tags {
   return out
 }
 
-// Formats Chromium can play, plus m4a, which may hold ALAC (the codec is kept, so 007 can tell).
-const audioExt = new Set(['mp3', 'flac', 'ogg', 'oga', 'opus', 'm4a', 'mp4', 'aac', 'wav', 'webm'])
+// Formats Chromium can play, plus some it can't (ALAC in m4a, WMA, APE, WavPack,
+// AIFF). Those are listed anyway, so the songs show up; playing one skips it with a notice.
+const audioExt = new Set([
+  'mp3',
+  'flac',
+  'ogg',
+  'oga',
+  'opus',
+  'm4a',
+  'mp4',
+  'aac',
+  'wav',
+  'webm',
+  'wma',
+  'ape',
+  'wv',
+  'aif',
+  'aiff'
+])
 
 export function extOf(name: string): string {
   const i = name.lastIndexOf('.')

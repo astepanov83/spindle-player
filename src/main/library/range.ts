@@ -37,7 +37,13 @@ const types: Record<string, string> = {
   mp4: 'audio/mp4',
   aac: 'audio/aac',
   wav: 'audio/wav',
-  webm: 'audio/webm'
+  webm: 'audio/webm',
+  // Chromium can't play these; the type only helps the error message
+  wma: 'audio/x-ms-wma',
+  ape: 'audio/ape',
+  wv: 'audio/wavpack',
+  aif: 'audio/aiff',
+  aiff: 'audio/aiff'
 }
 
 export function audioType(ext: string): string {

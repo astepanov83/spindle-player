@@ -16,6 +16,7 @@ describe('parseStoredSettings', () => {
       queue: { studio: 'col', classic: 'col', focus: 'drawer' },
       visualizer: 'wave',
       theme: 'light',
+      volume: 35,
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       folders: ['/home/me/Music', '/mnt/nas/music']
     }
@@ -71,6 +72,14 @@ describe('parseStoredSettings', () => {
       folders: ['/music/', 'relative/path', '', 7, '/music', 'C:\\Music\\', '/', '/a//']
     })
     expect(s.folders).toEqual(['/music', 'C:\\Music', '/', '/a'])
+  })
+
+  it('keeps the volume between 0 and 100, as a whole number', () => {
+    expect(parseStoredSettings({ volume: 42.4 }).volume).toBe(42)
+    expect(parseStoredSettings({ volume: -5 }).volume).toBe(0)
+    expect(parseStoredSettings({ volume: 250 }).volume).toBe(100)
+    expect(parseStoredSettings({ volume: '50' }).volume).toBe(70)
+    expect(parseStoredSettings({ volume: NaN }).volume).toBe(70)
   })
 
   it('treats folders that are not a list as none', () => {

@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { Album, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
-import { chunk, filterAlbums, gridColumns, nextSort, songRows, sortRows } from './views'
+import {
+  chunk,
+  filterAlbums,
+  gridColumns,
+  nextPlaylistSort,
+  nextSort,
+  playlistRows,
+  songRows,
+  sortRows
+} from './views'
 
 function lib(): { albums: Album[]; tracks: Map<string, Track> } {
   const tracks = new Map<string, Track>()
@@ -108,5 +117,33 @@ describe('grid', () => {
   it('splits items into rows', () => {
     expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]])
     expect(chunk([], 3)).toEqual([])
+  })
+})
+
+describe('playlist views', () => {
+  it('keeps playlist order with no sort', () => {
+    const { tracks } = lib()
+    const rows = [...tracks.values()].reverse()
+    expect(sortRows(rows, null, () => 0)).toBe(rows)
+  })
+
+  it('goes sorted up, sorted down, then back to playlist order', () => {
+    const a = nextPlaylistSort(null, 't')
+    expect(a).toEqual({ k: 't', dir: 1 })
+    const b = nextPlaylistSort(a, 't')
+    expect(b).toEqual({ k: 't', dir: -1 })
+    expect(nextPlaylistSort(b, 't')).toBeNull()
+    expect(nextPlaylistSort(b, 'a')).toEqual({ k: 'a', dir: 1 })
+  })
+
+  it('leaves out songs that are not in the library and counts them', () => {
+    const { tracks } = lib()
+    const r = playlistRows(
+      ['b/0', 'gone', 'a/1', 'gone2'],
+      (id) => tracks.has(id),
+      (id) => tracks.get(id)!
+    )
+    expect(r.rows.map((t) => t.id)).toEqual(['b/0', 'a/1'])
+    expect(r.missing).toBe(2)
   })
 })

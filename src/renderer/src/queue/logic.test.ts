@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advance, back, prune, type QueueState } from './logic'
+import { advance, afterFailure, back, jump, onEnded, prune, type QueueState } from './logic'
 
 const q = (index: number, items = ['a/0', 'a/1', 'a/2']): QueueState => ({
   items,
@@ -74,5 +74,57 @@ describe('prune', () => {
 
   it('empties the queue when every song is gone', () => {
     expect(prune(q(1), () => false)).toEqual({ items: [], index: 0, from: 'A' })
+  })
+})
+
+describe('onEnded', () => {
+  it('replays the song with repeat on', () => {
+    expect(onEnded(q(1), true, { shuffle: false, nextAlbum })).toEqual({ kind: 'replay' })
+  })
+
+  it('plays the next song', () => {
+    const r = onEnded(q(0), false, { shuffle: false, nextAlbum })
+    expect(r).toEqual({ kind: 'play', state: q(1) })
+  })
+
+  it('carries on with the next album at the end of the list', () => {
+    const r = onEnded(q(2), false, { shuffle: false, nextAlbum })
+    expect(r.kind === 'play' && r.state.items[r.state.index]).toBe('b/0')
+  })
+
+  it('stops when there is nothing to carry on with', () => {
+    expect(onEnded(q(1, ['x/0', 'x/1']), false, { shuffle: false, nextAlbum })).toEqual({
+      kind: 'stop'
+    })
+  })
+
+  it('shuffle picks another song from the list', () => {
+    const r = onEnded(q(0), false, { shuffle: true, nextAlbum, random: () => 0.99 })
+    expect(r).toEqual({ kind: 'play', state: q(2) })
+  })
+})
+
+describe('jump', () => {
+  it('moves to the clicked row', () => {
+    expect(jump(q(0), 2)).toEqual(q(2))
+  })
+  it('ignores rows out of range', () => {
+    const s = q(1)
+    expect(jump(s, 5)).toBe(s)
+    expect(jump(s, -1)).toBe(s)
+  })
+})
+
+describe('afterFailure', () => {
+  it('skips a song that fails', () => {
+    expect(afterFailure(1, 10)).toBe('skip')
+  })
+  it('stops after the cap', () => {
+    expect(afterFailure(20, 500)).toBe('stop')
+    expect(afterFailure(19, 500)).toBe('skip')
+  })
+  it('stops once a short queue has failed all the way round', () => {
+    expect(afterFailure(3, 3)).toBe('skip')
+    expect(afterFailure(4, 3)).toBe('stop')
   })
 })

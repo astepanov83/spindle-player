@@ -8,6 +8,7 @@
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { openSongMenu } from '../library/song-menu'
 
   // header and close are set by the container, not by templates
   let { header = false, close = false }: { header?: boolean; close?: boolean } = $props()
@@ -57,6 +58,7 @@
           class:past={item.index < queue.index}
           style:transform="translateY({v.offset(item)}px)"
           onclick={() => queue.jump(item.index)}
+          oncontextmenu={(e) => openSongMenu(e, [id])}
         >
           <Thumb src={library.album(t.albumId).cover} eq={cur && player.playing} />
           <span class="qt"><span class="nm">{t.title}</span><span class="ar">{t.artist}</span></span

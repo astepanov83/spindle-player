@@ -1,21 +1,39 @@
 <!-- Sortable song table. Only the rows on screen are drawn. -->
 <script lang="ts">
+  import type { Snippet } from 'svelte'
   import type { Track } from '../../../shared/library'
   import Eq from '../ui/Eq.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import { fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
-  import { nextSort, sortRows, type SortKey } from './views'
+  import { nextSort, sortRows, type Sort, type SortKey } from './views'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { openSongMenu } from './song-menu'
 
   let {
     title,
     meta,
     items,
-    scrollEl
-  }: { title: string; meta: string; items: Track[]; scrollEl: HTMLElement | undefined } = $props()
+    scrollEl,
+    sort: given,
+    onsort = (k) => (library.sort = nextSort(library.sort, k)),
+    playlistId,
+    head
+  }: {
+    title: string
+    meta: string
+    items: Track[]
+    scrollEl: HTMLElement | undefined
+    // the library's sort unless given; a playlist has its own
+    sort?: Sort | null
+    onsort?: (k: SortKey) => void
+    // set in a playlist, so the menu can take songs out of it
+    playlistId?: string
+    // replaces the title block (a playlist's name can be edited)
+    head?: Snippet
+  } = $props()
 
   const ROW = 54
   const cols: [SortKey, string][] = [
@@ -25,7 +43,8 @@
     ['d', 'Time']
   ]
 
-  const rows = $derived(sortRows(items, library.sort, (t) => library.order(t)))
+  const sort = $derived(given === undefined ? library.sort : given)
+  const rows = $derived(sortRows(items, sort, (t) => library.order(t)))
   let list: HTMLDivElement | undefined = $state()
 
   const v = virtualList(() => ({ count: rows.length, scrollEl, list, size: ROW }), 10)
@@ -41,24 +60,28 @@
 </script>
 
 <div class="tblhead">
-  <div>
-    <div class="m">{meta}</div>
-    <h2>{title}</h2>
-  </div>
+  {#if head}
+    {@render head()}
+  {:else}
+    <div>
+      <div class="m">{meta}</div>
+      <h2>{title}</h2>
+    </div>
+  {/if}
   <div class="m">{rows.length} songs</div>
 </div>
 <div class="tbl">
   <div class="th">
     <span></span>
     {#each cols as [k, label] (k)}
-      {@const on = library.sort.k === k}
+      {@const on = sort?.k === k}
       <span
         role="columnheader"
         class:end={k === 'd'}
-        aria-sort={on ? (library.sort.dir > 0 ? 'ascending' : 'descending') : undefined}
+        aria-sort={on ? (sort?.dir === 1 ? 'ascending' : 'descending') : undefined}
       >
-        <button class:on onclick={() => (library.sort = nextSort(library.sort, k))}
-          >{label}{on ? (library.sort.dir > 0 ? ' ↑' : ' ↓') : ''}</button
+        <button class:on onclick={() => onsort(k)}
+          >{label}{on ? (sort?.dir === 1 ? ' ↑' : ' ↓') : ''}</button
         >
       </span>
     {/each}
@@ -74,6 +97,7 @@
         class:first={item.index === 0}
         style:transform="translateY({v.offset(item)}px)"
         onclick={() => play(item.index)}
+        oncontextmenu={(e) => openSongMenu(e, [t.id], playlistId)}
       >
         <span class="n"
           >{#if cur && player.playing}<Eq />{:else}{item.index + 1}{/if}</span
@@ -122,10 +146,10 @@
     align-items: center;
     padding: 0 12px;
   }
-  /* the scroll box has 20px top padding */
+  /* sticks to the top of the scroll box, over its top padding */
   .th {
     position: sticky;
-    top: -20px;
+    top: calc(-1 * var(--scroll-pad-top, 20px));
     background: var(--bg);
     z-index: 1;
     height: 38px;

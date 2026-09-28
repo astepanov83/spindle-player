@@ -6,6 +6,7 @@
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { openSongMenu } from './song-menu'
 
   let { albumId }: { albumId: string } = $props()
 
@@ -31,13 +32,21 @@
     <div class="acts">
       <button class="pill" onclick={() => queue.playAlbum(al.id, 0)}>Play</button>
       <button class="pill ghost" onclick={shufflePlay}>Shuffle</button>
+      <button class="pill ghost" aria-haspopup="menu" onclick={(e) => openSongMenu(e, al.trackIds)}
+        >Add to playlist</button
+      >
     </div>
   </div>
 </div>
 <div>
   {#each tracks as t, i (t.id)}
     {@const cur = queue.isCurrent(t.id)}
-    <button class="srow" class:cur onclick={() => queue.playAlbum(al.id, i)}>
+    <button
+      class="srow"
+      class:cur
+      onclick={() => queue.playAlbum(al.id, i)}
+      oncontextmenu={(e) => openSongMenu(e, [t.id])}
+    >
       <span class="n"
         >{#if cur && player.playing}<Eq />{:else}{i + 1}{/if}</span
       >

@@ -1,5 +1,5 @@
 // Queue moves as plain functions. See work/specs/queue.md.
-// Ticket 007 puts real playback behind them.
+// stores/queue.svelte.ts plays what they pick.
 
 export interface QueueState {
   items: string[]
@@ -27,6 +27,28 @@ export function advance(q: QueueState, o: NextOptions): QueueState {
   if (q.index + 1 >= items.length) items = [...items, ...o.nextAlbum(items[items.length - 1])]
   if (q.index + 1 >= items.length) return q
   return { ...q, items, index: q.index + 1 }
+}
+
+// What to do when a song ends by itself: repeat replays it, otherwise the
+// next song plays; with nothing after it, playback stops.
+export type EndStep = { kind: 'replay' } | { kind: 'play'; state: QueueState } | { kind: 'stop' }
+
+export function onEnded(q: QueueState, repeat: boolean, o: NextOptions): EndStep {
+  if (repeat) return { kind: 'replay' }
+  const next = advance(q, o)
+  return next === q ? { kind: 'stop' } : { kind: 'play', state: next }
+}
+
+// Clicking a queue row.
+export function jump(q: QueueState, index: number): QueueState {
+  if (index < 0 || index >= q.items.length || index === q.index) return q
+  return { ...q, index }
+}
+
+// A song that won't play is skipped, but after `max` failures in a row, or a
+// whole queue's worth, playback stops instead of trying every song there is.
+export function afterFailure(failsInARow: number, queueLength: number, max = 20): 'skip' | 'stop' {
+  return failsInARow >= Math.min(max, queueLength + 1) ? 'stop' : 'skip'
 }
 
 // Previous restarts the song after 3s, otherwise goes one back.

@@ -3,8 +3,11 @@
   import TitleBar from './components/TitleBar.svelte'
   import Settings from './components/Settings.svelte'
   import Node from './layout/Node.svelte'
-  import { startFakeClock } from './stores/fake-clock'
+  import Menu from './ui/Menu.svelte'
+  import Notice from './ui/Notice.svelte'
+  import { engine } from './audio/engine'
   import { layout } from './stores/layout.svelte'
+  import { menu } from './stores/menu.svelte'
   import { togglePlay, player } from './stores/player.svelte'
   import { queue } from './stores/queue.svelte'
   import { settings } from './stores/settings.svelte'
@@ -15,29 +18,33 @@
     (queue.currentAlbum?.palette ?? defaultPalettes)[theme.light ? 'light' : 'dark']
   )
 
-  $effect(() => startFakeClock())
+  $effect(() => engine.setVolume(settings.volume))
 
   // Every change goes to main, which saves it and applies the window size and theme.
   $effect(() => window.settingsApi.save($state.snapshot(settings)))
 
   // Keys from the prototype: Space play, V visualizer, Q queue, Escape closes.
+  // Not while typing, and not with Ctrl, Alt or Meta held.
   function onkeydown(e: KeyboardEvent): void {
     const t = e.target as HTMLElement
-    if (/INPUT|TEXTAREA/.test(t.tagName)) return
+    if (e.key === 'Escape' && menu.open) return menu.close()
+    if (/INPUT|TEXTAREA/.test(t.tagName) || t.isContentEditable) return
+    if (e.key === 'Escape') {
+      if (layout.settingsOpen) layout.settingsOpen = false
+      else if (layout.showQueue) layout.showQueue = false
+    }
+    if (e.ctrlKey || e.altKey || e.metaKey) return
     if (e.code === 'Space' && t.tagName !== 'BUTTON') {
       e.preventDefault()
       togglePlay()
     }
     if (e.key === 'v') layout.cycleVisualizer()
     if (e.key === 'q') layout.toggleQueue()
-    if (e.key === 'Escape') {
-      if (layout.settingsOpen) layout.settingsOpen = false
-      else if (layout.showQueue) layout.showQueue = false
-    }
   }
 </script>
 
-<svelte:window {onkeydown} />
+<!-- the last position goes to main before the window closes -->
+<svelte:window {onkeydown} onpagehide={() => queue.savePos()} />
 
 <div
   class="app vz-{settings.visualizer}"
@@ -55,6 +62,8 @@
     <Node node={layout.built.root} />
   </main>
   {#if layout.settingsOpen}<Settings />{/if}
+  <Notice />
+  <Menu />
 </div>
 
 <style>

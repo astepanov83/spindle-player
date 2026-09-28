@@ -1,7 +1,7 @@
 // Library data plus view state. The view state lives here, not in the part,
 // so a layout rebuild keeps the open album, search, sort and section.
 // Main sends the data (from the index, then after each scan that changed something).
-import type { Album, LibraryData, Playlist, ScanStatus, Track } from '../../../shared/library'
+import type { Album, LibraryData, ScanStatus, Track } from '../../../shared/library'
 import type { Sort } from '../library/views'
 
 export type Chip = 'albums' | 'artists' | 'folders' | 'playlists'
@@ -11,8 +11,6 @@ export type Section = 'songs' | 'albums' | 'artists' | 'folders' | `pl:${string}
 class LibraryStore {
   // plain arrays, not deep proxies: they can hold 50k+ songs
   albums: Album[] = $state.raw([])
-  // ticket 007 adds playlists
-  playlists: Playlist[] = $state.raw([])
   #tracks = new Map<string, Track>()
   #order = new Map<string, number>()
   #albumIndex = new Map<string, number>()
@@ -35,8 +33,12 @@ class LibraryStore {
   section: Section = $state('songs')
   // album id of the open album page, or null for the grid
   open: string | null = $state(null)
+  // Studio's Playlists chip: the open playlist, or null for the list
+  openPlaylist: string | null = $state(null)
   query = $state('')
   sort: Sort = $state({ k: 'a', dir: 1 })
+  // playlists show in their own order until a column is clicked
+  playlistSort: Sort | null = $state(null)
 
   load(data: LibraryData): void {
     this.#tracks = new Map(data.tracks.map((t) => [t.id, t]))

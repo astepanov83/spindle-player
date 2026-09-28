@@ -3,6 +3,7 @@
   import AlbumGrid from './AlbumGrid.svelte'
   import AlbumPage from './AlbumPage.svelte'
   import Empty from './Empty.svelte'
+  import PlaylistView from './PlaylistView.svelte'
   import SearchBox from './SearchBox.svelte'
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
@@ -10,6 +11,7 @@
   import { placeholders } from './placeholders'
   import { songRows } from './views'
   import { library, type Section } from '../stores/library.svelte'
+  import { playlists } from '../stores/playlists.svelte'
 
   const sections: [Section, IconName, string][] = [
     ['songs', 'note', 'Songs'],
@@ -21,16 +23,21 @@
   let scrollEl: HTMLDivElement | undefined = $state()
 
   const playlist = $derived(
-    library.section.startsWith('pl:')
-      ? library.playlists.find((p) => 'pl:' + p.id === library.section)
-      : undefined
+    library.section.startsWith('pl:') ? playlists.get(library.section.slice(3)) : undefined
   )
 
   const songs = $derived(songRows(library.albums, (id) => library.track(id), library.query))
 
   function pick(s: Section): void {
+    if (s !== library.section) library.playlistSort = null
     library.section = s
     library.open = null
+  }
+
+  function create(): void {
+    const id = playlists.create()
+    pick(`pl:${id}`)
+    playlists.editing = id
   }
 
   // a new view starts at the top
@@ -43,7 +50,7 @@
 
 {#snippet item(sec: Section, icon: IconName, label: string)}
   <button class="sidebtn" aria-current={library.section === sec} onclick={() => pick(sec)}>
-    <Icon name={icon} size={18} />{label}
+    <Icon name={icon} size={18} /><span class="lbl">{label}</span>
   </button>
 {/snippet}
 
@@ -54,8 +61,13 @@
     {#each sections as [sec, icon, label] (sec)}
       {@render item(sec, icon, label)}
     {/each}
-    <div class="sidehead">Playlists</div>
-    {#each library.playlists as p (p.id)}
+    <div class="sidehead">
+      Playlists
+      <button class="add" aria-label="New playlist" title="New playlist" onclick={create}
+        ><Icon name="plus" size={16} /></button
+      >
+    </div>
+    {#each playlists.list as p (p.id)}
       {@render item(`pl:${p.id}`, 'list', p.name)}
     {/each}
   </aside>
@@ -69,12 +81,7 @@
         <AlbumGrid {scrollEl} />
       {/if}
     {:else if playlist}
-      <SongTable
-        title={playlist.name}
-        meta="Playlist"
-        items={playlist.trackIds.map((id) => library.track(id))}
-        {scrollEl}
-      />
+      <PlaylistView id={playlist.id} {scrollEl} />
     {:else if library.section === 'artists' || library.section === 'folders'}
       <Empty title={placeholders[library.section][0]} text={placeholders[library.section][1]} />
     {/if}
@@ -102,12 +109,28 @@
     margin: 0 4px 10px;
   }
   .sidehead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     font-size: 11px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--ink-3);
     font-weight: 600;
     padding: 14px 10px 6px;
+  }
+  .add {
+    width: 24px;
+    height: 24px;
+    margin: -4px -4px -4px 0;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    color: var(--ink-3);
+  }
+  .add:hover {
+    background: var(--hover);
+    color: var(--ink);
   }
   .sidebtn {
     display: flex;
@@ -120,6 +143,12 @@
     font-size: 14px;
     color: var(--ink-2);
     flex: none;
+  }
+  .lbl {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .sidebtn :global(.ico) {
     opacity: 0.8;

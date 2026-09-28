@@ -1,5 +1,4 @@
 // Main owns the settings file. The page gets a copy at start and sends back each change.
-import { copyFileSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 import type { TemplateId } from '../shared/layout'
@@ -9,24 +8,14 @@ import {
   type Size,
   type StoredSettings
 } from '../shared/settings'
-import { JsonFileWriter, readJsonFile } from './json-file'
+import { JsonFileWriter, readJsonFileKeepBroken } from './json-file'
 
 export class SettingsStore {
   #data: StoredSettings
   #writer: JsonFileWriter<StoredSettings>
 
   constructor(readonly path = join(app.getPath('userData'), 'settings.json')) {
-    const read = readJsonFile(path)
-    if (read.kind === 'broken') {
-      // Keep the broken file for a look later, since the next save replaces it.
-      console.error(`Settings file is broken, using defaults: ${path}`, read.error)
-      try {
-        copyFileSync(path, `${path}.broken`)
-      } catch {
-        // nothing more to save
-      }
-    }
-    this.#data = parseStoredSettings(read.kind === 'ok' ? read.value : undefined)
+    this.#data = parseStoredSettings(readJsonFileKeepBroken(path, 'Settings file'))
     this.#writer = new JsonFileWriter(path, 500)
   }
 

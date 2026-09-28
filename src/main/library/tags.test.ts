@@ -63,6 +63,7 @@ describe('file name rules', () => {
   it('knows audio files by extension, and skips hidden ones', () => {
     expect(isAudioFile('a.MP3')).toBe(true)
     expect(isAudioFile('a.opus')).toBe(true)
+    expect(isAudioFile('a.wma')).toBe(true)
     expect(isAudioFile('._a.mp3')).toBe(false)
     expect(isAudioFile('cover.jpg')).toBe(false)
     expect(isAudioFile('mp3')).toBe(false)

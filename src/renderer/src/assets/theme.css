@@ -22,6 +22,8 @@
   --glass: rgba(0, 0, 0, 0.45);
   --shadow: rgba(0, 0, 0, 0.6);
   --close-hover: #c42b1c;
+  /* text on --close-hover, the same in both themes */
+  --on-danger: #fff;
   /* album color strength: tint areas and the Focus wash */
   --tint: 70%;
   --wash-top: 20%;

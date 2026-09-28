@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
-  import { player } from '../stores/player.svelte'
+  import { settings } from '../stores/settings.svelte'
 
   let { width = 90 }: { width?: number } = $props()
 </script>
@@ -13,7 +13,7 @@
     max="100"
     aria-label="Volume"
     style:width="{width}px"
-    bind:value={player.vol}
+    bind:value={settings.volume}
   />
 </div>
 

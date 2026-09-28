@@ -32,12 +32,6 @@ export interface Album {
   trackIds: string[]
 }
 
-export interface Playlist {
-  id: string
-  name: string
-  trackIds: string[]
-}
-
 // What main sends the page. Albums and tracks are in library order.
 export interface LibraryData {
   albums: Album[]

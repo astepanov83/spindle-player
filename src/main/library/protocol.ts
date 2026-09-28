@@ -60,7 +60,9 @@ async function media(lib: LibraryService, id: string, req: Request): Promise<Res
   if (!path) return notFound()
   let size: number
   try {
-    size = (await stat(path)).size
+    const s = await stat(path)
+    size = s.size
+    lib.mediaOpened(s.dev)
   } catch {
     return notFound()
   }

@@ -77,6 +77,7 @@ export const PlaybackChannel = {
   loadQueue: 'queue:load',
   saveQueue: 'queue:save',
   savePlace: 'queue:save-place',
+  playing: 'playback:playing',
   log: 'playback:log'
 } as const
 
@@ -88,6 +89,8 @@ export interface PlaybackApi {
   saveQueue(queue: SavedQueue): void
   // the current song and seconds into it; sent on every song change and while playing
   savePlace(place: QueuePlace): void
+  // play or pause; while a song plays, the library scan slows down
+  playing(playing: boolean): void
   // a song that would not play, written to main's log
   log(text: string): void
 }
@@ -111,6 +114,7 @@ export interface PageChannels {
   [PlaybackChannel.loadQueue]: PlaybackApi['loadQueue']
   [PlaybackChannel.saveQueue]: PlaybackApi['saveQueue']
   [PlaybackChannel.savePlace]: PlaybackApi['savePlace']
+  [PlaybackChannel.playing]: PlaybackApi['playing']
   [PlaybackChannel.log]: PlaybackApi['log']
 }
 

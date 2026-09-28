@@ -36,6 +36,9 @@
     })
   )
 
+  // The library scan slows down while a song plays, so the audio gets the disk first.
+  $effect(() => window.playbackApi.playing(player.playing))
+
   setupMediaSession()
   $effect(() => showInMediaSession(queue.current, queue.currentAlbum))
   $effect(() => showStateInMediaSession())

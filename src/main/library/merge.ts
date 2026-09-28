@@ -83,13 +83,15 @@ export function isUnder(path: string, dir: string): boolean {
   return path === dir || path.startsWith(dir.endsWith(sep) ? dir : dir + sep)
 }
 
-// The files a scan has to read: new ones, changed ones, ones whose cover is
-// gone from the cache, and ones that failed last time (a fixed permission
-// doesn't change mtime).
+// The files a scan has to read: new ones, changed ones, and ones whose cover
+// is gone from the cache. Files that failed last time only on a manual Rescan
+// (a fixed permission doesn't change mtime): a start-up scan that reads them
+// every time can cost minutes on a NAS.
 export function planReads(
   known: Map<string, FileEntry>,
   found: { path: string; mtime: number; size: number }[],
-  cached: (hash: string) => boolean
+  cached: (hash: string) => boolean,
+  retryFailed: boolean
 ): string[] {
   const out: string[] = []
   for (const f of found) {
@@ -98,7 +100,7 @@ export function planReads(
       !k ||
       k.mtime !== f.mtime ||
       k.size !== f.size ||
-      k.error !== undefined ||
+      (retryFailed && k.error !== undefined) ||
       (k.cover && !cached(k.cover))
     )
       out.push(f.path)

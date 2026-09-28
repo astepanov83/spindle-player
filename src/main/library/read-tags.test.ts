@@ -1,0 +1,118 @@
+import { mkdtemp, rm, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { oggDuration, oldApeHeader, readTags, ReadLimitError } from './read-tags'
+
+const hex = (s: string): Uint8Array => Uint8Array.from(Buffer.from(s.replace(/\s/g, ''), 'hex'))
+
+// The first 32 bytes of two of the user's APE files.
+const oldApe = hex('4d414320 820f b80b 1600 0200 44ac0000 2c000000 00000000 0f020000 c8210100')
+const newApe = hex('4d414320 960f0000 34000000 18000000 dc250000 2c000000 2479581c 00000000')
+
+// A FLAC with only its STREAMINFO block: 44.1 kHz, 2 channels, 16 bits, 10 s.
+function flac(): Uint8Array {
+  const b = new Uint8Array(4 + 4 + 34)
+  b.set([0x66, 0x4c, 0x61, 0x43], 0)
+  b.set([0x80, 0, 0, 34], 4)
+  const v = new DataView(b.buffer)
+  v.setUint16(8, 4096)
+  v.setUint16(10, 4096)
+  const packed = (44100n << 44n) | (1n << 41n) | (15n << 36n) | 441000n
+  v.setBigUint64(18, packed)
+  return b
+}
+
+// An APE with the new header whose sizes point nowhere near the tag, so
+// music-metadata reads the rest of the file looking for it.
+function badApe(size: number): Uint8Array {
+  const b = new Uint8Array(size)
+  b.set([0x4d, 0x41, 0x43, 0x20], 0)
+  const v = new DataView(b.buffer)
+  v.setUint32(4, 3990, true)
+  v.setUint32(8, 52, true)
+  v.setUint32(12, 24, true)
+  v.setUint32(52 + 20, 44100, true)
+  return b
+}
+
+function oggPage(granule: bigint): Uint8Array {
+  const p = new Uint8Array(27)
+  p.set([0x4f, 0x67, 0x67, 0x53, 0, 4], 0)
+  new DataView(p.buffer).setBigInt64(6, granule, true)
+  return p
+}
+
+let dir: string
+beforeAll(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'spindle-tags-'))
+})
+afterAll(async () => {
+  await rm(dir, { recursive: true, force: true })
+})
+
+describe('oldApeHeader', () => {
+  it('reads the length from a header before 3.98', () => {
+    const h = oldApeHeader(oldApe)!
+    // 527 frames of 294912 blocks, the last one 74184, at 44.1 kHz
+    expect(h.duration).toBeCloseTo((526 * 294912 + 74184) / 44100, 3)
+    expect(h.container).toBe("Monkey's Audio")
+  })
+
+  it('leaves the new header and other files to music-metadata', () => {
+    expect(oldApeHeader(newApe)).toBeUndefined()
+    expect(oldApeHeader(flac().subarray(0, 32))).toBeUndefined()
+    expect(oldApeHeader(oldApe.subarray(0, 10))).toBeUndefined()
+  })
+})
+
+describe('oggDuration', () => {
+  it('takes the granule position of the last page', () => {
+    const tail = new Uint8Array(200)
+    tail.set(oggPage(44100n * 5n), 10)
+    tail.set(oggPage(44100n * 7n), 100)
+    expect(oggDuration(tail, 44100)).toBe(7)
+  })
+
+  it('skips a last page with no position and gives up without a page', () => {
+    const tail = new Uint8Array(200)
+    tail.set(oggPage(48000n * 3n), 10)
+    tail.set(oggPage(-1n), 100)
+    expect(oggDuration(tail, 48000)).toBe(3)
+    expect(oggDuration(new Uint8Array(100), 48000)).toBeUndefined()
+    expect(oggDuration(tail, undefined)).toBeUndefined()
+  })
+})
+
+describe('readTags', () => {
+  it('reads a FLAC header', async () => {
+    const path = join(dir, 'a.flac')
+    await writeFile(path, flac())
+    const m = await readTags(path)
+    expect(m.format.container).toBe('FLAC')
+    expect(m.format.duration).toBe(10)
+  })
+
+  it('gets the length of an old APE from its header alone', async () => {
+    const path = join(dir, 'old.ape')
+    const b = new Uint8Array(4 * 1024 * 1024)
+    b.set(oldApe, 0)
+    await writeFile(path, b)
+    const m = await readTags(path, { limit: 1024 })
+    expect(m.format.duration).toBeGreaterThan(3500)
+  })
+
+  it('stops before reading past the budget', async () => {
+    const path = join(dir, 'bad.ape')
+    await writeFile(path, badApe(4 * 1024 * 1024))
+    await expect(readTags(path, { limit: 1024 * 1024 })).rejects.toBeInstanceOf(ReadLimitError)
+    // with room for the whole file, music-metadata reads all of it and then fails
+    await expect(readTags(path, { limit: 8 * 1024 * 1024 })).rejects.toThrow(/APEv2 Footer/)
+  })
+
+  it('stops an mp3 that is not one before reading all of it', async () => {
+    const path = join(dir, 'zeros.mp3')
+    await writeFile(path, new Uint8Array(4 * 1024 * 1024))
+    await expect(readTags(path, { limit: 1024 * 1024 })).rejects.toBeInstanceOf(ReadLimitError)
+  })
+})

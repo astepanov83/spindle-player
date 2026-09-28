@@ -97,7 +97,7 @@ describe('planReads', () => {
       { path: '/m/has-cover.mp3', mtime: 1, size: 10 },
       { path: '/m/new.mp3', mtime: 1, size: 10 }
     ]
-    expect(planReads(known, found, (h) => h === 'here')).toEqual([
+    expect(planReads(known, found, (h) => h === 'here', false)).toEqual([
       '/m/touched.mp3',
       '/m/lost-cover.mp3',
       '/m/new.mp3'
@@ -106,15 +106,25 @@ describe('planReads', () => {
 })
 
 describe('planReads for failed files', () => {
-  it('reads a file that failed last time again, even if it did not change', () => {
-    const failed = entry('/m/locked.mp3', { mtime: 1, size: 10, error: 'EACCES' })
-    const fine = entry('/m/fine.mp3', { mtime: 1, size: 10 })
-    const known = new Map([failed, fine].map((e) => [e.path, e]))
-    const found = [
-      { path: '/m/locked.mp3', mtime: 1, size: 10 },
-      { path: '/m/fine.mp3', mtime: 1, size: 10 }
-    ]
-    expect(planReads(known, found, () => true)).toEqual(['/m/locked.mp3'])
+  const failed = entry('/m/locked.mp3', { mtime: 1, size: 10, error: 'EACCES' })
+  const fine = entry('/m/fine.mp3', { mtime: 1, size: 10 })
+  const known = new Map([failed, fine].map((e) => [e.path, e]))
+  const found = [
+    { path: '/m/locked.mp3', mtime: 1, size: 10 },
+    { path: '/m/fine.mp3', mtime: 1, size: 10 }
+  ]
+
+  it('reads a file that failed last time again on a Rescan, even if it did not change', () => {
+    expect(planReads(known, found, () => true, true)).toEqual(['/m/locked.mp3'])
+  })
+
+  it('leaves it alone on the start-up scan', () => {
+    expect(planReads(known, found, () => true, false)).toEqual([])
+  })
+
+  it('reads it on the start-up scan too once it changed', () => {
+    const touched = [{ path: '/m/locked.mp3', mtime: 2, size: 10 }]
+    expect(planReads(known, touched, () => true, false)).toEqual(['/m/locked.mp3'])
   })
 })
 

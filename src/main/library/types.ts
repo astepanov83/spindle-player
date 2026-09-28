@@ -1,4 +1,4 @@
-// The library index on disk, and the messages between main and the library worker.
+// The library index on disk, and the messages between main and the library process.
 import type { ScanStatus } from '../../shared/library'
 import type { ThemePalettes } from '../../shared/palette'
 
@@ -52,13 +52,12 @@ export interface WorkerStart {
   coversDir: string
   // for the status before the first scan
   folders: string[]
-  // one Int32 main waits on with Atomics while the worker saves at quit
-  flushFlag: SharedArrayBuffer
 }
 
-// main to the library worker
+// main to the library process
 export type WorkerIn =
-  | { type: 'scan'; folders: string[] }
+  // retryFailed: read files that failed last time again (a manual Rescan)
+  | { type: 'scan'; folders: string[]; retryFailed: boolean }
   // a picture sent with 'cover' is written (ok), can't be decoded (bad),
   // or went unanswered (retry: try again on a later scan)
   // rebuild: a cached small cover that can't be decoded was deleted; make it again
@@ -70,15 +69,18 @@ export type WorkerIn =
     }
   // the page's library as it is now, as JSON bytes in the reply
   | { type: 'get-library'; req: number }
-  // quitting: save the index now, then set the flush flag
+  // quitting: save the index now, then answer 'flushed'
   | { type: 'flush' }
+  // a song is playing: the scan slows down so the audio gets the disk first.
+  // dev: the playing file's device, so a scan of another disk keeps its speed
+  | { type: 'playing'; playing: boolean; dev?: number }
   // the app window closed: stop the scan running, keeping what it read
   | { type: 'stop' }
   | { type: 'find-track'; req: number; id: string }
   // the source picture of a cover, to make the large size
   | { type: 'cover-source'; req: number; hash: string }
 
-// the library worker to main
+// the library process to main
 export type WorkerOut =
   // a changed library as JSON bytes: main passes them on without reading them
   | { type: 'library'; bytes: Uint8Array }
@@ -88,3 +90,4 @@ export type WorkerOut =
   | { type: 'cover'; hash: string; data: Uint8Array; paletteOnly?: boolean }
   | { type: 'reply'; req: number; path?: string; data?: Uint8Array }
   | { type: 'log'; text: string }
+  | { type: 'flushed' }

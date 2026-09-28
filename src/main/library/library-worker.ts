@@ -1,14 +1,16 @@
-// The library worker thread. It owns the index: reads and writes library.json,
-// scans the music folders, groups albums, and hands main the page's library as
-// ready JSON bytes. Main only forwards, so a 50k library never blocks it.
+// The library process (an Electron utilityProcess). It owns the index: reads and
+// writes library.json, scans the music folders, groups albums, and hands main
+// the page's library as ready JSON bytes. Main only forwards, so a 50k library
+// never blocks it. Its own process means its own libuv pool: slow NAS reads here
+// can't hold up main's audio requests and saves.
 import { hash } from 'crypto'
 import { readdir, readFile, realpath, rm, stat } from 'fs/promises'
 import { basename, dirname, join } from 'path'
-import { parentPort, workerData } from 'worker_threads'
-import { parseFile } from 'music-metadata'
 import type { ScanStatus } from '../../shared/library'
 import { JsonFileWriter, readJsonFile } from '../json-file'
 import { buildLibrary, type BuiltLibrary } from './group'
+import { eachPaced, Pacer, scanSlow } from './pacer'
+import { readTags } from './read-tags'
 import {
   applyBatch,
   applyListing,
@@ -23,7 +25,7 @@ import {
   serializeIndex,
   usedCovers
 } from './merge'
-import { extOf, frontCover, isAudioFile, normalizeTags, pickFolderImage } from './tags'
+import { frontCover, isAudioFile, normalizeTags, pickFolderImage } from './tags'
 import type {
   FileEntry,
   FolderImage,
@@ -33,33 +35,51 @@ import type {
   WorkerStart
 } from './types'
 
-const port = parentPort!
-const start = workerData as WorkerStart
+const port = process.parentPort
+// main passes the start data as the last argument
+const start = JSON.parse(process.argv[process.argv.length - 1]) as WorkerStart
 
-// Tag reading is mostly waiting on the disk, so a few files at once is faster.
-// More than this only adds memory.
-const readAtOnce = 8
-const statAtOnce = 32
+// Disk jobs at once: folder listings, stats, and tag or image reads. Reading is
+// mostly waiting on the disk, so a few at once is faster when nothing plays.
+// While a song plays, one at a time, and reads rest after each, so a NAS link
+// is left for the audio.
+const dirPace = new Pacer(8, 1, false)
+const statPace = new Pacer(16, 2, false)
+const readPace = new Pacer(4, 1, true)
+
+let playing = false
+let playingDev: number | undefined
+// devices of the music folders being scanned
+let scannedDevs = new Set<number>()
+
+function setPace(): void {
+  const slow = scanSlow(playing, playingDev, scannedDevs)
+  for (const p of [dirPace, statPace, readPace]) p.setSlow(slow)
+}
+
+async function devicesOf(folders: string[]): Promise<Set<number>> {
+  const out = new Set<number>()
+  for (const f of folders) {
+    try {
+      out.add((await stat(f)).dev)
+    } catch {
+      // not found; the walk reports it
+    }
+  }
+  return out
+}
+
 // Pictures sent to main and not yet written, so a big first scan doesn't pile them up.
 const coversAtOnce = 16
 // While the first scan of an empty library runs, the page gets what is found this often.
 const interimMs = 15000
 
-function post(msg: WorkerOut, transfer: ArrayBuffer[] = []): void {
-  port.postMessage(msg, transfer)
+function post(msg: WorkerOut): void {
+  port.postMessage(msg)
 }
 
 function log(text: string): void {
   post({ type: 'log', text })
-}
-
-// Runs fn over items, at most n at a time.
-async function pool<T>(items: T[], n: number, fn: (item: T) => Promise<void>): Promise<void> {
-  let next = 0
-  const run = async (): Promise<void> => {
-    while (next < items.length) await fn(items[next++])
-  }
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, run))
 }
 
 // --- state ---
@@ -116,8 +136,7 @@ function encodeLibrary(): Uint8Array {
 // Groups albums and sends them to the page as JSON bytes.
 function publish(): void {
   build()
-  const bytes = encodeLibrary()
-  post({ type: 'library', bytes }, [bytes.buffer as ArrayBuffer])
+  post({ type: 'library', bytes: encodeLibrary() })
 }
 
 // One line, since the index can be tens of MB. The writer keeps one write at a
@@ -129,8 +148,11 @@ const writer = new JsonFileWriter<unknown>(
   0
 )
 
+// set once main asked for the last save before quitting
+let closing = false
+
 function saveIndex(): void {
-  if (!unsaved) return
+  if (!unsaved || closing) return
   unsaved = false
   writer.schedule(serializeIndex(ix))
 }
@@ -160,9 +182,8 @@ async function sendCover(data: Uint8Array, gen: number): Promise<string> {
   claimed.add(h)
   await waitForSlot(h, gen)
   sent.add(h)
-  // a copy of its own, so the buffer can move to main without a second copy
-  const copy = data.slice()
-  post({ type: 'cover', hash: h, data: copy }, [copy.buffer])
+  // a copy of just this picture: a view into a bigger buffer would send all of it
+  post({ type: 'cover', hash: h, data: data.slice() })
   return h
 }
 
@@ -196,7 +217,7 @@ async function fillPalettes(gen: number): Promise<void> {
       continue
     }
     sent.add(h)
-    post({ type: 'cover', hash: h, data, paletteOnly: true }, [data.buffer as ArrayBuffer])
+    post({ type: 'cover', hash: h, data, paletteOnly: true })
   }
 }
 
@@ -257,7 +278,7 @@ async function walk(roots: string[], gen: number): Promise<Listing> {
   let queue = [...roots]
   while (queue.length) {
     const next: string[] = []
-    await pool(queue, 16, async (dir) => {
+    await eachPaced(queue, dirPace, async (dir) => {
       checkGen(gen)
       let entries
       try {
@@ -310,13 +331,9 @@ async function readFileEntry(
 ): Promise<FileEntry> {
   let meta
   try {
-    // A full duration count reads the whole file for an mp3 with no header,
-    // so mp3 gets the quick estimate. Ogg needs it to report any duration at all.
-    const mp3 = extOf(path) === 'mp3'
-    meta = await parseFile(path, { skipCovers: false, duration: !mp3 })
-    if (mp3 && !meta.format.duration)
-      meta = await parseFile(path, { skipCovers: false, duration: true })
+    meta = await readTags(path)
   } catch (error) {
+    // listed by its file and folder names; tried again on a Rescan or once it changes
     return { path, mtime, size, duration: 0, error: String((error as Error)?.message ?? error) }
   }
   const entry: FileEntry = { path, mtime, size, ...normalizeTags(meta) }
@@ -345,8 +362,12 @@ async function readImage(
   return { path, mtime: Math.floor(s.mtimeMs), size: s.size, cover }
 }
 
-async function scan(folders: string[], gen: number): Promise<void> {
+async function scan(folders: string[], retryFailed: boolean, gen: number): Promise<void> {
   const t0 = performance.now()
+  // ms spent listing, getting sizes, and reading, for the log
+  const took: number[] = []
+  const lap = (): void =>
+    void took.push(Math.round(performance.now() - t0 - took.reduce((a, b) => a + b, 0)))
   const firstFill = ix.files.size === 0
   // While scanning: save what was read so far, so a quit or crash keeps it.
   // A first scan also shows it, so an empty library fills in as it goes.
@@ -357,11 +378,14 @@ async function scan(folders: string[], gen: number): Promise<void> {
   let read = 0
   try {
     setStatus({ folders, phase: 'walk', done: 0, total: 0, missing: [] })
+    scannedDevs = await devicesOf(folders)
+    setPace()
     const listing = await walk(folders, gen)
+    lap()
     progress('walk', listing.files.length, 0, true)
 
     const found: { path: string; mtime: number; size: number }[] = []
-    await pool(listing.files, statAtOnce, async (path) => {
+    await eachPaced(listing.files, statPace, async (path) => {
       checkGen(gen)
       try {
         const s = await stat(path)
@@ -372,14 +396,15 @@ async function scan(folders: string[], gen: number): Promise<void> {
     })
 
     const images: FolderImage[] = []
-    await pool(listing.images, statAtOnce, async (path) => {
+    await eachPaced(listing.images, readPace, async (path) => {
       checkGen(gen)
       const im = await readImage(path, ix.images.get(dirOf(path)), gen)
       if (im) images.push(im)
     })
 
+    lap()
     checkGen(gen)
-    const toRead = planReads(ix.files, found, known)
+    const toRead = planReads(ix.files, found, known, retryFailed)
     const skipped = [...listing.skipped, ...emptiedFolders(ix, folders, listing.files)]
     if (applyListing(ix, folders, { paths: found.map((f) => f.path), images, skipped }))
       markChanged()
@@ -387,7 +412,7 @@ async function scan(folders: string[], gen: number): Promise<void> {
 
     const byPath = new Map(found.map((f) => [f.path, f]))
     progress('read', 0, toRead.length, true)
-    await pool(toRead, readAtOnce, async (path) => {
+    await eachPaced(toRead, readPace, async (path) => {
       checkGen(gen)
       const f = byPath.get(path)!
       const entry = await readFileEntry(path, f.mtime, f.size, gen)
@@ -397,6 +422,7 @@ async function scan(folders: string[], gen: number): Promise<void> {
       progress('read', read, toRead.length)
     })
     progress('read', read, toRead.length, true)
+    lap()
     await fillPalettes(gen)
     // wait until main has every picture, so the covers are there for the albums
     while (sent.size > 0) {
@@ -417,7 +443,8 @@ async function scan(folders: string[], gen: number): Promise<void> {
   saveIndex()
   setStatus({ phase: 'idle', done: 0, total: 0 })
   log(
-    `Library scan: ${Math.round(performance.now() - t0)} ms, ${read} files read, ` +
+    `Library scan: ${Math.round(performance.now() - t0)} ms (listing ${took[0]}, ` +
+      `sizes and images ${took[1]}, tags ${took[2]}), ${read} files read, ` +
       `${status.tracks} songs in ${status.albums} albums`
   )
   await pruneCovers()
@@ -429,21 +456,30 @@ async function coverSource(h: string): Promise<Uint8Array | undefined> {
   for (const im of ix.images.values()) if (im.cover === h) return readFile(im.path)
   for (const e of ix.files.values()) {
     if (e.cover !== h) continue
-    const meta = await parseFile(e.path, { skipCovers: false })
+    const meta = await readTags(e.path)
     return frontCover(meta.common.picture)?.data
   }
   return undefined
 }
 
-port.on('message', (m: WorkerIn) => {
+port.on('message', (e: Electron.MessageEvent) => {
+  const m = e.data as WorkerIn
   switch (m.type) {
     case 'scan': {
+      if (closing) break
       const gen = ++scanGen
       // let a stopped scan's waits wake up and see the new number
       wakeCoverWaiters()
-      ready.then(() => scan(m.folders, gen)).catch((e) => log(`Library scan failed: ${e}`))
+      ready
+        .then(() => scan(m.folders, m.retryFailed, gen))
+        .catch((e) => log(`Library scan failed: ${e}`))
       break
     }
+    case 'playing':
+      playing = m.playing
+      playingDev = m.dev
+      setPace()
+      break
     case 'stop':
       ++scanGen
       wakeCoverWaiters()
@@ -473,30 +509,24 @@ port.on('message', (m: WorkerIn) => {
       break
     case 'get-library':
       ready.then(
-        () => {
-          const data = encodeLibrary()
-          post({ type: 'reply', req: m.req, data }, [data.buffer as ArrayBuffer])
-        },
+        () => post({ type: 'reply', req: m.req, data: encodeLibrary() }),
         () => post({ type: 'reply', req: m.req })
       )
       break
-    case 'flush': {
-      // quitting: main waits on the flag for a short while, so write now
+    case 'flush':
+      // quitting: main waits for the answer a short while, then this process ends
       saveIndex()
       writer.flushSync()
-      const flag = new Int32Array(start.flushFlag)
-      Atomics.store(flag, 0, 1)
-      Atomics.notify(flag, 0)
+      closing = true
+      ++scanGen
+      wakeCoverWaiters()
+      post({ type: 'flushed' })
       break
-    }
     case 'cover-source':
       ready
         .then(() => coverSource(m.hash))
         .then(
-          (data) => {
-            const copy = data?.slice()
-            post({ type: 'reply', req: m.req, data: copy }, copy ? [copy.buffer] : [])
-          },
+          (data) => post({ type: 'reply', req: m.req, data: data?.slice() }),
           () => post({ type: 'reply', req: m.req })
         )
       break

@@ -1,3 +1,5 @@
+// first, so main's libuv pool is made at this size
+import './pool-size'
 import { join } from 'path'
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
@@ -64,13 +66,14 @@ page.on(SettingsChannel.save, (_, raw) => {
 page.handle(LibraryChannel.load, () => library.load())
 page.handle(LibraryChannel.addFolder, (e) => library.addFolder(senderWindow(e)))
 page.on(LibraryChannel.removeFolder, (_, path) => library.removeFolder(path))
-page.on(LibraryChannel.rescan, () => library.scan())
+page.on(LibraryChannel.rescan, () => library.scan(true))
 
 page.handle(PlaylistChannel.load, () => playlists.get())
 page.on(PlaylistChannel.save, (_, raw) => playlists.setFromPage(raw))
 page.handle(PlaybackChannel.loadQueue, () => savedQueue.get())
 page.on(PlaybackChannel.saveQueue, (_, raw) => savedQueue.setFromPage(raw))
 page.on(PlaybackChannel.savePlace, (_, raw) => savedQueue.setPlace(raw))
+page.on(PlaybackChannel.playing, (_, playing) => library.setPlaying(playing === true))
 page.on(PlaybackChannel.log, (_, text) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
 })
@@ -113,12 +116,19 @@ app.whenReady().then(() => {
   })
 })
 
-// Last chance to write a change still waiting for its delay.
-app.on('will-quit', () => {
+// Last chance to write a change still waiting for its delay. The library
+// process saves on its own, so quitting waits for its answer (2s at most).
+let libraryFlushed = false
+app.on('will-quit', (e) => {
   store?.flushSync()
   playlists?.flushSync()
   savedQueue?.flushSync()
-  library?.flushSync()
+  if (!library || libraryFlushed) return
+  e.preventDefault()
+  void library.flush().then(() => {
+    libraryFlushed = true
+    app.quit()
+  })
 })
 
 app.on('window-all-closed', () => {

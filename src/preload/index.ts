@@ -96,6 +96,7 @@ const playbackApi: PlaybackApi = {
   loadQueue: () => savedQueue,
   saveQueue: (q) => send(PlaybackChannel.saveQueue, q),
   savePlace: (place) => send(PlaybackChannel.savePlace, place),
+  playing: (playing) => send(PlaybackChannel.playing, playing),
   log: (text) => send(PlaybackChannel.log, text)
 }
 

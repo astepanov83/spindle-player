@@ -1,14 +1,13 @@
-// Main's side of the library. The library worker owns the index and does the
+// Main's side of the library. The library process owns the index and does the
 // heavy work; main passes messages on, runs the folder dialog, and makes covers.
 import { join } from 'path'
-import type { Worker } from 'worker_threads'
-import { app, dialog, type BrowserWindow } from 'electron'
+import { app, dialog, utilityProcess, type BrowserWindow, type UtilityProcess } from 'electron'
 import { LibraryChannel } from '../../shared/ipc'
 import type { ScanStatus } from '../../shared/library'
 import type { SettingsStore } from '../settings-store'
 import { CoverCache } from './cover-cache'
 import { RestartBudget } from './restart'
-import createLibraryWorker from './library-worker?nodeWorker'
+import libraryProcessPath from './library-worker?modulePath'
 import type { WorkerIn, WorkerOut, WorkerStart } from './types'
 
 type Reply = Extract<WorkerOut, { type: 'reply' }>
@@ -21,14 +20,21 @@ type Ask =
 const emptyLibrary = (): Uint8Array =>
   new TextEncoder().encode(JSON.stringify({ albums: [], tracks: [] }))
 
-// At quit, main waits this long at most for the worker to save the index.
+// At quit, main waits this long at most for the library process to save the index.
 const flushWaitMs = 2000
+// Its own libuv pool: listings, stats and reads at once, plus room for lookups.
+const libraryPoolSize = '8'
 
 export class LibraryService {
   readonly covers: CoverCache
-  #worker: Worker | undefined
-  #flushFlag = new Int32Array(new SharedArrayBuffer(4))
-  // a worker that dies is started again a few times, then left dead
+  #worker: UtilityProcess | undefined
+  // set once quitting asked for the last save; called when it is done
+  #flushed: (() => void) | undefined
+  #flushing = Promise.resolve()
+  #playing = false
+  // device of the last audio file the page opened
+  #playingDev: number | undefined
+  // a library process that dies is started again a few times, then left dead
   #restarts = new RestartBudget(3, 60000)
   #quitting = false
   #status: ScanStatus
@@ -57,36 +63,38 @@ export class LibraryService {
   }
 
   #start(): void {
-    const shared = new SharedArrayBuffer(4)
-    this.#flushFlag = new Int32Array(shared)
     const start: WorkerStart = {
       indexPath: join(this.dir, 'library.json'),
       coversDir: this.covers.dir,
-      folders: this.store.get().folders,
-      flushFlag: shared
+      folders: this.store.get().folders
     }
-    const worker = createLibraryWorker({ workerData: start })
+    const worker = utilityProcess.fork(libraryProcessPath, [JSON.stringify(start)], {
+      serviceName: 'Spindle library',
+      env: { ...process.env, UV_THREADPOOL_SIZE: libraryPoolSize }
+    })
     this.#worker = worker
     worker.on('message', (m: WorkerOut) => {
       if (this.#worker === worker) this.#onMessage(m)
     })
-    worker.on('error', (e) => console.error('Library worker failed', e))
     worker.on('exit', (code) => {
       if (this.#worker !== worker) return
       this.#worker = undefined
-      // requests to the dead worker get an empty answer (a 404 for the page)
+      // requests to the dead process get an empty answer (a 404 for the page)
       for (const [req, done] of this.#replies) done({ type: 'reply', req })
       this.#replies.clear()
+      this.#flushed?.()
       if (this.#quitting) return
       this.#setStatus({ phase: 'idle', done: 0, total: 0 })
       if (this.#restarts.take(Date.now())) {
-        console.error(`Library worker stopped (code ${code}), starting it again`)
+        console.error(`Library process stopped (code ${code}), starting it again`)
         this.#start()
       } else {
-        console.error(`Library worker stopped (code ${code}) too often; the library stays empty`)
+        console.error(`Library process stopped (code ${code}) too often; the library stays empty`)
         this.#setStatus({ unavailable: true })
       }
     })
+    // a new process starts at full speed; tell it if a song is playing
+    if (this.#playing) this.#sendPlaying()
   }
 
   #post(m: WorkerIn): boolean {
@@ -122,6 +130,9 @@ export class LibraryService {
       case 'log':
         console.info(m.text)
         break
+      case 'flushed':
+        this.#flushed?.()
+        break
     }
   }
 
@@ -146,27 +157,48 @@ export class LibraryService {
     // after the reply is on its way, so the scan doesn't delay the first paint
     if (!this.#scannedOnStart) {
       this.#scannedOnStart = true
-      setTimeout(() => this.scan(), 0)
+      setTimeout(() => this.scan(false), 0)
     }
     return { library: library ?? emptyLibrary(), status: this.#status }
   }
 
-  // A scan already running stops; what it read stays.
-  scan(): void {
+  // A scan already running stops; what it read stays. Files that failed last
+  // time are read again only on a manual Rescan (retryFailed).
+  scan(retryFailed: boolean): void {
     // The folder list on disk is unknown, and a scan of the defaults (no
     // folders) would empty the index and delete the covers.
     if (!this.store.readable) {
       console.error('Library: settings.json could not be read, so the folders are not scanned')
       return
     }
-    this.#post({ type: 'scan', folders: this.store.get().folders })
+    this.#post({ type: 'scan', folders: this.store.get().folders, retryFailed })
   }
 
   // The app window closed: no more scanning or covers until a new one opens,
   // so nothing keeps the app running with no window.
   pause(): void {
     this.covers.shutDown()
+    this.setPlaying(false)
     this.#post({ type: 'stop' })
+  }
+
+  // The page's play state: while a song plays from a disk being scanned, the
+  // scan slows down.
+  setPlaying(playing: boolean): void {
+    if (playing === this.#playing) return
+    this.#playing = playing
+    this.#sendPlaying()
+  }
+
+  // The page opened an audio file on this device (st_dev).
+  mediaOpened(dev: number): void {
+    if (dev === this.#playingDev) return
+    this.#playingDev = dev
+    if (this.#playing) this.#sendPlaying()
+  }
+
+  #sendPlaying(): void {
+    this.#post({ type: 'playing', playing: this.#playing, dev: this.#playingDev })
   }
 
   resume(): void {
@@ -195,7 +227,7 @@ export class LibraryService {
   #setFolders(folders: string[]): void {
     this.store.setFolders(folders)
     this.#setStatus({ folders: this.store.get().folders })
-    this.scan()
+    this.scan(false)
   }
 
   // Only files in the index are served, by id; never a path from the page.
@@ -208,13 +240,22 @@ export class LibraryService {
     return (await this.#ask({ type: 'cover-source', hash })).data
   }
 
-  // Quitting: lets the worker write the index, waiting a short while at most.
-  flushSync(): void {
+  // Quitting: lets the library process write the index, waiting a short while
+  // at most. Resolves at once when there is nothing to wait for.
+  flush(): Promise<void> {
     this.#quitting = true
-    const flag = this.#flushFlag
-    Atomics.store(flag, 0, 0)
-    if (!this.#post({ type: 'flush' })) return
-    if (Atomics.wait(flag, 0, 0, flushWaitMs) === 'timed-out')
-      console.error('Library index: the worker did not save in time')
+    if (this.#flushed) return this.#flushing
+    this.#flushing = new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        console.error('Library index: the library process did not save in time')
+        resolve()
+      }, flushWaitMs)
+      this.#flushed = () => {
+        clearTimeout(timer)
+        resolve()
+      }
+      if (!this.#post({ type: 'flush' })) this.#flushed()
+    })
+    return this.#flushing
   }
 }

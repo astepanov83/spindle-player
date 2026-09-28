@@ -64,9 +64,11 @@ export function searchKey(artist: string, album: string): string {
 
 const various = new Set(['various artists', 'various', 'va'])
 
-// b's words are in a, in order and next to each other.
-function hasWords(a: string, b: string): boolean {
-  return (' ' + a + ' ').includes(' ' + b + ' ')
+// The names in a joint credit: "Jay-Z & Kanye West", "Drake feat. Rihanna".
+const joiner = /\s*(?:[,&/+;]|\s(?:and|feat\.?|ft\.?|featuring|with|x|vs\.?)\s)\s*/i
+
+function credits(s: string): string[] {
+  return s.split(joiner).map(cleanArtist).filter(Boolean)
 }
 
 function artistMatches(q: CoverQuery, found: string): boolean {
@@ -75,8 +77,9 @@ function artistMatches(q: CoverQuery, found: string): boolean {
   const a = cleanArtist(q.artist)
   if (!a || !f) return false
   if (a === f) return true
-  // a joint credit ("Jay-Z & Kanye West"); short names would match too much
-  return a.length >= 4 && f.length >= 4 && (hasWords(a, f) || hasWords(f, a))
+  // one is a joint credit holding the other; a name that only contains the
+  // other ("Кино Фильм" for "Кино") is another artist
+  return credits(found).includes(a) || credits(q.artist).includes(f)
 }
 
 // Years or track counts apart; unknown counts as 1 apart.

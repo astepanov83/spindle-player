@@ -78,6 +78,19 @@ describe('pickCandidates', () => {
       pickCandidates(q({ artist: 'Jay-Z' }), [c({ artist: 'Jay-Z & Kanye West' })])
     ).toHaveLength(1)
     expect(pickCandidates(q({ artist: 'Mo' }), [c({ artist: 'Moby' })])).toEqual([])
+    expect(
+      pickCandidates(q({ artist: 'Drake' }), [c({ artist: 'Drake feat. Rihanna' })])
+    ).toHaveLength(1)
+    expect(
+      pickCandidates(q({ artist: 'Mariah Carey, Boyz II Men' }), [c({ artist: 'Mariah Carey' })])
+    ).toHaveLength(1)
+  })
+
+  it('rejects another artist whose name holds the whole name', () => {
+    // seen on Deezer: an EP by "Кино Фильм" for Кино's "Группа крови"
+    const kino = q({ artist: 'Кино', album: 'Группа крови' })
+    expect(pickCandidates(kino, [c({ artist: 'Кино Фильм', album: 'Группа крови' })])).toEqual([])
+    expect(pickCandidates(q({ artist: 'Queen' }), [c({ artist: 'Queen Latifah' })])).toEqual([])
   })
 
   it('takes Various Artists for a compilation only', () => {

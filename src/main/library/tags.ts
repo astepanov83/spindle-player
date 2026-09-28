@@ -121,21 +121,95 @@ export function needsDecoding(ext: string, codec: string | undefined): boolean {
 // Folder images Chromium decodes (covers are resized in a hidden window).
 const imageExt = new Set(['jpg', 'jpeg', 'png', 'webp'])
 const coverNames = ['cover', 'folder', 'front', 'album']
+// Subfolders with scans of the booklet; their front is the album's cover.
+const artFolders = new Set(['scans', 'scan', 'artwork', 'art', 'covers', 'images'])
+// Words in the names of pictures that are not the front.
+const notFront = new Set([
+  'back',
+  'rear',
+  'inlay',
+  'inside',
+  'inner',
+  'booklet',
+  'book',
+  'cd',
+  'disc',
+  'disk',
+  'tray',
+  'label',
+  'matrix',
+  'obi',
+  'spine'
+])
 
-// The folder's cover image, by name: cover, then folder, front, album.
-export function pickFolderImage(names: string[]): string | undefined {
-  let best: string | undefined
-  let bestRank = Infinity
-  for (const n of names) {
-    if (!imageExt.has(extOf(n))) continue
-    const base = n.slice(0, n.lastIndexOf('.')).toLowerCase()
-    const rank = coverNames.indexOf(base)
-    if (rank >= 0 && rank < bestRank) {
-      best = n
-      bestRank = rank
-    }
+// Lower is better. A folder's own image beats one from its scans folder.
+const rank = {
+  wmp: coverNames.length,
+  wmpSmall: coverNames.length + 1,
+  folderName: coverNames.length + 2,
+  artFront: coverNames.length + 3,
+  artCover: coverNames.length + 4,
+  only: coverNames.length + 5,
+  artOnly: coverNames.length + 6
+}
+
+export interface FolderImagePick {
+  name: string
+  rank: number
+}
+
+const baseOf = (name: string): string => name.slice(0, name.lastIndexOf('.')).toLowerCase()
+const wordsOf = (base: string): string[] => base.split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+const looksLikeBack = (base: string): boolean => wordsOf(base).some((w) => notFront.has(w))
+
+// the same rank: the name that sorts first, so readdir order doesn't matter
+function best(picks: FolderImagePick[]): FolderImagePick | undefined {
+  let out: FolderImagePick | undefined
+  for (const p of picks)
+    if (!out || p.rank < out.rank || (p.rank === out.rank && p.name < out.name)) out = p
+  return out
+}
+
+// The folder's cover image: cover, folder, front, album; then Windows Media
+// Player's AlbumArt, one named after the folder, and the only image in a
+// folder with songs, unless its name says it is the back or the disc.
+export function pickFolderImage(names: string[], folder: string): FolderImagePick | undefined {
+  const images = names.filter((n) => imageExt.has(extOf(n)))
+  const folderName = folder.trim().toLowerCase()
+  const picks: FolderImagePick[] = []
+  for (const name of images) {
+    const base = baseOf(name)
+    const i = coverNames.indexOf(base)
+    if (i >= 0) picks.push({ name, rank: i })
+    else if (base.startsWith('albumart'))
+      picks.push({ name, rank: base.endsWith('large') ? rank.wmp : rank.wmpSmall })
+    else if (base === folderName) picks.push({ name, rank: rank.folderName })
   }
-  return best
+  // with no songs next to it, a lone picture is likelier a photo than a cover
+  const songs = names.some((n) => isAudioFile(n) || isCueFile(n))
+  if (images.length === 1 && songs && !looksLikeBack(baseOf(images[0])))
+    picks.push({ name: images[0], rank: rank.only })
+  return best(picks)
+}
+
+// "Scans", "Artwork": a subfolder with the booklet, not a disc of the album.
+export function isArtFolder(name: string): boolean {
+  return artFolders.has(name.trim().toLowerCase())
+}
+
+// The front picture in a scans folder: a name with "front" or "cover" that
+// doesn't also say "back" or the like, else the only picture that doesn't.
+export function pickArtImage(names: string[]): FolderImagePick | undefined {
+  const images = names.filter((n) => imageExt.has(extOf(n)) && !looksLikeBack(baseOf(n)))
+  const picks: FolderImagePick[] = []
+  for (const name of images) {
+    const words = wordsOf(baseOf(name))
+    // "front" beats "cover"
+    if (words.includes('front')) picks.push({ name, rank: rank.artFront })
+    else if (words.includes('cover')) picks.push({ name, rank: rank.artCover })
+  }
+  if (images.length === 1) picks.push({ name: images[0], rank: rank.artOnly })
+  return best(picks)
 }
 
 // "CD1", "Disc 2", "disk_3": a folder that holds one disc of an album.

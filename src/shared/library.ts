@@ -17,6 +17,19 @@ export interface Track {
   codec: string
   // set when the track is a stretch of a bigger file (a CUE sheet's disc image)
   part?: TrackPart
+  // the song's own picture, set only when it differs from its album's
+  // (compilations, singles folders); else the album's is shown
+  art?: Art
+}
+
+// A cover and the colors picked from it. An Album is one too.
+export interface Art {
+  // [--c1, --c2, --c3] (main, accent, dark) for each theme, from the cover (ticket 009)
+  palette: ThemePalettes
+  // small cover URL for grids and lists, or '' when there is none
+  cover: string
+  // big cover URL for the stage, or ''
+  coverLarge: string
 }
 
 // Where a track lies in its file, in seconds. `file` is the id the page loads
@@ -28,18 +41,12 @@ export interface TrackPart {
   end?: number
 }
 
-export interface Album {
+export interface Album extends Art {
   id: string
   title: string
   artist: string
   // 0 when unknown
   year: number
-  // [--c1, --c2, --c3] (main, accent, dark) for each theme, from the cover (ticket 009)
-  palette: ThemePalettes
-  // small cover URL for grids and lists, or '' when there is none
-  cover: string
-  // big cover URL for the stage, or ''
-  coverLarge: string
   trackIds: string[]
 }
 

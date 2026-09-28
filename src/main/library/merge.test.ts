@@ -45,6 +45,13 @@ describe('parseIndex', () => {
   it('reads back what serializeIndex wrote', () => {
     const ix = indexOf([entry('/m/a.mp3', { title: 'A', track: 2, cover: 'abc' })])
     ix.images.set('/m', { path: '/m/cover.jpg', mtime: 5, size: 6, cover: 'def' })
+    ix.images.set('/m/b', {
+      path: '/m/b/Scans/front.jpg',
+      dir: '/m/b',
+      mtime: 5,
+      size: 6,
+      cover: 'ghi'
+    })
     ix.palettes.set(h1, fallbackPalettes('a'))
     ix.stalePalettes.set(h2, fallbackPalettes('b'))
     const back = parseIndex(JSON.parse(JSON.stringify(serializeIndex(ix))))
@@ -183,8 +190,10 @@ describe('applyListing', () => {
     ix.images.set('/usb/x', { path: '/usb/x/cover.jpg', mtime: 1, size: 1, cover: 'u' })
     ix.images.set('/m/y', { path: '/m/y/cover.jpg', mtime: 1, size: 1, cover: 'y' })
     const im = { path: '/m/z/folder.jpg', mtime: 1, size: 1, cover: 'z' }
-    applyListing(ix, ['/usb', '/m'], { paths: [], images: [im], skipped: ['/usb'] })
-    expect([...ix.images.keys()].sort()).toEqual(['/m/z', '/usb/x'])
+    // from a scans folder: the cover of the folder above it
+    const scan = { path: '/m/w/Scans/front.jpg', dir: '/m/w', mtime: 1, size: 1, cover: 'w' }
+    applyListing(ix, ['/usb', '/m'], { paths: [], images: [im, scan], skipped: ['/usb'] })
+    expect([...ix.images.keys()].sort()).toEqual(['/m/w', '/m/z', '/usb/x'])
   })
 
   it('reports no change for the same listing', () => {

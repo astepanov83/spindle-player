@@ -60,7 +60,7 @@
           onclick={() => queue.jump(item.index)}
           oncontextmenu={(e) => openSongMenu(e, [id])}
         >
-          <Thumb src={library.album(t.albumId).cover} eq={cur && player.playing} />
+          <Thumb src={library.art(t).cover} eq={cur && player.playing} />
           <span class="qt"><span class="nm">{t.title}</span><span class="ar">{t.artist}</span></span
           >
           <span class="d">{fmtTime(t.duration)}</span>

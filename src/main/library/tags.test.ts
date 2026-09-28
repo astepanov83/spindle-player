@@ -3,9 +3,11 @@ import {
   cleanText,
   discFolderNumber,
   frontCover,
+  isArtFolder,
   isAudioFile,
   isDiscFolder,
   normalizeTags,
+  pickArtImage,
   pickFolderImage,
   titleFromFileName
 } from './tags'
@@ -70,10 +72,56 @@ describe('file name rules', () => {
   })
 
   it('picks the folder image by name', () => {
-    expect(pickFolderImage(['front.png', 'Folder.JPG', 'x.jpg'])).toBe('Folder.JPG')
-    expect(pickFolderImage(['back.jpg', 'cover.gif'])).toBeUndefined()
-    expect(pickFolderImage(['cover.webp'])).toBe('cover.webp')
-    expect(pickFolderImage(['album.jpeg', 'cover.jpg'])).toBe('cover.jpg')
+    const pick = (names: string[], folder = 'Night Bus'): string | undefined =>
+      pickFolderImage(names, folder)?.name
+    expect(pick(['front.png', 'Folder.JPG', 'x.jpg'])).toBe('Folder.JPG')
+    expect(pick(['back.jpg', 'cover.gif'])).toBeUndefined()
+    expect(pick(['cover.webp'])).toBe('cover.webp')
+    expect(pick(['album.jpeg', 'cover.jpg'])).toBe('cover.jpg')
+    // Windows Media Player's, the large one first
+    const wmp = ['AlbumArtSmall.jpg', 'AlbumArt_{7E1B}_Large.jpg', 'Night Bus.jpg']
+    expect(pick(wmp)).toBe('AlbumArt_{7E1B}_Large.jpg')
+    expect(pick(['cover.jpg', ...wmp])).toBe('cover.jpg')
+    // named after the folder
+    expect(pick(['night bus.png', 'scan.jpg', '01.mp3'])).toBe('night bus.png')
+    // the only image, next to songs, and not the back or the disc
+    expect(pick(['01.mp3', 'scan.jpg'])).toBe('scan.jpg')
+    expect(pick(['a.cue', 'scan.jpg'])).toBe('scan.jpg')
+    expect(pick(['scan.jpg'])).toBeUndefined()
+    expect(pick(['01.mp3', 'a.jpg', 'b.jpg'])).toBeUndefined()
+    expect(pick(['01.mp3', 'Back Cover.jpg'])).toBeUndefined()
+    expect(pick(['01.mp3', 'cd.png'])).toBeUndefined()
+    // better kinds rank lower
+    const rank = (names: string[]): number => pickFolderImage(names, 'Night Bus')!.rank
+    expect(rank(['cover.jpg'])).toBeLessThan(rank(['AlbumArtSmall.jpg']))
+    expect(rank(['AlbumArtSmall.jpg'])).toBeLessThan(rank(['Night Bus.jpg']))
+    expect(rank(['Night Bus.jpg'])).toBeLessThan(rank(['01.mp3', 'scan.jpg']))
+  })
+
+  it('picks the front from a scans folder', () => {
+    const pick = (names: string[]): string | undefined => pickArtImage(names)?.name
+    expect(isArtFolder('Scans')).toBe(true)
+    expect(isArtFolder('Artwork')).toBe(true)
+    expect(isArtFolder('covers')).toBe(true)
+    expect(isArtFolder('CD1')).toBe(false)
+    expect(pick(['Back.jpg', 'CD.jpg', 'Front.jpg', 'Inlay.jpg'])).toBe('Front.jpg')
+    expect(pick(['01 - booklet.jpg', '00 - cover.png'])).toBe('00 - cover.png')
+    expect(pick(['front_cover.jpg', 'back_cover.jpg'])).toBe('front_cover.jpg')
+    expect(pick(['scan001.jpg'])).toBe('scan001.jpg')
+    expect(pick(['scan001.jpg', 'scan002.jpg'])).toBeUndefined()
+    expect(pick(['back.jpg'])).toBeUndefined()
+    // a lone front among other scans
+    expect(pick(['back.jpg', 'scan001.jpg'])).toBe('scan001.jpg')
+    expect(pickFolderImage(['AlbumArt_{B}_Large.jpg', 'AlbumArt_{A}_Large.jpg'], 'x')?.name).toBe(
+      'AlbumArt_{A}_Large.jpg'
+    )
+    // a front-looking name beats the only image, and both lose to the album folder's own kinds
+    const front = pickArtImage(['front.jpg'])!.rank
+    const only = pickArtImage(['scan001.jpg'])!.rank
+    expect(front).toBeLessThan(only)
+    expect(pickFolderImage(['Night Bus.jpg'], 'Night Bus')!.rank).toBeLessThan(front)
+    // a lone image next to songs could be anything; a front scan is likelier the cover
+    expect(front).toBeLessThan(pickFolderImage(['01.mp3', 'x.jpg'], 'Night Bus')!.rank)
   })
 
   it('knows disc folders', () => {

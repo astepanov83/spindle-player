@@ -51,8 +51,31 @@ describe('walk', () => {
     const out = await run([root])
     expect(out.files).toEqual([join(root, 'A/01.flac')])
     expect(out.cues).toEqual([join(root, 'A/a.cue')])
-    expect(out.images).toEqual([join(root, 'A/cover.jpg')])
+    expect(out.images).toEqual([{ dir: join(root, 'A'), path: join(root, 'A/cover.jpg') }])
     expect(out.skipped).toEqual([])
+  })
+
+  it('takes the front from a scans folder for the folder above, unless it has a better image', async () => {
+    file('A/01.flac')
+    file('A/Scans/Back.jpg')
+    file('A/Scans/Front.jpg')
+    file('B/01.flac')
+    file('B/folder.jpg')
+    file('B/Artwork/front.jpg')
+    // a lone image next to the songs could be anything, so the front scan wins
+    file('C/01.flac')
+    file('C/photo.jpg')
+    file('C/Covers/cover.png')
+    // an album called Covers is an album, not a scans folder
+    file('D/Covers/01.flac')
+    file('D/Covers/folder.jpg')
+    const out = await run([root])
+    expect(out.images).toEqual([
+      { dir: join(root, 'A'), path: join(root, 'A/Scans/Front.jpg') },
+      { dir: join(root, 'B'), path: join(root, 'B/folder.jpg') },
+      { dir: join(root, 'C'), path: join(root, 'C/Covers/cover.png') },
+      { dir: join(root, 'D/Covers'), path: join(root, 'D/Covers/folder.jpg') }
+    ])
   })
 
   it('keeps the real path over a symlink to it, in any listing order', async () => {

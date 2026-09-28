@@ -1,7 +1,7 @@
 // The system's media controls (media keys, MPRIS on Linux) go through Chromium's
 // media session. Without handlers Chromium would play or pause the element
 // itself; with them, the queue decides, and Next and Previous work too.
-import type { Album, Track } from '../../../shared/library'
+import type { Art, Track } from '../../../shared/library'
 import { CoverBlob, fetchBlob } from './cover-blob'
 import { paletteTile, tileKey } from './cover-tile'
 import { pause, play, player, seek } from './player.svelte'
@@ -27,9 +27,9 @@ const covers = new CoverBlob({
 let shown = 0
 
 // The text goes at once; the picture follows when it is fetched or drawn.
-// A song with no cover gets a tile in its album's colors: with no picture,
+// A song with no cover gets a tile in its colors: with no picture,
 // Chromium would keep showing the last one it had.
-export function showInMediaSession(t: Track | undefined, al: Album | undefined): void {
+export function showInMediaSession(t: Track | undefined, art: Art | undefined): void {
   const ms = navigator.mediaSession
   if (!ms) return
   const n = ++shown
@@ -39,14 +39,14 @@ export function showInMediaSession(t: Track | undefined, al: Album | undefined):
   }
   const text = { title: t.title, artist: t.artist, album: t.album }
   ms.metadata = new MediaMetadata(text)
-  if (!al) return
-  const url = al.coverLarge
-  const tile = al.palette.dark
-  const art = url
+  if (!art) return
+  const url = art.coverLarge
+  const tile = art.palette.dark
+  const image = url
     ? covers.load(url, () => fetchBlob(url))
     : covers.load(tileKey(tile), () => paletteTile(tile))
-  void art.then((art) => {
-    if (art && n === shown) ms.metadata = new MediaMetadata({ ...text, artwork: [art] })
+  void image.then((pic) => {
+    if (pic && n === shown) ms.metadata = new MediaMetadata({ ...text, artwork: [pic] })
   })
 }
 

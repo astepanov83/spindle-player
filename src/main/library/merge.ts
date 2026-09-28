@@ -88,7 +88,14 @@ function parseCueEntry(v: unknown): CueEntry | undefined {
 function parseImage(v: unknown): FolderImage | undefined {
   if (!isObject(v) || !str(v.path) || !num(v.mtime) || !num(v.size) || !str(v.cover))
     return undefined
-  return { path: v.path, mtime: v.mtime, size: v.size, cover: v.cover }
+  const im: FolderImage = { path: v.path, mtime: v.mtime, size: v.size, cover: v.cover }
+  if (str(v.dir)) im.dir = v.dir
+  return im
+}
+
+// The folder an image is the cover of.
+export function imageDir(im: FolderImage): string {
+  return im.dir ?? dirOf(im.path)
 }
 
 // A file from another version starts empty, so every file is read again.
@@ -112,7 +119,7 @@ export function parseIndex(raw: unknown): LibraryIndex {
   if (Array.isArray(raw.images))
     for (const v of raw.images) {
       const im = parseImage(v)
-      if (im) ix.images.set(dirOf(im.path), im)
+      if (im) ix.images.set(imageDir(im), im)
     }
   if (isObject(raw.pendingMoves))
     for (const [from, to] of Object.entries(raw.pendingMoves))
@@ -245,7 +252,7 @@ export function applyListing(
   for (const [dir, im] of ix.images)
     if (folders.some((f) => isUnder(dir, f)) && listing.skipped.some((s) => isUnder(dir, s)))
       images.set(dir, im)
-  for (const im of listing.images) images.set(dirOf(im.path), im)
+  for (const im of listing.images) images.set(imageDir(im), im)
   if (!sameImages(ix.images, images)) {
     ix.images = images
     changed = true

@@ -103,7 +103,7 @@
           >{#if cur && player.playing}<Eq />{:else}{item.index + 1}{/if}</span
         >
         <span class="tt">
-          <Thumb src={library.album(t.albumId).cover} size={36} radius={4} />
+          <Thumb src={library.art(t).cover} size={36} radius={4} />
           <span class="nm">{t.title}</span>
         </span>
         <span class="o">{t.artist}</span>

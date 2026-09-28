@@ -1,7 +1,7 @@
 // The list you played from, and the song playing from it. See work/specs/queue.md.
 // The moves are plain functions in queue/logic.ts; this store plays what they pick.
 import { moveIds, type IdMoves } from '../../../shared/id-moves'
-import type { Album, Track } from '../../../shared/library'
+import type { Album, Art, Track } from '../../../shared/library'
 import type { SavedQueue } from '../../../shared/saved-queue'
 import { engine, mediaUrl, type EngineError } from '../audio/engine'
 import {
@@ -35,6 +35,8 @@ class QueueStore {
   currentAlbum: Album | undefined = $derived(
     this.current ? library.album(this.current.albumId) : undefined
   )
+  // the playing song's picture and colors
+  currentArt: Art | undefined = $derived(this.current && library.art(this.current))
 
   #fails = 0
   #savedPos = 0

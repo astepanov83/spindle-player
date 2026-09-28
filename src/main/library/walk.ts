@@ -1,13 +1,26 @@
 // Lists the music folders: audio files, cue sheets and folder images.
 import { readdir, realpath, stat } from 'fs/promises'
-import { join } from 'path'
+import { basename, dirname, join } from 'path'
 import { eachPaced, type Pacer } from './pacer'
-import { isAudioFile, isCueFile, pickFolderImage } from './tags'
+import {
+  isArtFolder,
+  isAudioFile,
+  isCueFile,
+  pickArtImage,
+  pickFolderImage,
+  type FolderImagePick
+} from './tags'
+
+// A folder's cover image. It may be in a scans subfolder of that folder.
+export interface ListedImage {
+  dir: string
+  path: string
+}
 
 export interface Listing {
   files: string[]
   cues: string[]
-  images: string[]
+  images: ListedImage[]
   skipped: string[]
 }
 
@@ -58,6 +71,16 @@ export async function walk(
   const seenFiles = new Set<string>()
   // real paths already walked, so a symlink loop is walked once
   const seenDirs = new Set<string>()
+  // folder -> its best image so far, from itself or its scans folder
+  const images = new Map<string, FolderImagePick & ListedImage>()
+  const offer = (dir: string, from: string, pick: FolderImagePick | undefined): void => {
+    if (!pick) return
+    const path = join(from, pick.name)
+    const old = images.get(dir)
+    // the same rank: the path that sorts first, so walk order doesn't matter
+    if (!old || pick.rank < old.rank || (pick.rank === old.rank && path < old.path))
+      images.set(dir, { ...pick, dir, path })
+  }
   let pending: Dir[] = []
   await eachPaced(roots, pace, async (path) => {
     check()
@@ -88,6 +111,7 @@ export async function walk(
         return
       }
       const names: string[] = []
+      let songs = false
       for (const d of entries) {
         if (d.name.startsWith('.')) continue
         const path = join(dir.path, d.name)
@@ -118,16 +142,25 @@ export async function walk(
         else if (isFile) {
           names.push(d.name)
           const audio = isAudioFile(d.name)
-          if ((audio || isCueFile(d.name)) && !seenFiles.has(path)) {
-            seenFiles.add(path)
-            ;(audio ? out.files : out.cues).push(path)
+          if (audio || isCueFile(d.name)) {
+            songs = true
+            if (!seenFiles.has(path)) {
+              seenFiles.add(path)
+              ;(audio ? out.files : out.cues).push(path)
+            }
           }
         }
       }
-      const image = pickFolderImage(names)
-      if (image) out.images.push(join(dir.path, image))
+      const name = basename(dir.path)
+      // "Covers" with songs in it is an album
+      if (dir.depth > 0 && !songs && isArtFolder(name))
+        offer(dirname(dir.path), dir.path, pickArtImage(names))
+      else offer(dir.path, dir.path, pickFolderImage(names, name))
       onDir(out.files.length)
     })
   }
+  out.images = [...images.values()]
+    .map(({ dir, path }) => ({ dir, path }))
+    .sort((a, b) => (a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0))
   return out
 }

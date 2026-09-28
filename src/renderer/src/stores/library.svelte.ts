@@ -1,7 +1,7 @@
 // Library data plus view state. The view state lives here, not in the part,
 // so a layout rebuild keeps the open album, search, sort and section.
 // Main sends the data (from the index, then after each scan that changed something).
-import type { Album, LibraryData, ScanStatus, Track } from '../../../shared/library'
+import type { Album, Art, LibraryData, ScanStatus, Track } from '../../../shared/library'
 import {
   nextPlaylistSort,
   withPlaylistSort,
@@ -88,6 +88,11 @@ class LibraryStore {
   album(id: string): Album {
     void this.#version
     return this.albums[this.#albumIndex.get(id)!]
+  }
+
+  // the song's own picture, else its album's
+  art(t: Track): Art {
+    return t.art ?? this.album(t.albumId)
   }
 
   // position in the library, for stable sorting

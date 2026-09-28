@@ -36,6 +36,8 @@ export interface FileEntry {
 // A cover.jpg (or folder.jpg, front.png...) found in a folder.
 export interface FolderImage {
   path: string
+  // the folder it is the cover of, when not the one it is in (a Scans subfolder)
+  dir?: string
   mtime: number
   size: number
   // hash of the image bytes, or '' before it is read

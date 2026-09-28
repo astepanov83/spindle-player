@@ -27,7 +27,7 @@
 {#if style === 'bar'}
   <div class="ctl bar">
     <div class="bl">
-      <div class="minicv"><Cover src={queue.currentAlbum?.cover} /></div>
+      <div class="minicv"><Cover src={queue.currentArt?.cover} /></div>
       <div class="meta">
         {#if queue.current}
           <div class="song-title">{queue.current.title}</div>

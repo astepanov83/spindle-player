@@ -22,7 +22,7 @@
   import { setLook } from './visualizer/loop'
 
   // each cover has a palette per theme; the light one has a darker accent
-  const palettes = $derived(queue.currentAlbum?.palette ?? defaultPalettes)
+  const palettes = $derived(queue.currentArt?.palette ?? defaultPalettes)
   const palette = $derived(palettes[theme.light ? 'light' : 'dark'])
 
   $effect(() => engine.setVolume(settings.volume))
@@ -40,7 +40,7 @@
   $effect(() => window.playbackApi.playing(player.playing))
 
   setupMediaSession()
-  $effect(() => showInMediaSession(queue.current, queue.currentAlbum))
+  $effect(() => showInMediaSession(queue.current, queue.currentArt))
   $effect(() => showStateInMediaSession())
   $effect(() => showPositionInMediaSession(player.pos, player.duration))
 

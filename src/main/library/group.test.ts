@@ -159,6 +159,31 @@ describe('buildLibrary', () => {
     expect(a.palette.dark).not.toBe(salt.dark)
   })
 
+  it("gives a song its own picture and colors only when it differs from the album's", () => {
+    const salt = fallbackPalettes('salt')
+    const { data } = build(
+      [
+        entry('/m/mix/1.mp3', { album: 'Mix', track: 1, cover: 'one' }),
+        entry('/m/mix/2.mp3', { album: 'Mix', track: 2, cover: 'two' }),
+        entry('/m/mix/3.mp3', { album: 'Mix', track: 3 }),
+        entry('/m/mix/4.mp3', { album: 'Mix', track: 4, cover: 'gone' })
+      ],
+      (ix) => ix.palettes.set('two', salt),
+      (h) => h !== 'gone'
+    )
+    const [one, two, three, four] = data.tracks
+    expect(data.albums[0].cover).toBe('spindle://cover/small/one')
+    expect(one.art).toBeUndefined()
+    expect(two.art).toEqual({
+      cover: 'spindle://cover/small/two',
+      coverLarge: 'spindle://cover/large/two',
+      palette: salt
+    })
+    // no picture, or one missing from the cache: the album's
+    expect(three.art).toBeUndefined()
+    expect(four.art).toBeUndefined()
+  })
+
   it('finds a folder image next to disc folders', () => {
     const { data } = build([entry('/m/Album/CD1/1.mp3', { album: 'A' })], (ix) => {
       ix.images.set('/m/Album', { path: '/m/Album/folder.jpg', mtime: 1, size: 1, cover: 'f' })

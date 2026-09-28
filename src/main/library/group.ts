@@ -173,6 +173,8 @@ export function buildLibrary(ix: LibraryIndex, hasCover: (hash: string) => boole
         codec: e.codec ?? ''
       }
       if (part) t.part = part
+      if (e.cover && e.cover !== cover && hasCover(e.cover))
+        t.art = { palette: paletteOf(ix, e.cover, id), ...coverUrls(e.cover) }
       return t
     })
     albums.push({

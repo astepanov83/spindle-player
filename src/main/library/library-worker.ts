@@ -31,7 +31,7 @@ import {
   usedCovers
 } from './merge'
 import { extOf, frontCover, normalizeTags } from './tags'
-import { walk } from './walk'
+import { walk, type ListedImage } from './walk'
 import { pruneCoverFiles, removeOldTemp } from './cover-prune'
 import { ownCopy } from './bytes'
 import { FirstFill, ScanChain, Stopped } from './scan-chain'
@@ -340,7 +340,7 @@ async function readCue(f: { path: string; mtime: number; size: number }): Promis
 }
 
 async function readImage(
-  path: string,
+  { dir, path }: ListedImage,
   old: FolderImage | undefined,
   gen: number
 ): Promise<FolderImage | undefined> {
@@ -356,7 +356,9 @@ async function readImage(
     return undefined
   }
   const cover = await sendCover(data, gen)
-  return { path, mtime: Math.floor(s.mtimeMs), size: s.size, cover }
+  const im: FolderImage = { path, mtime: Math.floor(s.mtimeMs), size: s.size, cover }
+  if (dir !== dirOf(path)) im.dir = dir
+  return im
 }
 
 // A file or cue sheet the scan found, and its key on disk (see moves.ts).
@@ -467,9 +469,9 @@ async function scan(
     })
 
     const images: FolderImage[] = []
-    await eachPaced(listing.images, readPace, async (path) => {
+    await eachPaced(listing.images, readPace, async (found) => {
       checkGen(gen)
-      const im = await readImage(path, ix.images.get(dirOf(path)), gen)
+      const im = await readImage(found, ix.images.get(found.dir), gen)
       if (im) images.push(im)
     })
 

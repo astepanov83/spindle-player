@@ -14,7 +14,8 @@ import {
   type SettingsApi,
   type WinApi
 } from '../shared/ipc'
-import type { IdMoves } from '../shared/id-moves'
+import { mergeMoves, type IdMoves } from '../shared/id-moves'
+import { keepEarly } from './early'
 import type { ScanStatus } from '../shared/library'
 
 // The window is sandboxed, so this file may only use contextBridge and ipcRenderer.
@@ -54,27 +55,18 @@ const settingsApi: SettingsApi = {
 // Asked for early too: the first paint shows the library from the index.
 const library = invoke(LibraryChannel.load)
 
-// Listens from the start. A value that comes before the page subscribes is
-// kept for it, so a scan that ends early is not lost. Once the page listens,
-// nothing is kept, since a library can be tens of MB.
-function latest<T>(channel: string): (listener: (value: T) => void) => () => void {
-  let early: { value: T } | undefined
-  const listeners = new Set<(value: T) => void>()
-  ipcRenderer.on(channel, (_, value: T) => {
-    if (!listeners.size) early = { value }
-    for (const l of listeners) l(value)
-  })
-  return (listener) => {
-    listeners.add(listener)
-    if (early) listener(early.value)
-    early = undefined
-    return () => void listeners.delete(listener)
-  }
+// Listens from the start; see keepEarly for what is kept until the page listens.
+function latest<T>(
+  channel: string,
+  merge?: (early: T, next: T) => T
+): (listener: (value: T) => void) => () => void {
+  return keepEarly<T>((onValue) => ipcRenderer.on(channel, (_, value: T) => onValue(value)), merge)
 }
 
 const onLibraryChanged = latest<Uint8Array>(LibraryChannel.changed)
 const onScanStatus = latest<ScanStatus>(LibraryChannel.status)
-const onIdsMoved = latest<IdMoves>(LibraryChannel.idsMoved)
+// each map matters, so two that come early are joined
+const onIdsMoved = latest<IdMoves>(LibraryChannel.idsMoved, mergeMoves)
 
 const libraryApi: LibraryApi = {
   load: () => library,

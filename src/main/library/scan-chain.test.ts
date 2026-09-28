@@ -170,6 +170,29 @@ describe('ScanChain', () => {
     expect(events.slice(3)).toEqual(['b starts', 'b done', 'prune 3', 'prune 3 done'])
   })
 
+  it('is busy from a scan asked for until its prune ended, or it stopped', async () => {
+    const { chain, scan, prunes } = setup()
+    await flush()
+    expect(chain.busy).toBe(false)
+    const a = scan('a')
+    const first = chain.request(a.run)
+    expect(chain.busy).toBe(true)
+    await flush()
+    a.finish()
+    await flush()
+    // the prune still runs
+    expect(chain.busy).toBe(true)
+    prunes.get(1)!()
+    await first
+    expect(chain.busy).toBe(false)
+    const b = scan('b')
+    const second = chain.request(b.run)
+    await flush()
+    chain.stop()
+    await second
+    expect(chain.busy).toBe(false)
+  })
+
   it('starts nothing after close', async () => {
     const { chain, events, scan } = setup()
     const a = scan('a')

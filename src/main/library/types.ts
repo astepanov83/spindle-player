@@ -147,6 +147,8 @@ export type WorkerIn =
   | { type: 'cover-source'; req: number; hash: string }
   // the online cover lookup setting changed
   | { type: 'fetch-covers'; on: boolean; sources: Record<CoverSource, boolean> }
+  // an app window is open again after 'stop'
+  | { type: 'resume' }
 
 // the library process to main
 export type WorkerOut =

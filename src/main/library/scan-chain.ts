@@ -27,6 +27,8 @@ export class ScanChain {
   #closed = false
   // the last scan asked for and its prune
   #last: Promise<void>
+  // scans asked for whose run and prune have not ended
+  #pending = 0
 
   constructor(
     ready: Promise<unknown>,
@@ -37,6 +39,11 @@ export class ScanChain {
       () => {},
       () => {}
     )
+  }
+
+  // A scan or prune runs or waits to.
+  get busy(): boolean {
+    return this.#pending > 0
   }
 
   // Bumped by every scan asked for and every stop.
@@ -60,27 +67,36 @@ export class ScanChain {
     const gen = ++this.#gen
     this.#asked = gen
     this.hooks.wake()
+    this.#pending++
     this.#last = this.#last.then(async () => {
-      // a newer scan was asked for while this one waited
-      if (this.stale(gen)) return
       try {
-        await scan(gen)
-      } catch (e) {
-        if (e instanceof Stopped) {
-          // stopped with no newer scan to take over (the window closed): the
-          // status must not stay on its progress
-          if (this.#asked <= gen && !this.#closed) this.hooks.stopped?.()
-          return
-        }
-        this.hooks.log(`Library scan failed: ${e}`)
-      }
-      try {
-        await this.hooks.prune(gen)
-      } catch (e) {
-        this.hooks.log(`Could not prune covers: ${e}`)
+        await this.#scanAndPrune(scan, gen)
+      } finally {
+        this.#pending--
       }
     })
     return this.#last
+  }
+
+  async #scanAndPrune(scan: (gen: number) => Promise<void>, gen: number): Promise<void> {
+    // a newer scan was asked for while this one waited
+    if (this.stale(gen)) return
+    try {
+      await scan(gen)
+    } catch (e) {
+      if (e instanceof Stopped) {
+        // stopped with no newer scan to take over (the window closed): the
+        // status must not stay on its progress
+        if (this.#asked <= gen && !this.#closed) this.hooks.stopped?.()
+        return
+      }
+      this.hooks.log(`Library scan failed: ${e}`)
+    }
+    try {
+      await this.hooks.prune(gen)
+    } catch (e) {
+      this.hooks.log(`Could not prune covers: ${e}`)
+    }
   }
 
   // Stops the scan or prune running; what the scan read stays.

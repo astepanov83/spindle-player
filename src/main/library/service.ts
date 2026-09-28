@@ -167,6 +167,8 @@ export class LibraryService {
 
   resume(): void {
     this.covers.allow()
+    // the online lookup was held when the window closed (macOS keeps the app)
+    this.#post({ type: 'resume' })
   }
 
   async addFolder(win: BrowserWindow | null): Promise<void> {

@@ -169,6 +169,8 @@ let fetchedWriter: JsonFileWriter<unknown> | undefined
 // bumped on every change to fetched, for the covers in use
 let fetchedEdits = 0
 let fetcher: CoverFetcher | undefined
+// a scan and its prune have ended at least once
+let pruned = false
 // the setting from main; a change can come before the fetcher is made
 let fetchSetting: { on: boolean; sources: Record<CoverSource, boolean> } | undefined
 
@@ -722,6 +724,11 @@ port.on('message', (e: Electron.MessageEvent) => {
     case 'fetch-covers':
       setFetch(m.on, m.sources)
       break
+    case 'resume':
+      // a new window: go on unless a scan runs (it releases when done) or none
+      // has ended yet (the lookup waits for the first)
+      if (pruned && !chain.busy && !closing) fetcher?.release()
+      break
     case 'playing':
       playing = m.playing
       playingDev = m.dev
@@ -838,7 +845,9 @@ const chain = new ScanChain(ready, {
     if (chain.stale(gen)) return
     await pruneSources(sourcesDir, (h) => liveUsed().has(h))
     sources = await listSources(sourcesDir)
-    if (!chain.stale(gen)) fetcher?.release()
+    if (chain.stale(gen)) return
+    pruned = true
+    fetcher?.release()
   },
   // let a stopped scan's waits wake up and see the new number
   wake: wakeCoverWaiters,

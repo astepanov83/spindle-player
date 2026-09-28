@@ -72,6 +72,8 @@ export type WorkerIn =
   | { type: 'get-library'; req: number }
   // quitting: save the index now, then set the flush flag
   | { type: 'flush' }
+  // the app window closed: stop the scan running, keeping what it read
+  | { type: 'stop' }
   | { type: 'find-track'; req: number; id: string }
   // the source picture of a cover, to make the large size
   | { type: 'cover-source'; req: number; hash: string }

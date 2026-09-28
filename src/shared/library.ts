@@ -53,4 +53,6 @@ export interface ScanStatus {
   failed: number
   // folders that could not be read in the last scan, e.g. an unplugged drive
   missing: string[]
+  // main gave up on the library worker: no library this run
+  unavailable?: boolean
 }

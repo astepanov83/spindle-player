@@ -25,11 +25,12 @@ let main: MainWindow | null = null
 registerScheme()
 
 function createWindow(): void {
+  library.resume()
   main = new MainWindow(store)
   main.win.on('closed', () => {
     main = null
-    // the hidden cover window would keep the app running
-    library.covers.close()
+    // a hidden cover window would keep the app running with no window
+    library.pause()
   })
 }
 
@@ -106,8 +107,9 @@ app.whenReady().then(() => {
 
   createWindow()
 
+  // macOS: the dock icon makes a new app window. The hidden cover window doesn't count.
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (!main) createWindow()
   })
 })
 

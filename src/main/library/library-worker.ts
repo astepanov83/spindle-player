@@ -444,6 +444,10 @@ port.on('message', (m: WorkerIn) => {
       ready.then(() => scan(m.folders, gen)).catch((e) => log(`Library scan failed: ${e}`))
       break
     }
+    case 'stop':
+      ++scanGen
+      wakeCoverWaiters()
+      break
     case 'cover-done':
       sent.delete(m.hash)
       claimed.delete(m.hash)

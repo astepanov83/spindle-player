@@ -84,6 +84,7 @@ export class LibraryService {
         this.#start()
       } else {
         console.error(`Library worker stopped (code ${code}) too often; the library stays empty`)
+        this.#setStatus({ unavailable: true })
       }
     })
   }
@@ -161,6 +162,17 @@ export class LibraryService {
     this.#post({ type: 'scan', folders: this.store.get().folders })
   }
 
+  // The app window closed: no more scanning or covers until a new one opens,
+  // so nothing keeps the app running with no window.
+  pause(): void {
+    this.covers.shutDown()
+    this.#post({ type: 'stop' })
+  }
+
+  resume(): void {
+    this.covers.allow()
+  }
+
   async addFolder(win: BrowserWindow | null): Promise<void> {
     const options: Electron.OpenDialogOptions = {
       title: 'Add music folder',
@@ -169,14 +181,20 @@ export class LibraryService {
     }
     const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     if (r.canceled || !r.filePaths.length) return
-    this.store.setFolders([...this.store.get().folders, ...r.filePaths])
-    this.scan()
+    this.#setFolders([...this.store.get().folders, ...r.filePaths])
   }
 
   removeFolder(path: unknown): void {
     const folders = this.store.get().folders
     if (typeof path !== 'string' || !folders.includes(path)) return
-    this.store.setFolders(folders.filter((f) => f !== path))
+    this.#setFolders(folders.filter((f) => f !== path))
+  }
+
+  // The status carries the list the settings sheet shows. It is set here too,
+  // since a worker that is gone for good sends no more status.
+  #setFolders(folders: string[]): void {
+    this.store.setFolders(folders)
+    this.#setStatus({ folders: this.store.get().folders })
     this.scan()
   }
 

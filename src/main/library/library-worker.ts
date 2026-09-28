@@ -26,7 +26,7 @@ import {
   planCueReads,
   planReads,
   prunePalettes,
-  readAgainWithProbe,
+  readAgain,
   serializeIndex,
   usedCovers
 } from './merge'
@@ -479,15 +479,9 @@ async function scan(
     checkGen(gen)
     const skipped = [...listing.skipped, ...emptiedFolders(ix, folders, listing.files)]
     await followMoves(gen, folders, skipped, [...found, ...cues])
-    // entries an older tag reader got wrong are read once more with ffprobe
-    const newReader = !!start.ffprobe && ix.reader < readerVersion
-    const toRead = planReads(
-      ix.files,
-      found,
-      known,
-      retryFailed,
-      newReader ? readAgainWithProbe : undefined
-    )
+    // files an older tag reader read are read once more (readTags falls back to ffprobe)
+    const oldReader = ix.reader < readerVersion
+    const toRead = planReads(ix.files, found, known, retryFailed, readAgain(ix.reader))
     const cuesToRead = planCueReads(ix.cues, cues, retryFailed)
     if (
       applyListing(ix, folders, {
@@ -519,7 +513,7 @@ async function scan(
       progress(gen, 'read', read, toRead.length)
     })
     progress(gen, 'read', read, toRead.length, true)
-    if (newReader) {
+    if (oldReader) {
       ix.reader = readerVersion
       unsaved = true
     }

@@ -13,6 +13,18 @@ import {
 } from './tags'
 
 describe('normalizeTags', () => {
+  it('keeps MusicBrainz release ids, lowercased, only when they look like ids', () => {
+    const t = normalizeTags({
+      common: {
+        musicbrainz_releasegroupid: 'F5093C06-23E3-404F-AEAA-40F72885EE3A',
+        musicbrainz_albumid: 'not an id'
+      },
+      format: {}
+    })
+    expect(t.mbReleaseGroup).toBe('f5093c06-23e3-404f-aeaa-40f72885ee3a')
+    expect(t).not.toHaveProperty('mbRelease')
+  })
+
   it('keeps the tags we use, cleaned up', () => {
     const t = normalizeTags({
       common: {

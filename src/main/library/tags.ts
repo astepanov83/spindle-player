@@ -15,6 +15,8 @@ export interface RawTags {
     year?: number
     date?: string
     genre?: string[]
+    musicbrainz_releasegroupid?: string
+    musicbrainz_albumid?: string
   }
   format: {
     duration?: number
@@ -43,6 +45,13 @@ function yearOf(year: unknown, date: unknown): number | undefined {
   return typeof y === 'number' && y >= 1000 && y <= 9999 ? y : undefined
 }
 
+const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+
+// A tag may hold several ids joined by "/" or ";"; the first one is enough.
+function mbid(v: unknown): string | undefined {
+  return typeof v === 'string' ? uuid.exec(v)?.[0].toLowerCase() : undefined
+}
+
 type Tags = Omit<FileEntry, 'path' | 'mtime' | 'size' | 'cover' | 'error'>
 
 // ext: the file's extension, to tell if the WAV format is worth keeping
@@ -65,7 +74,9 @@ export function normalizeTags(raw: RawTags, ext = ''): Tags {
         ? Math.round(f.duration * 100) / 100
         : 0,
     codec: cleanText(f.codec),
-    container: cleanText(f.container)
+    container: cleanText(f.container),
+    mbReleaseGroup: mbid(c.musicbrainz_releasegroupid),
+    mbRelease: mbid(c.musicbrainz_albumid)
   }
   if (needsDecoding(ext, out.codec)) {
     out.sampleRate = positive(f.sampleRate)

@@ -29,6 +29,9 @@ export interface FileEntry {
   bits?: number
   // hash of the embedded cover picture
   cover?: string
+  // MusicBrainz ids from the tags, for an exact cover lookup (ticket 014)
+  mbReleaseGroup?: string
+  mbRelease?: string
   // set when the tags could not be read; the file is still listed by its name
   error?: string
 }
@@ -75,9 +78,10 @@ export interface LibraryIndex {
 
 // Bump to make every file be read again (for example when a new tag is added).
 export const indexVersion = 1
-// 2: ffprobe reads what music-metadata can't (ticket 012). Entries from an
-// older reader that failed or have no title are read again once.
-export const readerVersion = 2
+// 2: ffprobe reads what music-metadata can't (ticket 012).
+// 3: MusicBrainz release ids are kept (ticket 014).
+// Every file an older reader read is read again once.
+export const readerVersion = 3
 // 2: a non-UTF-8 sheet may be cp1252, not only cp1251 (ticket 011). Every
 // sheet from an older reader is read again once.
 export const cueReaderVersion = 2

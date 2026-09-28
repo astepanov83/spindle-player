@@ -11,7 +11,7 @@ import {
   planCueReads,
   planReads,
   prunePalettes,
-  readAgainWithProbe,
+  readAgain,
   serializeIndex,
   usedCovers
 } from './merge'
@@ -377,23 +377,19 @@ describe('cue sheets in the index', () => {
   })
 })
 
-describe('reading again with ffprobe', () => {
-  it('picks files that failed and old APEs with no tags', () => {
-    expect(readAgainWithProbe(entry('/m/a.ape', { container: "Monkey's Audio" }))).toBe(true)
-    expect(readAgainWithProbe(entry('/m/b.wv', { error: 'Tags not read' }))).toBe(true)
-    expect(readAgainWithProbe(entry('/m/c.ape', { container: "Monkey's Audio", title: 'T' }))).toBe(
-      false
-    )
-    expect(readAgainWithProbe(entry('/m/d.flac', { container: 'FLAC' }))).toBe(false)
+describe('reading every file again for a new reader', () => {
+  it('reads every file again once for reader 3', () => {
+    const known = new Map([['/m/a.mp3', entry('/m/a.mp3', { title: 'A' })]])
+    const found = [{ path: '/m/a.mp3', mtime: 1, size: 10 }]
+    expect(planReads(known, found, () => true, false, readAgain(2))).toEqual(['/m/a.mp3'])
+    expect(planReads(known, found, () => true, false, readAgain(3))).toEqual([])
   })
 
-  it('plans those reads even though the files did not change', () => {
-    const known = new Map([
-      ['/m/a.ape', entry('/m/a.ape', { container: "Monkey's Audio" })],
-      ['/m/b.flac', entry('/m/b.flac')]
-    ])
-    const found = [...known.values()].map(({ path, mtime, size }) => ({ path, mtime, size }))
-    expect(planReads(known, found, () => true, false)).toEqual([])
-    expect(planReads(known, found, () => true, false, readAgainWithProbe)).toEqual(['/m/a.ape'])
+  it('keeps MusicBrainz ids through a save and load', () => {
+    const ix = emptyIndex()
+    const id = 'f5093c06-23e3-404f-aeaa-40f72885ee3a'
+    ix.files.set('/m/a.mp3', entry('/m/a.mp3', { mbReleaseGroup: id, mbRelease: id }))
+    const back = parseIndex(JSON.parse(JSON.stringify(serializeIndex(ix))))
+    expect(back.files.get('/m/a.mp3')).toMatchObject({ mbReleaseGroup: id, mbRelease: id })
   })
 })

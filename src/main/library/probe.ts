@@ -111,7 +111,9 @@ export function probeToTags(json: unknown): RawTags | undefined {
       track: noOf(tags.get('track') ?? tags.get('tracknumber')),
       disk: noOf(tags.get('disc') ?? tags.get('discnumber')),
       date: tags.get('date') ?? tags.get('year'),
-      genre: genre ? [genre] : undefined
+      genre: genre ? [genre] : undefined,
+      musicbrainz_releasegroupid: tags.get('musicbrainzreleasegroupid'),
+      musicbrainz_albumid: tags.get('musicbrainzalbumid')
     },
     format: {
       duration: num(format.duration) ?? num(audio.duration),

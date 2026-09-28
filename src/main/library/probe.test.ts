@@ -24,6 +24,20 @@ const octoberRust = {
 }
 
 describe('probeToTags', () => {
+  it('reads MusicBrainz ids under their ffprobe names', () => {
+    const t = probeToTags({
+      streams: [{ codec_type: 'audio' }],
+      format: {
+        tags: {
+          MUSICBRAINZ_RELEASEGROUPID: 'f5093c06-23e3-404f-aeaa-40f72885ee3a',
+          'MusicBrainz Album Id': '0f0a7b1c-5f3e-4f59-9e4e-1f7b0d3c2a11'
+        }
+      }
+    })
+    expect(t?.common.musicbrainz_releasegroupid).toBe('f5093c06-23e3-404f-aeaa-40f72885ee3a')
+    expect(t?.common.musicbrainz_albumid).toBe('0f0a7b1c-5f3e-4f59-9e4e-1f7b0d3c2a11')
+  })
+
   it('reads the format of a file with no tags', () => {
     const t = probeToTags(octoberRust)!
     expect(t.format).toEqual({

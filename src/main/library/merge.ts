@@ -6,6 +6,7 @@ import type { CueSheet, CueTrack } from './cue'
 import {
   cueReaderVersion,
   indexVersion,
+  readerVersion,
   type CueEntry,
   type FileEntry,
   type FolderImage,
@@ -46,7 +47,9 @@ function parseEntry(v: unknown): FileEntry | undefined {
     'codec',
     'container',
     'cover',
-    'error'
+    'error',
+    'mbReleaseGroup',
+    'mbRelease'
   ] as const)
     if (str(v[k]) && v[k]) e[k] = v[k]
   for (const k of ['track', 'disc', 'year', 'sampleRate', 'channels', 'bits'] as const)
@@ -194,10 +197,10 @@ export function planReads(
   return out
 }
 
-// Entries the tag reader before ffprobe (reader 1) got wrong: files it could
-// not read, and old Monkey's Audio files it gave only a length.
-export function readAgainWithProbe(e: FileEntry): boolean {
-  return e.error !== undefined || (e.container === "Monkey's Audio" && !e.title)
+// Files an older tag reader read are read again once: reader 2 added ffprobe
+// for files music-metadata can't read, reader 3 the MusicBrainz ids.
+export function readAgain(reader: number): ((e: FileEntry) => boolean) | undefined {
+  return reader < readerVersion ? () => true : undefined
 }
 
 // The cue sheets a scan has to read: new and changed ones, ones an older cue

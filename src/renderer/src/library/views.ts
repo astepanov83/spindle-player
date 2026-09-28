@@ -97,3 +97,26 @@ export function chunk<T>(items: T[], size: number): T[][] {
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
   return out
 }
+
+// How many rows the view must move so the first row on screen stays in its
+// place when songs or albums come or go above it (a scan adds them, ticket 022).
+// `first`: the first row on screen; `per`: items in a row (1 in a table). At
+// the top it stays at the top, so new songs show. Items are matched by key.
+export function placeShift<T>(
+  old: T[],
+  next: T[],
+  first: number,
+  per: number,
+  key: (item: T) => string
+): number {
+  if (first <= 0) return 0
+  const at = new Map<string, number>()
+  next.forEach((x, i) => at.set(key(x), i))
+  // the first item on screen, or the next that is still there
+  const end = Math.min(old.length, (first + 20) * per)
+  for (let i = first * per; i < end; i++) {
+    const j = at.get(key(old[i]))
+    if (j !== undefined) return Math.floor(j / per) - Math.floor(i / per)
+  }
+  return 0
+}

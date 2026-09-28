@@ -6,6 +6,7 @@
   import Thumb from '../ui/Thumb.svelte'
   import { fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
+  import { keepPlace } from '../ui/keep-place.svelte'
   import { nextSort, sortRows, type Sort, type SortKey } from './views'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
@@ -48,6 +49,15 @@
   let list: HTMLDivElement | undefined = $state()
 
   const v = virtualList(() => ({ count: rows.length, scrollEl, list, size: ROW }), 10)
+  keepPlace(() => ({
+    scrollEl,
+    list,
+    items: rows,
+    per: 1,
+    rowSize: ROW,
+    key: (t: Track) => t.id,
+    source: library.revision
+  }))
 
   // playing from the table makes the sorted list the queue
   function play(i: number): void {

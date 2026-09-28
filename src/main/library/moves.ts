@@ -20,15 +20,17 @@ export function fileKey(s: { dev: bigint; ino: bigint }): string | undefined {
 // index has that were not found, inside the music folders and not under a
 // folder that could not be read (an unplugged drive keeps its songs; they
 // didn't move). Both are empty when either would be, so nothing is stat'ed.
+// `had`: whether the index had a path when the scan started; the scan reads
+// new files while the walk goes on, so the index may have them by now.
 export function movePlan(
   ix: LibraryIndex,
   found: { path: string; key?: string }[],
   folders: string[],
-  skipped: string[]
+  skipped: string[],
+  had: (path: string) => boolean = (p) => ix.files.has(p) || ix.cues.has(p)
 ): { added: Map<string, string>; gone: string[] } {
   const added = new Map<string, string>()
-  for (const f of found)
-    if (f.key && !ix.files.has(f.path) && !ix.cues.has(f.path)) added.set(f.path, f.key)
+  for (const f of found) if (f.key && !had(f.path)) added.set(f.path, f.key)
   if (!added.size) return { added, gone: [] }
   const present = new Set(found.map((f) => f.path))
   const gone = [...ix.files.keys(), ...ix.cues.keys()].filter(

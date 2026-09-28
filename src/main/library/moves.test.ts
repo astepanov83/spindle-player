@@ -106,6 +106,17 @@ describe('movePlan', () => {
     expect(plan.gone).toEqual([])
   })
 
+  it('counts a path read earlier in the same scan as new', () => {
+    // the scan read /m/real/a.flac while the walk went on, so the index has it
+    const ix = ixWith('/m/link/a.flac', '/m/real/a.flac')
+    const had = new Set(['/m/link/a.flac'])
+    const plan = movePlan(ix, [{ path: '/m/real/a.flac', key: '1:1' }], folders, [], (p) =>
+      had.has(p)
+    )
+    expect(plan.added).toEqual(new Map([['/m/real/a.flac', '1:1']]))
+    expect(plan.gone).toEqual(['/m/link/a.flac'])
+  })
+
   it('asks for no stat when nothing is gone', () => {
     const ix = ixWith('/m/a.flac')
     const plan = movePlan(

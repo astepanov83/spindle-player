@@ -115,6 +115,11 @@ export class LibraryService {
     }
   }
 
+  // The whole library as it is now, for a page that missed a patch.
+  library(): Promise<Uint8Array> {
+    return this.#client.library()
+  }
+
   // The library as it is now, for the page's first paint or a reload.
   async load(): Promise<{ library: Uint8Array; status: ScanStatus; moves: IdMoves }> {
     const library = await this.#client.library()

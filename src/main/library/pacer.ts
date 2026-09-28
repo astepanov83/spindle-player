@@ -69,6 +69,76 @@ export async function eachPaced<T>(
   await Promise.all(Array.from({ length: Math.min(pacer.full, items.length) }, runner))
 }
 
+// Runs jobs through a pacer as they are found, in the order they came. The
+// walk hands over each folder as it lists it, so stats and tag reads start
+// before the walk ends (ticket 022). The first error stops the lane: jobs not
+// started are dropped, and idle() rejects with it.
+export class Lane {
+  #jobs: (() => Promise<void>)[] = []
+  #next = 0
+  #running = 0
+  #failed = false
+  #error: unknown
+  #idle: (() => void)[] = []
+
+  constructor(readonly pacer: Pacer) {}
+
+  push(job: () => Promise<void>): void {
+    if (this.#failed) return
+    this.#jobs.push(job)
+    // a runner per job up to the pacer's count; the pacer still holds them to its limit
+    if (this.#running < this.pacer.full) void this.#run()
+  }
+
+  // Throws the error that stopped the lane, if any.
+  check(): void {
+    if (this.#failed) throw this.#error
+  }
+
+  // Stops taking jobs, as if one had thrown `error`.
+  stop(error: unknown): void {
+    if (this.#failed) return
+    this.#failed = true
+    this.#error = error
+    this.#jobs = []
+    this.#next = 0
+  }
+
+  // Resolves when every job pushed so far has ended (jobs they push too).
+  // Rejects once the lane stopped and its running jobs ended.
+  async idle(): Promise<void> {
+    while (this.#running > 0 || (!this.#failed && this.#next < this.#jobs.length))
+      await new Promise<void>((r) => this.#idle.push(r))
+    this.check()
+  }
+
+  async #run(): Promise<void> {
+    this.#running++
+    try {
+      while (!this.#failed && this.#next < this.#jobs.length) {
+        const job = this.#jobs[this.#next++]
+        // drop what ran, so 100k paths don't stay in memory
+        if (this.#next > 1024 && this.#next * 2 > this.#jobs.length) {
+          this.#jobs = this.#jobs.slice(this.#next)
+          this.#next = 0
+        }
+        try {
+          await this.pacer.run(job)
+        } catch (e) {
+          this.stop(e)
+        }
+      }
+    } finally {
+      this.#running--
+      if (!this.#running) {
+        const w = this.#idle
+        this.#idle = []
+        for (const f of w) f()
+      }
+    }
+  }
+}
+
 // Slow down while a song plays from a filesystem being scanned. `dev` is the
 // playing file's device (st_dev), unknown until main has opened it.
 export function scanSlow(

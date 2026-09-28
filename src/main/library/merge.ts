@@ -233,6 +233,38 @@ export function emptiedFolders(ix: LibraryIndex, folders: string[], paths: strin
   )
 }
 
+// Every folder that holds a file or cue sheet of the index, and the folders
+// above it. A folder not in it is new to the scan (see walk's isNew).
+export function knownDirs(ix: LibraryIndex): Set<string> {
+  const out = new Set<string>()
+  for (const map of [ix.files, ix.cues])
+    for (const path of map.keys()) {
+      let d = dirOf(path)
+      while (!out.has(d)) {
+        out.add(d)
+        const up = dirOf(d)
+        if (up === d) break
+        d = up
+      }
+    }
+  return out
+}
+
+// Drops what no music folder holds any more (a folder was removed), at the
+// start of a scan, so those songs leave the page at once and not only when
+// the scan ends. Returns true if anything went.
+export function dropOutside(ix: LibraryIndex, folders: string[]): boolean {
+  const inside = (path: string): boolean => folders.some((f) => isUnder(path, f))
+  let changed = false
+  for (const map of [ix.files, ix.cues, ix.images])
+    for (const key of map.keys())
+      if (!inside(key)) {
+        map.delete(key)
+        changed = true
+      }
+  return changed
+}
+
 // Applies what the walk found. Files under a folder that could not be read are
 // kept, so an unplugged drive doesn't empty the library. Returns true if anything changed.
 export function applyListing(

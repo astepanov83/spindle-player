@@ -1,6 +1,6 @@
 // The library store's mouse Back and Forward between a list and a page.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LibraryData } from '../../../shared/library'
+import type { LibraryData, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 
 let library: typeof import('./library.svelte').library
@@ -122,9 +122,9 @@ describe('Artists', () => {
   })
 
   it('counts loads, so a photo that failed to show tries again after a scan', () => {
-    const before = library.loads
+    const before = library.revision
     library.load(lib('a'))
-    expect(library.loads).toBe(before + 1)
+    expect(library.revision).toBe(before + 1)
   })
 
   it('Back goes from an album to its artist to the grid, and Forward back down', () => {
@@ -153,5 +153,85 @@ describe('Artists', () => {
     library.openArtist('y')
     library.load(lib('a'))
     expect(library.artist).toBeNull()
+  })
+})
+
+describe('patches while a scan runs', () => {
+  const song = (id: string, albumId: string): Track => ({
+    id,
+    title: id,
+    duration: 1,
+    albumId,
+    artist: 'X',
+    album: albumId,
+    no: 1,
+    disc: 1,
+    codec: '',
+    folder: 0
+  })
+
+  function start(): void {
+    const l = lib('a', 'b')
+    l.albums[0].trackIds = ['a1']
+    l.albums[1].trackIds = ['b1']
+    library.load({ ...l, tracks: [song('a1', 'a'), song('b1', 'b')], epoch: 'e', n: 0 })
+  }
+
+  it('adds songs and keeps the album list, the open album and the songs shown', () => {
+    start()
+    library.open = 'b'
+    const albums = library.albums
+    const a1 = library.track('a1')
+    const gone = library.patch({
+      patch: true,
+      epoch: 'e',
+      from: 0,
+      n: 1,
+      albums: [{ ...albums[1], trackIds: ['b1', 'b2'] }],
+      tracks: [song('b2', 'b')],
+      goneTracks: []
+    })
+    expect(gone).toBe(false)
+    expect(library.sent).toEqual({ epoch: 'e', n: 1 })
+    expect(library.open).toBe('b')
+    expect(library.albums[0]).toBe(albums[0])
+    expect(library.track('a1')).toBe(a1)
+    expect(library.album('b').trackIds).toEqual(['b1', 'b2'])
+    // library order follows the albums
+    expect(library.order(library.track('b2'))).toBe(2)
+  })
+
+  it('keeps the same album list when only songs changed', () => {
+    start()
+    const albums = library.albums
+    library.patch({
+      patch: true,
+      epoch: 'e',
+      from: 0,
+      n: 1,
+      albums: [],
+      tracks: [{ ...song('a1', 'a'), title: 'Renamed' }],
+      goneTracks: []
+    })
+    expect(library.albums).toBe(albums)
+    expect(library.track('a1').title).toBe('Renamed')
+  })
+
+  it('reports songs that left, and closes an album that is gone', () => {
+    start()
+    library.open = 'b'
+    const gone = library.patch({
+      patch: true,
+      epoch: 'e',
+      from: 0,
+      n: 1,
+      albums: [],
+      order: ['a'],
+      tracks: [],
+      goneTracks: ['b1']
+    })
+    expect(gone).toBe(true)
+    expect(library.open).toBeNull()
+    expect(library.has('b1')).toBe(false)
   })
 })

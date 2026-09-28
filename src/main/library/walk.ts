@@ -6,6 +6,7 @@ import {
   isArtFolder,
   isAudioFile,
   isCueFile,
+  isSurePick,
   pickArtImage,
   pickFolderImage,
   type FolderImagePick
@@ -22,6 +23,14 @@ export interface Listing {
   cues: string[]
   images: ListedImage[]
   skipped: string[]
+}
+
+// What one folder's listing found: its audio files and cue sheets, and the
+// folder images that are now final (see walk).
+export interface Found {
+  files: string[]
+  cues: string[]
+  images: ListedImage[]
 }
 
 interface Entry {
@@ -60,12 +69,19 @@ const byKey = (a: Dir, b: Dir): number => a.links - b.links || a.depth - b.depth
 // So the path must not depend on readdir order or on which answer came first:
 // the one that follows the fewest symlinks wins, then the least deep one, then
 // the one that sorts first. A folder reached one way keeps the path it has.
+// Each folder's files go to onFound as soon as it is listed, so the scan can
+// read them while the walk goes on (ticket 022): once listed, a folder's path
+// is final, since later rounds only reach it by a worse one. Folders `isNew`
+// says the index doesn't know are listed first in their round, so the songs
+// of a folder just added show before the rest is checked again. The order in
+// a round never changes which path wins: that is picked before any listing.
 export async function walk(
   roots: string[],
   pace: Pacer,
   check: () => void,
-  onDir: (files: number) => void = () => {},
-  fs: WalkFs = nodeFs
+  onFound: (found: Found) => void = () => {},
+  fs: WalkFs = nodeFs,
+  isNew: (dir: string) => boolean = () => false
 ): Promise<Listing> {
   const out: Listing = { files: [], cues: [], images: [], skipped: [] }
   const seenFiles = new Set<string>()
@@ -81,6 +97,23 @@ export async function walk(
     if (!old || pick.rank < old.rank || (pick.rank === old.rank && path < old.path))
       images.set(dir, { ...pick, dir, path })
   }
+  // A folder's image is handed over once nothing can beat it: a sure name at
+  // once, else after the next round, which lists its scans subfolder.
+  const handed = new Map<string, string>()
+  const hand = (dirs: Iterable<string>): ListedImage[] => {
+    const out: ListedImage[] = []
+    for (const dir of dirs) {
+      const im = images.get(dir)
+      if (im && handed.get(dir) !== im.path) {
+        handed.set(dir, im.path)
+        out.push({ dir, path: im.path })
+      }
+    }
+    return out
+  }
+  // folders listed in this round and in the one before, whose image may still change
+  let thisRound: string[] = []
+  let lastRound: string[] = []
   let pending: Dir[] = []
   await eachPaced(roots, pace, async (path) => {
     check()
@@ -101,7 +134,9 @@ export async function walk(
       seenDirs.add(d.real)
       return true
     })
-    await eachPaced(picked, pace, async (dir) => {
+    const news = picked.filter((d) => isNew(d.path))
+    const order = news.length ? [...news, ...picked.filter((d) => !isNew(d.path))] : picked
+    await eachPaced(order, pace, async (dir) => {
       check()
       let entries
       try {
@@ -111,6 +146,7 @@ export async function walk(
         return
       }
       const names: string[] = []
+      const found: Found = { files: [], cues: [], images: [] }
       let songs = false
       for (const d of entries) {
         if (d.name.startsWith('.')) continue
@@ -147,6 +183,7 @@ export async function walk(
             if (!seenFiles.has(path)) {
               seenFiles.add(path)
               ;(audio ? out.files : out.cues).push(path)
+              ;(audio ? found.files : found.cues).push(path)
             }
           }
         }
@@ -155,10 +192,22 @@ export async function walk(
       // "Covers" with songs in it is an album
       if (dir.depth > 0 && !songs && isArtFolder(name))
         offer(dirname(dir.path), dir.path, pickArtImage(names))
-      else offer(dir.path, dir.path, pickFolderImage(names, name))
-      onDir(out.files.length)
+      else {
+        offer(dir.path, dir.path, pickFolderImage(names, name))
+        const own = images.get(dir.path)
+        if (own && isSurePick(own)) found.images = hand([dir.path])
+        else thisRound.push(dir.path)
+      }
+      onFound(found)
     })
+    const later = hand(lastRound)
+    lastRound = thisRound
+    thisRound = []
+    if (later.length) onFound({ files: [], cues: [], images: later })
   }
+  // the rest, and any a later round beat (a scans folder reached by a symlink)
+  const rest = hand(images.keys())
+  if (rest.length) onFound({ files: [], cues: [], images: rest })
   out.images = [...images.values()]
     .map(({ dir, path }) => ({ dir, path }))
     .sort((a, b) => (a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0))

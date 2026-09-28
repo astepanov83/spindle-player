@@ -1,15 +1,23 @@
 // Library data plus view state. The view state lives here, not in the part,
 // so a layout rebuild keeps the open album, search, sort and section.
-// Main sends the data (from the index, then after each scan that changed something).
+// Main sends the data from the index at start, then what changed while scans
+// run (patches, see library-patch.ts).
 import { listArtists, type Artist } from '../../../shared/artists'
 import type {
   Album,
   Art,
   ArtistPhoto,
+  Folder,
   LibraryData,
   ScanStatus,
   Track
 } from '../../../shared/library'
+import {
+  applyPatch,
+  type LibraryMessage,
+  type LibraryPatch,
+  type LibraryVersion
+} from '../../../shared/library-patch'
 import {
   nextPlaylistSort,
   withPlaylistSort,
@@ -48,6 +56,8 @@ class LibraryStore {
   #tracks = new Map<string, Track>()
   #order = new Map<string, number>()
   #albumIndex = new Map<string, number>()
+  // the folder table main sent, which folderTree is built from
+  #folderTable: Folder[] = []
   folders: FolderTree = $state.raw(emptyTree())
   // name order (see shared/artists.ts)
   artists: Artist[] = $state.raw([])
@@ -97,28 +107,46 @@ class LibraryStore {
   artistSort: Sort | null = $state(null)
   // the page mouse Back last closed, for Forward to reopen
   #closed: { page: Page; id: string } | null = null
+  // which library main sent last, so a patch is only put on the one it was made from
+  sent: LibraryVersion | undefined
 
-  load(data: LibraryData): void {
+  load(data: LibraryData & Partial<LibraryVersion>): void {
     this.#tracks = new Map(data.tracks.map((t) => [t.id, t]))
-    this.#order = new Map(data.tracks.map((t, i) => [t.id, i]))
-    this.#albumIndex = new Map(data.albums.map((a, i) => [a.id, i]))
-    this.albums = data.albums
-    this.folders = folderTree(data.folders ?? [], data.tracks, (id) => {
-      const i = this.#albumIndex.get(id)
-      return i === undefined ? '' : data.albums[i].cover
-    })
-    this.artists = listArtists(data.albums, (id) => this.#tracks.get(id)!)
-    this.#artistIndex = new Map(this.artists.map((a, i) => [a.key, i]))
+    this.#folderTable = data.folders ?? []
     this.photos = data.artistPhotos ?? {}
+    this.#setAlbums(data.albums)
+    if (data.epoch !== undefined && data.n !== undefined)
+      this.sent = { epoch: data.epoch, n: data.n }
+  }
+
+  // Puts a patch on the library shown. Songs and albums that did not change
+  // keep their objects, and the album list stays the same list when no album
+  // changed, so the grid and tables don't redo more than they must. Throws
+  // when it doesn't fit (the caller asks for the whole library then). Returns
+  // whether songs left the library.
+  patch(p: LibraryPatch): boolean {
+    this.#setAlbums(applyPatch(this.albums, this.#tracks, p))
+    this.sent = { epoch: p.epoch, n: p.n }
+    return p.goneTracks.length > 0
+  }
+
+  #setAlbums(albums: Album[]): void {
+    // library order is album order, then each album's own
+    const ids = albums.flatMap((a) => a.trackIds)
+    this.#order = new Map(ids.map((id, i) => [id, i]))
+    this.#albumIndex = new Map(albums.map((a, i) => [a.id, i]))
+    if (albums !== this.albums) this.albums = albums
+    const tracks = ids.map((id) => this.#tracks.get(id)!)
+    this.folders = folderTree(this.#folderTable, tracks, (id) => {
+      const i = this.#albumIndex.get(id)
+      return i === undefined ? '' : albums[i].cover
+    })
+    this.artists = listArtists(albums, (id) => this.#tracks.get(id)!)
+    this.#artistIndex = new Map(this.artists.map((a, i) => [a.key, i]))
     this.#version++
     // the open album or artist may be gone after a rescan
     if (this.open && !this.#albumIndex.has(this.open)) this.open = null
     if (this.artist && !this.#artistIndex.has(this.artist)) this.artist = null
-  }
-
-  // counts loads, for a picture that failed to show to try again after one
-  get loads(): number {
-    return this.#version
   }
 
   playlistSort(id: string): Sort | null {
@@ -219,6 +247,13 @@ class LibraryStore {
     if (this.#closed?.id === id) this.#closed = null
   }
 
+  // Bumped by every library the page gets, whole or a patch. A picture that
+  // failed to show tries again after one, since a scan can make its small
+  // file again at the same URL.
+  get revision(): number {
+    return this.#version
+  }
+
   has(id: string): boolean {
     void this.#version
     return this.#tracks.has(id)
@@ -255,6 +290,6 @@ class LibraryStore {
 export const library = new LibraryStore()
 
 // Main sends the library as UTF-8 JSON bytes (see LibraryApi).
-export function decodeLibrary(bytes: Uint8Array): LibraryData {
-  return JSON.parse(new TextDecoder().decode(bytes)) as LibraryData
+export function decodeLibrary(bytes: Uint8Array): LibraryMessage {
+  return JSON.parse(new TextDecoder().decode(bytes)) as LibraryMessage
 }

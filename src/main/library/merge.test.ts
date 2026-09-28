@@ -3,6 +3,8 @@ import {
   applyBatch,
   applyCue,
   applyListing,
+  dropOutside,
+  knownDirs,
   emptiedFolders,
   emptyIndex,
   isUnder,
@@ -164,6 +166,28 @@ describe('emptiedFolders', () => {
     applyListing(ix, folders, { paths, images: [], skipped })
     // the gone file in a folder that still lists files does leave
     expect([...ix.files.keys()]).toEqual(['/mnt/usb/a.mp3', '/m/b.mp3'])
+  })
+})
+
+describe('knownDirs', () => {
+  it('has every folder that holds songs or cue sheets of the index, and the folders above', () => {
+    const ix = indexOf([entry('/m/A/x/01.mp3'), entry('/m/B/02.mp3')])
+    ix.cues.set('/n/C/c.cue', { path: '/n/C/c.cue', mtime: 1, size: 1 })
+    expect([...knownDirs(ix)].sort()).toEqual(['/', '/m', '/m/A', '/m/A/x', '/m/B', '/n', '/n/C'])
+  })
+})
+
+describe('dropOutside', () => {
+  it('drops files, cue sheets and images no music folder holds', () => {
+    const ix = indexOf([entry('/m/a.mp3'), entry('/old/c.mp3')])
+    ix.cues.set('/old/x.cue', { path: '/old/x.cue', mtime: 1, size: 1 })
+    ix.images.set('/old', { path: '/old/cover.jpg', mtime: 1, size: 1, cover: 'o' })
+    ix.images.set('/m', { path: '/m/cover.jpg', mtime: 1, size: 1, cover: 'm' })
+    expect(dropOutside(ix, ['/m'])).toBe(true)
+    expect([...ix.files.keys()]).toEqual(['/m/a.mp3'])
+    expect(ix.cues.size).toBe(0)
+    expect([...ix.images.keys()]).toEqual(['/m'])
+    expect(dropOutside(ix, ['/m'])).toBe(false)
   })
 })
 

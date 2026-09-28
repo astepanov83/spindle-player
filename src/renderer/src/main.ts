@@ -9,6 +9,7 @@ import './assets/text.css'
 
 import App from './App.svelte'
 import { decodeLibrary, library } from './stores/library.svelte'
+import { LibraryFeed } from './stores/library-feed'
 import { playlists } from './stores/playlists.svelte'
 import { queue } from './stores/queue.svelte'
 import { loadSettings } from './stores/settings.svelte'
@@ -16,6 +17,7 @@ import { orFallback } from './start'
 import { emptyQueue } from '../../shared/saved-queue'
 import { defaultSettings } from '../../shared/settings'
 import type { ScanStatus } from '../../shared/library'
+import type { LibraryMessage } from '../../shared/library-patch'
 import {
   mergeMoves,
   moveQueue,
@@ -69,7 +71,9 @@ queue.restore(startQueue)
 // A library that can't be read leaves the one shown as it is.
 function loadLibrary(bytes: Uint8Array): boolean {
   try {
-    library.load(decodeLibrary(bytes))
+    const m = decodeLibrary(bytes)
+    if ('patch' in m) throw new Error('a patch, not a whole library')
+    library.load(m)
   } catch (e) {
     console.error('Could not read the library', e)
     library.loadFailed = true
@@ -79,13 +83,39 @@ function loadLibrary(bytes: Uint8Array): boolean {
   return true
 }
 
-window.libraryApi.onChanged((bytes) => {
+// Ids that changed are renamed as the library with the new ones loads.
+function applyLibrary(m: LibraryMessage): void {
   if (moves) {
     queue.moveIds(moves)
     playlists.moveIds(moves)
     moves = undefined
   }
-  if (loadLibrary(bytes)) queue.prune()
+  const gone = 'patch' in m ? library.patch(m) : (library.load(m), true)
+  library.loadFailed = false
+  if (gone) queue.prune()
+}
+
+// While a scan runs, main sends what changed (ticket 022).
+const feed = new LibraryFeed({
+  have: () => library.sent,
+  apply: applyLibrary,
+  fetch: async () => decodeLibrary(await window.libraryApi.get()),
+  fail: (e) => {
+    console.error('Could not get the library', e)
+    library.loadFailed = true
+  }
+})
+
+window.libraryApi.onChanged((bytes) => {
+  let m: LibraryMessage
+  try {
+    m = decodeLibrary(bytes)
+  } catch (e) {
+    console.error('Could not read the library', e)
+    library.loadFailed = true
+    return
+  }
+  feed.take(m)
 })
 window.libraryApi.onStatus((s) => (library.status = s))
 

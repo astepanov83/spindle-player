@@ -10,7 +10,7 @@
   // a photo the cache lost shows the covers, not a broken image. Only until
   // the next load: a scan can make its small file again at the same URL.
   let failed = $state({ url: '', load: -1 })
-  const broken = $derived(failed.url === photo && failed.load === library.loads)
+  const broken = $derived(failed.url === photo && failed.load === library.revision)
 </script>
 
 <span class="pic">
@@ -21,7 +21,7 @@
       loading="lazy"
       decoding="async"
       draggable="false"
-      onerror={() => (failed = { url: photo ?? '', load: library.loads })}
+      onerror={() => (failed = { url: photo ?? '', load: library.revision })}
     />
   {:else if covers.length >= 4}
     <span class="four">

@@ -19,7 +19,8 @@ export function libraryProblem(s: ScanStatus, pageFailed: boolean): string | und
 }
 
 export function scanLine(s: ScanStatus): string {
-  if (s.phase === 'walk') return `Looking for files: ${n(s.done)} found`
+  if (s.phase === 'walk')
+    return `Looking for files: ${n(s.done)} found` + (s.read ? `, ${n(s.read)} read` : '')
   if (s.phase === 'read') return `Reading tags: ${n(s.done)} of ${n(s.total)}`
   if (!s.folders.length) return 'No music folders yet.'
   const parts = [`${plural(s.tracks, 'song', 'songs')} in ${plural(s.albums, 'album', 'albums')}`]

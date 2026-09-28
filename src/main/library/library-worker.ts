@@ -3,14 +3,14 @@
 // the page's library as ready JSON bytes. Main only forwards, so a 50k library
 // never blocks it. Its own process means its own libuv pool: slow NAS reads here
 // can't hold up main's audio requests and saves.
-import { hash } from 'crypto'
+import { hash, randomBytes } from 'crypto'
 import { readdir, readFile, rm, stat } from 'fs/promises'
 import { basename, dirname, join } from 'path'
 import type { ScanStatus } from '../../shared/library'
 import type { CoverSource } from '../../shared/settings'
 import { JsonFileWriter, readJsonFile } from '../json-file'
 import { buildLibrary, type BuiltLibrary } from './group'
-import { eachPaced, Pacer, scanSlow } from './pacer'
+import { eachPaced, Lane, Pacer, scanSlow } from './pacer'
 import { decodeCue, parseCue } from './cue'
 import { probeTags } from './probe'
 import { readTags } from './read-tags'
@@ -19,9 +19,11 @@ import {
   applyCue,
   applyListing,
   dirOf,
+  dropOutside,
   emptiedFolders,
   emptyIndex,
   isUnder,
+  knownDirs,
   missingPalettes,
   parseIndex,
   planCueReads,
@@ -32,16 +34,18 @@ import {
   usedCovers
 } from './merge'
 import { extOf, frontCover, normalizeTags } from './tags'
-import { walk, type ListedImage } from './walk'
+import { walk, type Found as Listed, type ListedImage } from './walk'
 import { pruneCoverFiles, removeOldTemp } from './cover-prune'
 import { ownCopy } from './bytes'
-import { FirstFill, ScanChain, Stopped } from './scan-chain'
+import { ScanChain, Stopped } from './scan-chain'
 import { confirmMoves, fileKey, findMoves, idMoves, moveEntries, movePlan } from './moves'
 import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
 import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from './cover-names'
-import { CoverFetcher, publishGapMs } from './cover-fetch'
+import { CoverFetcher } from './cover-fetch'
+import { PublishTimer } from './publish'
+import { diffLibrary, type LibraryMessage } from '../../shared/library-patch'
 import { CoverHttp, defaultLimits, NetError } from './cover-http'
 import {
   dropGone,
@@ -101,8 +105,8 @@ async function devicesOf(folders: string[]): Promise<Set<number>> {
 
 // Pictures sent to main and not yet written, so a big first scan doesn't pile them up.
 const coversAtOnce = 16
-// While the first scan of an empty library runs, the page gets what is found this often.
-const interimMs = 15000
+// While a scan runs, what was read so far is saved this often, so a quit or crash keeps it.
+const saveMs = 15000
 
 function post(msg: WorkerOut): void {
   port.postMessage(msg)
@@ -140,19 +144,13 @@ function setStatus(change: Partial<ScanStatus>): void {
 }
 
 let lastProgress = 0
-function progress(
-  gen: number,
-  phase: 'walk' | 'read',
-  done: number,
-  total: number,
-  force = false
-): void {
+function progress(gen: number, change: Partial<ScanStatus>, force = false): void {
   // a stopped scan may still have a listing or read on its way
   if (chain.stale(gen)) return
   const now = Date.now()
   if (!force && now - lastProgress < 100) return
   lastProgress = now
-  setStatus({ phase, done, total })
+  setStatus(change)
 }
 
 // the index changed since it was last handed to the writer
@@ -165,6 +163,7 @@ function markChanged(): void {
   ixEdits++
   dirty = true
   unsaved = true
+  publisher.soon()
 }
 
 // --- covers found online (ticket 014) ---
@@ -185,16 +184,6 @@ let fetchSetting: { on: boolean; sources: Record<CoverSource, boolean> } | undef
 function saveFetched(): void {
   fetchedEdits++
   fetchedWriter?.schedule(serializeFetched(fetched, photos))
-}
-
-// A found cover shows at most this often while the lookup runs, so the page
-// isn't sent the whole library for every album.
-let fetchPublish: ReturnType<typeof setTimeout> | undefined
-function publishSoon(): void {
-  fetchPublish ??= setTimeout(() => {
-    fetchPublish = undefined
-    publish()
-  }, publishGapMs(built.data.tracks.length))
 }
 
 const abortableSleep = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -250,7 +239,7 @@ async function startFetcher(s: WorkerStart): Promise<void> {
     photos,
     changed: (found) => {
       saveFetched()
-      if (found) publishSoon()
+      if (found) publisher.soon()
     },
     status: (f) => {
       if (fetchSetting?.on) setStatus({ fetch: f })
@@ -273,15 +262,47 @@ function build(): void {
   fetcher?.setQueries(built.queries, built.artists)
 }
 
+// New each time this process starts, so the page can tell a patch made here
+// from one of a process before it (see library-patch.ts).
+const epoch = randomBytes(6).toString('hex')
+// libraries sent to the page so far; built.data is the last one
+let libraries = 0
+
+const encode = (m: LibraryMessage): Uint8Array => new TextEncoder().encode(JSON.stringify(m))
+
+// The whole library, for a page load or a page that missed a patch.
 function encodeLibrary(): Uint8Array {
-  return new TextEncoder().encode(JSON.stringify(built.data))
+  return encode({ epoch, n: libraries, ...built.data })
 }
 
-// Groups albums and sends them to the page as JSON bytes.
+// Groups albums and sends the page what changed since the last library it got.
 function publish(): void {
+  const old = built.data
   build()
-  post({ type: 'library', bytes: encodeLibrary() })
+  const d = diffLibrary(old, built.data)
+  if (!d) return
+  post({
+    type: 'library',
+    bytes: encode({ patch: true, epoch, from: libraries, n: libraries + 1, ...d })
+  })
+  libraries++
+  firstSent ??= Math.round(performance.now() - scanStart)
 }
+
+// when the running scan started, and when it first sent songs, for the log
+let scanStart = 0
+let firstSent: number | undefined
+
+// The page gets changes a few seconds apart at most (see publish.ts).
+const publisher = new PublishTimer({
+  publish,
+  tracks: () => built.data.tracks.length,
+  now: () => performance.now(),
+  setTimer: (f, ms) => {
+    const t = setTimeout(f, ms)
+    return () => clearTimeout(t)
+  }
+})
 
 // One line, since the index can be tens of MB. The writer keeps one write at a
 // time and drops a write that a newer one replaced; flushSync is for quitting.
@@ -530,7 +551,7 @@ async function readImage(
 }
 
 // A file or cue sheet the scan found, and its key on disk (see moves.ts).
-interface Found {
+interface Seen {
   path: string
   mtime: number
   size: number
@@ -549,9 +570,10 @@ async function followMoves(
   gen: number,
   folders: string[],
   skipped: string[],
-  found: Found[]
+  found: Seen[],
+  had: Set<string>
 ): Promise<void> {
-  const { added, gone } = movePlan(ix, found, folders, skipped)
+  const { added, gone } = movePlan(ix, found, folders, skipped, (p) => had.has(p))
   if (!added.size || !gone.length) return
   // the old path still reaches the file (a symlink); a deleted file has none
   const goneKeys = new Map<string, string>()
@@ -580,9 +602,14 @@ async function followMoves(
   saveIndex()
   writer?.flushSync()
   post({ type: 'ids-moved', moves: ix.pendingMoves })
-  publish()
+  publisher.now()
 }
 
+// The walk hands over each folder as it lists it, and its files are stat'ed
+// and read at once (ticket 022), so the first songs show a few seconds in,
+// not after a walk of the whole tree. New and changed songs reach the page as
+// they are read (publish.ts); songs whose files are gone leave only at the end,
+// so a partial scan never hides any.
 async function scan(
   folders: string[],
   retryFailed: boolean,
@@ -590,104 +617,191 @@ async function scan(
   id: number
 ): Promise<void> {
   const t0 = performance.now()
-  // ms spent listing, getting sizes, and reading, for the log
-  const took: number[] = []
-  const lap = (): void =>
-    void took.push(Math.round(performance.now() - t0 - took.reduce((a, b) => a + b, 0)))
-  firstFill.start(built.data.tracks.length === 0)
-  // While scanning: save what was read so far, so a quit or crash keeps it.
-  // A first scan also shows it, so an empty library fills in as it goes.
-  const interim = setInterval(() => {
-    if (firstFill.on && dirty) publish()
-    saveIndex()
-  }, interimMs)
+  scanStart = t0
+  firstSent = undefined
+  // when the walk, the stats and the reads ended, for the log
+  const ends: number[] = []
+  const lap = (): void => void ends.push(Math.round(performance.now() - t0))
+  const saving = setInterval(saveIndex, saveMs)
   let failed = false
+  // files listed, files to read, and files read
+  let listed = 0
+  let planned = 0
   let read = 0
+  let walking = true
+  const statLane = new Lane(statPace)
+  const readLane = new Lane(readPace)
+  const lanes = [statLane, readLane]
+  // a stopped scan, or a job that failed, stops the walk and the other lane
+  const check = (): void => {
+    checkGen(gen)
+    for (const l of lanes) l.check()
+  }
+  const show = (force = false): void =>
+    progress(
+      gen,
+      walking
+        ? { phase: 'walk', done: listed, total: 0, read }
+        : { phase: 'read', done: read, total: planned, read: undefined },
+      force
+    )
   // the online lookup waits for the scan and its prune (see the chain below)
   fetcher?.hold()
   try {
     retryBad = retryFailed
-    setStatus({ folders, phase: 'walk', done: 0, total: 0, missing: [], scanFailed: false })
+    setStatus({
+      folders,
+      phase: 'walk',
+      done: 0,
+      total: 0,
+      read: 0,
+      missing: [],
+      scanFailed: false
+    })
+    // a folder taken off the list: its songs go at once
+    if (dropOutside(ix, folders)) markChanged()
     scannedDevs = await devicesOf(folders)
     setPace()
+
+    // what the index had before this scan read anything, to find moves and new folders
+    const had = new Set([...ix.files.keys(), ...ix.cues.keys()])
+    const oldDirs = knownDirs(ix)
+    // files an older tag reader read are read once more (readTags falls back to ffprobe)
+    const oldReader = ix.reader < readerVersion
+    const again = readAgain(ix.reader)
+    const toRead = (f: Seen): boolean =>
+      planReads(ix.files, [f], known, retryFailed, again).length > 0
+    const files: Seen[] = []
+    const cues: Seen[] = []
+    const images = new Map<string, FolderImage>()
+
+    const statOf = async (path: string): Promise<Seen | undefined> => {
+      check()
+      let s
+      try {
+        s = await stat(path, { bigint: true })
+      } catch {
+        // gone since the walk
+        return undefined
+      }
+      check()
+      // whole ms, as the index keeps them
+      return { path, mtime: Number(s.mtimeMs), size: Number(s.size), key: fileKey(s) }
+    }
+
+    const readOne = async (f: Seen): Promise<void> => {
+      check()
+      // moved here from its old path meanwhile (followMoves): it keeps what was read
+      if (toRead(f)) {
+        const entry = await readFileEntry(f.path, f.mtime, f.size, gen)
+        check()
+        if (applyBatch(ix, [entry])) markChanged()
+      }
+      read++
+      show()
+    }
+
+    const statFile = async (path: string): Promise<void> => {
+      const f = await statOf(path)
+      if (!f) return
+      files.push(f)
+      if (toRead(f)) {
+        planned++
+        readLane.push(() => readOne(f))
+      }
+    }
+
+    // A file the index doesn't have is read anyway, so it skips the stats of
+    // known files (50k of them on a Rescan): a folder just added shows at once.
+    const newFile = async (path: string): Promise<void> => {
+      const f = await statOf(path)
+      if (!f) {
+        planned--
+        return
+      }
+      files.push(f)
+      await readOne(f)
+    }
+
+    const takeFile = (path: string): void => {
+      if (had.has(path)) statLane.push(() => statFile(path))
+      else {
+        planned++
+        readLane.push(() => newFile(path))
+      }
+    }
+
+    // A folder's cue sheets are read before its files, so a disc image shows
+    // as its tracks from the start, not as one song first.
+    const cueFolder = async (found: Listed): Promise<void> => {
+      for (const path of found.cues) {
+        const c = await statOf(path)
+        if (!c) continue
+        cues.push(c)
+        if (!planCueReads(ix.cues, [c], retryFailed).length) continue
+        const entry = await readPace.run(() => readCue(c))
+        check()
+        if (applyCue(ix, entry)) markChanged()
+      }
+      for (const path of found.files) takeFile(path)
+    }
+
+    const readFolderImage = async (listed: ListedImage): Promise<void> => {
+      check()
+      const im = await readImage(listed, ix.images.get(listed.dir), gen)
+      check()
+      if (!im) return
+      images.set(listed.dir, im)
+      const old = ix.images.get(listed.dir)
+      ix.images.set(listed.dir, im)
+      // a new time alone changes only the file, not what the page shows
+      if (old?.path !== im.path || old.cover !== im.cover) markChanged()
+      else if (old !== im) unsaved = true
+    }
+
     const listing = await walk(
       folders,
       dirPace,
-      () => checkGen(gen),
-      (files) => progress(gen, 'walk', files, 0)
+      check,
+      (found) => {
+        listed += found.files.length
+        for (const im of found.images) readLane.push(() => readFolderImage(im))
+        if (found.cues.length) statLane.push(() => cueFolder(found))
+        else for (const path of found.files) takeFile(path)
+        show()
+      },
+      undefined,
+      (dir) => !oldDirs.has(dir)
     )
     lap()
-    progress(gen, 'walk', listing.files.length, 0, true)
-
-    const found: Found[] = []
-    const cues: Found[] = []
-    const cueSet = new Set(listing.cues)
-    await eachPaced([...listing.files, ...listing.cues], statPace, async (path) => {
-      checkGen(gen)
-      try {
-        const s = await stat(path, { bigint: true })
-        ;(cueSet.has(path) ? cues : found).push({
-          path,
-          // whole ms, as the index keeps them
-          mtime: Number(s.mtimeMs),
-          size: Number(s.size),
-          key: fileKey(s)
-        })
-      } catch {
-        // gone since the walk
-      }
-    })
-
-    const images: FolderImage[] = []
-    await eachPaced(listing.images, readPace, async (found) => {
-      checkGen(gen)
-      const im = await readImage(found, ix.images.get(found.dir), gen)
-      if (im) images.push(im)
-    })
-
+    await statLane.idle()
     lap()
-    checkGen(gen)
+    check()
+    walking = false
+    show(true)
+
     const skipped = [...listing.skipped, ...emptiedFolders(ix, folders, listing.files)]
-    await followMoves(gen, folders, skipped, [...found, ...cues])
-    // files an older tag reader read are read once more (readTags falls back to ffprobe)
-    const oldReader = ix.reader < readerVersion
-    const toRead = planReads(ix.files, found, known, retryFailed, readAgain(ix.reader))
-    const cuesToRead = planCueReads(ix.cues, cues, retryFailed)
-    if (
-      applyListing(ix, folders, {
-        paths: found.map((f) => f.path),
-        cues: cues.map((c) => c.path),
-        images,
-        skipped
-      })
-    )
-      markChanged()
     setStatus({ missing: folders.filter((f) => skipped.some((s) => isUnder(f, s))) })
-
-    await eachPaced(cuesToRead, readPace, async (f) => {
-      checkGen(gen)
-      const c = await readCue(f)
-      checkGen(gen)
-      if (applyCue(ix, c)) markChanged()
-    })
-
-    const byPath = new Map(found.map((f) => [f.path, f]))
-    progress(gen, 'read', 0, toRead.length, true)
-    await eachPaced(toRead, readPace, async (path) => {
-      checkGen(gen)
-      const f = byPath.get(path)!
-      const entry = await readFileEntry(path, f.mtime, f.size, gen)
-      checkGen(gen)
-      if (applyBatch(ix, [entry])) markChanged()
-      read++
-      progress(gen, 'read', read, toRead.length)
-    })
-    progress(gen, 'read', read, toRead.length, true)
+    await followMoves(gen, folders, skipped, [...files, ...cues], had)
+    await readLane.idle()
+    check()
+    show(true)
+    lap()
     if (oldReader) {
       ix.reader = readerVersion
       unsaved = true
     }
-    lap()
+    // Only now that every file was seen: songs whose files are gone leave,
+    // and folder images the walk no longer found
+    if (
+      applyListing(ix, folders, {
+        paths: files.map((f) => f.path),
+        cues: cues.map((c) => c.path),
+        images: [...images.values()],
+        skipped
+      })
+    )
+      markChanged()
     await fillPalettes(gen)
     await refillFetched(gen)
     // wait until main has every picture, so the covers are there for the albums
@@ -696,6 +810,10 @@ async function scan(
       checkGen(gen)
     }
   } catch (error) {
+    // Jobs still running end before the scan does, so none of them touches
+    // the index after the next scan started.
+    for (const l of lanes) l.stop(error)
+    await Promise.allSettled(lanes.map((l) => l.idle()))
     // a stopped scan keeps what it read; the next one carries on from there
     if (error instanceof Stopped) {
       saveIndex()
@@ -704,10 +822,9 @@ async function scan(
     log(`Library scan failed: ${error}`)
     failed = true
   } finally {
-    clearInterval(interim)
+    clearInterval(saving)
   }
-  firstFill.end()
-  if (dirty) publish()
+  if (dirty) publisher.now()
   saveIndex()
   // results of albums and artists that are gone; a failed scan may have missed some
   if (!failed) {
@@ -715,9 +832,18 @@ async function scan(
     const artists = dropGone(photos, new Set(built.artists.map((a) => a.id)))
     if (albums || artists) saveFetched()
   }
-  setStatus({ phase: 'idle', done: 0, total: 0, scanFailed: failed })
+  setStatus({ phase: 'idle', done: 0, total: 0, read: undefined, scanFailed: failed })
   post({ type: 'scanned', id })
-  log(scanLogLine(Math.round(performance.now() - t0), took, read, status.tracks, status.albums))
+  log(
+    scanLogLine(
+      Math.round(performance.now() - t0),
+      ends,
+      read,
+      status.tracks,
+      status.albums,
+      firstSent
+    )
+  )
 }
 
 // --- lookups for the protocol ---
@@ -892,4 +1018,3 @@ const chain = new ScanChain(ready, {
   stopped: () => setStatus({ phase: 'idle', done: 0, total: 0 }),
   log
 })
-const firstFill = new FirstFill()

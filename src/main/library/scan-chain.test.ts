@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FirstFill, ScanChain, Stopped } from './scan-chain'
+import { ScanChain, Stopped } from './scan-chain'
 
 // A promise with its resolve at hand.
 function later<T = void>(): { p: Promise<T>; done: (v: T) => void } {
@@ -229,29 +229,5 @@ describe('ScanChain', () => {
     chain.stop()
     expect(() => chain.check(0)).toThrow(Stopped)
     expect(() => chain.check(chain.gen)).not.toThrow()
-  })
-})
-
-describe('FirstFill', () => {
-  it('is on while the page has no songs, until a scan ends', () => {
-    const f = new FirstFill()
-    f.start(true)
-    expect(f.on).toBe(true)
-    f.end()
-    expect(f.on).toBe(false)
-  })
-
-  it('stays on for the next scan when the first one was stopped', () => {
-    const f = new FirstFill()
-    f.start(true)
-    // stopped by Add folder after an interim update gave the page some songs
-    f.start(false)
-    expect(f.on).toBe(true)
-  })
-
-  it('is off for a library the page already shows', () => {
-    const f = new FirstFill()
-    f.start(false)
-    expect(f.on).toBe(false)
   })
 })

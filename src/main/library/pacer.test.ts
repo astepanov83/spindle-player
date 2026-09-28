@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { eachPaced, Pacer, scanSlow } from './pacer'
+import { eachPaced, Lane, Pacer, scanSlow } from './pacer'
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
 
@@ -99,6 +99,86 @@ describe('eachPaced', () => {
       seen.push(n)
     })
     expect(seen.sort()).toEqual([1, 2, 3, 4, 5])
+  })
+})
+
+describe('Lane', () => {
+  it("runs jobs as they come, in order, up to the pacer's count at once", async () => {
+    const lane = new Lane(new Pacer(2, 1, false))
+    const j = jobs()
+    const started: number[] = []
+    for (let i = 0; i < 3; i++)
+      lane.push(() => {
+        started.push(i)
+        return j.job()
+      })
+    await tick()
+    expect(started).toEqual([0, 1])
+    j.finishOne()
+    await tick()
+    await tick()
+    expect(started).toEqual([0, 1, 2])
+    // a job pushed later still runs
+    lane.push(() => {
+      started.push(3)
+      return j.job()
+    })
+    j.finishOne()
+    await tick()
+    await tick()
+    expect(started).toEqual([0, 1, 2, 3])
+  })
+
+  it('is idle once every job pushed so far ended, also ones pushed by a job', async () => {
+    const lane = new Lane(new Pacer(2, 1, false))
+    const seen: number[] = []
+    lane.push(async () => {
+      await tick()
+      seen.push(1)
+      lane.push(async () => {
+        await tick()
+        seen.push(2)
+      })
+    })
+    await lane.idle()
+    expect(seen).toEqual([1, 2])
+    // idle at once with nothing to do
+    await lane.idle()
+  })
+
+  it('stops at the first error: the rest is dropped and idle rejects with it', async () => {
+    const lane = new Lane(new Pacer(1, 1, false))
+    const seen: number[] = []
+    lane.push(async () => {
+      throw new Error('bad')
+    })
+    lane.push(async () => void seen.push(2))
+    await expect(lane.idle()).rejects.toThrow('bad')
+    expect(seen).toEqual([])
+    expect(() => lane.check()).toThrow('bad')
+    lane.push(async () => void seen.push(3))
+    await expect(lane.idle()).rejects.toThrow('bad')
+    expect(seen).toEqual([])
+  })
+
+  it('can be stopped from outside; jobs already running end first', async () => {
+    const lane = new Lane(new Pacer(2, 1, false))
+    const j = jobs()
+    lane.push(j.job)
+    lane.push(j.job)
+    lane.push(j.job)
+    await tick()
+    lane.stop(new Error('stopped'))
+    let settled = false
+    void lane.idle().catch(() => (settled = true))
+    await tick()
+    expect(settled).toBe(false)
+    j.finishOne()
+    j.finishOne()
+    await tick()
+    await tick()
+    expect(settled).toBe(true)
+    expect(j.running()).toBe(0)
   })
 })
 

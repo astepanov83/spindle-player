@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CoverFetcher, publishGapMs, type FetcherDeps } from './cover-fetch'
+import { CoverFetcher, type FetcherDeps } from './cover-fetch'
 import { BusyError, NetError } from './cover-http'
 import { cleanArtist, searchKey, type CoverQuery } from './cover-match'
 import type { ArtistQuery } from './artist-photo'
@@ -563,15 +563,5 @@ describe('artist photos', () => {
     f.setOptions(true, all)
     expect(photos.has('queen')).toBe(false)
     expect(d.changed).toHaveBeenCalledWith(false)
-  })
-})
-
-describe('publishGapMs', () => {
-  it('shows found covers every 2s in a small library, and less often in a big one', () => {
-    expect(publishGapMs(300)).toBe(2000)
-    expect(publishGapMs(8000)).toBe(2000)
-    expect(publishGapMs(20000)).toBe(5000)
-    expect(publishGapMs(40000)).toBe(10000)
-    expect(publishGapMs(200000)).toBe(10000)
   })
 })

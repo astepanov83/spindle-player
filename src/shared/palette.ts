@@ -387,12 +387,19 @@ export function palettesFromHue(h: number, c = 0.11): ThemePalettes {
   ])
 }
 
+// Made once per hue: picking one costs about 0.3ms, and the library is grouped
+// again every few seconds while a scan runs (thousands of albums with no cover).
+const byHue = new Map<number, ThemePalettes>()
+
 // Albums with no cover: a palette from their id, so each keeps the same colors
 // and they don't all look the same grey.
 export function fallbackPalettes(seed: string): ThemePalettes {
   let h = 2166136261
   for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619)
-  return palettesFromHue((h >>> 0) % 360)
+  const hue = (h >>> 0) % 360
+  let p = byHue.get(hue)
+  if (!p) byHue.set(hue, (p = palettesFromHue(hue)))
+  return { dark: [...p.dark], light: [...p.light] }
 }
 
 // Until something plays: the neutral set from before 009, with a darker accent for light.

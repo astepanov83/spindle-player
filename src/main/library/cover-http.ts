@@ -20,6 +20,8 @@ export interface HttpDeps {
 
 const maxImage = 10 * 1024 * 1024
 const maxJson = 2 * 1024 * 1024
+// Cover Art Archive sends a picture on to archive.org in one or two hops
+const maxRedirects = 3
 
 export function defaultLimits(): Record<Limiter, RateLimit> {
   return {
@@ -83,7 +85,13 @@ export class CoverHttp {
 
   // The answer, undefined for a 4xx (not there), or throws NetError or BusyError.
   // A stop (the setting turned off, a scan) throws the abort as it is.
-  async #get(url: string, limiter: Limiter, signal: AbortSignal): Promise<Response | undefined> {
+  // manual: a redirect comes back as it is, for the caller to check
+  async #get(
+    url: string,
+    limiter: Limiter,
+    signal: AbortSignal,
+    redirect: RequestRedirect = 'follow'
+  ): Promise<Response | undefined> {
     const limit = this.d.limits[limiter]
     await this.d.sleep(limit.take(), signal)
     signal.throwIfAborted()
@@ -91,6 +99,7 @@ export class CoverHttp {
     try {
       res = await this.d.fetch(url, {
         headers: { 'User-Agent': this.d.userAgent },
+        redirect,
         signal: AbortSignal.any([signal, AbortSignal.timeout(this.d.timeoutMs ?? 15000)])
       })
     } catch (e) {
@@ -103,6 +112,7 @@ export class CoverHttp {
     }
     if (res.status >= 500) throw new NetError(`${limiter}: ${res.status}`)
     limit.ok()
+    if (redirect === 'manual' && res.status >= 300 && res.status < 400) return res
     return res.ok ? res : undefined
   }
 
@@ -130,9 +140,17 @@ export class CoverHttp {
   }
 
   async image(url: string, limiter: Limiter, signal: AbortSignal): Promise<Uint8Array | undefined> {
-    if (!allowedImageHost(url)) return undefined
-    const res = await this.#get(url, limiter, signal)
-    // a redirect may lead anywhere; only the services' own hosts count
+    // Redirects are followed by hand: one may lead anywhere, and a host
+    // that is not the services' own is never asked.
+    let res: Response | undefined
+    for (let hop = 0; ; hop++) {
+      if (!allowedImageHost(url)) return undefined
+      res = await this.#get(url, limiter, signal, 'manual')
+      const to = res?.status && res.status >= 300 && res.status < 400 && res.headers.get('location')
+      if (!to) break
+      if (hop === maxRedirects) return undefined
+      url = new URL(to, url).href
+    }
     if (!res || !allowedImageHost(res.url || url)) return undefined
     const bytes = await this.#body(res, maxImage, limiter)
     return bytes && isImage(bytes) ? bytes : undefined

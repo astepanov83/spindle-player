@@ -97,6 +97,38 @@ describe('CoverHttp.image', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
+  it('follows a redirect only to the services own hosts, and only a few times', async () => {
+    const hop = (to: string): Response => {
+      const r = new Response(null, { status: 302, headers: { location: to } })
+      return r
+    }
+    const asked: string[] = []
+    const to =
+      (next: (u: string) => Response): FetchLike =>
+      async (u) => {
+        asked.push(u)
+        return next(u)
+      }
+    const archive = 'https://ia800.us.archive.org/1/items/x/y.jpg'
+    const good = to((u) => (u === caa ? hop(archive) : answer(jpeg, 200, archive)))
+    expect(await http(good).h.image(caa, 'caa', signal)).toEqual(jpeg)
+    asked.length = 0
+    const evil = to(() => hop('http://evil.example/y.jpg'))
+    expect(await http(evil).h.image(caa, 'caa', signal)).toBeUndefined()
+    // the bad host was never asked
+    expect(asked).toEqual([caa])
+    asked.length = 0
+    const loop = to(() => hop(caa))
+    expect(await http(loop).h.image(caa, 'caa', signal)).toBeUndefined()
+    expect(asked.length).toBeLessThanOrEqual(4)
+  })
+
+  it('asks for pictures with redirects handled by hand', async () => {
+    const fetch = vi.fn<FetchLike>(async () => answer(jpeg))
+    await http(fetch).h.image(caa, 'caa', signal)
+    expect(fetch.mock.calls[0][1].redirect).toBe('manual')
+  })
+
   it('drops what is not JPEG or PNG', async () => {
     expect(await http(async () => answer('GIF89a...')).h.image(caa, 'caa', signal)).toBeUndefined()
   })

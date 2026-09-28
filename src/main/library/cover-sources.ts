@@ -62,6 +62,8 @@ function deezer(json: Record<string, unknown>): Candidate[] {
     const artist = isObject(d.artist) ? str(d.artist.name) : undefined
     const image = str(d.cover_xl)
     if (!album || !artist || !image) return []
+    // an album with no art gets an empty placeholder picture
+    if (d.md5_image === '' || image.includes('/cover//')) return []
     return [{ album, artist, image, tracks: num(d.nb_tracks), kind: kindOf(d.record_type) }]
   })
 }

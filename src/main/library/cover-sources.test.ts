@@ -123,6 +123,26 @@ describe('parseAnswer', () => {
     expect(parseAnswer('deezer', deezerEp)[0].kind).toBe('ep')
   })
 
+  it('skips a Deezer album whose cover is the empty placeholder', () => {
+    const blank = {
+      data: [
+        {
+          title: 'X',
+          artist: { name: 'Y' },
+          md5_image: '',
+          cover_xl: 'https://cdn-images.dzcdn.net/images/cover//1000x1000-000000-80-0-0.jpg'
+        },
+        {
+          title: 'X',
+          artist: { name: 'Y' },
+          md5_image: 'ab',
+          cover_xl: 'https://cdn-images.dzcdn.net/images/cover//1000x1000.jpg'
+        }
+      ]
+    }
+    expect(parseAnswer('deezer', blank)).toEqual([])
+  })
+
   it('gives nothing for answers of the wrong shape', () => {
     for (const s of ['deezer', 'itunes', 'musicbrainz'] as const) {
       expect(parseAnswer(s, null)).toEqual([])

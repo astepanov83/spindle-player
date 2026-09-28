@@ -51,7 +51,8 @@ export function virtualList(opts: () => VirtualListOptions, overscan = 8): Virtu
   const listEl = $derived(opts().list)
   const boxEl = $derived(opts().scrollEl)
   $effect(() => {
-    if (listEl && boxEl) return watchOffset(listEl, boxEl, (m) => (margin = m))
+    if (!listEl || !boxEl) return
+    return watchOffset(listEl, boxEl, (m) => (margin = m))
   })
 
   // .pre: update the count before the rows are drawn

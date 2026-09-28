@@ -80,7 +80,8 @@ export function searchKey(artist: string, album: string): string {
   return cleanArtist(artist) + '\0' + cleanAlbum(album)
 }
 
-const various = new Set(['various artists', 'various', 'va'])
+// compilation credits; artist photos skip them too
+export const various: ReadonlySet<string> = new Set(['various artists', 'various', 'va'])
 
 // The names in a joint credit: "Jay-Z & Kanye West", "Drake feat. Rihanna".
 const joiner = /\s*(?:[,&/+;]|\s(?:and|feat\.?|ft\.?|featuring|with|x|vs\.?)\s)\s*/i

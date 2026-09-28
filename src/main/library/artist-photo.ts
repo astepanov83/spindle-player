@@ -4,7 +4,7 @@
 // artist is taken only when one of their albums or songs has a title the
 // library has too.
 import { allowedImageHost } from './cover-http'
-import { cleanAlbum, cleanArtist, stripEdition } from './cover-match'
+import { cleanAlbum, cleanArtist, stripEdition, various } from './cover-match'
 import { term } from './cover-sources'
 
 // A title of the artist's to check a found artist by.
@@ -34,11 +34,10 @@ export interface ArtistCandidate {
 // titles tried per artist, each a request
 export const checksPerArtist = 3
 
-const noPhoto = new Set(['various artists', 'various', 'unknown artist'])
-
 // Compilations, unknown artists and names with no letters match anyone.
 export function lookUpArtist(name: string): boolean {
-  return /\p{L}/u.test(name) && !noPhoto.has(cleanArtist(name))
+  const a = cleanArtist(name)
+  return /\p{L}/u.test(name) && !various.has(a) && a !== 'unknown artist'
 }
 
 const withParams = (base: string, params: Record<string, string>): string =>
@@ -83,7 +82,8 @@ export function artistCandidates(json: unknown, name: string): ArtistCandidate[]
   return out
 }
 
-// The candidate that has an album or song with the checked title in the answer.
+// The one candidate that has an album or song with the checked title in the
+// answer. Two with it (a self-titled album) tell nothing, so neither is taken.
 export function checkedArtist(
   json: unknown,
   c: ArtistCheck,
@@ -91,12 +91,13 @@ export function checkedArtist(
 ): ArtistCandidate | undefined {
   const want = cleanAlbum(c.title)
   if (!want) return undefined
+  const found = new Set<ArtistCandidate>()
   for (const d of list(json)) {
     const title = c.kind === 'song' && typeof d.title_short === 'string' ? d.title_short : d.title
     if (typeof title !== 'string' || cleanAlbum(title) !== want) continue
     const id = isObject(d.artist) ? idOf(d.artist.id) : undefined
-    const found = candidates.find((x) => x.id === id)
-    if (found) return found
+    const x = candidates.find((x) => x.id === id)
+    if (x) found.add(x)
   }
-  return undefined
+  return found.size === 1 ? [...found][0] : undefined
 }

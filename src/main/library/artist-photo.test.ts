@@ -22,6 +22,7 @@ describe('lookUpArtist', () => {
   it('skips compilations, unknown artists and names with no letters', () => {
     expect(lookUpArtist('Various Artists')).toBe(false)
     expect(lookUpArtist('various')).toBe(false)
+    expect(lookUpArtist('VA')).toBe(false)
     expect(lookUpArtist('Unknown artist')).toBe(false)
     expect(lookUpArtist('!!!')).toBe(false)
     expect(lookUpArtist('2 + 2')).toBe(false)
@@ -95,5 +96,23 @@ describe('checkedArtist', () => {
     expect(checkedArtist(json, { kind: 'song', title: 'The Sound of Silence' }, [real])).toBe(
       undefined
     )
+  })
+  it('picks no one when two candidates have the title, as with a self-titled album', () => {
+    const queen = [
+      { id: 7, image: real.image.replace('8af1', '0000') },
+      { id: 412, image: real.image }
+    ]
+    const json = {
+      data: [
+        { title: 'Queen', artist: { id: 7, name: 'Queen' } },
+        { title: 'Queen', artist: { id: 412, name: 'Queen' } },
+        { title: 'Queen', artist: { id: 412, name: 'Queen' } }
+      ]
+    }
+    expect(checkedArtist(json, { kind: 'album', title: 'Queen' }, queen)).toBeUndefined()
+    // the same candidate twice is still one
+    expect(
+      checkedArtist({ data: json.data.slice(1) }, { kind: 'album', title: 'Queen' }, queen)
+    ).toEqual(queen[1])
   })
 })

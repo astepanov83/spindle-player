@@ -1,6 +1,7 @@
 // The library index on disk, and the messages between main and the library process.
 import type { IdMoves } from '../../shared/id-moves'
 import type { ScanStatus } from '../../shared/library'
+import type { CoverSource } from '../../shared/settings'
 import type { ThemePalettes } from '../../shared/palette'
 import type { CueSheet } from './cue'
 
@@ -96,6 +97,11 @@ export interface WorkerStart {
   // old id -> new id of songs moved earlier this run, so a restarted process
   // still serves a song playing under its old id
   aliases?: IdMoves
+  // the online cover lookup setting, and where its results are kept (ticket 014)
+  fetch: { on: boolean; sources: Record<CoverSource, boolean> }
+  fetchedPath: string
+  // sent with every online request
+  userAgent: string
 }
 
 // What main needs to serve a file: its path, and for a file ffmpeg decodes,
@@ -139,6 +145,8 @@ export type WorkerIn =
   | { type: 'find-track'; req: number; id: string }
   // the source picture of a cover, to make the large size
   | { type: 'cover-source'; req: number; hash: string }
+  // the online cover lookup setting changed
+  | { type: 'fetch-covers'; on: boolean; sources: Record<CoverSource, boolean> }
 
 // the library process to main
 export type WorkerOut =

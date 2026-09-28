@@ -7,6 +7,7 @@ import { hash } from 'crypto'
 import { readdir, readFile, rm, stat } from 'fs/promises'
 import { basename, dirname, join } from 'path'
 import type { ScanStatus } from '../../shared/library'
+import type { CoverSource } from '../../shared/settings'
 import { JsonFileWriter, readJsonFile } from '../json-file'
 import { buildLibrary, type BuiltLibrary } from './group'
 import { eachPaced, Pacer, scanSlow } from './pacer'
@@ -40,6 +41,15 @@ import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
 import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from './cover-names'
+import { CoverFetcher } from './cover-fetch'
+import { CoverHttp, defaultLimits, NetError } from './cover-http'
+import {
+  dropGone,
+  dropNotFound,
+  parseFetched,
+  serializeFetched,
+  type Fetched
+} from './fetched-store'
 import {
   cueReaderVersion,
   readerVersion,
@@ -150,13 +160,98 @@ function markChanged(): void {
   unsaved = true
 }
 
+// --- covers found online (ticket 014) ---
+
+let fetched: Fetched = new Map()
+// none when the file could not be read: it may still be fine, so it is never replaced
+let fetchedWriter: JsonFileWriter<unknown> | undefined
+// bumped on every change to fetched, for the covers in use
+let fetchedEdits = 0
+let fetcher: CoverFetcher | undefined
+// the setting from main; a change can come before the fetcher is made
+let fetchSetting: { on: boolean; sources: Record<CoverSource, boolean> } | undefined
+
+function saveFetched(): void {
+  fetchedEdits++
+  fetchedWriter?.schedule(serializeFetched(fetched))
+}
+
+// A found cover shows at most this often while the lookup runs, so the page
+// isn't sent the whole library for every album.
+const fetchPublishMs = 2000
+let fetchPublish: ReturnType<typeof setTimeout> | undefined
+function publishSoon(): void {
+  fetchPublish ??= setTimeout(() => {
+    fetchPublish = undefined
+    publish()
+  }, fetchPublishMs)
+}
+
+const abortableSleep = (ms: number, signal: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    if (signal.aborted || ms <= 0) return resolve()
+    const t = setTimeout(resolve, ms)
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(t)
+        resolve()
+      },
+      { once: true }
+    )
+  })
+
+function setFetch(on: boolean, sources: Record<CoverSource, boolean>): void {
+  fetchSetting = { on, sources }
+  fetcher?.setOptions(on, sources)
+  if (!on) setStatus({ fetch: undefined })
+}
+
+function startFetcher(s: WorkerStart): void {
+  const r = readJsonFile(s.fetchedPath)
+  if (r.kind === 'broken' || r.kind === 'unreadable')
+    log(`Online covers file is ${r.kind}: ${s.fetchedPath}`)
+  fetched = parseFetched(r.kind === 'ok' ? r.value : undefined)
+  if (r.kind !== 'unreadable')
+    fetchedWriter = new JsonFileWriter<unknown>(
+      s.fetchedPath,
+      1000,
+      (e) => log(`Could not save ${s.fetchedPath}: ${e}`),
+      0
+    )
+  fetcher = new CoverFetcher({
+    http: new CoverHttp({
+      fetch: (u, i) => fetch(u, i),
+      sleep: abortableSleep,
+      userAgent: s.userAgent,
+      limits: defaultLimits()
+    }),
+    addCover: addFetchedCover,
+    hasCover: (h) => cached.has(h),
+    fetched,
+    changed: (found) => {
+      saveFetched()
+      if (found) publishSoon()
+    },
+    status: (f) => {
+      if (fetchSetting?.on) setStatus({ fetch: f })
+    },
+    now: () => Date.now(),
+    sleep: abortableSleep,
+    log
+  })
+  const opt = fetchSetting ?? s.fetch
+  setFetch(opt.on, opt.sources)
+}
+
 // Groups albums, for the page and the lookups.
 function build(): void {
   dirty = false
-  built = buildLibrary(ix, (h) => cached.has(h))
+  built = buildLibrary(ix, (h) => cached.has(h), fetched)
   let failed = 0
   for (const e of ix.files.values()) if (e.error) failed++
   setStatus({ tracks: built.data.tracks.length, albums: built.data.albums.length, failed })
+  fetcher?.setQueries(built.queries)
 }
 
 function encodeLibrary(): Uint8Array {
@@ -215,18 +310,36 @@ async function sendCover(data: Uint8Array, gen: number): Promise<string> {
   const h = hash('sha1', data)
   if (known(h) || claimed.has(h)) return h
   claimed.add(h)
-  await waitForSlot(h, gen)
+  await waitForSlot(h, () => checkGen(gen))
   sent.add(h)
   post({ type: 'cover', hash: h, data: ownCopy(data) })
   return h
 }
 
-// Waits for a free slot to send a picture to main. The hash must be claimed first.
-async function waitForSlot(h: string, gen: number): Promise<void> {
+// A picture found online: sent like a local one, then waited for, so the
+// lookup knows whether it decoded before it keeps it.
+async function addFetchedCover(data: Uint8Array): Promise<{ hash: string; ok: boolean }> {
+  const h = hash('sha1', data)
+  if (cached.has(h)) return { hash: h, ok: true }
+  if (!claimed.has(h)) {
+    claimed.add(h)
+    await waitForSlot(h, () => {})
+    sent.add(h)
+    post({ type: 'cover', hash: h, data })
+  }
+  while (claimed.has(h)) await new Promise<void>((r) => coverWaiters.push(r))
+  if (cached.has(h) || bad.has(h)) return { hash: h, ok: cached.has(h) }
+  // main could not make it this time (no window, a timeout): look again later
+  throw new NetError('the cover could not be made yet')
+}
+
+// Waits for a free slot to send a picture to main. The hash must be claimed
+// first. check throws when the wait should end (a stopped scan).
+async function waitForSlot(h: string, check: () => void): Promise<void> {
   try {
     while (sent.size >= coversAtOnce) {
       await new Promise<void>((r) => coverWaiters.push(r))
-      checkGen(gen)
+      check()
     }
   } catch (e) {
     claimed.delete(h)
@@ -238,10 +351,10 @@ async function waitForSlot(h: string, gen: number): Promise<void> {
 // quit before the index was saved) get one from the small cover, so no music
 // file is read again.
 async function fillPalettes(gen: number): Promise<void> {
-  for (const h of missingPalettes(ix, (x) => cached.has(x))) {
+  for (const h of missingPalettes(ix, (x) => cached.has(x), fetched)) {
     if (claimed.has(h)) continue
     claimed.add(h)
-    await waitForSlot(h, gen)
+    await waitForSlot(h, () => checkGen(gen))
     let data: Uint8Array
     try {
       data = new Uint8Array(await readFile(join(start.coversDir, smallName(h))))
@@ -266,10 +379,11 @@ async function loadCached(): Promise<void> {
   }
 }
 
-// The covers the index uses, made again only after the index changed.
-let usedCache: { edits: number; used: Set<string> } | undefined
+// The covers the index and the online lookup use, made again only after either changed.
+let usedCache: { edits: string; used: Set<string> } | undefined
 function liveUsed(): Set<string> {
-  if (usedCache?.edits !== ixEdits) usedCache = { edits: ixEdits, used: usedCovers(ix) }
+  const edits = `${ixEdits}.${fetchedEdits}`
+  if (usedCache?.edits !== edits) usedCache = { edits, used: usedCovers(ix, fetched) }
   return usedCache.used
 }
 
@@ -435,6 +549,8 @@ async function scan(
   }, interimMs)
   let failed = false
   let read = 0
+  // the online lookup waits for the scan and its prune (see the chain below)
+  fetcher?.hold()
   try {
     retryBad = retryFailed
     setStatus({ folders, phase: 'walk', done: 0, total: 0, missing: [], scanFailed: false })
@@ -538,6 +654,8 @@ async function scan(
   firstFill.end()
   if (dirty) publish()
   saveIndex()
+  // results of albums that are gone; a failed scan may have missed some
+  if (!failed && dropGone(fetched, new Set(built.data.albums.map((a) => a.id)))) saveFetched()
   setStatus({ phase: 'idle', done: 0, total: 0, scanFailed: failed })
   post({ type: 'scanned', id })
   log(scanLogLine(Math.round(performance.now() - t0), took, read, status.tracks, status.albums))
@@ -573,7 +691,12 @@ port.on('message', (e: Electron.MessageEvent) => {
       started(m.start)
       break
     case 'scan':
+      // a manual Rescan looks up every miss again
+      if (m.retryFailed && dropNotFound(fetched)) saveFetched()
       void chain.request((gen) => scan(m.folders, m.retryFailed, gen, m.id))
+      break
+    case 'fetch-covers':
+      setFetch(m.on, m.sources)
       break
     case 'playing':
       playing = m.playing
@@ -582,6 +705,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       break
     case 'stop':
       chain.stop()
+      fetcher?.hold()
       break
     case 'cover-done':
       sent.delete(m.hash)
@@ -619,6 +743,8 @@ port.on('message', (e: Electron.MessageEvent) => {
       // quitting: main waits for the answer a short while, then this process ends
       saveIndex()
       writer?.flushSync()
+      fetcher?.hold()
+      fetchedWriter?.flushSync()
       closing = true
       chain.close()
       post({ type: 'flushed' })
@@ -667,6 +793,7 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   status = { ...status, folders: s.folders }
   await removeStrayTemp()
   await loadCached()
+  startFetcher(s)
   const r = readJsonFile(start.indexPath)
   // the index is only a cache of the music files, so it is made again either way
   if (r.kind === 'broken' || r.kind === 'unreadable')
@@ -681,7 +808,11 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
 
 // Scans and prunes, one after the other; see scan-chain.ts.
 const chain = new ScanChain(ready, {
-  prune: pruneCovers,
+  // after the prune, so it can't delete a cover the lookup just made
+  prune: async (gen) => {
+    await pruneCovers(gen)
+    if (!chain.stale(gen)) fetcher?.release()
+  },
   // let a stopped scan's waits wake up and see the new number
   wake: wakeCoverWaiters,
   // the window closed mid-scan: a new window must not show old progress

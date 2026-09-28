@@ -173,6 +173,15 @@ describe('LibraryClient scans', () => {
 })
 
 describe('LibraryClient status', () => {
+  it('passes the online cover progress on to the page, and drops it when gone', () => {
+    const { client, statuses } = setup()
+    const fetch = { found: 2, notFound: 1, left: 3, running: true }
+    client.onMessage({ type: 'status', status: workerStatus({ fetch }) })
+    expect(statuses.at(-1)?.fetch).toEqual(fetch)
+    client.onMessage({ type: 'status', status: workerStatus() })
+    expect(statuses.at(-1)).not.toHaveProperty('fetch')
+  })
+
   it('says the library never loaded when the process gives up before a library', () => {
     const { client } = setup()
     client.onExit(1, 'given-up')

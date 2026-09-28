@@ -6,6 +6,7 @@ import { app, dialog, utilityProcess, type BrowserWindow } from 'electron'
 import { LibraryChannel } from '../../shared/ipc'
 import type { IdMoves } from '../../shared/id-moves'
 import type { ScanStatus } from '../../shared/library'
+import type { CoverSource } from '../../shared/settings'
 import { ffmpegTool } from '../ffmpeg-path'
 import type { SettingsStore } from '../settings-store'
 import { CoverCache } from './cover-cache'
@@ -69,7 +70,11 @@ export class LibraryService {
         coversDir: this.covers.dir,
         folders: this.store.get().folders,
         ffprobe: this.ffprobe,
-        aliases: this.#client.aliases
+        aliases: this.#client.aliases,
+        // live: with settings.json unreadable, the page's choice still counts this run
+        fetch: { on: this.store.live().fetchCovers, sources: this.store.live().coverSources },
+        fetchedPath: join(this.dir, 'fetched-covers.json'),
+        userAgent: `Spindle/${app.getVersion()} (https://github.com/astepanov83/spindle-player)`
       }),
       // a library process that dies is started again a few times, then left dead
       new RestartBudget(3, 60000),
@@ -153,6 +158,11 @@ export class LibraryService {
 
   #sendPlaying(): void {
     this.#post({ type: 'playing', playing: this.#playing, dev: this.#playingDev })
+  }
+
+  // The online cover lookup setting changed.
+  setFetch(on: boolean, sources: Record<CoverSource, boolean>): void {
+    this.#post({ type: 'fetch-covers', on, sources })
   }
 
   resume(): void {

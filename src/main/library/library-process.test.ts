@@ -2,7 +2,7 @@ import { EventEmitter } from 'events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LibraryProcess, type AfterExit, type Child } from './library-process'
 import { RestartBudget } from './restart'
-import type { WorkerIn } from './types'
+import type { WorkerIn, WorkerStart } from './types'
 
 // Stands in for Electron's UtilityProcess.
 class FakeChild extends EventEmitter {
@@ -12,7 +12,14 @@ class FakeChild extends EventEmitter {
   }
 }
 
-const start = { indexPath: '/u/library.json', coversDir: '/u/covers', folders: ['/m'] }
+const start: WorkerStart = {
+  indexPath: '/u/library.json',
+  coversDir: '/u/covers',
+  folders: ['/m'],
+  fetch: { on: false, sources: { musicbrainz: true, deezer: true, itunes: true } },
+  fetchedPath: '/u/fetched-covers.json',
+  userAgent: 'Spindle/test'
+}
 
 function setup(): {
   proc: LibraryProcess

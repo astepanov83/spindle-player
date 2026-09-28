@@ -81,6 +81,11 @@ page.on(SettingsChannel.save, (_, raw, toFile) => {
   const { before, next } = store.setFromPage(raw, toFile !== false)
   if (next.theme !== before.theme) nativeTheme.themeSource = next.theme
   if (next.template !== before.template) main?.applyTemplate(before.template, next.template)
+  if (
+    next.fetchCovers !== before.fetchCovers ||
+    JSON.stringify(next.coverSources) !== JSON.stringify(before.coverSources)
+  )
+    library.setFetch(next.fetchCovers, next.coverSources)
 })
 
 page.handle(LibraryChannel.load, () => library.load())

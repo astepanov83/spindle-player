@@ -16,10 +16,13 @@ export function fileKey(s: { dev: bigint; ino: bigint }): string | undefined {
 }
 
 // What a scan has to look at to find moves. `added`: paths found that the
-// index doesn't have (files and cue sheets), with their key. `gone`: paths the
-// index has that were not found, inside the music folders and not under a
-// folder that could not be read (an unplugged drive keeps its songs; they
-// didn't move). Both are empty when either would be, so nothing is stat'ed.
+// index doesn't have (files and cue sheets), with their key. `kept`: paths
+// found that it had, with theirs: a save during a scan (every 15s, or on
+// quit) can write a moved file's new path before its move was found, and the
+// next scan must still find it. `gone`: paths the index has that were not
+// found, inside the music folders and not under a folder that could not be
+// read (an unplugged drive keeps its songs; they didn't move). All are empty
+// when nothing was found with a key or nothing is gone, so nothing is stat'ed.
 // `had`: whether the index had a path when the scan started; the scan reads
 // new files while the walk goes on, so the index may have them by now.
 export function movePlan(
@@ -28,30 +31,39 @@ export function movePlan(
   folders: string[],
   skipped: string[],
   had: (path: string) => boolean = (p) => ix.files.has(p) || ix.cues.has(p)
-): { added: Map<string, string>; gone: string[] } {
+): { added: Map<string, string>; kept: Map<string, string>; gone: string[] } {
   const added = new Map<string, string>()
-  for (const f of found) if (f.key && !had(f.path)) added.set(f.path, f.key)
-  if (!added.size) return { added, gone: [] }
+  const kept = new Map<string, string>()
+  for (const f of found) if (f.key) (had(f.path) ? kept : added).set(f.path, f.key)
+  const none = { added: new Map(), kept: new Map(), gone: [] }
+  if (!added.size && !kept.size) return none
   const present = new Set(found.map((f) => f.path))
   const gone = [...ix.files.keys(), ...ix.cues.keys()].filter(
     (p) =>
       !present.has(p) && folders.some((f) => isUnder(p, f)) && !skipped.some((s) => isUnder(p, s))
   )
-  return { added: gone.length ? added : new Map(), gone }
+  return gone.length ? { added, kept, gone } : none
 }
 
 // Old path -> new path. `gone`: paths that left the index this scan, with
-// their key now. `added`: paths new to the index, with theirs. A key that two
-// new paths share (hard links) is left out, since which one it is isn't known.
+// their key now. `added`: paths new to the index, with theirs; `kept`: paths
+// it had, taken only for a key no new path has. A key that two paths of one
+// kind share (hard links) is left out, since which one it is isn't known.
 export function findMoves(
   gone: Map<string, string>,
-  added: Map<string, string>
+  added: Map<string, string>,
+  kept: Map<string, string> = new Map()
 ): Map<string, string> {
-  const byKey = new Map<string, string | null>()
-  for (const [path, key] of added) byKey.set(key, byKey.has(key) ? null : path)
+  const byKey = (paths: Map<string, string>): Map<string, string | null> => {
+    const out = new Map<string, string | null>()
+    for (const [path, key] of paths) out.set(key, out.has(key) ? null : path)
+    return out
+  }
+  const news = byKey(added)
+  const olds = byKey(kept)
   const moves = new Map<string, string>()
   for (const [path, key] of gone) {
-    const to = byKey.get(key)
+    const to = news.has(key) ? news.get(key) : olds.get(key)
     if (to) moves.set(path, to)
   }
   return moves

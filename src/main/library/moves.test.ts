@@ -99,11 +99,21 @@ describe('movePlan', () => {
     expect(plan.gone).toEqual(['/m/z.flac'])
   })
 
-  it('asks for no stat when nothing was added', () => {
+  it('asks for no stat when nothing was found with a key', () => {
     const ix = ixWith('/m/a.flac', '/m/b.flac')
-    const plan = movePlan(ix, [{ path: '/m/a.flac', key: '1:1' }], folders, [])
+    const plan = movePlan(ix, [{ path: '/m/a.flac' }], folders, [])
     expect(plan.added.size).toBe(0)
     expect(plan.gone).toEqual([])
+  })
+
+  it('keeps paths the index had, for a move a save cut in two', () => {
+    // a save during the last scan wrote /m/real/a.flac, and a quit came before
+    // its move was found; the old path is still in the index
+    const ix = ixWith('/m/link/a.flac', '/m/real/a.flac')
+    const plan = movePlan(ix, [{ path: '/m/real/a.flac', key: '1:1' }], folders, [])
+    expect(plan.added.size).toBe(0)
+    expect(plan.kept).toEqual(new Map([['/m/real/a.flac', '1:1']]))
+    expect(plan.gone).toEqual(['/m/link/a.flac'])
   })
 
   it('counts a path read earlier in the same scan as new', () => {
@@ -129,6 +139,7 @@ describe('movePlan', () => {
       []
     )
     expect(plan.added.size).toBe(0)
+    expect(plan.kept.size).toBe(0)
     expect(plan.gone).toEqual([])
   })
 })
@@ -153,6 +164,30 @@ describe('findMoves', () => {
       ['/m/b.flac', '1:10']
     ])
     expect(findMoves(gone, added).size).toBe(0)
+  })
+
+  it('pairs a path that left with a path the index had, when no new path has its key', () => {
+    const gone = new Map([['/m/link/a.flac', '1:10']])
+    const kept = new Map([['/m/real/a.flac', '1:10']])
+    expect(findMoves(gone, new Map(), kept)).toEqual(
+      new Map([['/m/link/a.flac', '/m/real/a.flac']])
+    )
+  })
+
+  it('takes a new path over one the index had (hard links)', () => {
+    const gone = new Map([['/m/old.flac', '1:10']])
+    const added = new Map([['/m/new.flac', '1:10']])
+    const kept = new Map([['/m/other.flac', '1:10']])
+    expect(findMoves(gone, added, kept)).toEqual(new Map([['/m/old.flac', '/m/new.flac']]))
+  })
+
+  it('leaves out a file that two paths the index had reach', () => {
+    const gone = new Map([['/m/old.flac', '1:10']])
+    const kept = new Map([
+      ['/m/a.flac', '1:10'],
+      ['/m/b.flac', '1:10']
+    ])
+    expect(findMoves(gone, new Map(), kept).size).toBe(0)
   })
 
   it('does not take the same key on another device', () => {

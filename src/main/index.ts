@@ -2,7 +2,7 @@
 import './pool-size'
 import { join } from 'path'
 import { app, BrowserWindow, nativeTheme } from 'electron'
-import { electronApp, optimizer } from '@electron-toolkit/utils'
+import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import {
   LibraryChannel,
   PlaybackChannel,
@@ -17,6 +17,7 @@ import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
 import { PlaylistFile, QueueFile } from './page-files'
 import { SettingsStore } from './settings-store'
+import { takeLock } from './single-instance'
 import { currentBackground, MainWindow } from './window'
 
 let store: SettingsStore
@@ -26,6 +27,20 @@ let savedQueue: QueueFile
 let main: MainWindow | null = null
 
 registerScheme()
+
+// Before anything reads or writes userData: one copy per user-data folder.
+// Only the dev server waits, for the copy it just stopped to finish saving.
+const devServer = is.dev && !!process.env['ELECTRON_RENDERER_URL']
+const locked = takeLock(() => app.requestSingleInstanceLock(), devServer ? 10000 : 0)
+void locked.then((ok) => {
+  if (ok) return
+  console.warn('Spindle is already running with this user-data folder; showing that one.')
+  app.quit()
+})
+// set once the files are read and the library started
+let started = false
+let quitting = false
+app.on('before-quit', () => (quitting = true))
 
 function createWindow(): void {
   library.resume()
@@ -81,7 +96,25 @@ page.on(PlaybackChannel.log, (_, text) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
 })
 
-app.whenReady().then(() => {
+// Another copy was started: it quits, and this one comes to the front.
+app.on('second-instance', () => {
+  // a window made now would close again with the app
+  if (!started || quitting) return
+  if (!main) {
+    createWindow()
+    return
+  }
+  const win = main.win
+  if (win.isMinimized()) win.restore()
+  // still loading: it shows itself when ready
+  else if (!win.isVisible()) return
+  win.show()
+  win.focus()
+})
+
+void Promise.all([locked, app.whenReady()]).then(([ok]) => {
+  if (!ok) return
+  started = true
   electronApp.setAppUserModelId('io.github.astepanov83.spindle')
 
   // Read before the window exists, so it opens at the saved template's size and theme.

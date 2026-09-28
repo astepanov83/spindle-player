@@ -14,6 +14,8 @@ export interface CueItem {
   entry: FileEntry
   // undefined when the track is the whole file
   part?: TrackPart
+  // the sheet's folder; the image may be below it
+  dir: string
 }
 
 const lower = (s: string): string => s.toLocaleLowerCase()
@@ -60,6 +62,7 @@ export function resolveCueFile(
 // The tracks of one image, in time order. The end of each is the start of the
 // next one in the same file; the last runs to the end of the file.
 function imageTracks(
+  sheetPath: string,
   sheet: CueSheet,
   fileIndex: number,
   image: FileEntry,
@@ -101,7 +104,7 @@ function imageTracks(
     }
     for (const k of Object.keys(entry) as (keyof FileEntry)[])
       if (entry[k] === undefined) delete entry[k]
-    const item: CueItem = { id, entry }
+    const item: CueItem = { id, entry, dir: dirOf(sheetPath) }
     if (!whole) {
       item.part = { file: shortHash(image.path), start: t.start }
       if (end !== undefined) item.part.end = end
@@ -141,7 +144,7 @@ export function cueTracks(ix: LibraryIndex): { items: CueItem[]; images: Set<str
       )
       if (!path || images.has(path)) return
       taken.add(path)
-      const got = imageTracks(sheet, i, ix.files.get(path)!, used)
+      const got = imageTracks(cue.path, sheet, i, ix.files.get(path)!, used)
       if (!got.length) return
       images.add(path)
       items.push(...got)

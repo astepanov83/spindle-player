@@ -176,6 +176,7 @@ describe('follows', () => {
     no: 1,
     disc: 1,
     codec: '',
+    folder: 0,
     ...(part ? { part } : {})
   })
 

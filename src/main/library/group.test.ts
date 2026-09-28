@@ -204,6 +204,34 @@ describe('buildLibrary', () => {
   })
 })
 
+describe('folders', () => {
+  it('sends each folder once and the folder of each song', () => {
+    const ix = emptyIndex()
+    for (const f of [
+      entry('/m/B/2.mp3', { album: 'B' }),
+      entry('/m/A/CD1/1.mp3', { album: 'A', artist: 'X', title: 'one' }),
+      entry('/m/A/CD2/1.mp3', { album: 'A', artist: 'X', title: 'two' }),
+      entry('/m/loose.mp3')
+    ])
+      ix.files.set(f.path, f)
+    const { data } = buildLibrary(ix, () => true, undefined, ['/m'])
+    expect(data.folders).toEqual([
+      { name: '/m', parent: -1 },
+      { name: 'A', parent: 0 },
+      { name: 'CD1', parent: 1 },
+      { name: 'CD2', parent: 1 },
+      { name: 'B', parent: 0 }
+    ])
+    // library order: albums by artist, then title
+    expect(data.tracks.map((t) => [t.album, data.folders[t.folder].name])).toEqual([
+      ['B', 'B'],
+      ['m', '/m'],
+      ['A', 'CD1'],
+      ['A', 'CD2']
+    ])
+  })
+})
+
 describe('albumFolder', () => {
   it('steps out of a disc folder only', () => {
     expect(albumFolder('/m/Album/Disc 2')).toBe('/m/Album')

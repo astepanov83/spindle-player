@@ -68,7 +68,7 @@
       <h2 class="page-title">{title}</h2>
     </div>
   {/if}
-  <div class="page-meta">{rows.length} songs</div>
+  <div class="page-meta">{rows.length} {rows.length === 1 ? 'song' : 'songs'}</div>
 </div>
 <div class="tbl">
   <div class="th">

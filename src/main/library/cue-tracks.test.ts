@@ -387,6 +387,30 @@ describe('buildLibrary with cue sheets', () => {
     expect(a).toEqual(b)
   })
 
+  it('puts cue tracks in the folder of the sheet, not of the image', () => {
+    const i = index(
+      [entry('/m/a/disc/img.flac', { duration: 100 })],
+      [
+        [
+          '/m/a/a.cue',
+          sheet(
+            ['disc/img.flac'],
+            [
+              [0, 0],
+              [0, 50]
+            ]
+          )
+        ]
+      ]
+    )
+    const { data } = buildLibrary(i, () => true, undefined, ['/m'])
+    expect(data.folders).toEqual([
+      { name: '/m', parent: -1 },
+      { name: 'a', parent: 0 }
+    ])
+    expect(data.tracks.map((t) => t.folder)).toEqual([1, 1])
+  })
+
   it('lists the image as one song again when the sheet is gone', () => {
     const i = ix()
     i.cues.clear()

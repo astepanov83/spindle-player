@@ -3,6 +3,7 @@
   import AlbumGrid from './AlbumGrid.svelte'
   import AlbumPage from './AlbumPage.svelte'
   import Empty from './Empty.svelte'
+  import FolderView from './FolderView.svelte'
   import PlaylistView from './PlaylistView.svelte'
   import SearchBox from './SearchBox.svelte'
   import SongTable from './SongTable.svelte'
@@ -12,7 +13,7 @@
   import { onSideButton } from './side-buttons'
   import { scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { songRows } from './views'
-  import { library, type Section } from '../stores/library.svelte'
+  import { library, type Page, type Section } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
 
   const sections: [Section, IconName, string][] = [
@@ -43,11 +44,13 @@
 
   scrollTopOnChange(
     () => scrollEl,
-    () => [library.open, library.section]
+    () => [library.open, library.section, library.folder]
   )
+
+  const pages: Partial<Record<Section, Page>> = { albums: 'open', folders: 'folder' }
 </script>
 
-<svelte:window onmouseup={(e) => onSideButton(e, library.section === 'albums' ? 'open' : null)} />
+<svelte:window onmouseup={(e) => onSideButton(e, pages[library.section] ?? null)} />
 
 {#snippet item(sec: Section, icon: IconName, label: string)}
   <button class="sidebtn" aria-current={library.section === sec} onclick={() => pick(sec)}>
@@ -83,8 +86,10 @@
       {/if}
     {:else if playlist}
       <PlaylistView id={playlist.id} {scrollEl} />
-    {:else if library.section === 'artists' || library.section === 'folders'}
-      <Empty title={placeholders[library.section][0]} text={placeholders[library.section][1]} />
+    {:else if library.section === 'folders'}
+      <FolderView {scrollEl} />
+    {:else if library.section === 'artists'}
+      <Empty title={placeholders.artists[0]} text={placeholders.artists[1]} />
     {/if}
   </div>
 </div>

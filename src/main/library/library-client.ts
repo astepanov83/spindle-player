@@ -18,7 +18,7 @@ export type Ask =
 
 // What the page gets when the process can't give it a library.
 export const emptyLibrary = (): Uint8Array =>
-  new TextEncoder().encode(JSON.stringify({ albums: [], tracks: [] }))
+  new TextEncoder().encode(JSON.stringify({ albums: [], tracks: [], folders: [] }))
 
 export interface ClientOptions {
   // false when there is no process to take it

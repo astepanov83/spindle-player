@@ -10,3 +10,4 @@ resources/ffmpeg/*
 !resources/ffmpeg/SOURCE.txt
 # their source, gathered by scripts/fetch-ffmpeg-source.mjs
 ffmpeg-source/
+*.tsbuildinfo

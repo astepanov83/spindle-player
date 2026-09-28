@@ -106,6 +106,15 @@ export function planReads(
   return out
 }
 
+// Music folders that listed no files this time but have songs in the index.
+// An unmounted drive often leaves an empty mount point, which reads fine but
+// empty, so it counts as a folder that can't be read and keeps its songs.
+export function emptiedFolders(ix: LibraryIndex, folders: string[], paths: string[]): string[] {
+  return folders.filter(
+    (f) => !paths.some((p) => isUnder(p, f)) && [...ix.files.keys()].some((p) => isUnder(p, f))
+  )
+}
+
 // Applies what the walk found. Files under a folder that could not be read are
 // kept, so an unplugged drive doesn't empty the library. Returns true if anything changed.
 export function applyListing(

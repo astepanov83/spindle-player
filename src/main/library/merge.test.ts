@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyBatch,
   applyListing,
+  emptiedFolders,
   emptyIndex,
   isUnder,
   missingPalettes,
@@ -114,6 +115,24 @@ describe('planReads for failed files', () => {
       { path: '/m/fine.mp3', mtime: 1, size: 10 }
     ]
     expect(planReads(known, found, () => true)).toEqual(['/m/locked.mp3'])
+  })
+})
+
+describe('emptiedFolders', () => {
+  it('finds a folder that had songs and now lists none, like an empty mount point', () => {
+    const ix = indexOf([entry('/mnt/usb/a.mp3'), entry('/m/b.mp3')])
+    expect(emptiedFolders(ix, ['/mnt/usb', '/m', '/new'], ['/m/b.mp3'])).toEqual(['/mnt/usb'])
+    expect(emptiedFolders(ix, ['/mnt/usb', '/m'], ['/mnt/usb/c.mp3', '/m/b.mp3'])).toEqual([])
+  })
+
+  it('keeps the songs of that folder when used as unread', () => {
+    const ix = indexOf([entry('/mnt/usb/a.mp3'), entry('/m/b.mp3'), entry('/m/c.mp3')])
+    const folders = ['/mnt/usb', '/m']
+    const paths = ['/m/b.mp3']
+    const skipped = emptiedFolders(ix, folders, paths)
+    applyListing(ix, folders, { paths, images: [], skipped })
+    // the gone file in a folder that still lists files does leave
+    expect([...ix.files.keys()]).toEqual(['/mnt/usb/a.mp3', '/m/b.mp3'])
   })
 })
 

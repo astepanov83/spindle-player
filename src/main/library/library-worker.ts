@@ -13,6 +13,7 @@ import {
   applyBatch,
   applyListing,
   dirOf,
+  emptiedFolders,
   emptyIndex,
   isUnder,
   missingPalettes,
@@ -379,15 +380,10 @@ async function scan(folders: string[], gen: number): Promise<void> {
 
     checkGen(gen)
     const toRead = planReads(ix.files, found, known)
-    if (
-      applyListing(ix, folders, {
-        paths: found.map((f) => f.path),
-        images,
-        skipped: listing.skipped
-      })
-    )
+    const skipped = [...listing.skipped, ...emptiedFolders(ix, folders, listing.files)]
+    if (applyListing(ix, folders, { paths: found.map((f) => f.path), images, skipped }))
       markChanged()
-    setStatus({ missing: folders.filter((f) => listing.skipped.some((s) => isUnder(f, s))) })
+    setStatus({ missing: folders.filter((f) => skipped.some((s) => isUnder(f, s))) })
 
     const byPath = new Map(found.map((f) => [f.path, f]))
     progress('read', 0, toRead.length, true)

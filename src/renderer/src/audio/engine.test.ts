@@ -73,8 +73,12 @@ vi.stubGlobal('removeEventListener', () => {})
 // main's answer to the HEAD that asks whether a failed file is still there
 let headStatus = 200
 const heads: string[] = []
-vi.stubGlobal('fetch', async (url: string, init: { method: string }) => {
+// a HEAD that never answers in time
+let headTimeout = false
+vi.stubGlobal('fetch', async (url: string, init: { method: string; signal?: AbortSignal }) => {
   heads.push(`${init.method} ${url}`)
+  expect(init.signal).toBeDefined()
+  if (headTimeout) throw Object.assign(new Error('timed out'), { name: 'TimeoutError' })
   return { status: headStatus }
 })
 
@@ -90,6 +94,7 @@ beforeEach(() => {
   el = e.el as unknown as FakeAudio
   got = []
   headStatus = 200
+  headTimeout = false
   heads.length = 0
   e.on({
     time: (t) => got.push(`time ${t.toFixed(2)}`),
@@ -259,22 +264,36 @@ describe('a file Chromium can’t read', () => {
     expect(got).toEqual(['error 4 gone'])
   })
 
+  it("says the file can't be read when main doesn't answer in time", async () => {
+    headTimeout = true
+    e.load('spindle://media/nas', 0)
+    el.error = { code: 4, message: '' }
+    el.fire('error')
+    el.error = { code: 4, message: '' }
+    el.fire('error')
+    await vi.runAllTimersAsync()
+    expect(got).toEqual(['error 4 gone'])
+  })
+
   it('drops the error of a song that is no longer loaded', async () => {
     e.load('spindle://media/x', 0)
-    el.error = { code: 2, message: '' }
+    el.error = { code: 4, message: '' }
+    el.fire('error')
+    el.error = { code: 4, message: '' }
     el.fire('error')
     e.load('spindle://media/y', 0)
     await vi.runAllTimersAsync()
     expect(got).toEqual([])
   })
 
-  it('is not retried for a network error', async () => {
+  it('a network error is not retried, and is the file not coming through, with no HEAD', async () => {
     e.load('spindle://media/x', 0)
     el.error = { code: 2, message: '' }
     el.fire('error')
     await vi.runAllTimersAsync()
     expect(el.loads).toEqual(['spindle://media/x'])
-    expect(got).toEqual(['error 2'])
+    expect(got).toEqual(['error 2 gone'])
+    expect(heads).toEqual([])
   })
 
   it('the same file is a seek after the retry, not a load of the undecoded file', () => {

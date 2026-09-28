@@ -42,13 +42,15 @@ export function mediaUrl(fileId: string): string {
   return `spindle://media/${fileId}`
 }
 
-// True when main has no readable file for a song URL (404). Any other answer,
-// or none, counts as there: the error is then about the format.
+// True when main has no readable file for a song URL (404), or doesn't answer
+// within 5s (a NAS that dropped out). Any other answer counts as there: the
+// error is then about the format.
 export async function fileGone(url: string): Promise<boolean> {
   try {
-    return (await fetch(url, { method: 'HEAD' })).status === 404
-  } catch {
-    return false
+    const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(5000) })
+    return res.status === 404
+  } catch (e) {
+    return (e as Error)?.name === 'TimeoutError'
   }
 }
 
@@ -150,7 +152,10 @@ export class AudioEngine {
       const url = this.#url
       const code = e?.code ?? 0
       const message = e?.message ?? ''
-      void fileGone(url).then((gone) => {
+      // A network error (2) is the file not coming through, never its format.
+      // Only a decode or format error needs asking whether the file is there.
+      const check = code === 3 || code === 4 ? fileGone(url) : Promise.resolve(true)
+      void check.then((gone) => {
         // a newer song came first
         if (url === this.#url) this.#on.error?.({ code, message, gone })
       })

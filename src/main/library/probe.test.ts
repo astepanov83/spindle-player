@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { lengthMayBeGuessed, packetsLength, probeToTags, run } from './probe'
+import { execFileSync } from 'child_process'
+import { existsSync, mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { lengthMayBeGuessed, PacketSpan, probeLength, probeToTags, run, stream } from './probe'
 import { normalizeTags } from './tags'
 
 // ffprobe 7.0.2 on the user's "October Rust" image (APE 3.97, no tags).
@@ -130,17 +134,91 @@ describe('run', () => {
   })
 })
 
-describe('packetsLength', () => {
+// ffprobe's packet lines, pushed in pieces of `size` characters.
+function spanOf(csv: string, size = csv.length || 1): number | undefined {
+  const span = new PacketSpan()
+  for (let i = 0; i < csv.length; i += size) span.push(csv.slice(i, i + size))
+  return span.length()
+}
+
+describe('PacketSpan', () => {
   it('runs from the first packet to the end of the last', () => {
-    expect(
-      packetsLength('0.000000,0.026122\n0.026122,0.026122\n120.006531,0.026122\n')
-    ).toBeCloseTo(120.032653, 6)
-    expect(packetsLength('1.5,0.5\n3.0,0.5\n')).toBe(2)
+    expect(spanOf('0.000000,0.026122\n0.026122,0.026122\n120.006531,0.026122\n')).toBeCloseTo(
+      120.032653,
+      6
+    )
+    expect(spanOf('1.5,0.5\n3.0,0.5\n')).toBe(2)
   })
 
   it('skips lines with no time and gives nothing for no packets', () => {
-    expect(packetsLength('N/A,0.1\n2,1\n\n')).toBe(1)
-    expect(packetsLength('')).toBeUndefined()
+    expect(spanOf('N/A,0.1\n2,1\n\n')).toBe(1)
+    expect(spanOf('')).toBeUndefined()
+  })
+
+  it('gives the same length whatever the pieces are cut at', () => {
+    const csv = '0.5,0.25\n1.0,0.25\n7.75,0.25'
+    for (const size of [1, 2, 3, 7, 100]) expect(spanOf(csv, size)).toBe(7.5)
+  })
+
+  it('drops a line too long to be a packet, even when it comes in pieces', () => {
+    const junk = '9'.repeat(5000)
+    expect(spanOf(`1,1\n${junk}\n3,1\n`, 64)).toBe(3)
+    expect(spanOf(`1,1\n3,1\n${junk}`, 64)).toBe(3)
+  })
+})
+
+describe('stream', () => {
+  const node = process.execPath
+
+  it('hands on the output as it comes, with characters split between pieces kept whole', async () => {
+    const pieces: string[] = []
+    // "é" is two bytes; the first write ends between them
+    const script =
+      'process.stdout.write(Buffer.from([0x61, 0xc3]));' +
+      'setTimeout(() => process.stdout.write(Buffer.from([0xa9, 0x62])), 50)'
+    await stream(node, ['-e', script], (t) => pieces.push(t))
+    expect(pieces.join('')).toBe('aéb')
+    expect(pieces.length).toBeGreaterThan(1)
+  })
+
+  it('kills a program that says too much', async () => {
+    await expect(
+      stream(
+        node,
+        ['-e', 'process.stdout.write("x".repeat(100000)); setTimeout(() => {}, 10000)'],
+        () => {},
+        5000,
+        1000
+      )
+    ).rejects.toThrow(/SIGKILL/)
+  })
+})
+
+// The bundled ffprobe on a real mp3 with no Xing header, when it is there.
+const bin = (name: string): string => join(__dirname, '../../../resources/ffmpeg', name)
+describe.skipIf(!existsSync(bin('ffmpeg')) || !existsSync(bin('ffprobe')))('probeLength', () => {
+  it('counts the packets of an mp3 with no length header', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'spindle-probe-'))
+    try {
+      const mp3 = join(dir, 'a.mp3')
+      execFileSync(bin('ffmpeg'), [
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'sine=frequency=440:duration=3',
+        '-write_xing',
+        '0',
+        mp3
+      ])
+      // 3 s of sound, plus the encoder's padding in the last frame
+      const length = await probeLength(bin('ffprobe'), mp3)
+      expect(length).toBeGreaterThanOrEqual(3)
+      expect(length).toBeLessThan(3.05)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 

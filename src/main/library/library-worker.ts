@@ -35,7 +35,7 @@ import { walk } from './walk'
 import { pruneCoverFiles, removeOldTemp } from './cover-prune'
 import { ownCopy } from './bytes'
 import { FirstFill, ScanChain, Stopped } from './scan-chain'
-import { fileKey, findMoves, idMoves, moveEntries } from './moves'
+import { fileKey, findMoves, idMoves, moveEntries, movePlan } from './moves'
 import { mergeMoves, type IdMoves } from '../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
 import { markerOf, smallName } from './cover-names'
@@ -379,22 +379,14 @@ async function followMoves(
   skipped: string[],
   found: Found[]
 ): Promise<void> {
-  const present = new Set(found.map((f) => f.path))
-  const added = new Map<string, string>()
-  for (const f of found)
-    if (f.key && !ix.files.has(f.path) && !ix.cues.has(f.path)) added.set(f.path, f.key)
-  if (!added.size) return
-  const gone = [...ix.files.keys(), ...ix.cues.keys()].filter(
-    (p) =>
-      !present.has(p) && folders.some((f) => isUnder(p, f)) && !skipped.some((s) => isUnder(p, s))
-  )
-  if (!gone.length) return
+  const { added, gone } = movePlan(ix, found, folders, skipped)
+  if (!added.size || !gone.length) return
   // the old path still reaches the file (a symlink); a deleted file has none
   const goneKeys = new Map<string, string>()
   await eachPaced(gone, statPace, async (path) => {
     checkGen(gen)
     try {
-      const key = fileKey(await stat(path))
+      const key = fileKey(await stat(path, { bigint: true }))
       if (key) goneKeys.set(path, key)
     } catch {
       // deleted or moved away
@@ -457,11 +449,12 @@ async function scan(
     await eachPaced([...listing.files, ...listing.cues], statPace, async (path) => {
       checkGen(gen)
       try {
-        const s = await stat(path)
+        const s = await stat(path, { bigint: true })
         ;(cueSet.has(path) ? cues : found).push({
           path,
-          mtime: Math.floor(s.mtimeMs),
-          size: s.size,
+          // whole ms, as the index keeps them
+          mtime: Number(s.mtimeMs),
+          size: Number(s.size),
           key: fileKey(s)
         })
       } catch {
@@ -682,6 +675,8 @@ const chain = new ScanChain(ready, {
   prune: pruneCovers,
   // let a stopped scan's waits wake up and see the new number
   wake: wakeCoverWaiters,
+  // the window closed mid-scan: a new window must not show old progress
+  stopped: () => setStatus({ phase: 'idle', done: 0, total: 0 }),
   log
 })
 const firstFill = new FirstFill()

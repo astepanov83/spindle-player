@@ -33,6 +33,7 @@ function setup(ready: Promise<unknown> = Promise.resolve()): {
       events.push(chain.stale(gen) ? `prune ${gen} stopped` : `prune ${gen} done`)
     },
     wake: () => void wakes++,
+    stopped: () => void events.push('idle'),
     log: (t) => logs.push(t)
   })
   // A scan that checks its number, like the real one, until finish() or a stop.
@@ -157,7 +158,8 @@ describe('ScanChain', () => {
     await flush()
     chain.stop()
     await first
-    expect(events).toEqual(['a starts', 'a stopped'])
+    // nothing newer is waiting, so the status goes back to idle
+    expect(events).toEqual(['a starts', 'a stopped', 'idle'])
     const b = scan('b')
     const done = chain.request(b.run)
     await flush()
@@ -165,7 +167,7 @@ describe('ScanChain', () => {
     await flush()
     prunes.get(3)!()
     await done
-    expect(events.slice(2)).toEqual(['b starts', 'b done', 'prune 3', 'prune 3 done'])
+    expect(events.slice(3)).toEqual(['b starts', 'b done', 'prune 3', 'prune 3 done'])
   })
 
   it('starts nothing after close', async () => {

@@ -3,7 +3,7 @@ import type { CueSheet } from './cue'
 import { buildLibrary } from './group'
 import { shortHash } from './ids'
 import { emptyIndex } from './merge'
-import { fileKey, findMoves, idMoves, moveEntries } from './moves'
+import { fileKey, findMoves, idMoves, moveEntries, movePlan } from './moves'
 import type { FileEntry, LibraryIndex } from './types'
 
 const entry = (path: string, more: Partial<FileEntry> = {}): FileEntry => ({
@@ -47,8 +47,78 @@ const ids = (ix: LibraryIndex): string[] =>
 
 describe('fileKey', () => {
   it('is device and inode, and none without an inode', () => {
-    expect(fileKey({ dev: 5, ino: 42 })).toBe('5:42')
-    expect(fileKey({ dev: 5, ino: 0 })).toBeUndefined()
+    expect(fileKey({ dev: 5n, ino: 42n })).toBe('5:42')
+    expect(fileKey({ dev: 5n, ino: 0n })).toBeUndefined()
+  })
+
+  it('keeps an inode past 2^53 exact', () => {
+    const a = fileKey({ dev: 1n, ino: 2n ** 60n + 1n })
+    const b = fileKey({ dev: 1n, ino: 2n ** 60n })
+    expect(a).not.toBe(b)
+  })
+})
+
+describe('movePlan', () => {
+  const folders = ['/m', '/usb']
+  const ixWith = (...paths: string[]): LibraryIndex => {
+    const ix = emptyIndex()
+    for (const p of paths)
+      if (p.endsWith('.cue')) ix.cues.set(p, { path: p, mtime: 1, size: 1 })
+      else ix.files.set(p, entry(p))
+    return ix
+  }
+
+  it('takes new paths with a key, and paths gone from the music folders', () => {
+    const ix = ixWith('/m/link/a.flac', '/m/link/a.cue', '/m/kept.flac')
+    const plan = movePlan(
+      ix,
+      [
+        { path: '/m/real/a.flac', key: '1:1' },
+        { path: '/m/real/a.cue', key: '1:2' },
+        { path: '/m/kept.flac', key: '1:3' },
+        // no key: can't be matched
+        { path: '/m/real/b.flac' }
+      ],
+      folders,
+      []
+    )
+    expect(plan.added).toEqual(
+      new Map([
+        ['/m/real/a.flac', '1:1'],
+        ['/m/real/a.cue', '1:2']
+      ])
+    )
+    // cue sheets count too
+    expect(plan.gone.sort()).toEqual(['/m/link/a.cue', '/m/link/a.flac'])
+  })
+
+  it('leaves out folders that could not be read, and paths outside the folders', () => {
+    const ix = ixWith('/usb/x.flac', '/m/gone/y.flac', '/old/z.flac', '/m/z.flac')
+    // /usb is unplugged; /m/gone could not be read; /old is no music folder any more
+    const plan = movePlan(ix, [{ path: '/m/new.flac', key: '1:9' }], folders, ['/usb', '/m/gone'])
+    expect(plan.gone).toEqual(['/m/z.flac'])
+  })
+
+  it('asks for no stat when nothing was added', () => {
+    const ix = ixWith('/m/a.flac', '/m/b.flac')
+    const plan = movePlan(ix, [{ path: '/m/a.flac', key: '1:1' }], folders, [])
+    expect(plan.added.size).toBe(0)
+    expect(plan.gone).toEqual([])
+  })
+
+  it('asks for no stat when nothing is gone', () => {
+    const ix = ixWith('/m/a.flac')
+    const plan = movePlan(
+      ix,
+      [
+        { path: '/m/a.flac', key: '1:1' },
+        { path: '/m/new.flac', key: '1:2' }
+      ],
+      folders,
+      []
+    )
+    expect(plan.added.size).toBe(0)
+    expect(plan.gone).toEqual([])
   })
 })
 

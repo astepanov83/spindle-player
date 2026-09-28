@@ -15,11 +15,15 @@ export interface ChainHooks {
   prune(gen: number): Promise<void>
   // a scan was stopped or replaced: wake whatever a scan waits on, so it sees that
   wake(): void
+  // a scan stopped and no newer one was asked for
+  stopped?(): void
   log(text: string): void
 }
 
 export class ScanChain {
   #gen = 0
+  // the number of the last scan asked for
+  #asked = 0
   #closed = false
   // the last scan asked for and its prune
   #last: Promise<void>
@@ -54,6 +58,7 @@ export class ScanChain {
   request(scan: (gen: number) => Promise<void>): Promise<void> {
     if (this.#closed) return this.#last
     const gen = ++this.#gen
+    this.#asked = gen
     this.hooks.wake()
     this.#last = this.#last.then(async () => {
       // a newer scan was asked for while this one waited
@@ -61,7 +66,12 @@ export class ScanChain {
       try {
         await scan(gen)
       } catch (e) {
-        if (e instanceof Stopped) return
+        if (e instanceof Stopped) {
+          // stopped with no newer scan to take over (the window closed): the
+          // status must not stay on its progress
+          if (this.#asked <= gen && !this.#closed) this.hooks.stopped?.()
+          return
+        }
         this.hooks.log(`Library scan failed: ${e}`)
       }
       try {

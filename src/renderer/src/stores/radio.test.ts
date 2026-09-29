@@ -487,6 +487,23 @@ describe('the time listened', () => {
     expect(at()).toBe(8)
   })
 
+  it('never goes below what was heard when asked with a time from before the sound started', async () => {
+    // the controls' tick keeps its own now, up to 1 s old
+    await start(mine[1])
+    const stale = Date.now()
+    await vi.advanceTimersByTimeAsync(400)
+    ev.playing!()
+    expect(radio.listened(stale)).toBe(0)
+    await vi.advanceTimersByTimeAsync(5000)
+    radio.pause()
+    const heard = radio.listened()
+    const stale2 = Date.now()
+    await radio.resume()
+    await vi.advanceTimersByTimeAsync(300)
+    ev.playing!()
+    expect(radio.listened(stale2)).toBe(heard)
+  })
+
   it('starts from 0 on another station', async () => {
     await start(mine[0])
     ev.playing!()
@@ -508,6 +525,17 @@ describe('saving the station', () => {
     expect(save).toHaveBeenCalledWith(found)
     expect(radio.saved).toBe(true)
     expect(radio.stations.at(-1)?.id).toBe('rb-1')
+  })
+
+  it('a second click while saving sends nothing more', async () => {
+    const found = st('rb-2', [128])
+    await start(found)
+    save.mockClear()
+    const first = radio.save()
+    const second = radio.save()
+    await Promise.all([first, second])
+    expect(save).toHaveBeenCalledOnce()
+    expect(radio.saved).toBe(true)
   })
 
   it('a station of My stations is saved already', async () => {

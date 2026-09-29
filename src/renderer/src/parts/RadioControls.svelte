@@ -53,8 +53,9 @@
     <div class="bl">
       <div class="minicv"><Cover src={playing.art?.cover} /></div>
       <div class="meta">
-        <div class="song-title">{playing.title}</div>
-        <div class="song-sub">{playing.sub}</div>
+        <!-- cut sooner when Save shows: the tooltip has it whole -->
+        <div class="song-title" title={playing.title}>{playing.title}</div>
+        <div class="song-sub" title={playing.sub}>{playing.sub}</div>
       </div>
       {@render save()}
     </div>

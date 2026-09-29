@@ -5,6 +5,7 @@ export function fmtTime(s: number): string {
 
 // The time listened to a station: 754 -> "12:34", 4360 -> "1:12:40"
 export function fmtClock(s: number): string {
+  s = Math.max(0, s)
   const h = Math.floor(s / 3600)
   if (!h) return fmtTime(s)
   const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0')

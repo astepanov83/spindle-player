@@ -67,6 +67,7 @@ class RadioStore {
   #retryTimer: ReturnType<typeof setTimeout> | undefined
   #stallTimer: ReturnType<typeof setTimeout> | undefined
   #listening = false
+  #saving = false
 
   // The engine's events while radio has the player (playing.svelte.ts passes them on).
   readonly events: Partial<EngineEvents> = {
@@ -170,18 +171,25 @@ class RadioStore {
 
   // ms of sound from this station since it was picked
   listened(now = Date.now()): number {
-    return this.#heardMs + (this.#soundSince === undefined ? 0 : now - this.#soundSince)
+    // the controls' tick can hold a now from just before the sound started
+    return (
+      this.#heardMs + (this.#soundSince === undefined ? 0 : Math.max(0, now - this.#soundSince))
+    )
   }
 
   // Save: a station tried from search goes into My stations.
   async save(): Promise<void> {
     const s = this.station
-    if (!s || this.saved) return
+    // a second click while main saves
+    if (!s || this.saved || this.#saving) return
+    this.#saving = true
     try {
       this.stations = await window.radioApi.save($state.snapshot(s) as Station)
     } catch (e) {
       window.playbackApi.log(`Radio ${s.id}: radio:save failed: ${String(e)}`)
       notice.show(`Couldn't save ${s.name}`)
+    } finally {
+      this.#saving = false
     }
   }
 

@@ -13,4 +13,6 @@ it('formats a long time as h:mm:ss, a short one as m:ss', () => {
   expect(fmtClock(3599)).toBe('59:59')
   expect(fmtClock(3600)).toBe('1:00:00')
   expect(fmtClock(4360)).toBe('1:12:40')
+  // a clock read a moment early
+  expect(fmtClock(-0.4)).toBe('0:00')
 })

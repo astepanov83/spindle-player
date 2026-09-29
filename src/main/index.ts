@@ -25,7 +25,15 @@ import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
 import { findStreams } from './radio/find-streams'
 import { fetchLogo } from './radio/logo-fetch'
-import { keptLogos, metalOnlyLogo, needsBundledLogo, sitePrefix, StationLogos } from './radio/logos'
+import {
+  keptLogos,
+  metalOnlyLogo,
+  needsBundledLogo,
+  onLocalNetwork,
+  sitePrefix,
+  StationLogos
+} from './radio/logos'
+import { checkedFetch } from './radio/checked-fetch'
 import { fetchSiteLogo } from './radio/site-icons'
 import { PlayedStations } from './radio/play'
 import { RadioBrowser, resolveMirrors } from './radio/radio-browser'
@@ -248,6 +256,9 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   const radioFetch: typeof fetch = (url, init) => net.fetch(url as string, init)
   const radioLog = (text: string): void => console.warn(text)
   const radioAgent = `Spindle/${app.getVersion()}`
+  // logos and homepages: each redirect checked, local addresses only for a local station
+  const logoFetch = (privateOk: boolean): typeof fetch =>
+    checkedFetch((o) => net.request(o), privateOk)
   // before the library starts, so its first prune keeps these covers
   const songFile = openSongCovers(
     join(userData, 'radio-covers.json'),
@@ -282,15 +293,13 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     ]
   )
   logos = new StationLogos({
-    load: async (source) => {
+    load: async (source, station) => {
       if (source === metalOnlyLogo) return new Uint8Array(await readFile(metalOnlyLogoPath))
+      const privateOk = onLocalNetwork(station)
+      const o = { fetch: logoFetch(privateOk), userAgent: radioAgent, privateOk }
       // a station with no logo, or one that failed: its homepage's icons (ticket 033)
-      if (source.startsWith(sitePrefix))
-        return fetchSiteLogo(source.slice(sitePrefix.length), {
-          fetch: radioFetch,
-          userAgent: radioAgent
-        })
-      return fetchLogo(source, { fetch: radioFetch, userAgent: radioAgent })
+      if (source.startsWith(sitePrefix)) return fetchSiteLogo(source.slice(sitePrefix.length), o)
+      return fetchLogo(source, o)
     },
     cache: library.covers,
     kept: () => library.coversKept(),
@@ -320,7 +329,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     known: (id) => !!played.lookup(id)
   })
   resultLogos = new ResultLogos({
-    load: (url, signal) => fetchLogo(url, { fetch: radioFetch, userAgent: radioAgent, signal }),
+    load: (url, signal) =>
+      fetchLogo(url, { fetch: logoFetch(false), userAgent: radioAgent, signal }),
     log: radioLog
   })
   const radioRequest = (id: string, stream: string | null): Promise<Response> => {

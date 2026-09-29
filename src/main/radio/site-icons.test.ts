@@ -11,13 +11,13 @@ const og = 'https://vsh-smedia.radioparadise.com/uploads/RP_Logo_Flat_HCR_Green_
 const be32 = (n: number): number[] => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]
 const ascii = (t: string): number[] => [...t].map((c) => c.charCodeAt(0))
 // a PNG as far as its size, which is all fetchLogo reads
-const png = (side: number): Uint8Array<ArrayBuffer> =>
+const png = (width: number, height = width): Uint8Array<ArrayBuffer> =>
   new Uint8Array([
     ...[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
     ...be32(13),
     ...ascii('IHDR'),
-    ...be32(side),
-    ...be32(side),
+    ...be32(width),
+    ...be32(height),
     8,
     2,
     0,
@@ -32,7 +32,7 @@ type Answer = string | Uint8Array<ArrayBuffer> | number | (() => Response)
 interface Site {
   fetch: typeof fetch
   asked: string[]
-  opts: { fetch: typeof fetch; userAgent: string }
+  opts: { fetch: typeof fetch; userAgent: string; privateOk?: boolean }
 }
 function site(answers: Record<string, Answer>, at: Record<string, string> = {}): Site {
   const asked: string[] = []
@@ -90,10 +90,11 @@ describe('iconCandidates', () => {
       <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
       <link rel="apple-touch-icon-precomposed" sizes="152x152" href="/touch.png">`
     expect(iconCandidates(html, 'https://x.example/')).toEqual([
-      'https://x.example/share.jpg?w=1&h=2',
       'https://x.example/touch.png',
       'https://x.example/plain.png',
       'https://x.example/small.png',
+      // a wide share picture: tried last, as it only wins when nothing square loads
+      'https://x.example/share.jpg?w=1&h=2',
       'https://x.example/favicon.ico'
     ])
   })
@@ -105,16 +106,28 @@ describe('iconCandidates', () => {
       <link rel="icon" href="data:image/png;base64,AAAA">
       <link rel="icon" href="javascript:alert(1)">
       <!-- <link rel="apple-touch-icon" href="/old.png"> -->
+      <style>a::before { content: "<link rel=icon href=/css.png>" }</style>
       <script>document.write('<link rel="icon" href="/js.png">')</script>`
     expect(iconCandidates(html, 'https://x.example/')).toEqual(['https://x.example/favicon.ico'])
   })
 
   it('scans a hostile page of unclosed tags quickly (it runs in main)', () => {
-    for (const bad of ['<link ', '<link "', "<meta a='"]) {
+    const bads = ['<link ', '<link "', "<meta a='", '<!--', '<script>', '<script><!--', '</style ']
+    for (const bad of bads) {
       const t = performance.now()
       iconCandidates(bad.repeat((512 * 1024) / bad.length), 'https://x.example/')
       expect(performance.now() - t).toBeLessThan(500)
     }
+  })
+
+  it('takes a comment start inside a script as script text', () => {
+    const html = `<script>var s = "<!--";</script><link rel=icon sizes=96x96 href=/after.png>
+      <!-- <script> --><link rel=icon sizes=32x32 href=/after-comment.png>`
+    expect(iconCandidates(html, 'https://x.example/')).toEqual([
+      'https://x.example/after.png',
+      'https://x.example/after-comment.png',
+      'https://x.example/favicon.ico'
+    ])
   })
 
   it('lists /favicon.ico once', () => {
@@ -125,16 +138,78 @@ describe('iconCandidates', () => {
 })
 
 describe('fetchSiteLogo', () => {
-  it('stops at the first icon of 64px or more, biggest hint first', async () => {
+  it('keeps the biggest square icon that loads', async () => {
     const pic = png(180)
     const s = site({
       [home]: paradise,
       [og]: 404,
       'https://radioparadise.com/apple-touch-icon.png': pic,
-      'https://radioparadise.com/favicon.ico': png(32)
+      'https://radioparadise.com/favicon.ico': png(48),
+      'https://radioparadise.com/favicon-32x32.png': png(32)
     })
     expect(await fetchSiteLogo(home, s.opts)).toEqual(pic)
-    expect(s.asked).toEqual([home, og, 'https://radioparadise.com/apple-touch-icon.png'])
+    expect(s.asked).toHaveLength(6)
+  })
+
+  it('takes a square icon over a bigger wide share picture', async () => {
+    // the page says 1000x1000; the picture is a 1200x630 banner
+    const apple = png(180)
+    const s = site({
+      [home]: paradise,
+      [og]: png(1200, 630),
+      'https://radioparadise.com/apple-touch-icon.png': apple
+    })
+    expect(await fetchSiteLogo(home, s.opts)).toEqual(apple)
+  })
+
+  it('takes an unsized 180px apple-touch-icon over a 96x96 icon', async () => {
+    const apple = png(180)
+    const s = site({
+      'https://x.example/':
+        '<link rel="icon" sizes="96x96" href="/i96.png"><link rel="apple-touch-icon" href="/t.png">',
+      'https://x.example/i96.png': png(96),
+      'https://x.example/t.png': apple
+    })
+    expect(await fetchSiteLogo('https://x.example/', s.opts)).toEqual(apple)
+  })
+
+  it('counts a little off square as square, and a wide picture only when nothing square loads', async () => {
+    const wide = png(1200, 630)
+    const html =
+      '<meta property="og:image" content="/og.png"><link rel="apple-touch-icon" href="/t.png">'
+    const s = site({
+      'https://x.example/': html,
+      'https://x.example/og.png': png(1200, 1000),
+      'https://x.example/t.png': png(200, 240)
+    })
+    // 1200x1000 is square enough (1.2) and bigger
+    expect(await fetchSiteLogo('https://x.example/', s.opts)).toEqual(png(1200, 1000))
+    const s2 = site({
+      'https://x.example/': html,
+      'https://x.example/og.png': wide,
+      'https://x.example/t.png': png(32)
+    })
+    expect(await fetchSiteLogo('https://x.example/', s2.opts)).toEqual(png(32))
+    const s3 = site({ 'https://x.example/': html, 'https://x.example/og.png': wide })
+    expect(await fetchSiteLogo('https://x.example/', s3.opts)).toEqual(wide)
+  })
+
+  it('refuses icons on the local network, unless the station is there too', async () => {
+    const html = `<link rel="apple-touch-icon" href="http://192.168.1.1/t.png">
+      <link rel="icon" href="http://[::1]/i.png"><link rel="icon" href="http://localhost/l.png">`
+    const answers = {
+      'https://x.example/': html,
+      'http://192.168.1.1/t.png': png(180),
+      'https://x.example/favicon.ico': png(16)
+    }
+    const s = site(answers)
+    expect(await fetchSiteLogo('https://x.example/', s.opts)).toEqual(png(16))
+    expect(s.asked).toEqual(['https://x.example/', 'https://x.example/favicon.ico'])
+    const ok = site(answers)
+    expect(await fetchSiteLogo('https://x.example/', { ...ok.opts, privateOk: true })).toEqual(
+      png(180)
+    )
+    await expect(fetchSiteLogo('http://10.0.0.2/', s.opts)).rejects.toThrow(/local network/)
   })
 
   it('keeps the biggest one that loads when none is 64px', async () => {

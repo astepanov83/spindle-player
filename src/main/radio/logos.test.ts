@@ -7,6 +7,7 @@ import {
   logoSource,
   logoSources,
   metalOnlyLogo,
+  onLocalNetwork,
   needsBundledLogo,
   StationLogos,
   type LogoDeps
@@ -78,6 +79,14 @@ describe('logoSources', () => {
     ])
     expect(logoSources(st('a', { site }))).toEqual(['site:https://a.example/'])
     expect(logoSources(st('a'))).toEqual([])
+  })
+})
+
+describe('onLocalNetwork', () => {
+  it('is true when the station’s site or a stream is on a local address', () => {
+    expect(onLocalNetwork(st('a', { site: 'http://192.168.1.2/' }))).toBe(true)
+    expect(onLocalNetwork(st('a', { streams: [{ url: 'http://10.0.0.3:8000/s' }] }))).toBe(true)
+    expect(onLocalNetwork(st('a', { site: 'https://a.example/' }))).toBe(false)
   })
 })
 
@@ -278,7 +287,7 @@ describe('StationLogos from the homepage (ticket 033)', () => {
     expect(await logos.logoFor(st('a', { logoUrl: url, site, logo: fromSite }))).toBe(fromSite)
     // the logo url is tried once this run, the homepage not again
     expect(d.load).toHaveBeenCalledTimes(1)
-    expect(d.load).toHaveBeenCalledWith(url)
+    expect(d.load).toHaveBeenCalledWith(url, expect.anything())
   })
 
   it('takes the logo url’s logo once it appears or loads', async () => {
@@ -290,6 +299,27 @@ describe('StationLogos from the homepage (ticket 033)', () => {
       from: url
     })
     expect(d.loads).toEqual([url])
+  })
+
+  it('hands the station to load, so it can tell a local station', async () => {
+    const d = deps()
+    const s = st('a', { site })
+    await new StationLogos(d).logoFor(s)
+    expect(d.load).toHaveBeenCalledWith(`site:${site}`, s)
+  })
+
+  it('keeps a logo with no source before it reads the homepage', async () => {
+    const d = deps()
+    d.load.mockRejectedValue(new Error('HTTP 404'))
+    d.files.add(picHash)
+    const noSource: StationLogo = { hash: picHash, palette, v: paletteVersion }
+    const logos = new StationLogos(d)
+    expect(await logos.logoFor(st('a', { logoUrl: url, site, logo: noSource }))).toBe(noSource)
+    expect(d.load.mock.calls.map((c) => c[0])).toEqual([url])
+    // with its files gone the homepage is read
+    d.files.clear()
+    d.load.mockResolvedValue(pic)
+    expect(await logos.logoFor(st('a', { logoUrl: url, site, logo: noSource }))).toEqual(fromSite)
   })
 
   it('reads the homepage again when the station’s site changed', async () => {

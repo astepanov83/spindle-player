@@ -3,7 +3,7 @@
 // nothing in it runs. Each icon goes through fetchLogo, so the same type, size
 // and pixel checks hold as for a logo address.
 import { smallLogoSide } from '../../shared/stations'
-import { fetchLogo, pictureSize } from './logo-fetch'
+import { fetchLogo, pictureSize, refusedAddress } from './logo-fetch'
 
 export interface SiteLogoOptions {
   // net.fetch in the app; a fake in tests
@@ -11,13 +11,15 @@ export interface SiteLogoOptions {
   userAgent: string
   // for the page, and for each icon
   timeoutMs?: number
+  // local network addresses too: only for a station that is on one itself
+  privateOk?: boolean
 }
 
 const timeoutMs = 10000
 // Icons are in the <head>; a page past this is cut, not refused.
 const maxPageBytes = 512 * 1024
-// Icons downloaded per homepage at most, so a page with many icons that all
-// fail or are small costs a few requests, not dozens.
+// Icons downloaded per homepage at most, so a page with many icons costs a
+// few requests, not dozens.
 export const maxIconTries = 6
 
 const isWeb = (u: URL): boolean => u.protocol === 'http:' || u.protocol === 'https:'
@@ -47,11 +49,13 @@ interface Tag {
   attrs: Map<string, string>
 }
 
-// <link>, <meta> and <base> tags outside comments, scripts and styles.
+// <link>, <meta> and <base> tags outside comments, scripts and styles. One
+// pass takes whichever starts first, so "<!--" in a script is script text.
 function tags(html: string): Tag[] {
-  const text = html
-    .replace(/<!--[\s\S]*?(-->|$)/g, '')
-    .replace(/<(script|style|template)\b[\s\S]*?(<\/\1\s*>|$)/gi, '')
+  const text = html.replace(
+    /<!--[\s\S]*?(?:-->|$)|<(script|style|template)\b[\s\S]*?(?:<\/\1\s*>|$)/gi,
+    ''
+  )
   const out: Tag[] = []
   // A tag never runs past the next '<', so a page of unclosed tags is scanned
   // in one pass, not once per tag (this runs in main).
@@ -83,11 +87,14 @@ interface Candidate {
   hint?: number
   // for unsized ones: apple-touch-icon, og:image, icon
   rank: number
+  // the page says it is not square (a share banner)
+  wide?: boolean
 }
 
 // The icons to try, in order: sized ones of 64px or more (biggest first),
 // then the unsized ones (apple-touch-icon, og:image, icon), then the small
-// sized ones, then /favicon.ico. Relative addresses are resolved against the
+// sized ones, then an og:image the page says is not square, then
+// /favicon.ico. Only the first maxIconTries are asked. Relative addresses are resolved against the
 // base href, else the page's own address (where it ended up after redirects).
 export function iconCandidates(html: string, pageUrl: string): string[] {
   const found = tags(html)
@@ -103,10 +110,11 @@ export function iconCandidates(html: string, pageUrl: string): string[] {
     href: string | undefined,
     type: string | undefined,
     rank: number,
-    hint?: number
+    hint?: number,
+    wide?: boolean
   ): void => {
     const u = webUrl(href, base)
-    if (u && !isSvg(u, type)) list.push({ url: u.href, hint, rank })
+    if (u && !isSvg(u, type)) list.push({ url: u.href, hint, rank, wide })
   }
   for (const t of found) {
     if (t.name !== 'link') continue
@@ -120,10 +128,11 @@ export function iconCandidates(html: string, pageUrl: string): string[] {
   const og = meta('og:image') ?? meta('og:image:url') ?? meta('og:image:secure_url')
   const w = Number(meta('og:image:width'))
   const h = Number(meta('og:image:height'))
-  add(og, meta('og:image:type'), 1, w > 0 && h > 0 ? Math.min(w, h) : undefined)
+  const sized = w > 0 && h > 0
+  add(og, meta('og:image:type'), 1, sized ? Math.min(w, h) : undefined, sized && !square(w, h))
 
   const group = (c: Candidate): number =>
-    c.hint === undefined ? 1 : c.hint >= smallLogoSide ? 0 : 2
+    c.wide ? 3 : c.hint === undefined ? 1 : c.hint >= smallLogoSide ? 0 : 2
   const sorted = list
     .map((c, i) => ({ c, i }))
     .sort(
@@ -157,17 +166,30 @@ async function readHead(res: Response): Promise<Uint8Array> {
   return out.subarray(0, size)
 }
 
-const shorter = (b: Uint8Array): number => {
-  const s = pictureSize(b)
-  return s ? Math.min(s.width, s.height) : 0
+// Near enough to square for the stage, which crops a cover to its middle
+// square: a 1200x630 share banner would lose its sides.
+function square(w: number, h: number): boolean {
+  return Math.max(w, h) <= 1.25 * Math.min(w, h)
 }
 
-// The logo from the station's homepage: tries the icons in iconCandidates'
-// order and stops at the first that loads at 64px or more; else keeps the
-// biggest that loaded. Throws with the reason when none did.
+// Square first, then the bigger shorter side; a tie keeps the earlier one.
+function better(a: Uint8Array, b: Uint8Array | undefined): boolean {
+  if (!b) return true
+  const sa = pictureSize(a)!
+  const sb = pictureSize(b)!
+  const qa = square(sa.width, sa.height)
+  const qb = square(sb.width, sb.height)
+  if (qa !== qb) return qa
+  return Math.min(sa.width, sa.height) > Math.min(sb.width, sb.height)
+}
+
+// The logo from the station's homepage: downloads the first maxIconTries of
+// iconCandidates and keeps the best (see better); a picture that is not
+// square only when no square one loaded. Throws with the reason when none did.
 export async function fetchSiteLogo(site: string, o: SiteLogoOptions): Promise<Uint8Array> {
+  const refused = refusedAddress(site, o.privateOk)
+  if (refused) throw new Error(refused)
   const u = new URL(site)
-  if (!isWeb(u)) throw new Error('not a web address')
   const ms = o.timeoutMs ?? timeoutMs
   // Chromium follows at most 20 redirects
   const res = await o.fetch(u.href, {
@@ -178,21 +200,33 @@ export async function fetchSiteLogo(site: string, o: SiteLogoOptions): Promise<U
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const type = res.headers.get('content-type') ?? ''
   if (type && !/html/i.test(type)) throw new Error(`not a web page (${type})`)
+  // Response.url is where it ended up; the app's fetch sets it (net.fetch does not)
   const page = webUrl(res.url, site)?.href ?? u.href
+  const landed = refusedAddress(page, o.privateOk)
+  if (landed) {
+    await res.body?.cancel().catch(() => {})
+    throw new Error(landed)
+  }
   const html = new TextDecoder().decode(await readHead(res))
 
   let best: Uint8Array | undefined
   const reasons: string[] = []
-  for (const url of iconCandidates(html, page).slice(0, maxIconTries)) {
+  // local ones are dropped first, so they can't use up the tries
+  const urls = iconCandidates(html, page).filter((x) => !refusedAddress(x, o.privateOk))
+  for (const url of urls.slice(0, maxIconTries)) {
     let pic: Uint8Array
     try {
-      pic = await fetchLogo(url, { fetch: o.fetch, userAgent: o.userAgent, timeoutMs: ms })
+      pic = await fetchLogo(url, {
+        fetch: o.fetch,
+        userAgent: o.userAgent,
+        timeoutMs: ms,
+        privateOk: o.privateOk
+      })
     } catch (e) {
       reasons.push(`${url}: ${String(e)}`)
       continue
     }
-    if (shorter(pic) >= smallLogoSide) return pic
-    if (!best || shorter(pic) > shorter(best)) best = pic
+    if (better(pic, best)) best = pic
   }
   if (best) return best
   throw new Error(`no icon on the page (${reasons.join('; ')})`)

@@ -5,6 +5,7 @@
 import { hash } from 'crypto'
 import { sameLogo, smallLogoSide, type Station, type StationLogo } from '../../shared/stations'
 import { paletteVersion, type ThemePalettes } from '../../shared/palette'
+import { localAddress } from './logo-fetch'
 
 // Metal Only's logo comes with the app (resources/metal-only.png), so the
 // first start needs no request. It goes through the same steps as a fetched one.
@@ -31,6 +32,12 @@ export function logoSources(s: Station): string[] {
   return out
 }
 
+// A station on the local network (its site or a stream there) may have its
+// logo there too; for any other, local addresses are refused.
+export function onLocalNetwork(s: Station): boolean {
+  return localAddress(s.site) || s.streams.some((x) => localAddress(x.url))
+}
+
 // A station whose logo ships with the app and is not made yet (Metal Only on
 // the first run): made at start from the file, with no request.
 export function needsBundledLogo(s: Station): boolean {
@@ -50,8 +57,8 @@ export interface LogoCache {
 
 export interface LogoDeps {
   // the picture from a source (a web address, metalOnlyLogo or a sitePrefix
-  // homepage); throws with the reason
-  load(source: string): Promise<Uint8Array>
+  // homepage) for this station; throws with the reason
+  load(source: string, station: Station): Promise<Uint8Array>
   cache: LogoCache
   // keptThisRun() grew: the cover prune must hear of it before the files are written
   kept(): void
@@ -86,16 +93,19 @@ export class StationLogos {
   // it has while its files are in the cache and it came from that source,
   // else one made from that source; if that fails, the next source. None
   // left: no logo. A logo with no `from` (made before it was kept) may be
-  // from an older address, so it is made again from the sources once; if
-  // that fails it is kept while its files are there.
+  // from an older address, so it is made again from the logo address once;
+  // if that fails it is kept while its files are there, before the homepage
+  // is read: it came from the station's own logo, a homepage icon may not.
   async logoFor(station: Station): Promise<StationLogo | undefined> {
     const have = station.logo
+    const legacy = async (): Promise<boolean> => !!have && !have.from && (await this.#has(have))
     for (const source of logoSources(station)) {
+      if (source.startsWith(sitePrefix) && (await legacy())) return this.#withNewColors(have!)
       if (have?.from === source && (await this.#has(have))) return this.#withNewColors(have)
-      const made = await this.#fromSource(source)
+      const made = await this.#fromSource(source, station)
       if (made) return made
     }
-    if (have && !have.from && (await this.#has(have))) return this.#withNewColors(have)
+    if (await legacy()) return this.#withNewColors(have!)
     return undefined
   }
 
@@ -126,22 +136,24 @@ export class StationLogos {
     return true
   }
 
-  async #fromSource(source: string): Promise<StationLogo | undefined> {
+  // Made once per source per run; the first station to ask decides whether a
+  // local address may be asked.
+  async #fromSource(source: string, station: Station): Promise<StationLogo | undefined> {
     const made = this.#made.get(source)
     if (made && (await this.#has(made))) return made
     if (this.#failed.has(source)) return undefined
     let job = this.#busy.get(source)
     if (!job) {
-      job = this.#make(source).finally(() => this.#busy.delete(source))
+      job = this.#make(source, station).finally(() => this.#busy.delete(source))
       this.#busy.set(source, job)
     }
     return job
   }
 
-  async #make(source: string): Promise<StationLogo | undefined> {
+  async #make(source: string, station: Station): Promise<StationLogo | undefined> {
     let data: Uint8Array
     try {
-      data = await this.d.load(source)
+      data = await this.d.load(source, station)
     } catch (e) {
       this.#failed.add(source)
       this.d.log(`Could not fetch a station logo from ${source}: ${String(e)}`)

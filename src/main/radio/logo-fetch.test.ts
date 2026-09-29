@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fetchLogo, isLogoPicture, pictureSize } from './logo-fetch'
+import { fetchLogo, isLogoPicture, localAddress, pictureSize, privateHost } from './logo-fetch'
 
 const be32 = (n: number): number[] => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]
 const le16 = (n: number): number[] => [n & 255, n >>> 8]
@@ -179,5 +179,67 @@ describe('isLogoPicture', () => {
     for (const k of kinds) expect(isLogoPicture(new Uint8Array(k))).toBe(true)
     expect(isLogoPicture(new TextEncoder().encode('<svg xmlns='))).toBe(false)
     expect(isLogoPicture(new Uint8Array())).toBe(false)
+  })
+})
+
+describe('privateHost', () => {
+  it('knows loopback, private and link-local addresses, as the URL parser writes them', () => {
+    const host = (u: string): string => new URL(u).hostname
+    for (const u of [
+      'http://127.0.0.1/',
+      'http://0x7f.1/',
+      'http://2130706433/',
+      'http://10.1.2.3/',
+      'http://172.16.0.1/',
+      'http://172.31.255.255/',
+      'http://192.168.1.1/',
+      'http://169.254.169.254/',
+      'http://100.64.0.1/',
+      'http://0.0.0.0/',
+      'http://[::1]/',
+      'http://[::]/',
+      'http://[fe80::1]/',
+      'http://[fd12:3456::1]/',
+      'http://[::ffff:127.0.0.1]/',
+      'http://[::ffff:192.168.0.1]/',
+      'http://localhost/',
+      'http://LOCALHOST./',
+      'http://radio.localhost/'
+    ])
+      expect(privateHost(host(u)), u).toBe(true)
+    for (const u of [
+      'http://8.8.8.8/',
+      'http://172.32.0.1/',
+      'http://[2001:4860::8888]/',
+      'http://example.com/',
+      'http://localhost.example.com/'
+    ])
+      expect(privateHost(host(u)), u).toBe(false)
+  })
+})
+
+describe('localAddress', () => {
+  it('is true for a web address on the local network', () => {
+    expect(localAddress('http://192.168.1.5:8000/stream')).toBe(true)
+    expect(localAddress('https://example.com/')).toBe(false)
+    expect(localAddress('not a url')).toBe(false)
+    expect(localAddress(undefined)).toBe(false)
+  })
+})
+
+describe('fetchLogo on the local network', () => {
+  it('refuses a local address unless the caller allows it', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => answer(png))
+    for (const u of ['http://127.0.0.1/l.png', 'http://[::1]/l.png', 'http://localhost/l.png'])
+      await expect(fetchLogo(u, { fetch, userAgent: 'x' })).rejects.toThrow(/local network/)
+    expect(fetch).not.toHaveBeenCalled()
+    expect(
+      await fetchLogo('http://10.0.0.5/l.png', { fetch, userAgent: 'x', privateOk: true })
+    ).toEqual(png)
+  })
+
+  it('refuses a picture that ended up on the local network after a redirect', async () => {
+    const fetch = async (): Promise<Response> => answer(png, 200, 'http://192.168.0.1/l.png')
+    await expect(fetchLogo(url, { fetch, userAgent: 'x' })).rejects.toThrow(/local network/)
   })
 })

@@ -4,7 +4,9 @@
   import AlbumPage from './AlbumPage.svelte'
   import ArtistView from './ArtistView.svelte'
   import FolderView from './FolderView.svelte'
+  import NoLibrary from './NoLibrary.svelte'
   import PlaylistView from './PlaylistView.svelte'
+  import RadioView from './RadioView.svelte'
   import SearchBox from './SearchBox.svelte'
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
@@ -19,7 +21,8 @@
     ['songs', 'note', 'Songs'],
     ['albums', 'disc', 'Albums'],
     ['artists', 'person', 'Artists'],
-    ['folders', 'folder', 'Folders']
+    ['folders', 'folder', 'Folders'],
+    ['radio', 'radio', 'Radio']
   ]
 
   let scrollEl: HTMLDivElement | undefined = $state()
@@ -80,7 +83,12 @@
     {/each}
   </aside>
   <div class="main" bind:this={scrollEl}>
-    {#if library.section === 'songs'}
+    {#if library.section === 'radio'}
+      <RadioView />
+    {:else if !library.albums.length}
+      <!-- radio needs no songs, so the sidebar stays -->
+      <div class="fill"><NoLibrary /></div>
+    {:else if library.section === 'songs'}
       <SongTable title="Songs" meta="Library" items={songs} {scrollEl} />
     {:else if library.section === 'albums'}
       {#if library.open}
@@ -170,6 +178,11 @@
     background: var(--active);
     color: var(--ink);
     font-weight: 600;
+  }
+  .fill {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
   }
   .main {
     flex: 1;

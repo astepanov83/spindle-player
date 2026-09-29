@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { Station, Stream } from '../../../shared/stations'
 import {
   backNote,
+  bitrateLine,
+  stationLine,
+  stationMatches,
   cantPlayFormat,
   heardAt,
   msToMidnight,
@@ -202,5 +205,40 @@ describe('recent songs (031)', () => {
     expect(backNote('Powerslave', 1)).toBe('From Powerslave, 1 song')
     expect(backNote('', 1200)).toBe('1,200 songs')
     expect(backNote('Late Night', 0)).toBe('The queue is empty')
+  })
+})
+
+describe('Radio view rows (ticket 029)', () => {
+  const s: Station = {
+    id: 'rb-1',
+    name: 'SomaFM Drone Zone',
+    tags: ['ambient', 'drone', 'space', 'chillout'],
+    country: 'US',
+    streams: [
+      { url: 'https://x/1', bitrate: 128 },
+      { url: 'https://x/2', bitrate: 64 },
+      { url: 'https://x/3' },
+      { url: 'https://x/4', bitrate: 128 },
+      { url: 'https://x/5', bitrate: 320 }
+    ]
+  }
+
+  it('filters by name, tag or country, any case', () => {
+    expect(stationMatches(s, '')).toBe(true)
+    expect(stationMatches(s, 'drone z')).toBe(true)
+    expect(stationMatches(s, 'SPACE')).toBe(true)
+    expect(stationMatches(s, 'us')).toBe(true)
+    expect(stationMatches(s, 'metal')).toBe(false)
+  })
+
+  it('lists the known bitrates once, lowest first', () => {
+    expect(bitrateLine(s)).toBe('64 128 320')
+    expect(bitrateLine({ ...s, streams: [{ url: 'https://x/3' }] })).toBe('')
+  })
+
+  it('shows three tags and the country', () => {
+    expect(stationLine(s)).toBe('ambient, drone, space · us')
+    expect(stationLine({ ...s, tags: [] })).toBe('us')
+    expect(stationLine({ ...s, country: undefined })).toBe('ambient, drone, space')
   })
 })

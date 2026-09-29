@@ -126,6 +126,7 @@ export const RadioChannel = {
   play: 'radio:play',
   lastAnswer: 'radio:last-answer',
   stop: 'radio:stop',
+  search: 'radio:search',
   // main to page: a new song title in the stream playing
   title: 'radio:title',
   // main to page: main made or dropped a station's logo (ticket 030)
@@ -145,6 +146,10 @@ export interface RadioLogo {
   id: string
   logo?: StationLogo
 }
+
+// Radio Browser's stations for a search, grouped, best voted first (ticket
+// 029). ok false: no Radio Browser server could be reached.
+export type RadioSearch = { ok: true; stations: Station[] } | { ok: false }
 
 // What main last answered to spindle://radio/<id>: audio (ok) or 502/404, and
 // how many bytes of audio it passed on. Lets the page tell a format it can't
@@ -177,6 +182,9 @@ export interface RadioApi {
   // Pause: main ends the stream. The page's element keeps it, paused, so the
   // system's media controls stay; play opens a new connection.
   stop(): void
+  // Radio Browser's stations by name and by tag. Their logos load from
+  // spindle://radio-logo/<station id> while main remembers the search.
+  search(q: string): Promise<RadioSearch>
   // Returns a function that stops listening.
   onTitle(listener: (title: RadioTitle) => void): () => void
   // Main fetches a logo when a station is saved or played, after it answered.
@@ -210,6 +218,7 @@ export interface PageChannels {
   [RadioChannel.play]: RadioApi['play']
   [RadioChannel.lastAnswer]: RadioApi['lastAnswer']
   [RadioChannel.stop]: RadioApi['stop']
+  [RadioChannel.search]: RadioApi['search']
   [PlaybackChannel.loadQueue]: PlaybackApi['loadQueue']
   [PlaybackChannel.saveQueue]: PlaybackApi['saveQueue']
   [PlaybackChannel.savePlace]: PlaybackApi['savePlace']

@@ -4,8 +4,10 @@
   import AlbumPage from './AlbumPage.svelte'
   import ArtistView from './ArtistView.svelte'
   import FolderView from './FolderView.svelte'
+  import NoLibrary from './NoLibrary.svelte'
   import PlaylistList from './PlaylistList.svelte'
   import PlaylistView from './PlaylistView.svelte'
+  import RadioView from './RadioView.svelte'
   import SearchBox from './SearchBox.svelte'
   import { onSideButton } from './side-buttons'
   import { scrollTopOnChange } from '../ui/scroll-top.svelte'
@@ -15,7 +17,8 @@
     ['albums', 'Albums'],
     ['artists', 'Artists'],
     ['folders', 'Folders'],
-    ['playlists', 'Playlists']
+    ['playlists', 'Playlists'],
+    ['radio', 'Radio']
   ]
 
   let scrollEl: HTMLDivElement | undefined = $state()
@@ -50,7 +53,9 @@
         ? 'Search this folder'
         : library.chip === 'artists'
           ? 'Search artists'
-          : 'Search albums and artists'}
+          : library.chip === 'radio'
+            ? 'Search stations'
+            : 'Search albums and artists'}
     />
     <div class="chips">
       {#each chips as [c, label] (c)}
@@ -61,7 +66,12 @@
     </div>
   </div>
   <div class="scroll" bind:this={scrollEl}>
-    {#if library.chip === 'playlists'}
+    {#if library.chip === 'radio'}
+      <RadioView />
+    {:else if !library.albums.length}
+      <!-- radio needs no songs, so the chips stay -->
+      <div class="fill"><NoLibrary /></div>
+    {:else if library.chip === 'playlists'}
       {#if library.openPlaylist}
         <PlaylistView id={library.openPlaylist} {scrollEl} back />
       {:else}
@@ -107,6 +117,11 @@
   .chip[aria-pressed='true'] {
     background: var(--ink);
     color: var(--bg);
+  }
+  .fill {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
   }
   .scroll {
     --scroll-pad-top: 4px;

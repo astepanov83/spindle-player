@@ -112,6 +112,7 @@ const radioApi: RadioApi = {
   play: (station) => invoke(RadioChannel.play, station),
   lastAnswer: (id) => invoke(RadioChannel.lastAnswer, id),
   stop: () => send(RadioChannel.stop),
+  search: (q) => invoke(RadioChannel.search, q),
   onTitle: (listener) => {
     const handler = (_: Electron.IpcRendererEvent, title: RadioTitle): void => listener(title)
     ipcRenderer.on(RadioChannel.title, handler)

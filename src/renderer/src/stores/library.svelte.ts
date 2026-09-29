@@ -43,9 +43,9 @@ import {
   type ArtistPlace
 } from '../library/artists'
 
-export type Chip = 'albums' | 'artists' | 'folders' | 'playlists'
+export type Chip = 'albums' | 'artists' | 'folders' | 'playlists' | 'radio'
 // sidebar sections; playlists are "pl:<id>"
-export type Section = 'songs' | 'albums' | 'artists' | 'folders' | `pl:${string}`
+export type Section = 'songs' | 'albums' | 'artists' | 'folders' | 'radio' | `pl:${string}`
 // the pages the mouse Back and Forward buttons close and reopen; in
 // Folders they go up a folder and back down, in Artists from an album to
 // its artist to the grid and back

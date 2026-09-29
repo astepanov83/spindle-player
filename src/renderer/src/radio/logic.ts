@@ -203,3 +203,22 @@ export function backNote(from: string, count: number): string {
   const songs = `${count.toLocaleString('en-US')} ${count === 1 ? 'song' : 'songs'}`
   return from ? `From ${from}, ${songs}` : songs
 }
+
+// The Radio view's filter of My stations: name, tag or country.
+export function stationMatches(s: Station, q: string): boolean {
+  const t = q.trim().toLowerCase()
+  if (!t) return true
+  return [s.name, ...s.tags, s.country ?? ''].some((x) => x.toLowerCase().includes(t))
+}
+
+// "64 128 320": the station's known bitrates, lowest first.
+export function bitrateLine(s: Station): string {
+  const rates = new Set(s.streams.map((x) => x.bitrate).filter((b): b is number => !!b))
+  return [...rates].sort((a, b) => a - b).join(' ')
+}
+
+// "ambient, drone · us" under the station's name.
+export function stationLine(s: Station): string {
+  const tags = s.tags.slice(0, 3).join(', ')
+  return [tags, s.country?.toLowerCase() ?? ''].filter(Boolean).join(' · ')
+}

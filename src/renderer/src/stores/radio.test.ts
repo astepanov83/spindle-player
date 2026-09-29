@@ -60,6 +60,14 @@ const choose = vi.fn(async (id: string, url: string) =>
 const history = vi.fn(async () => [{ at: 1, title: 'Old - Song' }])
 // main adds a new station to the end of My stations
 const save = vi.fn(async (s: Station) => [...mine, s])
+const remove = vi.fn(async (id: string) => mine.filter((s) => s.id !== id))
+// main swaps the station with its neighbour
+const move = vi.fn(async (id: string, by: -1 | 1) => {
+  const at = mine.findIndex((s) => s.id === id)
+  const next = [...mine]
+  ;[next[at], next[at + by]] = [next[at + by], next[at]]
+  return next
+})
 // what main last answered for the stream: by default, the server was not reached
 let answer: LastAnswer | undefined
 const lastAnswer = vi.fn(async () => answer)
@@ -73,6 +81,8 @@ vi.stubGlobal('window', {
     play,
     choose,
     save,
+    remove,
+    move,
     history,
     lastAnswer,
     stop,
@@ -581,5 +591,48 @@ describe('saving the station', () => {
   it('a station of My stations is saved already', async () => {
     await start(mine[1])
     expect(radio.saved).toBe(true)
+  })
+})
+
+describe('My stations from the Radio view (ticket 029)', () => {
+  it('saves a search result that is not playing', async () => {
+    await start(mine[0])
+    const found = st('rb-9', [128])
+    save.mockClear()
+    await radio.save(found)
+    expect(save).toHaveBeenCalledWith(found)
+    expect(radio.stations.at(-1)?.id).toBe('rb-9')
+    // the station playing is not touched
+    expect(radio.station?.id).toBe('a')
+  })
+
+  it('does not save a station twice', async () => {
+    save.mockClear()
+    await radio.save(mine[2])
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('removing the playing station does not stop it: it becomes unsaved', async () => {
+    await start(mine[1])
+    await radio.remove('b')
+    expect(remove).toHaveBeenCalledWith('b')
+    expect(radio.stations.map((s) => s.id)).toEqual(['a', 'c'])
+    expect(radio.station?.id).toBe('b')
+    expect(player.playing).toBe(true)
+    expect(fake.calls).toEqual([])
+    expect(radio.saved).toBe(false)
+  })
+
+  it('moves a station up or down', async () => {
+    await radio.move('c', -1)
+    expect(move).toHaveBeenCalledWith('c', -1)
+    expect(radio.stations.map((s) => s.id)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('shows a notice when main could not remove it', async () => {
+    remove.mockRejectedValueOnce(new Error('no'))
+    await radio.remove('a')
+    expect(notice.text).toBe("Couldn't remove A")
+    expect(radio.stations.map((s) => s.id)).toEqual(['a', 'b', 'c'])
   })
 })

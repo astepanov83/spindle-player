@@ -67,7 +67,8 @@ class RadioStore {
   #retryTimer: ReturnType<typeof setTimeout> | undefined
   #stallTimer: ReturnType<typeof setTimeout> | undefined
   #listening = false
-  #saving = false
+  // stations main is saving now
+  #saving = new Set<string>()
 
   // The engine's events while radio has the player (playing.svelte.ts passes them on).
   readonly events: Partial<EngineEvents> = {
@@ -177,19 +178,41 @@ class RadioStore {
     )
   }
 
-  // Save: a station tried from search goes into My stations.
-  async save(): Promise<void> {
-    const s = this.station
+  // Save: a station tried from search goes into My stations. The playing
+  // one by default; the Radio view saves any result.
+  async save(station: Station | undefined = this.station): Promise<void> {
+    const s = station
     // a second click while main saves
-    if (!s || this.saved || this.#saving) return
-    this.#saving = true
+    if (!s || this.stations.some((x) => x.id === s.id) || this.#saving.has(s.id)) return
+    this.#saving.add(s.id)
     try {
       this.stations = await window.radioApi.save($state.snapshot(s) as Station)
     } catch (e) {
       window.playbackApi.log(`Radio ${s.id}: radio:save failed: ${String(e)}`)
       notice.show(`Couldn't save ${s.name}`)
     } finally {
-      this.#saving = false
+      this.#saving.delete(s.id)
+    }
+  }
+
+  // Out of My stations. The playing station goes on playing, unsaved: the
+  // controls offer Save again.
+  async remove(id: string): Promise<void> {
+    const s = this.stations.find((x) => x.id === id)
+    try {
+      this.stations = await window.radioApi.remove(id)
+    } catch (e) {
+      window.playbackApi.log(`Radio ${id}: radio:remove failed: ${String(e)}`)
+      notice.show(`Couldn't remove ${s?.name ?? 'the station'}`)
+    }
+  }
+
+  // One place up (-1) or down (1) in My stations.
+  async move(id: string, by: -1 | 1): Promise<void> {
+    try {
+      this.stations = await window.radioApi.move(id, by)
+    } catch (e) {
+      window.playbackApi.log(`Radio ${id}: radio:move failed: ${String(e)}`)
     }
   }
 

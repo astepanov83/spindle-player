@@ -1,5 +1,6 @@
 // first, so main's libuv pool is made at this size
 import './pool-size'
+import { promises as dns } from 'dns'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { app, BrowserWindow, nativeTheme, net, session } from 'electron'
@@ -14,7 +15,7 @@ import {
   type RadioLogo,
   type RadioTitle
 } from '../shared/ipc'
-import { parseStation, type StationLogo } from '../shared/stations'
+import { isStationId, parseStation, type StationLogo } from '../shared/stations'
 import metalOnlyLogoPath from '../../resources/metal-only.png?asset'
 import { pageSettings } from '../shared/settings'
 import { stopAllDecoders } from './library/decode'
@@ -25,6 +26,8 @@ import { findStreams } from './radio/find-streams'
 import { fetchLogo } from './radio/logo-fetch'
 import { keptLogos, metalOnlyLogo, StationLogos } from './radio/logos'
 import { PlayedStations } from './radio/play'
+import { RadioBrowser, resolveMirrors } from './radio/radio-browser'
+import { ResultLogos } from './radio/result-logos'
 import { RadioHistoryStore, StationsStore } from './radio/stations-store'
 import { RadioStreams, radioStream } from './radio/stream'
 import { PlaylistFile, QueueFile } from './page-files'
@@ -44,6 +47,11 @@ let radioHistory: RadioHistoryStore
 let played: PlayedStations
 // station logos in the cover cache (ticket 030)
 let logos: StationLogos
+// Radio Browser search and click counts, and the logos of its results (ticket 029)
+let radioBrowser: RadioBrowser
+let resultLogos: ResultLogos
+// counts searches, so only the newest one's rows get logos
+let searches = 0
 const radioStreams = new RadioStreams()
 let main: MainWindow | null = null
 
@@ -150,7 +158,19 @@ page.handle(RadioChannel.remove, (_, id) => {
 page.handle(RadioChannel.move, (_, id, by) => stations.move(id, by))
 page.handle(RadioChannel.choose, (_, id, url) => stations.choose(id, url))
 page.handle(RadioChannel.history, (_, id) => (typeof id === 'string' ? radioHistory.get(id) : []))
-page.handle(RadioChannel.play, (_, station) => played.play(station))
+page.handle(RadioChannel.play, (_, station) => {
+  // the click is counted when a stream opens, behind the answer
+  const id = (station as { id?: unknown } | null)?.id
+  if (isStationId(id)) radioBrowser.played(id)
+  return played.play(station)
+})
+page.handle(RadioChannel.search, async (_, q) => {
+  if (typeof q !== 'string') return { ok: true, stations: [] }
+  const n = ++searches
+  const found = await radioBrowser.search(q)
+  if (found.ok && n === searches) resultLogos.searched(found.stations)
+  return found
+})
 page.on(RadioChannel.stop, () => radioStreams.stop())
 page.handle(RadioChannel.lastAnswer, (_, id) =>
   typeof id === 'string' ? radioStreams.lastAnswer(id) : undefined
@@ -238,8 +258,20 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     kept: () => library.coversKept(),
     log: radioLog
   })
-  handleProtocol(library, (id, stream) =>
-    radioStream(id, stream, {
+  radioBrowser = new RadioBrowser({
+    fetch: radioFetch,
+    mirrors: () => resolveMirrors(dns),
+    userAgent: radioAgent,
+    log: radioLog
+  })
+  resultLogos = new ResultLogos({
+    load: (url, signal) => fetchLogo(url, { fetch: radioFetch, userAgent: radioAgent, signal }),
+    log: radioLog
+  })
+  const radioRequest = (id: string, stream: string | null): Promise<Response> => {
+    // the first stream to open after a play counts a Radio Browser click
+    void radioBrowser.opened(id, played.lookup(id)?.streams[Number(stream)]?.url)
+    return radioStream(id, stream, {
       lookup: (id) => played.lookup(id),
       fetch: radioFetch,
       onTitle: (stationId, title) => {
@@ -252,7 +284,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
       streams: radioStreams,
       userAgent: radioAgent
     })
-  )
+  }
+  handleProtocol(library, radioRequest, (id) => resultLogos.get(id))
 
   // F12 opens DevTools in dev, and Ctrl+R reload is blocked in production.
   app.on('browser-window-created', (_, window) => {

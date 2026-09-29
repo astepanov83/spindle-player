@@ -3,7 +3,7 @@
 // grouped into stations (decision 144). Mirrors come from DNS and one is kept
 // for the run. A play of a station from here counts a click, as their docs ask.
 import type { RadioSearch } from '../../shared/ipc'
-import type { Station, Stream } from '../../shared/stations'
+import { webAddress, type Station, type Stream } from '../../shared/stations'
 
 // The fields read from a station record.
 export interface RbRecord {
@@ -22,8 +22,7 @@ export interface RbRecord {
   votes: number
 }
 
-const web = /^https?:\/\//i
-const webUrl = (v: unknown): string => (typeof v === 'string' && web.test(v.trim()) ? v.trim() : '')
+const webUrl = (v: unknown): string => (typeof v === 'string' && webAddress(v) ? v.trim() : '')
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 
 export function searchPath(field: 'name' | 'tag', q: string): string {

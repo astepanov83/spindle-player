@@ -289,6 +289,27 @@ describe('fetchSiteLogo', () => {
     expect(s.asked).toHaveLength(1)
   })
 
+  it('lets go of the body of an HTTP error or a page that is not one (final fix 10)', async () => {
+    for (const [status, type] of [
+      [500, 'text/html'],
+      [200, 'audio/mpeg']
+    ] as const) {
+      let cancelled = false
+      const answer = (): Response =>
+        new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true
+            }
+          }),
+          { status, headers: { 'Content-Type': type } }
+        )
+      const s = site({ 'https://x.example/': answer })
+      await expect(fetchSiteLogo('https://x.example/', s.opts)).rejects.toThrow()
+      expect(cancelled).toBe(true)
+    }
+  })
+
   it('gives up on a page that takes too long', async () => {
     const fetch = ((_url: string, init?: RequestInit) =>
       new Promise((_, reject) => {

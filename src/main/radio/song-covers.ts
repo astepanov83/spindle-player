@@ -7,16 +7,15 @@
 // Follows "Find missing covers online": off, nothing is looked up. Results are
 // kept by artist and song in radio-covers.json, misses too, so a song or a
 // jingle played again is not looked up again.
-import { hash } from 'crypto'
-import { paletteVersion, parseThemePalettes } from '../../shared/palette'
+import { parseThemePalettes } from '../../shared/palette'
 import type { RadioCover } from '../../shared/ipc'
 import { songQuery, type SongQuery } from '../../shared/radio-title'
-import { smallLogoSide, type SongCover } from '../../shared/stations'
+import type { SongCover } from '../../shared/stations'
 import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../json-file'
 import { cleanArtist } from '../library/cover-match'
 import { isCoverHash } from '../library/cover-names'
 import { cleanSong, type SongSource } from '../library/song-cover'
-import type { LogoCache } from './logos'
+import { makeCover, withNewColors, type LogoCache } from './logos'
 
 const sources = ['deezer', 'itunes'] as const
 
@@ -257,32 +256,25 @@ export class SongCovers {
       this.d.save()
       return undefined
     }
-    const h = hash('sha1', found)
-    // before the files exist, so a prune running now does not take them
-    if (!this.#made.has(h)) {
+    const cover = await makeCover(this.d.cache, found, (h) => {
+      if (this.#made.has(h)) return
       this.#made.add(h)
       this.d.kept()
-    }
-    const done = await this.d.cache.addLogo(h, found)
+    })
     // tried again the next time the song plays
-    if (!done) {
+    if (!cover) {
       this.d.log(`Could not make a song cover for ${q.artist} - ${q.song}`)
       return undefined
     }
-    const cover: NonNullable<SongCoverEntry['cover']> = { hash: h, palette: done.palette }
-    if (done.side < smallLogoSide) cover.small = true
-    cover.v = paletteVersion
     this.d.map.set(key, { cover, at: this.d.now() })
     this.d.save()
     return toPage(cover)
   }
 
-  // Colors an older paletteVersion picked are picked again from the small cover.
+  // New colors, kept in the file, for ones an older paletteVersion picked.
   async #withNewColors(key: string, c: NonNullable<SongCoverEntry['cover']>): Promise<SongCover> {
-    if (c.v === paletteVersion) return toPage(c)
-    const palette = await this.d.cache.logoPalette(c.hash)
-    if (!palette) return toPage(c)
-    const next = { ...c, palette, v: paletteVersion }
+    const next = await withNewColors(this.d.cache, c)
+    if (!next || next === c) return toPage(c)
     const e = this.d.map.get(key)
     if (e) {
       this.d.map.set(key, { ...e, cover: next })

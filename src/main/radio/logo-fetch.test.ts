@@ -111,6 +111,18 @@ describe('fetchLogo', () => {
     )
   })
 
+  it('lets go of the body of an HTTP error, so the request ends at once (final fix 10)', async () => {
+    let cancelled = false
+    const body = new ReadableStream({
+      cancel() {
+        cancelled = true
+      }
+    })
+    const fetch = async (): Promise<Response> => new Response(body, { status: 404 })
+    await expect(fetchLogo(url, { fetch, userAgent: 'x' })).rejects.toThrow('404')
+    expect(cancelled).toBe(true)
+  })
+
   it('asks only http and https addresses', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () => answer(png))
     await expect(fetchLogo('file:///etc/passwd', { fetch, userAgent: 'x' })).rejects.toThrow()

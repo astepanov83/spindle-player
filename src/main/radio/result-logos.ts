@@ -5,6 +5,7 @@
 // too big) into a short-lived cache in memory. Nothing goes to the cover cache:
 // a logo becomes a cover only when its station is saved or played (030).
 import type { Station } from '../../shared/stations'
+import { pictureType } from './logo-fetch'
 
 export interface ResultLogosDeps {
   // the picture's bytes, or throws with the reason
@@ -26,18 +27,8 @@ const atOnce = 4
 // station ids kept from searches; a search adds up to 200
 const maxSources = 2000
 
-const starts = (b: Uint8Array, sig: number[], at = 0): boolean =>
-  b.length >= at + sig.length && sig.every((x, i) => b[at + i] === x)
-
 // The picture types fetchLogo lets through.
-export function logoType(b: Uint8Array): string {
-  if (starts(b, [0x89, 0x50, 0x4e, 0x47])) return 'image/png'
-  if (starts(b, [0xff, 0xd8, 0xff])) return 'image/jpeg'
-  if (starts(b, [0x47, 0x49, 0x46, 0x38])) return 'image/gif'
-  if (starts(b, [0x52, 0x49, 0x46, 0x46]) && starts(b, [0x57, 0x45, 0x42, 0x50], 8))
-    return 'image/webp'
-  return 'image/x-icon'
-}
+export const logoType = (b: Uint8Array): string => pictureType(b) ?? 'image/x-icon'
 
 interface Kept {
   at: number

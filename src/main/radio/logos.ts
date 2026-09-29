@@ -60,6 +60,44 @@ export interface LogoCache {
   logoPalette(hash: string): Promise<ThemePalettes | undefined>
 }
 
+// A picture made into the cover cache: its hash, colors, small below
+// smallLogoSide, and the paletteVersion that picked the colors.
+export interface MadeCover {
+  hash: string
+  palette: ThemePalettes
+  small?: boolean
+  v: number
+}
+
+// Makes a picture into the cover cache with its colors, for a station logo or
+// a song cover. `keep` hears the hash before the files exist, so a prune
+// running now does not take them. Undefined when the cover window failed.
+export async function makeCover(
+  cache: LogoCache,
+  data: Uint8Array,
+  keep: (hash: string) => void
+): Promise<MadeCover | undefined> {
+  const h = hash('sha1', data)
+  keep(h)
+  const done = await cache.addLogo(h, data)
+  if (!done) return undefined
+  const out: MadeCover = { hash: h, palette: done.palette, v: paletteVersion }
+  if (done.side < smallLogoSide) out.small = true
+  return out
+}
+
+// Colors picked by an older paletteVersion, picked again from the small cover
+// with no new fetch. The same object when they are current; undefined when
+// the new ones could not be picked.
+export async function withNewColors<T extends { hash: string; palette: ThemePalettes; v?: number }>(
+  cache: LogoCache,
+  c: T
+): Promise<T | undefined> {
+  if (c.v === paletteVersion) return c
+  const palette = await cache.logoPalette(c.hash)
+  return palette && { ...c, palette, v: paletteVersion }
+}
+
 export interface LogoDeps {
   // the picture from a source (a web address, metalOnlyLogo or a sitePrefix
   // homepage) for this station; throws with the reason
@@ -123,16 +161,13 @@ export class StationLogos {
     if (!sameLogo(logo, station.logo)) apply(station.id, logo)
   }
 
-  // Colors picked by an older paletteVersion are picked again from the small
-  // cover, with no new fetch. If that fails the old ones stay until the next run.
+  // If new colors can't be picked, the old ones stay until the next run.
   async #withNewColors(logo: StationLogo): Promise<StationLogo> {
-    if (logo.v === paletteVersion || this.#repaintFailed.has(logo.hash)) return logo
-    const palette = await this.d.cache.logoPalette(logo.hash)
-    if (!palette) {
-      this.#repaintFailed.add(logo.hash)
-      return logo
-    }
-    return { ...logo, palette, v: paletteVersion }
+    if (this.#repaintFailed.has(logo.hash)) return logo
+    const next = await withNewColors(this.d.cache, logo)
+    if (next) return next
+    this.#repaintFailed.add(logo.hash)
+    return logo
   }
 
   async #has(logo: StationLogo): Promise<boolean> {
@@ -164,19 +199,13 @@ export class StationLogos {
       this.d.log(`Could not fetch a station logo from ${source}: ${String(e)}`)
       return undefined
     }
-    const h = hash('sha1', data)
-    // before the files exist, so a prune running now does not take them
-    this.#keep(h)
-    const done = await this.d.cache.addLogo(h, data)
-    if (!done) {
+    const made = await makeCover(this.d.cache, data, (h) => this.#keep(h))
+    if (!made) {
       this.#failed.add(source)
       this.d.log(`Could not make a station logo from ${source}`)
       return undefined
     }
-    const logo: StationLogo = { hash: h, palette: done.palette }
-    if (done.side < smallLogoSide) logo.small = true
-    logo.from = source
-    logo.v = paletteVersion
+    const logo: StationLogo = { ...made, from: source }
     this.#made.set(source, logo)
     return logo
   }

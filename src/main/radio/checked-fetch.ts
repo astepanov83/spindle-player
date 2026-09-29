@@ -33,6 +33,7 @@ export function checkedFetch(
       // after the answer, a stop errors its body instead
       let stopBody: ((e: unknown) => void) | undefined
       const fail = (e: unknown): void => {
+        release()
         req.abort()
         if (stopBody) stopBody(e)
         else if (!settled) reject(e)
@@ -40,6 +41,8 @@ export function checkedFetch(
       }
       const onAbort = (): void => fail(signal?.reason)
       signal?.addEventListener('abort', onAbort, { once: true })
+      // the caller's signal is let go once the request or its body is over
+      const release = (): void => signal?.removeEventListener('abort', onAbort)
       let hops = 0
       req.on('redirect', (_status, _method, to) => {
         if (++hops > maxRedirects) return fail(new Error('too many redirects'))
@@ -51,7 +54,7 @@ export function checkedFetch(
       req.on('error', (e) => fail(e))
       req.on('response', (res) => {
         try {
-          resolve(answer(res, url, req, (stop) => (stopBody = stop)))
+          resolve(answer(res, url, req, (stop) => (stopBody = stop), release))
           settled = true
         } catch (e) {
           fail(e)
@@ -65,7 +68,8 @@ function answer(
   res: IncomingMessage,
   url: string,
   req: ClientRequest,
-  onStop: (stop: (e: unknown) => void) => void
+  onStop: (stop: (e: unknown) => void) => void,
+  over: () => void
 ): Response {
   const headers = new Headers()
   for (const [k, v] of Object.entries(res.headers))
@@ -80,6 +84,7 @@ function answer(
         const end = (f: () => void): void => {
           if (done) return
           done = true
+          over()
           f()
         }
         onStop((e) => end(() => c.error(e)))
@@ -98,10 +103,11 @@ function answer(
       },
       cancel() {
         done = true
+        over()
         req.abort()
       }
     })
-  }
+  } else over()
   const out = new Response(body, { status: res.statusCode, headers })
   Object.defineProperty(out, 'url', { value: url })
   return out

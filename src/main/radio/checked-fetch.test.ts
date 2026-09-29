@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
 import type { ClientRequest, ClientRequestConstructorOptions } from 'electron'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { checkedFetch, maxRedirects, RefusedAddress } from './checked-fetch'
 
 // A stand-in for net.request: redirects to follow, then an answer.
@@ -100,6 +100,36 @@ describe('checkedFetch', () => {
     const f = checkedFetch(n.request, false)
     await expect(f('https://a.example/')).rejects.toBeInstanceOf(RefusedAddress)
     await expect(f('http://127.0.0.1/')).rejects.toBeInstanceOf(RefusedAddress)
+  })
+
+  it('lets go of the caller’s signal once the body ended or the request failed (final fix 10)', async () => {
+    const ac = new AbortController()
+    const n = net()
+    const p = checkedFetch(n.request, false)('https://a.example/', { signal: ac.signal })
+    await tick()
+    n.res.emit('end')
+    await (await p).arrayBuffer()
+    ac.abort()
+    expect(n.made[0].aborted).toBe(false)
+
+    // a body that failed, and a request that failed (a refused redirect)
+    const failed = new AbortController()
+    const off = vi.spyOn(failed.signal, 'removeEventListener')
+    const m = net()
+    const res = await (async () => {
+      const r = checkedFetch(m.request, false)('https://a.example/', { signal: failed.signal })
+      await tick()
+      return r
+    })()
+    m.res.emit('error', new Error('net::ERR_CONNECTION_RESET'))
+    await expect(res.arrayBuffer()).rejects.toThrow()
+    expect(off).toHaveBeenCalledWith('abort', expect.any(Function))
+
+    const refused = new AbortController()
+    const off2 = vi.spyOn(refused.signal, 'removeEventListener')
+    const f = checkedFetch(net(['http://192.168.1.1/']).request, false)
+    await expect(f('https://a.example/', { signal: refused.signal })).rejects.toThrow()
+    expect(off2).toHaveBeenCalledWith('abort', expect.any(Function))
   })
 
   it('follows redirects on the web and says where it ended up', async () => {

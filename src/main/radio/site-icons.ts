@@ -2,11 +2,11 @@
 // 033). The page is only read as text and scanned for <link> and <meta> tags;
 // nothing in it runs. Each icon goes through fetchLogo, so the same type, size
 // and pixel checks hold as for a logo address.
-import { smallLogoSide } from '../../shared/stations'
+import { smallLogoSide, webAddress } from '../../shared/stations'
 import { fetchLogo, pictureSize, refusedAddress } from './logo-fetch'
 
 export interface SiteLogoOptions {
-  // net.fetch in the app; a fake in tests
+  // checkedFetch in the app (each redirect checked); a fake in tests
   fetch: typeof fetch
   userAgent: string
   // for the page, and for each icon
@@ -22,17 +22,8 @@ const maxPageBytes = 512 * 1024
 // few requests, not dozens.
 export const maxIconTries = 6
 
-const isWeb = (u: URL): boolean => u.protocol === 'http:' || u.protocol === 'https:'
-
-function webUrl(href: string | undefined, base: string): URL | undefined {
-  if (!href) return undefined
-  try {
-    const u = new URL(href.trim(), base)
-    return isWeb(u) ? u : undefined
-  } catch {
-    return undefined
-  }
-}
+const webUrl = (href: string | undefined, base: string): URL | undefined =>
+  href ? webAddress(href, base) : undefined
 
 const named: Record<string, string> = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' }
 
@@ -191,16 +182,22 @@ export async function fetchSiteLogo(site: string, o: SiteLogoOptions): Promise<U
   if (refused) throw new Error(refused)
   const u = new URL(site)
   const ms = o.timeoutMs ?? timeoutMs
-  // Chromium follows at most 20 redirects
+  // the app's fetch follows at most 10 redirects (checked-fetch.ts)
   const res = await o.fetch(u.href, {
     headers: { 'User-Agent': o.userAgent, Accept: 'text/html' },
     redirect: 'follow',
     signal: AbortSignal.timeout(ms)
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const type = res.headers.get('content-type') ?? ''
-  if (type && !/html/i.test(type)) throw new Error(`not a web page (${type})`)
-  // Response.url is where it ended up; the app's fetch sets it (net.fetch does not)
+  const wrong = !res.ok
+    ? `HTTP ${res.status}`
+    : type && !/html/i.test(type) && `not a web page (${type})`
+  if (wrong) {
+    // else the request waits, paused, for its timeout
+    await res.body?.cancel().catch(() => {})
+    throw new Error(wrong)
+  }
+  // Response.url is where it ended up; checkedFetch sets it (net.fetch would not)
   const page = webUrl(res.url, site)?.href ?? u.href
   const landed = refusedAddress(page, o.privateOk)
   if (landed) {

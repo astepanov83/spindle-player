@@ -87,16 +87,20 @@ function text(v: unknown): string | undefined {
   return t || undefined
 }
 
-// These end up in a link or a request, so only http and https pass.
-function webUrl(v: unknown): string | undefined {
-  const t = text(v)
-  if (!t) return undefined
+// An http or https address, relative ones against `base`; undefined for
+// anything else. Station addresses end up in a link or a request.
+export function webAddress(href: string, base?: string): URL | undefined {
   try {
-    const u = new URL(t)
-    return u.protocol === 'http:' || u.protocol === 'https:' ? t : undefined
+    const u = new URL(href.trim(), base)
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u : undefined
   } catch {
     return undefined
   }
+}
+
+function webUrl(v: unknown): string | undefined {
+  const t = text(v)
+  return t && webAddress(t) ? t : undefined
 }
 
 const hashPattern = /^[0-9a-f]{40}$/

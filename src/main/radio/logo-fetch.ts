@@ -5,7 +5,7 @@ import { BlockList, isIP } from 'net'
 import { maxImage, readCapped } from '../library/cover-http'
 
 export interface LogoFetchOptions {
-  // net.fetch in the app; a fake in tests
+  // checkedFetch in the app (each redirect checked); a fake in tests
   fetch: typeof fetch
   userAgent: string
   timeoutMs?: number
@@ -84,17 +84,20 @@ export const maxLogoSide = 4096
 const starts = (b: Uint8Array, sig: number[], at = 0): boolean =>
   b.length >= at + sig.length && sig.every((x, i) => b[at + i] === x)
 
-// JPEG, PNG, GIF, WebP and ICO: what station logos and site icons come in, and
-// what Chromium decodes. SVG is not one: the cover window can't draw it.
-export function isLogoPicture(b: Uint8Array): boolean {
-  return (
-    starts(b, [0xff, 0xd8, 0xff]) ||
-    starts(b, [0x89, 0x50, 0x4e, 0x47]) ||
-    starts(b, [0x47, 0x49, 0x46, 0x38]) ||
-    (starts(b, [0x52, 0x49, 0x46, 0x46]) && starts(b, [0x57, 0x45, 0x42, 0x50], 8)) ||
-    starts(b, [0, 0, 1, 0])
-  )
+// The type of a JPEG, PNG, GIF, WebP or ICO: what station logos and site icons
+// come in, and what Chromium decodes. SVG is not one: the cover window can't
+// draw it. Undefined for anything else.
+export function pictureType(b: Uint8Array): string | undefined {
+  if (starts(b, [0x89, 0x50, 0x4e, 0x47])) return 'image/png'
+  if (starts(b, [0xff, 0xd8, 0xff])) return 'image/jpeg'
+  if (starts(b, [0x47, 0x49, 0x46, 0x38])) return 'image/gif'
+  if (starts(b, [0x52, 0x49, 0x46, 0x46]) && starts(b, [0x57, 0x45, 0x42, 0x50], 8))
+    return 'image/webp'
+  if (starts(b, [0, 0, 1, 0])) return 'image/x-icon'
+  return undefined
 }
+
+export const isLogoPicture = (b: Uint8Array): boolean => pictureType(b) !== undefined
 
 export interface PictureSize {
   width: number
@@ -188,7 +191,11 @@ export async function fetchLogo(url: string, o: LogoFetchOptions): Promise<Uint8
     redirect: 'follow',
     signal: o.signal ? AbortSignal.any([o.signal, signal]) : signal
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (!res.ok) {
+    // else the request waits, paused, for its timeout
+    await res.body?.cancel().catch(() => {})
+    throw new Error(`HTTP ${res.status}`)
+  }
   // where it ended up; the app's fetch checks each redirect before it is followed
   const landed = res.url && refusedAddress(res.url, o.privateOk)
   if (landed) {

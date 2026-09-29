@@ -45,7 +45,8 @@ export class StationsStore {
     const file = openJsonFile(path, 'Stations file', isKnownStationsFile)
     this.#writer = file.canWrite ? new JsonFileWriter<unknown>(path, 500) : undefined
     if (missing) {
-      this.#data = [metalOnly]
+      // in the checked form, so the next start reads the file as one it knows
+      this.#data = parseStations(stationsFile([metalOnly]))
       this.#writer?.schedule(stationsFile(this.#data))
       this.#writer?.flushSync()
     } else {

@@ -33,6 +33,12 @@ describe('StationsStore', () => {
     expect(metalOnly.pls).toEqual(['https://metal-only.streampanel.cloud/listen.pls'])
   })
 
+  it('reads the file it wrote on the first run as its own, with no copy kept aside', () => {
+    new StationsStore(path).flushSync()
+    new StationsStore(path)
+    expect(readdirSync(dir)).toEqual(['stations.json'])
+  })
+
   it('does not add Metal Only twice', () => {
     new StationsStore(path).flushSync()
     const again = new StationsStore(path)

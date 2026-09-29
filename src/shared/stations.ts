@@ -301,15 +301,19 @@ export function isKnownHistoryFile(raw: unknown): boolean {
 }
 
 // Oldest first, so the newest title is the last. A blank title, or the same one
-// again (a reconnect sends it twice), is not added.
-export function addTitle(h: RadioHistory, id: string, title: string, at: number): RadioHistory {
+// again (a reconnect sends it twice), is not added: the same list comes back.
+// The page adds heard titles by this too, so its list matches the file.
+export function addEntry(list: HistoryEntry[], title: string, at: number): HistoryEntry[] {
   const t = title.trim().slice(0, maxTextLength)
+  if (!t || list[list.length - 1]?.title === t) return list
+  return [...list, { at, title: t }].slice(-maxHistory)
+}
+
+export function addTitle(h: RadioHistory, id: string, title: string, at: number): RadioHistory {
   const list = h.byStation[id] ?? []
-  if (!t || list[list.length - 1]?.title === t) return h
-  return {
-    ...h,
-    byStation: { ...h.byStation, [id]: [...list, { at, title: t }].slice(-maxHistory) }
-  }
+  const next = addEntry(list, title, at)
+  if (next === list) return h
+  return { ...h, byStation: { ...h.byStation, [id]: next } }
 }
 
 // A station that is not in My stations loses its titles 30 days after the last one.

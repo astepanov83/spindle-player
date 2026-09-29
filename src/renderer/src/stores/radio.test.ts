@@ -365,6 +365,33 @@ describe('titles', () => {
   })
 })
 
+describe('recent songs (031)', () => {
+  it('adds titles as main does: trimmed, and a reconnect’s repeat dropped', async () => {
+    await start(st('h0', [128]))
+    await vi.waitFor(() => expect(radio.history).toHaveLength(1))
+    titleListener!({ stationId: 'h0', title: ' Dio - Holy Diver ', at: 5 })
+    titleListener!({ stationId: 'h0', title: 'Dio - Holy Diver', at: 6 })
+    expect(radio.history).toEqual([
+      { at: 1, title: 'Old - Song' },
+      { at: 5, title: 'Dio - Holy Diver' }
+    ])
+  })
+
+  it('keeps main’s list when a title came before it answered', async () => {
+    let reply: (h: { at: number; title: string }[]) => void = () => {}
+    history.mockImplementationOnce(() => new Promise((r) => (reply = r)))
+    await start(st('h1', [128]))
+    titleListener!({ stationId: 'h1', title: 'New - One', at: 9 })
+    // main added the title to its file before it sent it
+    reply([
+      { at: 1, title: 'Old - Song' },
+      { at: 9, title: 'New - One' }
+    ])
+    await vi.waitFor(() => expect(radio.history).toHaveLength(2))
+    expect(radio.history[0].title).toBe('Old - Song')
+  })
+})
+
 describe('late answers and outside pauses (027 fix round 1)', () => {
   it('main’s answer about the last station’s connection does not act on the new one', async () => {
     answer = { ok: true, bytes: 64000 }

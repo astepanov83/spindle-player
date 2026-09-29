@@ -4,7 +4,7 @@
 import type { Art } from '../../../shared/library'
 import type { RadioLogo, RadioTitle } from '../../../shared/ipc'
 import {
-  maxHistory,
+  addEntry,
   stationArt,
   withLogo,
   type HistoryEntry,
@@ -238,9 +238,11 @@ class RadioStore {
     this.title = ''
     this.history = []
     const id = station.id
+    // Main adds a title to its file before it sends it, so its answer already
+    // has any title heard while it was on the way.
     void window.radioApi.history(id).then(
       (h) => {
-        if (this.station?.id === id && !this.history.length) this.history = h
+        if (this.station?.id === id) this.history = h
       },
       () => {}
     )
@@ -326,8 +328,7 @@ class RadioStore {
   #heard(t: RadioTitle): void {
     if (t.stationId !== this.station?.id) return
     this.title = t.title
-    if (this.history.at(-1)?.title === t.title) return
-    this.history = [...this.history, { at: t.at, title: t.title }].slice(-maxHistory)
+    this.history = addEntry(this.history, t.title, t.at)
   }
 }
 

@@ -2,12 +2,14 @@
   import { tick } from 'svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Thumb from '../ui/Thumb.svelte'
+  import RecentSongs from './RecentSongs.svelte'
   import { fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { layout } from '../stores/layout.svelte'
   import { library } from '../stores/library.svelte'
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { radio } from '../stores/radio.svelte'
   import { openSongMenu } from '../library/song-menu'
 
   // header and close are set by the container, not by templates
@@ -24,7 +26,12 @@
   const currentKey = (): string => queue.index + ':' + queue.current?.id
   $effect(() => {
     const key = currentKey()
-    if (key === seen || !body) return
+    // radio showed its songs here: back on the queue, show its current song again
+    if (!body) {
+      seen = ''
+      return
+    }
+    if (key === seen) return
     seen = key
     // one row above the current song, as in the prototype; wait for the list to get its height
     const index = Math.max(0, queue.index - 1)
@@ -36,45 +43,57 @@
     queue.jump(index)
     seen = currentKey()
   }
+
+  // Radio: its recent songs in place of the queue, with a head even in a tab.
+  const onRadio = $derived(playing.kind === 'radio')
 </script>
 
 <div class="qpart">
-  {#if header}
+  {#if header || onRadio}
     <div class="head">
-      <div>
-        <b>Queue</b>{#if queue.from}<small>From {queue.from}</small>{/if}
+      <div class="title">
+        {#if onRadio}
+          <b>{radio.station?.name} · recent songs</b>
+        {:else}
+          <b>Queue</b>{#if queue.from}<small>From {queue.from}</small>{/if}
+        {/if}
       </div>
       {#if close}
         <IconButton icon="close" label="Close queue" onclick={() => (layout.showQueue = false)} />
       {/if}
     </div>
   {/if}
-  <div class="body" bind:this={body}>
-    {#if !queue.items.length}
-      <p class="empty">The queue is empty. Songs you play show up here.</p>
-    {/if}
-    <div class="rows" bind:this={list} style:height="{v.total}px">
-      {#each v.items as item (item.key)}
-        {@const id = queue.items[item.index]}
-        {@const t = library.track(id)}
-        {@const cur = item.index === queue.index}
-        <button
-          class="qrow"
-          class:cur-row={cur}
-          class:cur
-          class:past={item.index < queue.index}
-          style:transform="translateY({v.offset(item)}px)"
-          onclick={() => playRow(item.index)}
-          oncontextmenu={(e) => openSongMenu(e, [id])}
-        >
-          <Thumb src={library.art(t).cover} eq={cur && playing.songPlaying} />
-          <span class="qt"><span class="nm">{t.title}</span><span class="ar">{t.artist}</span></span
+  {#if onRadio}
+    <RecentSongs />
+  {:else}
+    <div class="body" bind:this={body}>
+      {#if !queue.items.length}
+        <p class="empty">The queue is empty. Songs you play show up here.</p>
+      {/if}
+      <div class="rows" bind:this={list} style:height="{v.total}px">
+        {#each v.items as item (item.key)}
+          {@const id = queue.items[item.index]}
+          {@const t = library.track(id)}
+          {@const cur = item.index === queue.index}
+          <button
+            class="qrow"
+            class:cur-row={cur}
+            class:cur
+            class:past={item.index < queue.index}
+            style:transform="translateY({v.offset(item)}px)"
+            onclick={() => playRow(item.index)}
+            oncontextmenu={(e) => openSongMenu(e, [id])}
           >
-          <span class="d">{fmtTime(t.duration)}</span>
-        </button>
-      {/each}
+            <Thumb src={library.art(t).cover} eq={cur && playing.songPlaying} />
+            <span class="qt"
+              ><span class="nm">{t.title}</span><span class="ar">{t.artist}</span></span
+            >
+            <span class="d">{fmtTime(t.duration)}</span>
+          </button>
+        {/each}
+      </div>
     </div>
-  </div>
+  {/if}
 </div>
 
 <style>
@@ -91,9 +110,15 @@
     padding: 14px 10px 6px 20px;
     flex: none;
   }
+  .title {
+    min-width: 0;
+  }
   b {
     display: block;
     font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   small {
     font-size: 12px;

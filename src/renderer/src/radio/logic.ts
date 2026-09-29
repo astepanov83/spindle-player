@@ -1,6 +1,6 @@
 // Radio moves as plain functions: the title's parts, which stream to try next,
 // how long to wait. stores/radio.svelte.ts plays what they pick.
-import type { Station, Stream } from '../../../shared/stations'
+import type { HistoryEntry, Station, Stream } from '../../../shared/stations'
 import type { LastAnswer } from '../../../shared/ipc'
 
 const entities: Record<string, string> = {
@@ -139,4 +139,55 @@ export function cantPlayFormat(heardSound: boolean, a: LastAnswer | undefined): 
 // of asking main (seen in the app: a "reconnect" replayed the last 6 s).
 export function radioUrl(stationId: string, stream: number, connection: number): string {
   return `spindle://radio/${stationId}?stream=${stream}&c=${connection}`
+}
+
+const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// When a recent song was heard: "21:14" today, "28 Sep" before (the file keeps
+// a station's titles for up to 30 days after its last play).
+export function heardAt(at: number, now: number): string {
+  const d = new Date(at)
+  if (d.toDateString() !== new Date(now).toDateString()) {
+    return `${d.getDate()} ${months[d.getMonth()]}`
+  }
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+export interface RecentRow {
+  key: string
+  time: string
+  artist: string
+  song: string
+  // the title playing now
+  now: boolean
+}
+
+// The Queue part's rows while radio plays: newest first. `current` is the
+// title playing now, or undefined when stopped; only the newest can be it.
+export function recentRows(
+  history: HistoryEntry[],
+  current: string | undefined,
+  now: number
+): RecentRow[] {
+  const playingNow = current?.trim()
+  return history
+    .map((e, i) => {
+      const t = parseTitle(e.title)
+      return {
+        key: `${e.at}:${e.title}`,
+        time: heardAt(e.at, now),
+        artist: t.artist,
+        song: t.song,
+        now: i === history.length - 1 && e.title === playingNow
+      }
+    })
+    .reverse()
+}
+
+// What "Back to queue" goes back to: "From Late Night, 42 songs".
+export function backNote(from: string, count: number): string {
+  if (!count) return 'The queue is empty'
+  const songs = `${count.toLocaleString('en-US')} ${count === 1 ? 'song' : 'songs'}`
+  return from ? `From ${from}, ${songs}` : songs
 }

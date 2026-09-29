@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { defaultPalettes, type ThemePalettes } from './palette'
 import {
+  addEntry,
   addTitle,
   chooseStream,
   historyFile,
@@ -267,6 +268,18 @@ describe('history', () => {
     expect(addTitle(h, 'a', 'song', 2)).toBe(h)
     h = addTitle(h, 'a', 'other', 3)
     expect(h.byStation.a).toHaveLength(2)
+  })
+
+  it('adds to a list by the same rule, so the page and the file agree', () => {
+    const list = addEntry([], '  Dio - Holy Diver ', 1)
+    expect(list).toEqual([{ at: 1, title: 'Dio - Holy Diver' }])
+    // a reconnect sends the title again
+    expect(addEntry(list, 'Dio - Holy Diver', 2)).toBe(list)
+    expect(addEntry(list, ' ', 2)).toBe(list)
+    let long: { at: number; title: string }[] = []
+    for (let i = 0; i < 55; i++) long = addEntry(long, `song ${i}`, i)
+    expect(long).toHaveLength(50)
+    expect(long[0].title).toBe('song 5')
   })
 
   it('drops a station that is not saved and was not played for 30 days', () => {

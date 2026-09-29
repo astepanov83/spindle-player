@@ -9,7 +9,7 @@
 // nativeImage. sharp is out too: on Linux it clashes with the glib Electron
 // loads, in main, in a worker and in a utilityProcess alike.
 import { mkdirSync } from 'fs'
-import { rm, stat } from 'fs/promises'
+import { readFile, rm, stat } from 'fs/promises'
 import { join } from 'path'
 import { BrowserWindow, ipcMain } from 'electron'
 import { CoverChannel, type CoverJob, type CoverResult } from '../../shared/cover-job'
@@ -227,6 +227,20 @@ export class CoverCache {
       console.error('Could not save a station logo', e)
       return undefined
     }
+  }
+
+  // New colors for a logo whose palette an older paletteVersion picked, from
+  // its small cover (no new fetch). Its see-through parts count with the
+  // backdrop they got. Undefined when it can't be read or decoded.
+  async logoPalette(hash: string): Promise<ThemePalettes | undefined> {
+    let data: Uint8Array
+    try {
+      data = new Uint8Array(await readFile(this.smallPath(hash)))
+    } catch {
+      return undefined
+    }
+    const o = await this.#run(data, { palette: true })
+    return o.kind === 'ok' ? o.palette : undefined
   }
 
   // Whether a logo's files are still in the cache (the large one only when it has one).

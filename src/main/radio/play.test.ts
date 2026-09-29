@@ -179,4 +179,14 @@ describe('radio:play', () => {
     p.setLogo('rb-2', logo)
     expect(p.lookup('rb-2')).toBeUndefined()
   })
+
+  it('never takes a logo from the page', async () => {
+    const p = new PlayedStations(saved([]), finder().find, log)
+    const page = { hash: 'b'.repeat(40), palette: fallbackPalettes('y') }
+    expect(await p.play(st('rb-1', [s128], { logo: page }))).not.toHaveProperty('logo')
+    // played again: the copy main keeps has main's logo, not the page's
+    const mine = { hash: 'a'.repeat(40), palette: fallbackPalettes('x') }
+    p.setLogo('rb-1', mine)
+    expect((await p.play(st('rb-1', [s128], { logo: page })))?.logo).toEqual(mine)
+  })
 })

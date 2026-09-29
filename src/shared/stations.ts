@@ -36,6 +36,11 @@ export interface StationLogo {
   hash: string
   palette: ThemePalettes
   small?: boolean
+  // the source it was made from (a logo address, or the one shipped with the
+  // app); another source now means it is out of date
+  from?: string
+  // the paletteVersion the colors were picked with
+  v?: number
 }
 
 // Logos under this many px on their shorter side show as a tile on the stage.
@@ -93,6 +98,9 @@ function parseLogo(raw: unknown): StationLogo | undefined {
   if (!palette) return undefined
   const logo: StationLogo = { hash: raw.hash, palette }
   if (raw.small === true) logo.small = true
+  const from = text(raw.from)
+  if (from) logo.from = from
+  if (typeof raw.v === 'number' && Number.isInteger(raw.v) && raw.v > 0) logo.v = raw.v
   return logo
 }
 

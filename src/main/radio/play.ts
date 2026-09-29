@@ -48,7 +48,8 @@ export class PlayedStations {
     const given = parseStation(raw)
     if (!given) return undefined
     const id = given.id
-    const station = this.lookup(id) ?? given
+    // main owns `logo`: a station new to main starts with none
+    const station = this.lookup(id) ?? withLogo(given, undefined)
     this.#remember(station)
     this.started(station)
     if (this.#asked.has(id) && station.streams.length) return station

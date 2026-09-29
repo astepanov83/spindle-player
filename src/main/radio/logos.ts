@@ -4,7 +4,7 @@
 // for an album. Main owns the station's `logo`; the page only shows it.
 import { hash } from 'crypto'
 import { sameLogo, smallLogoSide, type Station, type StationLogo } from '../../shared/stations'
-import type { ThemePalettes } from '../../shared/palette'
+import { paletteVersion, type ThemePalettes } from '../../shared/palette'
 
 // Metal Only's logo comes with the app (resources/metal-only.png), so the
 // first start needs no request. It goes through the same steps as a fetched one.
@@ -23,6 +23,8 @@ export interface LogoCache {
     data: Uint8Array
   ): Promise<{ palette: ThemePalettes; side: number } | undefined>
   hasLogo(hash: string, large: boolean): Promise<boolean>
+  // new colors from the small cover, for colors picked by an older paletteVersion
+  logoPalette(hash: string): Promise<ThemePalettes | undefined>
 }
 
 export interface LogoDeps {
@@ -49,6 +51,8 @@ export class StationLogos {
   #failed = new Set<string>()
   #busy = new Map<string, Promise<StationLogo | undefined>>()
   #kept = new Set<string>()
+  // hashes whose new colors could not be picked this run
+  #repaintFailed = new Set<string>()
 
   constructor(readonly d: LogoDeps) {}
 
@@ -57,12 +61,19 @@ export class StationLogos {
   }
 
   // The logo the station should have now: the one it has while its files are
-  // in the cache, else one made from its source, else none.
+  // in the cache and it came from the station's source, else one made from
+  // that source, else none. A logo with no `from` (made before it was kept)
+  // may be from an older address, so it is made again from the source once;
+  // if that fails it is kept while its files are there.
   async logoFor(station: Station): Promise<StationLogo | undefined> {
-    const have = station.logo
-    if (have && (await this.#has(have))) return have
     const source = logoSource(station)
-    return source ? this.#fromSource(source) : undefined
+    const have = station.logo
+    if (have?.from && have.from === source && (await this.#has(have)))
+      return this.#withNewColors(have)
+    const made = source ? await this.#fromSource(source) : undefined
+    if (made) return made
+    if (have && !have.from && (await this.#has(have))) return this.#withNewColors(have)
+    return undefined
   }
 
   // Finds the logo behind the caller's answer, and hands it to `apply` when it changed.
@@ -72,6 +83,18 @@ export class StationLogos {
   ): Promise<void> {
     const logo = await this.logoFor(station)
     if (!sameLogo(logo, station.logo)) apply(station.id, logo)
+  }
+
+  // Colors picked by an older paletteVersion are picked again from the small
+  // cover, with no new fetch. If that fails the old ones stay until the next run.
+  async #withNewColors(logo: StationLogo): Promise<StationLogo> {
+    if (logo.v === paletteVersion || this.#repaintFailed.has(logo.hash)) return logo
+    const palette = await this.d.cache.logoPalette(logo.hash)
+    if (!palette) {
+      this.#repaintFailed.add(logo.hash)
+      return logo
+    }
+    return { ...logo, palette, v: paletteVersion }
   }
 
   async #has(logo: StationLogo): Promise<boolean> {
@@ -112,6 +135,8 @@ export class StationLogos {
     }
     const logo: StationLogo = { hash: h, palette: done.palette }
     if (done.side < smallLogoSide) logo.small = true
+    logo.from = source
+    logo.v = paletteVersion
     this.#made.set(source, logo)
     return logo
   }

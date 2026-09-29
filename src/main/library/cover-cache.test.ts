@@ -1,6 +1,6 @@
 // CoverCache with a fake hidden window: what happens when a send throws, when
 // the window never loads, and after the app window closed.
-import { mkdtempSync, readdirSync, rmSync } from 'fs'
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -217,6 +217,21 @@ describe('CoverCache', () => {
       await answerAll(fake.windows[0], 48, 48)
       expect(await p).toEqual({ palette, side: 48 })
       expect(readdirSync(dir)).toEqual([`${hash}.jpg`])
+      covers.close()
+    })
+
+    it('picks new colors from the small cover with a palette-only job', async () => {
+      const covers = new CoverCache(dir, 'preload.js')
+      writeFileSync(join(dir, `${hash}.jpg`), new Uint8Array([7, 7]))
+      const p = covers.logoPalette(hash)
+      await tick()
+      await tick()
+      const job = fake.windows[0].sent[0] as unknown as CoverJob
+      expect([job.side, job.palette, [...job.data]]).toEqual([undefined, true, [7, 7]])
+      fake.onDone!({ sender: fake.windows[0].webContents }, { id: job.id, palette })
+      expect(await p).toEqual(palette)
+      // no small cover: nothing to pick from
+      expect(await covers.logoPalette('b'.repeat(40))).toBeUndefined()
       covers.close()
     })
 

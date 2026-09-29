@@ -1,11 +1,90 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fetchLogo, isLogoPicture } from './logo-fetch'
+import { fetchLogo, isLogoPicture, pictureSize } from './logo-fetch'
 
-const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2])
+const be32 = (n: number): number[] => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]
+const le16 = (n: number): number[] => [n & 255, n >>> 8]
+const le24 = (n: number): number[] => [n & 255, (n >>> 8) & 255, n >>> 16]
+const ascii = (t: string): number[] => [...t].map((c) => c.charCodeAt(0))
+
+// the first bytes of each kind of picture, as far as the size
+function pngOf(w: number, h: number): Uint8Array {
+  const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+  return new Uint8Array([
+    ...sig,
+    ...be32(13),
+    ...ascii('IHDR'),
+    ...be32(w),
+    ...be32(h),
+    8,
+    2,
+    0,
+    0,
+    0
+  ])
+}
+const gifOf = (w: number, h: number): Uint8Array =>
+  new Uint8Array([...ascii('GIF89a'), ...le16(w), ...le16(h), 0, 0, 0])
+function jpegOf(w: number, h: number): Uint8Array {
+  // SOI, an APP0 of 16 bytes, then SOF0
+  const app0 = [0xff, 0xe0, 0, 16, ...ascii('JFIF'), 0, 1, 1, 0, 0, 1, 0, 1, 0, 0]
+  const sof = [0xff, 0xc0, 0, 17, 8, h >> 8, h & 255, w >> 8, w & 255, 3]
+  return new Uint8Array([0xff, 0xd8, ...app0, ...sof, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+}
+const riff = (chunk: string, body: number[]): Uint8Array =>
+  new Uint8Array([
+    ...ascii('RIFF'),
+    0,
+    0,
+    0,
+    0,
+    ...ascii('WEBP'),
+    ...ascii(chunk),
+    0,
+    0,
+    0,
+    0,
+    ...body
+  ])
+const webpLossy = (w: number, h: number): Uint8Array =>
+  riff('VP8 ', [0, 0, 0, 0x9d, 0x01, 0x2a, ...le16(w), ...le16(h)])
+function webpLossless(w: number, h: number): Uint8Array {
+  const bits = (w - 1) | ((h - 1) << 14)
+  return riff('VP8L', [
+    0x2f,
+    bits & 255,
+    (bits >>> 8) & 255,
+    (bits >>> 16) & 255,
+    (bits >>> 24) & 255
+  ])
+}
+const webpExtended = (w: number, h: number): Uint8Array =>
+  riff('VP8X', [0, 0, 0, 0, ...le24(w - 1), ...le24(h - 1)])
+function icoOf(w: number, h: number, inner?: Uint8Array): Uint8Array {
+  const entry = [
+    w & 255,
+    h & 255,
+    0,
+    0,
+    1,
+    0,
+    32,
+    0,
+    ...le16(inner?.length ?? 0),
+    0,
+    0,
+    22,
+    0,
+    0,
+    0
+  ]
+  return new Uint8Array([0, 0, 1, 0, 1, 0, ...entry, ...(inner ?? [])])
+}
+
+const png = pngOf(120, 80)
 const url = 'https://radio.example/logo.png'
 
-function answer(body: BodyInit | null, status = 200, at = url): Response {
-  const r = new Response(body, { status })
+function answer(body: BodyInit | Uint8Array | null, status = 200, at = url): Response {
+  const r = new Response(body as BodyInit | null, { status })
   Object.defineProperty(r, 'url', { value: at })
   return r
 }
@@ -44,6 +123,47 @@ describe('fetchLogo', () => {
       throw new TypeError('fetch failed')
     }
     await expect(fetchLogo(url, { fetch, userAgent: 'x' })).rejects.toThrow('fetch failed')
+  })
+})
+
+describe('pictureSize', () => {
+  it('reads the size from the header of each kind', () => {
+    expect(pictureSize(pngOf(300, 200))).toEqual({ width: 300, height: 200 })
+    expect(pictureSize(gifOf(64, 32))).toEqual({ width: 64, height: 32 })
+    expect(pictureSize(jpegOf(1200, 900))).toEqual({ width: 1200, height: 900 })
+    expect(pictureSize(webpLossy(400, 300))).toEqual({ width: 400, height: 300 })
+    expect(pictureSize(webpLossless(5000, 17))).toEqual({ width: 5000, height: 17 })
+    expect(pictureSize(webpExtended(9000, 9000))).toEqual({ width: 9000, height: 9000 })
+    // an icon's 0 is 256; a PNG inside counts with its own size
+    expect(pictureSize(icoOf(0, 0))).toEqual({ width: 256, height: 256 })
+    expect(pictureSize(icoOf(0, 0, pngOf(30000, 30000)))).toEqual({ width: 30000, height: 30000 })
+  })
+
+  it('knows no size for a cut-off header', () => {
+    expect(pictureSize(pngOf(300, 200).slice(0, 20))).toBeUndefined()
+    expect(pictureSize(jpegOf(300, 200).slice(0, 12))).toBeUndefined()
+    expect(pictureSize(new Uint8Array([1, 2, 3]))).toBeUndefined()
+  })
+})
+
+describe('fetchLogo and the picture size', () => {
+  const d = (body: Uint8Array): Parameters<typeof fetchLogo>[1] => ({
+    fetch: async () => answer(body),
+    userAgent: 'x'
+  })
+
+  it('takes a picture up to 4096 px a side', async () => {
+    expect(await fetchLogo(url, d(pngOf(4096, 4096)))).toBeDefined()
+    expect(await fetchLogo(url, d(jpegOf(4000, 100)))).toBeDefined()
+  })
+
+  it('refuses one bigger than that, or of no known size, before it is decoded', async () => {
+    await expect(fetchLogo(url, d(pngOf(30000, 30000)))).rejects.toThrow('too many pixels')
+    await expect(fetchLogo(url, d(webpExtended(5000, 10)))).rejects.toThrow('too many pixels')
+    await expect(fetchLogo(url, d(icoOf(0, 0, pngOf(8000, 8000))))).rejects.toThrow(
+      'too many pixels'
+    )
+    await expect(fetchLogo(url, d(jpegOf(300, 200).slice(0, 12)))).rejects.toThrow('no size')
   })
 })
 

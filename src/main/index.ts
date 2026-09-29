@@ -134,7 +134,8 @@ page.handle(PlaylistChannel.load, () => playlists.get())
 page.on(PlaylistChannel.save, (_, raw) => playlists.setFromPage(raw))
 page.handle(RadioChannel.stations, () => stations.list())
 page.handle(RadioChannel.save, (_, raw) => {
-  const list = stations.save(raw)
+  // a station played from search brings the logo main made for it
+  const list = stations.save(raw, (id) => played.lookup(id)?.logo)
   const saved = stations.get(parseStation(raw)?.id ?? '')
   // behind the answer; the page hears of the logo with radio:logo
   if (saved) void logos.update(saved, setLogo)

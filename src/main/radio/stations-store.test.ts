@@ -123,6 +123,23 @@ describe('StationsStore', () => {
     expect(store.setLogo('zzz', logo)).toBe(store.list())
   })
 
+  it('never takes a logo from the page: keeps its own, or the one it is given for a new station', () => {
+    const store = new StationsStore(path)
+    const mine = { hash: 'a'.repeat(40), palette: fallbackPalettes('x') }
+    const page = { hash: 'b'.repeat(40), palette: fallbackPalettes('y') }
+    // a new station: the page's logo is dropped
+    store.save({ ...st('a'), logo: page })
+    expect(store.get('a')).not.toHaveProperty('logo')
+    // a new station with a logo main made while it played
+    store.save({ ...st('b'), logo: page }, () => mine)
+    expect(store.get('b')?.logo).toEqual(mine)
+    // saved again: the saved station's logo stays
+    store.setLogo('a', mine)
+    store.save({ ...st('a'), name: 'New', logo: page }, () => page)
+    expect(store.get('a')?.name).toBe('New')
+    expect(store.get('a')?.logo).toEqual(mine)
+  })
+
   it('keeps the chosen stream when streams are added', () => {
     const store = new StationsStore(path)
     store.save({ ...st('a'), chosen: 'https://a.example/s' })

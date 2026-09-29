@@ -92,6 +92,10 @@ describe('station logos', () => {
   it('keeps a logo only with a cover hash and a palette', () => {
     const small = { hash: hashA, palette: colors, small: true }
     expect(parseStation(st('a', { logo: small }))?.logo).toEqual(small)
+    // where it came from and the palette version are kept
+    const full = { ...small, from: 'bundled:metal-only', v: 2 }
+    expect(parseStation(st('a', { logo: full }))?.logo).toEqual(full)
+    expect(parseStation({ ...st('a'), logo: { ...full, from: 7, v: 'x' } })?.logo).toEqual(small)
     for (const logo of [
       'abc',
       { hash: 'abc', palette: colors },

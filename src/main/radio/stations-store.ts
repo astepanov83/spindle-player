@@ -16,6 +16,7 @@ import {
   saveStation,
   setLogo,
   stationsFile,
+  withLogo,
   type HistoryEntry,
   type RadioHistory,
   type Station,
@@ -66,9 +67,13 @@ export class StationsStore {
 
   // What the page sends can't be trusted, so each method checks its arguments.
   // Each one gives back the list as it is now.
-  save(raw: unknown): Station[] {
+  // Main owns `logo`: the page's is dropped. A saved station keeps its own; a
+  // new one gets `logoOf` (the logo main made while it played), or none.
+  save(raw: unknown, logoOf: (id: string) => StationLogo | undefined = () => undefined): Station[] {
     const station = parseStation(raw)
-    return station ? this.#set(saveStation(this.#data, station)) : this.#data
+    if (!station) return this.#data
+    const logo = this.get(station.id) ? this.get(station.id)!.logo : logoOf(station.id)
+    return this.#set(saveStation(this.#data, withLogo(station, logo)))
   }
 
   remove(id: unknown): Station[] {

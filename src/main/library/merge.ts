@@ -334,6 +334,19 @@ export function usedCovers(ix: LibraryIndex, ...fetched: Fetched[]): Set<string>
   return out
 }
 
+// The covers the prune keeps: the ones above, and those main asked to keep
+// (station logos, ticket 030). Logos have their palette in stations.json, so
+// they are left out of the palettes above.
+export function coversInUse(
+  ix: LibraryIndex,
+  fetched: Fetched[],
+  kept: Iterable<string>
+): Set<string> {
+  const out = usedCovers(ix, ...fetched)
+  for (const h of kept) out.add(h)
+  return out
+}
+
 // Drops palettes of covers nothing points at, and old-version stand-ins that
 // were picked again. Returns true if any went.
 export function prunePalettes(ix: LibraryIndex, used: Set<string>): boolean {

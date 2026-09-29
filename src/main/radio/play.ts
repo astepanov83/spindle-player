@@ -2,7 +2,14 @@
 // Main keeps a copy, so spindle://radio finds a station from search and one
 // removed from My stations while it plays, and asks the station's server for
 // its streams (findStreams) before the page loads one.
-import { mergeStreams, parseStation, type Station, type Stream } from '../../shared/stations'
+import {
+  mergeStreams,
+  parseStation,
+  withLogo,
+  type Station,
+  type StationLogo,
+  type Stream
+} from '../../shared/stations'
 
 // What this needs of StationsStore.
 export interface SavedStationsLike {
@@ -23,7 +30,9 @@ export class PlayedStations {
   constructor(
     readonly saved: SavedStationsLike,
     readonly find: (station: Station) => Promise<Stream[]>,
-    readonly log: (text: string) => void
+    readonly log: (text: string) => void,
+    // told at once which station plays, as main knows it (its logo is looked up behind)
+    readonly started: (station: Station) => void = () => {}
   ) {}
 
   // My stations first: that copy has the latest streams and choice.
@@ -41,6 +50,7 @@ export class PlayedStations {
     const id = given.id
     const station = this.lookup(id) ?? given
     this.#remember(station)
+    this.started(station)
     if (this.#asked.has(id) && station.streams.length) return station
     this.#asked.add(id)
     let job = this.#finding.get(id)
@@ -71,6 +81,12 @@ export class PlayedStations {
     }
     const played = this.#played.get(id)
     if (played) this.#remember({ ...played, streams: mergeStreams(played.streams, found) })
+  }
+
+  // The logo of the copy kept here; My stations keep their own.
+  setLogo(id: string, logo: StationLogo | undefined): void {
+    const played = this.#played.get(id)
+    if (played) this.#played.set(id, withLogo(played, logo))
   }
 
   // The newest last, so the oldest goes first when there are too many.

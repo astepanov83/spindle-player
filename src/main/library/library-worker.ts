@@ -34,7 +34,7 @@ import {
   prunePalettes,
   readAgain,
   serializeIndex,
-  usedCovers
+  coversInUse
 } from './merge'
 import { extOf, frontCover, normalizeTags } from './tags'
 import type { ListedImage } from './walk'
@@ -485,11 +485,16 @@ async function loadCached(): Promise<void> {
   }
 }
 
-// The covers the index and the online lookup use, made again only after either changed.
+// Station logos main keeps in the cover cache (ticket 030), and a count of changes.
+let keptCovers: string[] = []
+let keptEdits = 0
+
+// The covers the index, the online lookup and main use, made again only after one changed.
 let usedCache: { edits: string; used: Set<string> } | undefined
 function liveUsed(): Set<string> {
-  const edits = `${ixEdits}.${fetchedEdits}`
-  if (usedCache?.edits !== edits) usedCache = { edits, used: usedCovers(ix, fetched, photos) }
+  const edits = `${ixEdits}.${fetchedEdits}.${keptEdits}`
+  if (usedCache?.edits !== edits)
+    usedCache = { edits, used: coversInUse(ix, [fetched, photos], keptCovers) }
   return usedCache.used
 }
 
@@ -739,7 +744,14 @@ port.on('message', (e: Electron.MessageEvent) => {
   const m = e.data as WorkerIn
   switch (m.type) {
     case 'start':
+      // here, not when ready: a 'keep-covers' after it may come before that
+      keptCovers = m.start.keepCovers
+      keptEdits++
       started(m.start)
+      break
+    case 'keep-covers':
+      keptCovers = m.hashes
+      keptEdits++
       break
     case 'scan':
       // a manual Rescan looks up every miss again

@@ -1,5 +1,7 @@
 // Radio stations: My stations (stations.json) and the titles heard on each
 // station (radio-history.json). Main checks both files and what the page sends.
+import { coverUrls, type Art } from './library'
+import { defaultPalettes, parseThemePalettes, type ThemePalettes } from './palette'
 import { cleanName } from './playlists'
 
 export interface Stream {
@@ -19,14 +21,25 @@ export interface Station {
   country?: string
   // where the logo came from
   logoUrl?: string
-  // cover hash, once fetched
-  logo?: string
+  // the logo in the cover cache, once fetched (ticket 030)
+  logo?: StationLogo
   // playlists to read on play (Metal Only)
   pls?: string[]
   streams: Stream[]
   // url of the stream the user picked
   chosen?: string
 }
+
+// A station's logo as a cover: its hash in the cover cache and the colors
+// picked from it. small: under 64px, too blurry for the stage.
+export interface StationLogo {
+  hash: string
+  palette: ThemePalettes
+  small?: boolean
+}
+
+// Logos under this many px on their shorter side show as a tile on the stage.
+export const smallLogoSide = 64
 
 export interface SavedStations {
   version: 1
@@ -69,6 +82,18 @@ function webUrl(v: unknown): string | undefined {
   } catch {
     return undefined
   }
+}
+
+const hashPattern = /^[0-9a-f]{40}$/
+
+function parseLogo(raw: unknown): StationLogo | undefined {
+  if (!isObject(raw) || typeof raw.hash !== 'string' || !hashPattern.test(raw.hash))
+    return undefined
+  const palette = parseThemePalettes(raw.palette)
+  if (!palette) return undefined
+  const logo: StationLogo = { hash: raw.hash, palette }
+  if (raw.small === true) logo.small = true
+  return logo
 }
 
 function parseStream(raw: unknown): Stream | undefined {
@@ -122,7 +147,7 @@ export function parseStation(raw: unknown): Station | undefined {
   if (country) s.country = country
   const logoUrl = webUrl(raw.logoUrl)
   if (logoUrl) s.logoUrl = logoUrl
-  const logo = text(raw.logo)
+  const logo = parseLogo(raw.logo)
   if (logo) s.logo = logo
   if (pls.length) s.pls = [...new Set(pls)]
   if (typeof raw.chosen === 'string' && streams.some((x) => x.url === raw.chosen))
@@ -181,6 +206,37 @@ export function chooseStream(list: Station[], id: string, url: string): Station[
   const s = list.find((x) => x.id === id)
   if (!s || s.chosen === url || !s.streams.some((x) => x.url === url)) return list
   return list.map((x) => (x.id === id ? { ...x, chosen: url } : x))
+}
+
+export const sameLogo = (a: StationLogo | undefined, b: StationLogo | undefined): boolean =>
+  JSON.stringify(a) === JSON.stringify(b)
+
+// The same list back when the station is not there or has this logo already.
+export function setLogo(list: Station[], id: string, logo: StationLogo | undefined): Station[] {
+  const s = list.find((x) => x.id === id)
+  if (!s || sameLogo(s.logo, logo)) return list
+  return list.map((x) => (x.id === id ? withLogo(x, logo) : x))
+}
+
+export function withLogo(s: Station, logo: StationLogo | undefined): Station {
+  const next = { ...s, logo }
+  if (!logo) delete next.logo
+  return next
+}
+
+// No logo: a tile in the fixed colors.
+const noLogo: Art = { palette: defaultPalettes, cover: '', coverLarge: '' }
+
+// The logo as an album's cover, so the app colors, the stage and the media
+// controls work as for a song. A small logo is left off the stage.
+export function stationArt(s: Station): Art {
+  if (!s.logo) return noLogo
+  const urls = coverUrls(s.logo.hash)
+  return {
+    palette: s.logo.palette,
+    cover: urls.cover,
+    coverLarge: s.logo.small ? '' : urls.coverLarge
+  }
 }
 
 // Adds streams found on the server. A stream with the same bitrate and codec as

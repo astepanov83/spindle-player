@@ -57,6 +57,11 @@ export interface Art {
   coverLarge: string
 }
 
+// The page's addresses of a cover in the cache (spindle://cover, see protocol.ts).
+export function coverUrls(hash: string): { cover: string; coverLarge: string } {
+  return { cover: `spindle://cover/small/${hash}`, coverLarge: `spindle://cover/large/${hash}` }
+}
+
 // Where a track lies in its file, in seconds. `file` is the id the page loads
 // (spindle://media/<file>), the same for every track of one image.
 export interface TrackPart {

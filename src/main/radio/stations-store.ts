@@ -14,10 +14,12 @@ import {
   pruneHistory,
   removeStation,
   saveStation,
+  setLogo,
   stationsFile,
   type HistoryEntry,
   type RadioHistory,
   type Station,
+  type StationLogo,
   type Stream
 } from '../../shared/stations'
 import { JsonFileWriter, openJsonFile, readJsonFile, removeStrayTmp } from '../json-file'
@@ -90,6 +92,11 @@ export class StationsStore {
     const streams = mergeStreams(s.streams, found)
     if (streams === s.streams) return this.#data
     return this.#set(saveStation(this.#data, { ...s, streams }))
+  }
+
+  // A logo main made (ticket 030). A station removed meanwhile stays removed.
+  setLogo(id: string, logo: StationLogo | undefined): Station[] {
+    return this.#set(setLogo(this.#data, id, logo))
   }
 
   #set(next: Station[]): Station[] {

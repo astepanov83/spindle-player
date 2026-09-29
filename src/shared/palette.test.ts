@@ -9,6 +9,7 @@ import {
   fallbackPalettes,
   hexToLch,
   lchToHex,
+  logoBackdrop,
   mixOklch,
   parseThemePalettes,
   shiftHue,
@@ -258,5 +259,27 @@ describe('parseThemePalettes', () => {
       { dark: ['#000000', '#000000', '#000000'] }
     ])
       expect(parseThemePalettes(v)).toBeUndefined()
+  })
+})
+
+describe('logoBackdrop', () => {
+  // [r, g, b, a] repeated
+  const px = (rgba: number[], n: number): number[] => Array.from({ length: n }, () => rgba).flat()
+
+  it('puts a dark logo on white and a light one on near black', () => {
+    const dark = [...px([10, 10, 30, 255], 10), ...px([0, 0, 0, 0], 30)]
+    const light = [...px([240, 240, 200, 255], 10), ...px([0, 0, 0, 0], 30)]
+    expect(logoBackdrop(dark)).toBe('#ffffff')
+    expect(logoBackdrop(light)).toBe('#16161a')
+  })
+
+  it('counts only the parts that show', () => {
+    // the hidden pixels are white, but it is a black logo
+    const rgba = [...px([0, 0, 0, 255], 10), ...px([255, 255, 255, 0], 90)]
+    expect(logoBackdrop(rgba)).toBe('#ffffff')
+  })
+
+  it('puts a logo with nothing that shows on white', () => {
+    expect(logoBackdrop(px([0, 0, 0, 0], 4))).toBe('#ffffff')
   })
 })

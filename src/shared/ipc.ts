@@ -4,7 +4,7 @@ import type { ScanStatus } from './library'
 import type { Playlist } from './playlists'
 import type { QueuePlace, SavedPlaying, SavedQueue } from './saved-queue'
 import type { Settings } from './settings'
-import type { HistoryEntry, Station } from './stations'
+import type { HistoryEntry, Station, StationLogo } from './stations'
 
 // Channel names used by both main and preload, so a typo is a type error.
 export const WinChannel = {
@@ -127,7 +127,9 @@ export const RadioChannel = {
   lastAnswer: 'radio:last-answer',
   stop: 'radio:stop',
   // main to page: a new song title in the stream playing
-  title: 'radio:title'
+  title: 'radio:title',
+  // main to page: main made or dropped a station's logo (ticket 030)
+  logo: 'radio:logo'
 } as const
 
 // A title read from the stream's ICY metadata, as main heard it.
@@ -135,6 +137,13 @@ export interface RadioTitle {
   stationId: string
   title: string
   at: number
+}
+
+// A station's logo as main has it now; none when it was dropped. Sent for a
+// saved station and one played from search alike.
+export interface RadioLogo {
+  id: string
+  logo?: StationLogo
 }
 
 // What main last answered to spindle://radio/<id>: audio (ok) or 502/404, and
@@ -170,6 +179,8 @@ export interface RadioApi {
   stop(): void
   // Returns a function that stops listening.
   onTitle(listener: (title: RadioTitle) => void): () => void
+  // Main fetches a logo when a station is saved or played, after it answered.
+  onLogo(listener: (logo: RadioLogo) => void): () => void
 }
 
 // Which API method each page-to-main channel carries. The preload's calls and

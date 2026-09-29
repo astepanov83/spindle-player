@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { fallbackPalettes } from '../../shared/palette'
 import { mergeStreams, type Station, type Stream } from '../../shared/stations'
 import { PlayedStations, type SavedStationsLike } from './play'
 
@@ -152,5 +153,30 @@ describe('radio:play', () => {
     for (let i = 0; i < 101; i++) await p.play(st(`rb-${i}`))
     expect(p.lookup('rb-0')).toBeUndefined()
     expect(p.lookup('rb-100')).toBeDefined()
+  })
+
+  it('says which station plays at once, before the server answers', async () => {
+    const f = finder()
+    const store = saved([st('metal-only', [], { pls: ['https://m.example/listen.pls'] })])
+    const started = vi.fn()
+    const p = new PlayedStations(store, f.find, log, started)
+    const answer = p.play(st('metal-only', [], { pls: ['https://m.example/listen.pls'] }))
+    expect(started).toHaveBeenCalledWith(store.get('metal-only'))
+    f.answer([s128])
+    await answer
+    expect(started).toHaveBeenCalledTimes(1)
+  })
+
+  it('sets the logo of the copy of a station from search', async () => {
+    const p = new PlayedStations(saved([]), finder().find, log)
+    await p.play(st('rb-1'))
+    const logo = { hash: 'a'.repeat(40), palette: fallbackPalettes('x') }
+    p.setLogo('rb-1', logo)
+    expect(p.lookup('rb-1')?.logo).toEqual(logo)
+    p.setLogo('rb-1', undefined)
+    expect(p.lookup('rb-1')).not.toHaveProperty('logo')
+    // not played: nothing to set
+    p.setLogo('rb-2', logo)
+    expect(p.lookup('rb-2')).toBeUndefined()
   })
 })

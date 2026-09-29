@@ -1,5 +1,6 @@
 // first, so main's libuv pool is made at this size
 import './pool-size'
+import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { app, BrowserWindow, nativeTheme, net, session } from 'electron'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
@@ -10,14 +11,19 @@ import {
   RadioChannel,
   SettingsChannel,
   WinChannel,
+  type RadioLogo,
   type RadioTitle
 } from '../shared/ipc'
+import { parseStation, type StationLogo } from '../shared/stations'
+import metalOnlyLogoPath from '../../resources/metal-only.png?asset'
 import { pageSettings } from '../shared/settings'
 import { stopAllDecoders } from './library/decode'
 import { handleProtocol, registerScheme } from './library/protocol'
 import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
 import { findStreams } from './radio/find-streams'
+import { fetchLogo } from './radio/logo-fetch'
+import { keptLogos, metalOnlyLogo, StationLogos } from './radio/logos'
 import { PlayedStations } from './radio/play'
 import { RadioHistoryStore, StationsStore } from './radio/stations-store'
 import { RadioStreams, radioStream } from './radio/stream'
@@ -36,6 +42,8 @@ let stations: StationsStore
 let radioHistory: RadioHistoryStore
 // stations played this run, saved or not; spindle://radio looks them up here
 let played: PlayedStations
+// station logos in the cover cache (ticket 030)
+let logos: StationLogos
 const radioStreams = new RadioStreams()
 let main: MainWindow | null = null
 
@@ -73,6 +81,15 @@ function createWindow(splash?: Splash): void {
 
 function toPage(channel: string, data: unknown): void {
   if (main && !main.win.isDestroyed()) main.win.webContents.send(channel, data)
+}
+
+// A logo main made or dropped: into My stations (stations.json) for a saved
+// station, into the copy kept for one from search, and to the page.
+function setLogo(id: string, logo: StationLogo | undefined): void {
+  stations.setLogo(id, logo)
+  played.setLogo(id, logo)
+  toPage(RadioChannel.logo, { id, logo } satisfies RadioLogo)
+  library.coversKept()
 }
 
 // Only the app window's page may use these; see page-ipc.ts.
@@ -116,8 +133,19 @@ page.on(LibraryChannel.setArtists, (_, changes) => library.setArtists(changes))
 page.handle(PlaylistChannel.load, () => playlists.get())
 page.on(PlaylistChannel.save, (_, raw) => playlists.setFromPage(raw))
 page.handle(RadioChannel.stations, () => stations.list())
-page.handle(RadioChannel.save, (_, raw) => stations.save(raw))
-page.handle(RadioChannel.remove, (_, id) => stations.remove(id))
+page.handle(RadioChannel.save, (_, raw) => {
+  const list = stations.save(raw)
+  const saved = stations.get(parseStation(raw)?.id ?? '')
+  // behind the answer; the page hears of the logo with radio:logo
+  if (saved) void logos.update(saved, setLogo)
+  library.coversKept()
+  return list
+})
+page.handle(RadioChannel.remove, (_, id) => {
+  const list = stations.remove(id)
+  library.coversKept()
+  return list
+})
 page.handle(RadioChannel.move, (_, id, by) => stations.move(id, by))
 page.handle(RadioChannel.choose, (_, id, url) => stations.choose(id, url))
 page.handle(RadioChannel.history, (_, id) => (typeof id === 'string' ? radioHistory.get(id) : []))
@@ -177,10 +205,13 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   )
   const radioFetch: typeof fetch = (url, init) => net.fetch(url as string, init)
   const radioLog = (text: string): void => console.warn(text)
+  const radioAgent = `Spindle/${app.getVersion()}`
   played = new PlayedStations(
     stations,
     (station) => findStreams(station, { fetch: radioFetch, log: radioLog }),
-    radioLog
+    radioLog,
+    // not waited for: the stream matters more than the picture
+    (station) => void logos.update(station, setLogo)
   )
 
   // Starts reading the index now, while the window loads.
@@ -193,8 +224,19 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
       const queue = savedQueue.moveIds(moves)
       return lists && queue
     },
-    join(__dirname, '../preload/covers.js')
+    join(__dirname, '../preload/covers.js'),
+    // asked at once for the start data, before logos is made
+    () => keptLogos(stations.list(), logos ? logos.keptThisRun() : new Set())
   )
+  logos = new StationLogos({
+    load: async (source) =>
+      source === metalOnlyLogo
+        ? new Uint8Array(await readFile(metalOnlyLogoPath))
+        : fetchLogo(source, { fetch: radioFetch, userAgent: radioAgent }),
+    cache: library.covers,
+    kept: () => library.coversKept(),
+    log: radioLog
+  })
   handleProtocol(library, (id, stream) =>
     radioStream(id, stream, {
       lookup: (id) => played.lookup(id),
@@ -207,7 +249,7 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
       },
       log: radioLog,
       streams: radioStreams,
-      userAgent: `Spindle/${app.getVersion()}`
+      userAgent: radioAgent
     })
   )
 

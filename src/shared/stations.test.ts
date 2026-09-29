@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { defaultPalettes, type ThemePalettes } from './palette'
 import {
   addTitle,
   chooseStream,
@@ -13,10 +14,18 @@ import {
   pruneHistory,
   removeStation,
   saveStation,
+  setLogo,
+  stationArt,
   stationsFile,
   type RadioHistory,
   type Station
 } from './stations'
+
+const hashA = 'a'.repeat(40)
+const colors: ThemePalettes = {
+  dark: ['#111111', '#222222', '#333333'],
+  light: ['#444444', '#555555', '#666666']
+}
 
 const st = (id: string, extra: Partial<Station> = {}): Station => ({
   id,
@@ -35,7 +44,7 @@ describe('parseStation', () => {
       tags: ['metal', 'de'],
       country: 'DE',
       logoUrl: 'https://x.example/l.png',
-      logo: 'abc',
+      logo: { hash: hashA, palette: colors },
       pls: ['https://x.example/listen.pls'],
       streams: [{ url: 'https://x.example/s', bitrate: 128, codec: 'mp3' }],
       chosen: 'https://x.example/s'
@@ -76,6 +85,57 @@ describe('parseStation', () => {
       streams: [{ url: 'https://a.example/1' }],
       pls: ['https://x.example/a.pls']
     })
+  })
+})
+
+describe('station logos', () => {
+  it('keeps a logo only with a cover hash and a palette', () => {
+    const small = { hash: hashA, palette: colors, small: true }
+    expect(parseStation(st('a', { logo: small }))?.logo).toEqual(small)
+    for (const logo of [
+      'abc',
+      { hash: 'abc', palette: colors },
+      { hash: hashA },
+      { hash: hashA, palette: { dark: ['red'] } }
+    ])
+      expect(parseStation({ ...st('a'), logo })?.logo).toBeUndefined()
+    // small is true or left out
+    expect(parseStation({ ...st('a'), logo: { ...small, small: 'yes' } })?.logo).toEqual({
+      hash: hashA,
+      palette: colors
+    })
+  })
+
+  it('gives a station with no logo a tile in the fixed colors', () => {
+    expect(stationArt(st('a'))).toEqual({ palette: defaultPalettes, cover: '', coverLarge: '' })
+  })
+
+  it('gives a logo the art of an album cover', () => {
+    expect(stationArt(st('a', { logo: { hash: hashA, palette: colors } }))).toEqual({
+      palette: colors,
+      cover: `spindle://cover/small/${hashA}`,
+      coverLarge: `spindle://cover/large/${hashA}`
+    })
+  })
+
+  it('shows a small logo as a tile in its colors on the stage', () => {
+    const art = stationArt(st('a', { logo: { hash: hashA, palette: colors, small: true } }))
+    expect(art.palette).toBe(colors)
+    expect(art.coverLarge).toBe('')
+    // rows are small enough for it
+    expect(art.cover).toBe(`spindle://cover/small/${hashA}`)
+  })
+
+  it('sets or drops the logo of one station, and gives the same list when nothing changes', () => {
+    const logo = { hash: hashA, palette: colors }
+    const list = [st('a'), st('b')]
+    const next = setLogo(list, 'b', logo)
+    expect(next[1].logo).toEqual(logo)
+    expect(next[0]).toBe(list[0])
+    expect(setLogo(next, 'b', { ...logo })).toBe(next)
+    expect(setLogo(list, 'zzz', logo)).toBe(list)
+    expect(setLogo(next, 'b', undefined)[1]).not.toHaveProperty('logo')
+    expect(setLogo(list, 'a', undefined)).toBe(list)
   })
 })
 

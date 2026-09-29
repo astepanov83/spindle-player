@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fallbackPalettes } from '../../shared/palette'
 import type { Station } from '../../shared/stations'
 import { metalOnly, RadioHistoryStore, StationsStore } from './stations-store'
 
@@ -108,6 +109,18 @@ describe('StationsStore', () => {
     store.remove('a')
     store.addStreams('a', [{ url: 'https://a.example/x', bitrate: 64 }])
     expect(store.get('a')).toBeUndefined()
+  })
+
+  it('sets the logo of a saved station, and writes it', () => {
+    const store = new StationsStore(path)
+    store.save(st('a'))
+    const logo = { hash: 'a'.repeat(40), palette: fallbackPalettes('x'), small: true }
+    const list = store.setLogo('a', logo)
+    expect(list.find((s) => s.id === 'a')?.logo).toEqual(logo)
+    store.flushSync()
+    expect(onDisk().find((s) => s.id === 'a')?.logo).toEqual(logo)
+    // not saved: nothing changes
+    expect(store.setLogo('zzz', logo)).toBe(store.list())
   })
 
   it('keeps the chosen stream when streams are added', () => {

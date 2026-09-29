@@ -105,6 +105,8 @@ export interface WorkerStart {
   overridesPath: string
   // sent with every online request
   userAgent: string
+  // covers main uses that the index does not know: station logos (ticket 030)
+  keepCovers: string[]
 }
 
 // What main needs to serve a file: its path, and for a file ffmpeg decodes,
@@ -154,6 +156,8 @@ export type WorkerIn =
   | { type: 'resume' }
   // the page renamed or split artists (ticket 024)
   | { type: 'artist-overrides'; changes: ArtistChanges }
+  // the covers main uses changed (station logos); the prune keeps them
+  | { type: 'keep-covers'; hashes: string[] }
 
 // the library process to main
 export type WorkerOut =

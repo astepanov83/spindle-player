@@ -2,7 +2,14 @@
 import { basename } from 'path'
 import { creditOf, type ArtistOverrides } from '../../shared/artist-overrides'
 import { artistKey, listArtists, namesOf } from '../../shared/artists'
-import type { Album, ArtistPhoto, LibraryData, Track, TrackPart } from '../../shared/library'
+import {
+  coverUrls,
+  type Album,
+  type ArtistPhoto,
+  type LibraryData,
+  type Track,
+  type TrackPart
+} from '../../shared/library'
 import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../shared/palette'
 import { checksPerArtist, lookUpArtist, type ArtistCheck, type ArtistQuery } from './artist-photo'
 import { cleanAlbum, cleanArtist, searchKey, type CoverQuery } from './cover-match'
@@ -30,10 +37,6 @@ export const unknownArtist = 'Unknown artist'
 export const variousArtists = 'Various Artists'
 
 export { shortHash }
-
-export function coverUrls(hash: string): { cover: string; coverLarge: string } {
-  return { cover: `spindle://cover/small/${hash}`, coverLarge: `spindle://cover/large/${hash}` }
-}
 
 // The folder an album lives in: "Album/CD2" counts as "Album".
 export function albumFolder(dir: string): string {

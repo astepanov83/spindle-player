@@ -47,7 +47,8 @@ vi.stubGlobal('window', {
     history: async () => [],
     lastAnswer: async () => undefined,
     stop: () => {},
-    onTitle: () => () => {}
+    onTitle: () => () => {},
+    onLogo: () => () => {}
   }
 })
 

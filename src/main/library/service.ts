@@ -42,6 +42,8 @@ export class LibraryService {
     // (false when a write failed, so the library process keeps the map)
     readonly idsMoved: (moves: IdMoves) => boolean,
     coverPreload: string,
+    // covers main uses that the index does not know (station logos), for the prune
+    readonly keepCovers: () => string[] = () => [],
     readonly dir = app.getPath('userData')
   ) {
     this.covers = new CoverCache(join(dir, 'covers'), coverPreload)
@@ -76,7 +78,8 @@ export class LibraryService {
         fetch: { on: this.store.live().fetchCovers, sources: this.store.live().coverSources },
         fetchedPath: join(this.dir, 'fetched-covers.json'),
         overridesPath: join(this.dir, 'artist-overrides.json'),
-        userAgent: `Spindle/${app.getVersion()} (https://github.com/astepanov83/spindle-player)`
+        userAgent: `Spindle/${app.getVersion()} (https://github.com/astepanov83/spindle-player)`,
+        keepCovers: this.keepCovers()
       }),
       // a library process that dies is started again a few times, then left dead
       new RestartBudget(3, 60000),
@@ -166,6 +169,11 @@ export class LibraryService {
 
   #sendPlaying(): void {
     this.#post({ type: 'playing', playing: this.#playing, dev: this.#playingDev })
+  }
+
+  // keepCovers() changed. A process started later gets it with its start data.
+  coversKept(): void {
+    this.#post({ type: 'keep-covers', hashes: this.keepCovers() })
   }
 
   // The online cover lookup setting changed.

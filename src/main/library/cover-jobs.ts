@@ -3,12 +3,13 @@
 import type { CoverResult } from '../../shared/cover-job'
 import { parseThemePalettes, type ThemePalettes } from '../../shared/palette'
 
-// ok: the resized JPEG and/or the palette, as the job asked. bad: the picture
+// ok: the resized JPEG and/or the palette, as the job asked, and the shorter
+// side of the source picture in px. bad: the picture
 // can't be decoded, so don't try again. retry: nothing is known about the
 // picture (window closed, crashed or stuck); try on a later scan. crash: the
 // window crashed while the job was in it.
 export type Outcome =
-  | { kind: 'ok'; jpg?: Uint8Array; palette?: ThemePalettes }
+  | { kind: 'ok'; jpg?: Uint8Array; palette?: ThemePalettes; side?: number }
   | { kind: 'bad' }
   | { kind: 'retry'; crash?: boolean }
 
@@ -19,6 +20,8 @@ export function outcomeOf(r: CoverResult): Outcome {
     const o: Outcome = { kind: 'ok' }
     if (r.jpg) o.jpg = r.jpg
     if (palette) o.palette = palette
+    const side = Math.min(Number(r.width), Number(r.height))
+    if (Number.isInteger(side) && side > 0) o.side = side
     return o
   }
   return r.bad ? { kind: 'bad' } : { kind: 'retry' }

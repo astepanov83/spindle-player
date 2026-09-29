@@ -402,6 +402,22 @@ export function fallbackPalettes(seed: string): ThemePalettes {
   return { dark: [...p.dark], light: [...p.light] }
 }
 
+// What a logo's see-through parts are filled with before it becomes a JPEG
+// (which has none, so they would turn black): white under a dark logo, near
+// black under a light one. Only the pixels that show count.
+export function logoBackdrop(rgba: ArrayLike<number>): string {
+  let sum = 0
+  let weight = 0
+  for (let i = 0; i + 3 < rgba.length; i += 4) {
+    const a = rgba[i + 3] / 255
+    if (!a) continue
+    const lab = linearToLab(linear8[rgba[i]], linear8[rgba[i + 1]], linear8[rgba[i + 2]])
+    sum += lab[0] * a
+    weight += a
+  }
+  return weight && sum / weight > 0.6 ? '#16161a' : '#ffffff'
+}
+
 // Until something plays: the neutral set from before 009, with a darker accent for light.
 export const defaultPalettes: ThemePalettes = {
   dark: ['#6f7787', '#a3adc2', '#232733'],

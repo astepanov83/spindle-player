@@ -14,6 +14,7 @@ import { join } from 'path'
 import { BrowserWindow, ipcMain } from 'electron'
 import { CoverChannel, type CoverJob, type CoverResult } from '../../shared/cover-job'
 import type { ThemePalettes } from '../../shared/palette'
+import { smallLogoSide } from '../../shared/stations'
 import { writeFileAtomic } from '../json-file'
 import { blockNavigation } from '../web-guard'
 import { badName, largeName, smallName } from './cover-names'
@@ -201,6 +202,42 @@ export class CoverCache {
       }
     // tried again on the next scan
     return { result: 'retry' }
+  }
+
+  // A station logo (ticket 030): the small cover, its colors and the size of
+  // the picture, and the large cover unless it is too small for the stage. Both
+  // are made now: a logo has no file the library process could make the large
+  // one from later. Undefined when the picture can't be used; no "bad" marker,
+  // since logos are tried again on the next run.
+  async addLogo(
+    hash: string,
+    data: Uint8Array
+  ): Promise<{ palette: ThemePalettes; side: number } | undefined> {
+    try {
+      const o = await this.#run(data, { side: smallSide, palette: true, backdrop: true })
+      if (o.kind !== 'ok' || !o.jpg || !o.palette || !o.side) return undefined
+      if (o.side >= smallLogoSide) {
+        const big = await this.#run(data, { side: largeSide, backdrop: true })
+        if (big.kind !== 'ok' || !big.jpg) return undefined
+        await writeFileAtomic(join(this.dir, largeName(hash)), big.jpg)
+      }
+      await writeFileAtomic(this.smallPath(hash), o.jpg)
+      return { palette: o.palette, side: o.side }
+    } catch (e) {
+      console.error('Could not save a station logo', e)
+      return undefined
+    }
+  }
+
+  // Whether a logo's files are still in the cache (the large one only when it has one).
+  async hasLogo(hash: string, large: boolean): Promise<boolean> {
+    try {
+      await stat(this.smallPath(hash))
+      if (large) await stat(join(this.dir, largeName(hash)))
+      return true
+    } catch {
+      return false
+    }
   }
 
   // The big cover's path, made from `source` the first time.

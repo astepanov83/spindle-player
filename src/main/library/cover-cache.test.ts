@@ -56,6 +56,8 @@ vi.mock('electron', () => {
 })
 
 const { CoverCache } = await import('./cover-cache')
+const { fallbackPalettes } = await import('../../shared/palette')
+type CoverJob = import('../../shared/cover-job').CoverJob
 
 let dir: string
 beforeEach(() => {
@@ -177,5 +179,60 @@ describe('CoverCache', () => {
     expect(await p).toEqual({ result: 'ok' })
     expect(readdirSync(dir)).toEqual([`${hash}.jpg`])
     covers.close()
+  })
+
+  describe('station logos', () => {
+    const palette = fallbackPalettes('logo')
+
+    // answers each job as it comes, with a picture of this size
+    async function answerAll(w: FakeWindow, width: number, height: number): Promise<void> {
+      const done = new Set<number>()
+      for (let i = 0; i < 5; i++) {
+        await tick()
+        answer(w, done, () => ({ jpg: new Uint8Array([9]), palette, width, height }))
+      }
+    }
+
+    it('makes the small and the large cover, with the backdrop, and gives the colors and size', async () => {
+      const covers = new CoverCache(dir, 'preload.js')
+      const p = covers.addLogo(hash, new Uint8Array([1]))
+      await tick()
+      await answerAll(fake.windows[0], 300, 200)
+      expect(await p).toEqual({ palette, side: 200 })
+      const jobs = fake.windows[0].sent as unknown as CoverJob[]
+      expect(jobs.map((j) => [j.side, !!j.palette, j.backdrop])).toEqual([
+        [320, true, true],
+        [1000, false, true]
+      ])
+      expect(readdirSync(dir).sort()).toEqual([`${hash}-large.jpg`, `${hash}.jpg`])
+      expect(await covers.hasLogo(hash, false)).toBe(true)
+      expect(await covers.hasLogo(hash, true)).toBe(true)
+      covers.close()
+    })
+
+    it('makes no large cover for a small logo', async () => {
+      const covers = new CoverCache(dir, 'preload.js')
+      const p = covers.addLogo(hash, new Uint8Array([1]))
+      await tick()
+      await answerAll(fake.windows[0], 48, 48)
+      expect(await p).toEqual({ palette, side: 48 })
+      expect(readdirSync(dir)).toEqual([`${hash}.jpg`])
+      covers.close()
+    })
+
+    it('gives nothing for a picture that is not one, and marks nothing', async () => {
+      const covers = new CoverCache(dir, 'preload.js')
+      const p = covers.addLogo(hash, new Uint8Array([1]))
+      await tick()
+      const done = new Set<number>()
+      for (let i = 0; i < 3; i++) {
+        answer(fake.windows[0], done, () => ({ bad: true }))
+        await tick()
+      }
+      expect(await p).toBeUndefined()
+      expect(readdirSync(dir)).toEqual([])
+      expect(await covers.hasLogo(hash, false)).toBe(false)
+      covers.close()
+    })
   })
 })

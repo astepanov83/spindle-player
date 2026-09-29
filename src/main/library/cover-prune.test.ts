@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { fallbackPalettes } from '../../shared/palette'
+import type { Station } from '../../shared/stations'
+import { keptLogos } from '../radio/logos'
+import { coversInUse, emptyIndex } from './merge'
 import { pruneCoverFiles, removeOldTemp, tmpAgeMs, type PruneFs } from './cover-prune'
 
 const h1 = '1'.repeat(40)
@@ -172,5 +176,40 @@ describe('removeOldTemp', () => {
       rm: async () => {}
     }
     await expect(removeOldTemp('/c', () => now, fs)).resolves.toBeUndefined()
+  })
+})
+
+describe('pruning with station logos', () => {
+  it('keeps the logos of saved stations and the ones made this run', async () => {
+    const ix = emptyIndex()
+    ix.files.set('/m/a.flac', { path: '/m/a.flac', mtime: 0, size: 0, duration: 0, cover: h1 })
+    const saved: Station[] = [
+      {
+        id: 's',
+        name: 's',
+        tags: [],
+        streams: [],
+        logo: { hash: h2, palette: fallbackPalettes('x') }
+      }
+    ]
+    const h4 = '4'.repeat(40)
+    const fs = fakeFs({
+      [`${h1}.jpg`]: 0,
+      [`${h2}.jpg`]: 0,
+      [`${h2}-large.jpg`]: 0,
+      [`${h3}.jpg`]: 0,
+      [`${h4}.jpg`]: 0
+    })
+    // what main sent the library process (a removed station's logo is no longer in it)
+    const kept = keptLogos(saved, new Set([h3]))
+    await pruneCoverFiles({
+      dir: '/c',
+      used: () => coversInUse(ix, [], kept),
+      busy: () => false,
+      stale: () => false,
+      now: () => now,
+      fs
+    })
+    expect(fs.left()).toEqual([`${h1}.jpg`, `${h2}-large.jpg`, `${h2}.jpg`, `${h3}.jpg`])
   })
 })

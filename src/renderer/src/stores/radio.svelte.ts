@@ -2,9 +2,14 @@
 // drops. See work/specs/radio.md, "Playing a live stream". The moves are plain
 // functions in radio/logic.ts; playing.svelte.ts says when radio has the player.
 import type { Art } from '../../../shared/library'
-import type { RadioTitle } from '../../../shared/ipc'
-import { defaultPalettes } from '../../../shared/palette'
-import { maxHistory, type HistoryEntry, type Station } from '../../../shared/stations'
+import type { RadioLogo, RadioTitle } from '../../../shared/ipc'
+import {
+  maxHistory,
+  stationArt,
+  withLogo,
+  type HistoryEntry,
+  type Station
+} from '../../../shared/stations'
 import { engine, type EngineEvents } from '../audio/engine'
 import {
   cantPlayFormat,
@@ -22,9 +27,6 @@ const stallMs = 8000
 // failed retries of one stream before the next stream
 const retriesPerStream = 3
 
-// Until station logos (ticket 030): a tile in a fixed color.
-const noLogo: Art = { palette: defaultPalettes, cover: '', coverLarge: '' }
-
 class RadioStore {
   // My stations, in the user's order
   stations: Station[] = $state.raw([])
@@ -37,7 +39,8 @@ class RadioStore {
   now = $derived(parseTitle(this.title))
   // the station's last titles, oldest first
   history: HistoryEntry[] = $state.raw([])
-  art: Art | undefined = $derived(this.station && noLogo)
+  // the logo as a cover (ticket 030); a tile in the fixed colors until main made it
+  art: Art | undefined = $derived(this.station && stationArt(this.station))
 
   // the user wants sound: reconnect while this holds
   #wanted = false
@@ -95,6 +98,7 @@ class RadioStore {
     if (this.#listening) return
     this.#listening = true
     window.radioApi.onTitle((t) => this.#heard(t))
+    window.radioApi.onLogo((l) => this.#logo(l))
   }
 
   // Picked but not playing: after a restart.
@@ -259,6 +263,11 @@ class RadioStore {
     const format = this.#formatFailed.size > 0 && this.#formatFailed.size === this.#failed.size
     this.pause()
     notice.show(format ? `Format can't be played: ${name}` : `Station can't be reached: ${name}`)
+  }
+
+  #logo({ id, logo }: RadioLogo): void {
+    this.stations = this.stations.map((s) => (s.id === id ? withLogo(s, logo) : s))
+    if (this.station?.id === id) this.station = withLogo(this.station, logo)
   }
 
   #heard(t: RadioTitle): void {

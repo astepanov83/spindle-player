@@ -4,12 +4,12 @@
 // the album colors, since the decoded pixels are here already.
 import { ipcRenderer } from 'electron'
 import { CoverChannel, type CoverJob, type CoverResult } from '../shared/cover-job'
-import { coverPalettes, type ThemePalettes } from '../shared/palette'
+import { coverPalettes, logoBackdrop } from '../shared/palette'
 
 // Colors are picked from a sample this big; more pixels change nothing.
 const sampleSide = 64
 
-async function resize(full: ImageBitmap, side: number): Promise<Uint8Array> {
+async function resize(full: ImageBitmap, side: number, fill?: string): Promise<Uint8Array> {
   const scale = Math.min(1, side / Math.min(full.width, full.height))
   const width = Math.max(1, Math.round(full.width * scale))
   const height = Math.max(1, Math.round(full.height * scale))
@@ -22,13 +22,19 @@ async function resize(full: ImageBitmap, side: number): Promise<Uint8Array> {
         })
       : full
   const canvas = new OffscreenCanvas(width, height)
-  canvas.getContext('2d')!.drawImage(img, 0, 0)
+  const ctx = canvas.getContext('2d')!
+  if (fill) {
+    ctx.fillStyle = fill
+    ctx.fillRect(0, 0, width, height)
+  }
+  ctx.drawImage(img, 0, 0)
   if (img !== full) img.close()
   const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 })
   return new Uint8Array(await blob.arrayBuffer())
 }
 
-async function palette(full: ImageBitmap): Promise<ThemePalettes> {
+// A small copy's pixels, for the colors and a logo's backdrop.
+async function sample(full: ImageBitmap): Promise<Uint8ClampedArray> {
   const img = await createImageBitmap(full, {
     resizeWidth: sampleSide,
     resizeHeight: sampleSide,
@@ -39,7 +45,7 @@ async function palette(full: ImageBitmap): Promise<ThemePalettes> {
   })!
   ctx.drawImage(img, 0, 0)
   img.close()
-  return coverPalettes(ctx.getImageData(0, 0, sampleSide, sampleSide).data)
+  return ctx.getImageData(0, 0, sampleSide, sampleSide).data
 }
 
 async function run(job: CoverJob): Promise<CoverResult> {
@@ -52,14 +58,21 @@ async function run(job: CoverJob): Promise<CoverResult> {
     return { id: job.id, bad: true }
   }
   try {
-    const result: CoverResult = { id: job.id }
-    if (job.side) result.jpg = await resize(full, job.side)
-    if (job.palette)
+    const result: CoverResult = { id: job.id, width: full.width, height: full.height }
+    let pixels: Uint8ClampedArray | undefined
+    if (job.palette || job.backdrop)
       try {
-        result.palette = await palette(full)
+        pixels = await sample(full)
+        if (job.palette) result.palette = coverPalettes(pixels)
       } catch {
         // keep the JPEG; the next scan picks the palette from the small cover
       }
+    if (job.side)
+      result.jpg = await resize(
+        full,
+        job.side,
+        job.backdrop ? logoBackdrop(pixels ?? []) : undefined
+      )
     return result
   } finally {
     full.close()

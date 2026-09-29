@@ -18,6 +18,13 @@ describe('outcomeOf', () => {
     expect(outcomeOf({ id: 1, palette: junk })).toEqual({ kind: 'retry' })
   })
 
+  it('passes the size of the picture on', () => {
+    const jpg = new Uint8Array([1])
+    expect(outcomeOf({ id: 1, jpg, width: 120, height: 48 })).toEqual({ kind: 'ok', jpg, side: 48 })
+    // junk from the window is dropped
+    expect(outcomeOf({ id: 1, jpg, width: -1, height: 48 })).toEqual({ kind: 'ok', jpg })
+  })
+
   it('passes the palette on, with or without a JPEG', () => {
     const jpg = new Uint8Array([1])
     const palette = fallbackPalettes('x')

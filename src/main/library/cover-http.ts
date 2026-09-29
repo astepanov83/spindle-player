@@ -18,7 +18,7 @@ export interface HttpDeps {
   timeoutMs?: number
 }
 
-const maxImage = 10 * 1024 * 1024
+export const maxImage = 10 * 1024 * 1024
 const maxJson = 2 * 1024 * 1024
 // Cover Art Archive sends a picture on to archive.org in one or two hops
 const maxRedirects = 3
@@ -56,7 +56,7 @@ const isImage = (b: Uint8Array): boolean =>
   (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)
 
 // The body, or undefined past `max` bytes. The header's length is not trusted.
-async function readCapped(res: Response, max: number): Promise<Uint8Array | undefined> {
+export async function readCapped(res: Response, max: number): Promise<Uint8Array | undefined> {
   if (!res.body) return new Uint8Array()
   const parts: Uint8Array[] = []
   let size = 0

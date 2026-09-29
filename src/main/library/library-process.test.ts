@@ -19,7 +19,8 @@ const start: WorkerStart = {
   fetch: { on: false, sources: { musicbrainz: true, deezer: true, itunes: true } },
   fetchedPath: '/u/fetched-covers.json',
   overridesPath: '/u/artist-overrides.json',
-  userAgent: 'Spindle/test'
+  userAgent: 'Spindle/test',
+  keepCovers: []
 }
 
 function setup(): {

@@ -2,7 +2,8 @@
 // next stream after 3 failed retries, and stopping when all streams fail.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EngineError, EngineEvents } from '../audio/engine'
-import type { LastAnswer, RadioTitle } from '../../../shared/ipc'
+import type { LastAnswer, RadioLogo, RadioTitle } from '../../../shared/ipc'
+import { defaultPalettes, fallbackPalettes } from '../../../shared/palette'
 import type { Station } from '../../../shared/stations'
 
 const fake = vi.hoisted(() => ({
@@ -62,6 +63,7 @@ let answer: LastAnswer | undefined
 const lastAnswer = vi.fn(async () => answer)
 const stop = vi.fn()
 let titleListener: ((t: RadioTitle) => void) | undefined
+let logoListener: ((l: RadioLogo) => void) | undefined
 const log = vi.fn()
 vi.stubGlobal('window', {
   playbackApi: { log, saveQueue: vi.fn(), savePlace: vi.fn(), savePlaying: vi.fn() },
@@ -73,6 +75,10 @@ vi.stubGlobal('window', {
     stop,
     onTitle: (l: (t: RadioTitle) => void) => {
       titleListener = l
+      return () => {}
+    },
+    onLogo: (l: (t: RadioLogo) => void) => {
+      logoListener = l
       return () => {}
     }
   }
@@ -403,5 +409,42 @@ describe('late answers and outside pauses (027 fix round 1)', () => {
     radio.choose(2)
     ev.paused!()
     expect(radio.wanted).toBe(true)
+  })
+})
+
+describe('the station’s logo', () => {
+  const hash = 'a'.repeat(40)
+  const logo = { hash, palette: fallbackPalettes('logo') }
+
+  it('is a tile in the fixed colors until main made the logo', async () => {
+    await start(mine[0])
+    expect(radio.art).toEqual({ palette: defaultPalettes, cover: '', coverLarge: '' })
+  })
+
+  it('becomes the cover and the colors when main made it', async () => {
+    await start(mine[0])
+    logoListener!({ id: 'a', logo })
+    expect(radio.art).toEqual({
+      palette: logo.palette,
+      cover: `spindle://cover/small/${hash}`,
+      coverLarge: `spindle://cover/large/${hash}`
+    })
+    expect(radio.stations[0].logo).toEqual(logo)
+    // another station's logo changes only that one
+    logoListener!({ id: 'b', logo: { ...logo, small: true } })
+    expect(radio.art?.coverLarge).toBe(`spindle://cover/large/${hash}`)
+    expect(radio.stations[1].logo?.small).toBe(true)
+  })
+
+  it('a small logo is a tile in its colors on the stage', async () => {
+    await start({ ...mine[0], logo: { ...logo, small: true } })
+    expect(radio.art?.palette).toEqual(logo.palette)
+    expect(radio.art?.coverLarge).toBe('')
+  })
+
+  it('goes back to the tile when main drops it', async () => {
+    await start({ ...mine[0], logo })
+    logoListener!({ id: 'a' })
+    expect(radio.art?.palette).toEqual(defaultPalettes)
   })
 })

@@ -6,6 +6,7 @@ import { app, dialog, utilityProcess, type BrowserWindow } from 'electron'
 import { LibraryChannel } from '../../shared/ipc'
 import type { IdMoves } from '../../shared/id-moves'
 import type { ScanStatus } from '../../shared/library'
+import { parseChanges } from '../../shared/artist-overrides'
 import type { CoverSource } from '../../shared/settings'
 import { ffmpegTool } from '../ffmpeg-path'
 import type { SettingsStore } from '../settings-store'
@@ -74,6 +75,7 @@ export class LibraryService {
         // live: with settings.json unreadable, the page's choice still counts this run
         fetch: { on: this.store.live().fetchCovers, sources: this.store.live().coverSources },
         fetchedPath: join(this.dir, 'fetched-covers.json'),
+        overridesPath: join(this.dir, 'artist-overrides.json'),
         userAgent: `Spindle/${app.getVersion()} (https://github.com/astepanov83/spindle-player)`
       }),
       // a library process that dies is started again a few times, then left dead
@@ -203,6 +205,12 @@ export class LibraryService {
     this.store.setFolders(folders)
     this.#client.setStatus({ folders: this.store.get().folders })
     this.scan(false)
+  }
+
+  // The page renamed or split artists; checked here, since the page can't be trusted.
+  setArtists(changes: unknown): void {
+    const c = parseChanges(changes)
+    if (c) this.#post({ type: 'artist-overrides', changes: c })
   }
 
   // Only files in the index are served, by id; never a path from the page.

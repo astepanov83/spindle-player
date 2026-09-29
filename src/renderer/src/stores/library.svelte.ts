@@ -109,6 +109,11 @@ class LibraryStore {
   #artistAhead: ArtistPlace[] = []
   // "Also on" shows in library order until a column is clicked, like playlists.
   artistSort: Sort | null = $state(null)
+  // the artist whose names are being edited (ticket 024)
+  editingArtist: string | null = $state(null)
+  // After an edit, the key the open artist has in the library that comes
+  // back: a rename or split changes it.
+  #follow: string | null = null
   // the page mouse Back last closed, for Forward to reopen
   #closed: { page: Page; id: string } | null = null
   // which library main sent last, so a patch is only put on the one it was made from
@@ -170,7 +175,12 @@ class LibraryStore {
     this.#loads++
     // the open album or artist may be gone after a rescan
     if (this.open && !this.#albumIndex.has(this.open)) this.open = null
-    if (this.artist && !this.#artistIndex.has(this.artist)) this.artist = null
+    if (this.artist && !this.#artistIndex.has(this.artist)) {
+      // kept until used: a scan's patch may come before the edit's
+      const to = this.#follow && this.#artistIndex.has(this.#follow) ? this.#follow : null
+      this.artist = to
+      if (to) this.#follow = null
+    }
   }
 
   playlistSort(id: string): Sort | null {
@@ -215,8 +225,14 @@ class LibraryStore {
     this.#artistAhead = nav.ahead
   }
 
+  // The open artist is renamed or split: show `key` once it is in the library.
+  followArtist(key: string): void {
+    this.#follow = key
+  }
+
   // null goes back to the grid
   openArtist(key: string | null): void {
+    this.#follow = null
     this.#artistNav = goToArtist(this.#artistNav, { artist: key, album: null })
   }
 

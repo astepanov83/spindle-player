@@ -95,6 +95,7 @@ page.handle(LibraryChannel.get, () => library.library())
 page.handle(LibraryChannel.addFolder, (e) => library.addFolder(senderWindow(e)))
 page.on(LibraryChannel.removeFolder, (_, path) => library.removeFolder(path))
 page.on(LibraryChannel.rescan, () => library.scan(true))
+page.on(LibraryChannel.setArtists, (_, changes) => library.setArtists(changes))
 
 page.handle(PlaylistChannel.load, () => playlists.get())
 page.on(PlaylistChannel.save, (_, raw) => playlists.setFromPage(raw))

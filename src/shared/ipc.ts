@@ -1,3 +1,4 @@
+import type { ArtistChanges } from './artist-overrides'
 import type { IdMoves } from './id-moves'
 import type { ScanStatus } from './library'
 import type { Playlist } from './playlists'
@@ -45,6 +46,7 @@ export const LibraryChannel = {
   addFolder: 'library:add-folder',
   removeFolder: 'library:remove-folder',
   rescan: 'library:rescan',
+  setArtists: 'library:set-artists',
   // main to page: what changed in the library (a patch, see library-patch.ts)
   changed: 'library:changed',
   // main to page: scan progress and the folder list
@@ -69,6 +71,8 @@ export interface LibraryApi {
   addFolder(): Promise<void>
   removeFolder(path: string): void
   rescan(): void
+  // rename or split artists (ticket 024); the library comes back with them
+  setArtists(changes: ArtistChanges): void
   onChanged(listener: (library: Uint8Array) => void): () => void
   onStatus(listener: (status: ScanStatus) => void): () => void
   onIdsMoved(listener: (moves: IdMoves) => void): () => void
@@ -123,6 +127,7 @@ export interface PageChannels {
   [LibraryChannel.addFolder]: LibraryApi['addFolder']
   [LibraryChannel.removeFolder]: LibraryApi['removeFolder']
   [LibraryChannel.rescan]: LibraryApi['rescan']
+  [LibraryChannel.setArtists]: LibraryApi['setArtists']
   [PlaylistChannel.load]: PlaylistsApi['load']
   [PlaylistChannel.save]: PlaylistsApi['save']
   [PlaybackChannel.loadQueue]: PlaybackApi['loadQueue']

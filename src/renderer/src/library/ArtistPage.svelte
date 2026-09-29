@@ -1,7 +1,10 @@
 <!-- An artist: their picture and name, their albums as covers, then their
-     songs on other albums in the song table. -->
+     songs on other albums in the song table. Edit renames or splits them
+     (ticket 024). -->
 <script lang="ts">
-  import type { Artist } from '../../../shared/artists'
+  import { untrack } from 'svelte'
+  import { artistKey, type Artist, type ArtistTag } from '../../../shared/artists'
+  import { cleanNames, editArtist, maxNameLength } from '../../../shared/artist-overrides'
   import AlbumGrid from './AlbumGrid.svelte'
   import ArtistPic from './ArtistPic.svelte'
   import SongTable from './SongTable.svelte'
@@ -38,6 +41,55 @@
     if (shuffle) player.shuffle = true
     queue.playList(ids, shuffle ? Math.floor(Math.random() * ids.length) : 0, a.name)
   }
+
+  // the names in the editor: one renames, two or more split
+  let draft: string[] = $state([])
+  const editing = $derived(library.editingArtist === a.key)
+  const canSave = $derived(cleanNames(draft).length > 0)
+  // tags are listed when an override changed one, or when there are several
+  const showTags = $derived(a.tags.length > 1 || a.tags.some((t) => t.names))
+
+  // Starts when editing turns on (the grid's menu opens it too). Not again
+  // while it is on: a scan's patch brings a new artist object every few seconds.
+  let wasEditing = false
+  $effect.pre(() => {
+    const on = editing
+    if (on && !wasEditing) draft = [untrack(() => a.name)]
+    wasEditing = on
+  })
+
+  function save(): void {
+    const names = cleanNames(draft)
+    if (!names.length) return
+    library.editingArtist = null
+    const changes = editArtist(a, names)
+    if (!Object.keys(changes).length) return
+    window.libraryApi.setArtists(changes)
+    library.followArtist(artistKey(names[0]))
+  }
+
+  function useTag(t: ArtistTag): void {
+    window.libraryApi.setArtists({ [t.key]: null })
+    // with no other tag, the artist becomes the tag again
+    library.followArtist(a.tags.length > 1 ? a.key : t.key)
+  }
+
+  function onkeydown(e: KeyboardEvent): void {
+    if (e.key === 'Enter') save()
+    if (e.key === 'Escape') {
+      library.editingArtist = null
+      e.stopPropagation()
+    }
+  }
+
+  function focus(node: HTMLInputElement, on: boolean): void {
+    if (!on) return
+    node.focus()
+    node.select()
+  }
+
+  const tagNote = (t: ArtistTag): string =>
+    !t.names ? '' : t.names.length > 1 ? ' (split)' : ' (renamed)'
 </script>
 
 <button class="back" onclick={() => library.openArtist(null)}
@@ -47,7 +99,47 @@
   <div class="pic"><ArtistPic photo={library.photos[a.key]?.coverLarge} {covers} /></div>
   <div class="about">
     <div class="page-meta">Artist</div>
-    <h2 class="page-title">{a.name}</h2>
+    {#if editing}
+      <div class="names">
+        {#each draft.map((_, i) => i) as i (i)}
+          <div class="name-row">
+            <input
+              class="page-title name"
+              aria-label="Artist name {i + 1}"
+              maxlength={maxNameLength}
+              bind:value={draft[i]}
+              use:focus={i === draft.length - 1}
+              {onkeydown}
+            />
+            {#if draft.length > 1}
+              <button
+                class="x"
+                aria-label="Remove this name"
+                onclick={() => (draft = draft.filter((_, j) => j !== i))}
+                ><Icon name="close" size={14} /></button
+              >
+            {/if}
+          </div>
+        {/each}
+        <button class="add" onclick={() => (draft = [...draft, ''])}
+          ><Icon name="plus" size={14} />Add artist</button
+        >
+        <div class="hint">One name renames. Two or more split this artist into several.</div>
+      </div>
+    {:else}
+      <h2 class="page-title">{a.name}</h2>
+    {/if}
+    {#if showTags}
+      <div class="tags">
+        From tags:
+        {#each a.tags as t, i (t.key)}
+          {#if i > 0}<span class="dot">·</span>{/if}<span>{t.name}{tagNote(t)}</span>
+          {#if t.names}
+            <button class="use" onclick={() => useTag(t)}>Use tag</button>
+          {/if}
+        {/each}
+      </div>
+    {/if}
     <div class="page-meta">
       {[
         albums.length ? plural(albums.length, 'album', 'albums') : '',
@@ -57,11 +149,17 @@
         .join(' · ')}
     </div>
     <div class="acts">
-      <button class="pill" onclick={() => play(false)}>Play</button>
-      <button class="pill ghost" onclick={() => play(true)}>Shuffle</button>
-      <button class="pill ghost" aria-haspopup="menu" onclick={(e) => openSongMenu(e, playIds())}
-        >Add to playlist</button
-      >
+      {#if editing}
+        <button class="pill" disabled={!canSave} onclick={save}>Save</button>
+        <button class="pill ghost" onclick={() => (library.editingArtist = null)}>Cancel</button>
+      {:else}
+        <button class="pill" onclick={() => play(false)}>Play</button>
+        <button class="pill ghost" onclick={() => play(true)}>Shuffle</button>
+        <button class="pill ghost" aria-haspopup="menu" onclick={(e) => openSongMenu(e, playIds())}
+          >Add to playlist</button
+        >
+        <button class="pill ghost" onclick={() => (library.editingArtist = a.key)}>Edit</button>
+      {/if}
     </div>
   </div>
 </div>
@@ -134,6 +232,75 @@
     font-weight: 600;
     background: var(--ink);
     color: var(--bg);
+  }
+  .pill:disabled {
+    opacity: 0.4;
+  }
+  .names {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  .name-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    width: min(100%, 520px);
+  }
+  .name {
+    flex: 1;
+    min-width: 0;
+    padding: 2px 6px;
+    margin-left: -7px;
+    color: var(--ink);
+    background: var(--field);
+    border: 1px solid var(--ring);
+    border-radius: 8px;
+    outline: none;
+  }
+  .x {
+    color: var(--ink-3);
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .x:hover {
+    color: var(--ink);
+    background: var(--field);
+  }
+  .add {
+    font-size: 13px;
+    color: var(--ink-2);
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .add:hover {
+    color: var(--ink);
+  }
+  .hint {
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 5px;
+    font-size: 13px;
+    color: var(--ink-3);
+    margin: 2px 0 4px;
+  }
+  .use {
+    font-size: 13px;
+    color: var(--ink-2);
+    text-decoration: underline;
+  }
+  .use:hover {
+    color: var(--ink);
   }
   .pill.ghost {
     background: var(--field);

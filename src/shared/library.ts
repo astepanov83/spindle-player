@@ -7,7 +7,10 @@ export interface Track {
   // seconds
   duration: number
   albumId: string
+  // the tag, or what an artist override made of it (see ArtistCredit)
   artist: string
+  artists?: string[]
+  artistTag?: string
   album: string
   // track number, 1-based; 0 when unknown
   no: number
@@ -34,6 +37,16 @@ export interface Folder {
   parent: number
 }
 
+// An artist credit after the overrides (ticket 024). `artist` is what is
+// shown: the tag, a new name, or the names of a split joined by ", ".
+export interface ArtistCredit {
+  artist: string
+  // the names, only when an override split the tag into several
+  artists?: string[]
+  // the tag as written, only when an override changed it
+  artistTag?: string
+}
+
 // A cover and the colors picked from it. An Album is one too.
 export interface Art {
   // [--c1, --c2, --c3] (main, accent, dark) for each theme, from the cover (ticket 009)
@@ -56,7 +69,10 @@ export interface TrackPart {
 export interface Album extends Art {
   id: string
   title: string
+  // see ArtistCredit
   artist: string
+  artists?: string[]
+  artistTag?: string
   // 0 when unknown
   year: number
   trackIds: string[]

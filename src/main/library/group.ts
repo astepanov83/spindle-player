@@ -1,6 +1,7 @@
 // Builds the albums and tracks the page shows from the index.
 import { basename } from 'path'
-import { artistKey, listArtists } from '../../shared/artists'
+import { creditOf, type ArtistOverrides } from '../../shared/artist-overrides'
+import { artistKey, listArtists, namesOf } from '../../shared/artists'
 import type { Album, ArtistPhoto, LibraryData, Track, TrackPart } from '../../shared/library'
 import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../shared/palette'
 import { checksPerArtist, lookUpArtist, type ArtistCheck, type ArtistQuery } from './artist-photo'
@@ -180,7 +181,7 @@ function artistsOf(
     const own = a.albums.map((id) => albumById.get(id)!)
     const songs = own
       .flatMap((al) => al.trackIds.map((id) => byId.get(id)!))
-      .filter((t) => artistKey(t.artist) === a.key)
+      .filter((t) => namesOf(t).some((n) => artistKey(n) === a.key))
     const checks = checksOf(
       own,
       a.also.map((id) => byId.get(id)!),
@@ -192,13 +193,16 @@ function artistsOf(
 }
 
 // `roots` are the music folders, for the Folders view. `photos` are the
-// artist photos found online, by artist key.
+// artist photos found online, by artist key. `overrides` change the artist
+// names shown (ticket 024); albums are still grouped and looked up online
+// by the tags.
 export function buildLibrary(
   ix: LibraryIndex,
   hasCover: (hash: string) => boolean,
   fetched: Fetched = new Map(),
   roots: string[] = [],
-  photos: Fetched = new Map()
+  photos: Fetched = new Map(),
+  overrides: ArtistOverrides = new Map()
 ): BuiltLibrary {
   const groups = new Map<string, Group>()
   const paths = new Map<string, string>()
@@ -260,7 +264,7 @@ export function buildLibrary(
         title: e.title ?? fromName,
         duration: e.duration,
         albumId: id,
-        artist: e.artist ?? e.albumArtist ?? fallbackArtist,
+        ...creditOf(e.artist ?? e.albumArtist ?? fallbackArtist, overrides),
         album: title,
         no,
         disc,
@@ -276,7 +280,7 @@ export function buildLibrary(
     albums.push({
       id,
       title,
-      artist,
+      ...creditOf(artist, overrides),
       year: yearOf(entries),
       palette: paletteOf(ix, cover, id),
       ...(cover ? coverUrls(cover) : { cover: '', coverLarge: '' }),

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { creditOf, type ArtistOverrides } from './artist-overrides'
 import { artistKey, listArtists } from './artists'
 import type { Album, Track } from './library'
 import { defaultPalettes } from './palette'
@@ -96,5 +97,59 @@ describe('listArtists', () => {
 
   it('returns nothing for an empty library', () => {
     expect(list()).toEqual([])
+  })
+
+  it('lists each artist with the tag they come from', () => {
+    const [queen] = list(album('a', 'Queen'), album('b', 'queen'))
+    expect(queen.tags).toEqual([{ key: 'queen', name: 'Queen' }])
+  })
+})
+
+describe('listArtists with overrides (ticket 024)', () => {
+  // the album and its songs as the library process sends them
+  function credited(o: Record<string, string[]>, al: Album): Album {
+    const m: ArtistOverrides = new Map(Object.entries(o))
+    for (const id of al.trackIds) {
+      const t = tracks.get(id)!
+      tracks.set(id, { ...t, ...creditOf(t.artist, m) })
+    }
+    return { ...al, ...creditOf(al.artist, m) }
+  }
+  const split = { 'sadness,stellafera': ['Sadness', 'Stellafera'] }
+
+  it('gives a split album to each band, and each song to the band in its own tag', () => {
+    const out = list(
+      credited(split, album('s', 'sadness, stellafera', ['Sadness', 'Stellafera'])),
+      album('own', 'Sadness')
+    )
+    expect(out.map((a) => a.name)).toEqual(['Sadness', 'Stellafera'])
+    const [sadness, stellafera] = out
+    expect(sadness).toMatchObject({ albums: ['s', 'own'], also: [] })
+    expect(stellafera).toMatchObject({ albums: ['s'], also: [] })
+  })
+
+  it('credits a split song to each name, as "Also on" for those who do not own the album', () => {
+    const o = { 'xfeat.y': ['X', 'Y'] }
+    const out = list(credited(o, album('a', 'X', [undefined, 'X feat. Y'])))
+    const [x, y] = out
+    expect(x).toMatchObject({ name: 'X', albums: ['a'], also: [] })
+    expect(y).toMatchObject({ name: 'Y', albums: [], also: ['a-1'] })
+  })
+
+  it('joins a renamed artist with one who already has that name', () => {
+    const out = list(credited({ kino: ['Кино'] }, album('a', 'kino')), album('b', 'Кино'))
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ name: 'Кино', albums: ['a', 'b'] })
+  })
+
+  it('lists the tags an artist comes from, tags used as they are first', () => {
+    const [sadness] = list(
+      credited(split, album('s', 'sadness, stellafera')),
+      album('own', 'Sadness')
+    )
+    expect(sadness.tags).toEqual([
+      { key: 'sadness', name: 'Sadness' },
+      { key: 'sadness,stellafera', name: 'sadness, stellafera', names: ['Sadness', 'Stellafera'] }
+    ])
   })
 })

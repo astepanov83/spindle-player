@@ -6,9 +6,19 @@
 import { hash, randomBytes } from 'crypto'
 import { readdir, readFile, rm, stat } from 'fs/promises'
 import { basename, dirname, join } from 'path'
+import {
+  applyChanges,
+  dropUnused,
+  knownOverrides,
+  parseOverrides,
+  serializeOverrides,
+  tagKeys,
+  type ArtistChanges,
+  type ArtistOverrides
+} from '../../shared/artist-overrides'
 import type { ScanStatus } from '../../shared/library'
 import type { CoverSource } from '../../shared/settings'
-import { JsonFileWriter, readJsonFile } from '../json-file'
+import { JsonFileWriter, openJsonFile, readJsonFile } from '../json-file'
 import { buildLibrary, type BuiltLibrary } from './group'
 import { Pacer, scanSlow, Turns } from './pacer'
 import { decodeCue, parseCue } from './cue'
@@ -247,10 +257,36 @@ async function startFetcher(s: WorkerStart): Promise<void> {
   setFetch(opt.on, opt.sources)
 }
 
+// --- artist names changed by hand (ticket 024) ---
+
+let overrides: ArtistOverrides = new Map()
+// none when the file could not be read: it may still be fine, so it is never replaced
+let overridesWriter: JsonFileWriter<unknown> | undefined
+
+// A broken file or one of an unknown version is copied aside before it is
+// written again (see openJsonFile): these took the user's time to make.
+function loadOverrides(s: WorkerStart): void {
+  const f = openJsonFile(s.overridesPath, 'Artist overrides', knownOverrides)
+  overrides = parseOverrides(f.value)
+  if (f.canWrite)
+    overridesWriter = new JsonFileWriter<unknown>(s.overridesPath, 1000, (e) =>
+      log(`Could not save ${s.overridesPath}: ${e}`)
+    )
+}
+
+const saveOverrides = (): void => overridesWriter?.schedule(serializeOverrides(overrides))
+
+function setOverrides(c: ArtistChanges): void {
+  if (!applyChanges(overrides, c)) return
+  saveOverrides()
+  dirty = true
+  publisher.now()
+}
+
 // Groups albums, for the page and the lookups.
 function build(): void {
   dirty = false
-  built = buildLibrary(ix, (h) => cached.has(h), fetched, status.folders, photos)
+  built = buildLibrary(ix, (h) => cached.has(h), fetched, status.folders, photos, overrides)
   let failed = 0
   for (const e of ix.files.values()) if (e.error) failed++
   setStatus({ tracks: built.data.tracks.length, albums: built.data.albums.length, failed })
@@ -658,6 +694,8 @@ async function scan(
     const albums = dropGone(fetched, new Set(built.data.albums.map((a) => a.id)))
     const artists = dropGone(photos, new Set(built.artists.map((a) => a.id)))
     if (albums || artists) saveFetched()
+    const used = tagKeys([...built.data.albums, ...built.data.tracks])
+    if (dropUnused(overrides, used)) saveOverrides()
   }
   setStatus({ phase: 'idle', done: 0, total: 0, read: undefined, scanFailed: failed })
   post({ type: 'scanned', id })
@@ -713,6 +751,9 @@ port.on('message', (e: Electron.MessageEvent) => {
       break
     case 'fetch-covers':
       setFetch(m.on, m.sources)
+      break
+    case 'artist-overrides':
+      void ready.then(() => setOverrides(m.changes))
       break
     case 'resume':
       // a new window: go on unless a scan runs (it releases when done) or none
@@ -772,6 +813,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       writer?.flushSync()
       fetcher?.hold()
       fetchedWriter?.flushSync()
+      overridesWriter?.flushSync()
       closing = true
       chain.close()
       post({ type: 'flushed' })
@@ -801,10 +843,11 @@ port.on('message', (e: Electron.MessageEvent) => {
 // covers and may be at it now (a restart), so only old ones go there.
 async function removeStrayTemp(): Promise<void> {
   const dir = dirname(start.indexPath)
-  const index = basename(start.indexPath)
+  const names = [basename(start.indexPath), basename(start.overridesPath)]
   try {
     for (const n of await readdir(dir))
-      if (n.startsWith(index + '.') && n.endsWith('.tmp')) await rm(join(dir, n), { force: true })
+      if (names.some((f) => n.startsWith(f + '.')) && n.endsWith('.tmp'))
+        await rm(join(dir, n), { force: true })
   } catch {
     // no folder yet
   }
@@ -820,6 +863,7 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   status = { ...status, folders: s.folders }
   await removeStrayTemp()
   await loadCached()
+  loadOverrides(s)
   await startFetcher(s)
   const r = readJsonFile(start.indexPath)
   // the index is only a cache of the music files, so it is made again either way

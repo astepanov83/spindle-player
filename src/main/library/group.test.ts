@@ -27,12 +27,13 @@ function build(
   setup?: (ix: LibraryIndex) => void,
   has: (hash: string) => boolean = () => true,
   fetched?: Fetched,
-  photos?: Fetched
+  photos?: Fetched,
+  overrides?: Record<string, string[]>
 ): ReturnType<typeof buildLibrary> {
   const ix = emptyIndex()
   for (const f of files) ix.files.set(f.path, f)
   setup?.(ix)
-  return buildLibrary(ix, has, fetched, [], photos)
+  return buildLibrary(ix, has, fetched, [], photos, new Map(Object.entries(overrides ?? {})))
 }
 
 describe('buildLibrary', () => {
@@ -398,6 +399,61 @@ describe('artist photos (ticket 021)', () => {
     expect(build(files, undefined, (x) => x !== h, undefined, photos()).data.artistPhotos).toEqual(
       {}
     )
+  })
+})
+
+describe('artist overrides (ticket 024)', () => {
+  const files = [
+    entry('/m/s/1.mp3', { album: 'Split', albumArtist: 'sadness, stellafera', artist: 'Sadness' }),
+    entry('/m/s/2.mp3', {
+      album: 'Split',
+      albumArtist: 'sadness, stellafera',
+      artist: 'Stellafera'
+    }),
+    entry('/m/k/1.mp3', { album: 'Gruppa krovi', artist: 'kino', title: 'Gruppa krovi' }),
+    entry('/m/b/1.mp3', { album: 'Parklife', artist: 'Blur' })
+  ]
+  const o = { 'sadness,stellafera': ['Sadness', 'Stellafera'], kino: ['Кино'] }
+
+  it('shows the new names on albums and songs, with the tag kept beside them', () => {
+    const { data } = build(files, undefined, () => true, undefined, undefined, o)
+    const split = data.albums.find((a) => a.title === 'Split')!
+    expect(split).toMatchObject({
+      artist: 'Sadness, Stellafera',
+      artists: ['Sadness', 'Stellafera'],
+      artistTag: 'sadness, stellafera'
+    })
+    const kino = data.tracks.find((t) => t.title === 'Gruppa krovi')!
+    expect(kino).toMatchObject({ artist: 'Кино', artistTag: 'kino' })
+    expect(kino.artists).toBeUndefined()
+    expect(data.albums.find((a) => a.title === 'Parklife')).not.toHaveProperty('artistTag')
+  })
+
+  it('keeps album ids, since albums are still grouped by the tags', () => {
+    const ids = (d: LibraryData): string[] => d.albums.map((a) => a.id).sort()
+    expect(ids(build(files, undefined, () => true, undefined, undefined, o).data)).toEqual(
+      ids(build(files).data)
+    )
+  })
+
+  it('sorts albums by the name shown', () => {
+    const { data } = build(files, undefined, () => true, undefined, undefined, o)
+    expect(data.albums.map((a) => a.artist)).toEqual(['Blur', 'Sadness, Stellafera', 'Кино'])
+  })
+
+  it('looks covers up by the tags, and artist photos by the new names', () => {
+    const { queries, artists } = build(files, undefined, () => false, undefined, undefined, o)
+    expect(queries.map((q) => q.artist).sort()).toEqual(['Blur', 'kino', 'sadness, stellafera'])
+    expect(artists.map((a) => a.name)).toEqual(['Blur', 'Sadness', 'Stellafera', 'Кино'])
+    expect(artists.find((a) => a.name === 'Кино')!.checks).toEqual([
+      { kind: 'album', title: 'Gruppa krovi' },
+      { kind: 'song', title: 'Gruppa krovi' }
+    ])
+    // a band of a split album is checked by its own songs on it (title from the file name)
+    expect(artists.find((a) => a.name === 'Stellafera')!.checks).toEqual([
+      { kind: 'album', title: 'Split' },
+      { kind: 'song', title: '2' }
+    ])
   })
 })
 

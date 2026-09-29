@@ -154,6 +154,34 @@ describe('Artists', () => {
     library.load(lib('a'))
     expect(library.artist).toBeNull()
   })
+
+  it('follows an artist that was renamed or split to its new key (ticket 024)', () => {
+    const named = (artist: string): LibraryData => {
+      const d = lib('a')
+      d.albums[0].artist = artist
+      return d
+    }
+    library.openArtist('x')
+    library.followArtist('кино')
+    // a scan's patch that comes before the edit's changes nothing
+    library.load(lib('a'))
+    expect(library.artist).toBe('x')
+    library.load(named('Кино'))
+    expect(library.artist).toBe('кино')
+    // used once: a later rescan that drops the artist closes it
+    library.load(named('Y'))
+    expect(library.artist).toBeNull()
+  })
+
+  it('does not follow after another artist was opened', () => {
+    library.openArtist('x')
+    library.followArtist('кино')
+    library.openArtist('x')
+    const d = lib('a')
+    d.albums[0].artist = 'Кино'
+    library.load(d)
+    expect(library.artist).toBeNull()
+  })
 })
 
 describe('patches while a scan runs', () => {

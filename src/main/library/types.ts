@@ -1,6 +1,7 @@
 // The library index on disk, and the messages between main and the library process.
 import type { IdMoves } from '../../shared/id-moves'
 import type { ScanStatus } from '../../shared/library'
+import type { ArtistChanges } from '../../shared/artist-overrides'
 import type { CoverSource } from '../../shared/settings'
 import type { ThemePalettes } from '../../shared/palette'
 import type { CueSheet } from './cue'
@@ -100,6 +101,8 @@ export interface WorkerStart {
   // the online cover lookup setting, and where its results are kept (ticket 014)
   fetch: { on: boolean; sources: Record<CoverSource, boolean> }
   fetchedPath: string
+  // artist names changed by hand (ticket 024)
+  overridesPath: string
   // sent with every online request
   userAgent: string
 }
@@ -149,6 +152,8 @@ export type WorkerIn =
   | { type: 'fetch-covers'; on: boolean; sources: Record<CoverSource, boolean> }
   // an app window is open again after 'stop'
   | { type: 'resume' }
+  // the page renamed or split artists (ticket 024)
+  | { type: 'artist-overrides'; changes: ArtistChanges }
 
 // the library process to main
 export type WorkerOut =

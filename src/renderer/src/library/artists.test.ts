@@ -16,6 +16,7 @@ import type { Sort } from './views'
 const artist = (name: string, albums: string[] = [], also: string[] = []): Artist => ({
   key: name.toLowerCase(),
   name,
+  tags: [],
   albums,
   also
 })

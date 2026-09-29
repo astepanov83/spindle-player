@@ -5,12 +5,13 @@
   import ArtistPic from './ArtistPic.svelte'
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
-  import { artistKey, type Artist } from '../../../shared/artists'
+  import { artistKey, namesOf, type Artist } from '../../../shared/artists'
   import { artistCovers, artistSongs, filterArtists } from './artists'
   import { chunk, gridColumns } from './views'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
   import { library } from '../stores/library.svelte'
+  import { menu } from '../stores/menu.svelte'
   import { queue } from '../stores/queue.svelte'
 
   let { scrollEl }: { scrollEl: HTMLElement | undefined } = $props()
@@ -49,10 +50,15 @@
   const playing = $derived(
     new Set(
       queue.current && queue.currentAlbum
-        ? [artistKey(queue.currentAlbum.artist), artistKey(queue.current.artist)]
+        ? [...namesOf(queue.currentAlbum), ...namesOf(queue.current)].map(artistKey)
         : []
     )
   )
+
+  function edit(a: Artist): void {
+    library.openArtist(a.key)
+    library.editingArtist = a.key
+  }
 
   const album = (id: string): { cover: string; trackIds: string[] } => library.album(id)
   const songCover = (id: string): string => library.art(library.track(id)).cover
@@ -78,7 +84,11 @@
       style:transform="translateY({v.offset(item)}px)"
     >
       {#each rows[item.index] as a (a.key)}
-        <div class="card">
+        <div
+          class="card"
+          role="group"
+          oncontextmenu={(e) => menu.showFor(e, [{ label: 'Edit artist', run: () => edit(a) }])}
+        >
           <div class="picwrap">
             <button class="pic" aria-label="Open {a.name}" onclick={() => library.openArtist(a.key)}
               ><ArtistPic

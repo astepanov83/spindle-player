@@ -170,6 +170,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   })
 
   createWindow(splash)
+  // After the first paint: read earlier, it shows software drawing before the GPU process is up.
+  main!.win.once('ready-to-show', () => console.log('GPU:', app.getGPUFeatureStatus()))
 
   // macOS: the dock icon makes a new app window. The hidden cover window doesn't count.
   app.on('activate', () => {

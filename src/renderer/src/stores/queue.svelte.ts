@@ -197,7 +197,8 @@ class QueueStore {
     if (!t) return
     window.playbackApi.log(
       `Could not play track ${t.id} "${t.title}" (${t.codec || 'unknown codec'}): ` +
-        `error ${e.code} ${e.message}${e.gone ? ' (file gone or unreadable)' : ''}`
+        `error ${e.code} ${e.message}${e.gone ? ' (file gone or unreadable)' : ''}` +
+        (e.first ? `; before ?decode: ${e.first}` : '')
     )
     if (!player.playing) {
       notice.show(failNotice(t.title, e.gone, 'paused'))

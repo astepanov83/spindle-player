@@ -8,7 +8,7 @@ import { Readable } from 'stream'
 import { protocol } from 'electron'
 import { extOf, needsDecoding } from './tags'
 import { isCoverHash } from './cover-names'
-import { dataSize, DecodeStream, ffmpegArgs, startFfmpeg, wavHeader } from './decode'
+import { dataSize, DecodeStream, ffmpegArgs, IdleError, startFfmpeg, wavHeader } from './decode'
 import { DecodePlans } from './decode-plan'
 import { openMedia } from './media-file'
 import { probeLength, probeTags } from './probe'
@@ -114,7 +114,10 @@ async function decoded(
   } catch (e) {
     console.error(`Could not read the format of ${m.path}: ${e}`)
   }
-  if (!ffmpeg || !plan) return cantDecode()
+  if (!ffmpeg || !plan) {
+    if (ffmpeg) console.error(`No sample rate or length for ${m.path}; answered 415`)
+    return cantDecode()
+  }
   const { format, duration } = plan
   const data = dataSize(format, duration)
   const header = wavHeader(format, data)
@@ -129,7 +132,11 @@ async function decoded(
       : (start, end) =>
           new DecodeStream(header, format, start, end, (seconds) =>
             startFfmpeg(ffmpeg, ffmpegArgs(m.path, seconds, format))
-          )
+          ).on('error', (e) => {
+            // a paused song, or Chromium dropping the request (a seek, a new song): both normal
+            if (e instanceof IdleError || e.name === 'AbortError') return
+            console.error(`Could not decode ${m.path}: ${e.message}`)
+          })
   )
 }
 
@@ -140,7 +147,10 @@ async function media(
   decode: boolean
 ): Promise<Response> {
   const m = await lib.mediaInfo(id)
-  if (!m) return notFound()
+  if (!m) {
+    console.error(`spindle://media/${id}: not in the library index; answered 404`)
+    return notFound()
+  }
   const file = await openMedia(m.path)
   if (!file) return notFound()
   lib.mediaOpened(file.dev)

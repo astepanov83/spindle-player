@@ -17,6 +17,8 @@ export type EngineError = {
   // Main answered 404: the file is gone or can't be read. Chromium gives
   // error 4 for that too, so this is asked for apart.
   gone: boolean
+  // the error of the try before ?decode, if there was one
+  first?: string
 }
 
 export interface EngineEvents {
@@ -78,6 +80,8 @@ export class AudioEngine {
   #url = ''
   // main is decoding it with ffmpeg: Chromium could not play it as it is
   #decoding = false
+  // why the try without ?decode failed
+  #firstError = ''
   #part: Part = wholeFile
   // the part's end was reported; not again until it moves or changes
   #endSent = false
@@ -144,6 +148,7 @@ export class AudioEngine {
       // Chromium can't read it (3 decode, 4 format): once more, decoded by ffmpeg
       if ((e?.code === 3 || e?.code === 4) && !this.#decoding && this.#url) {
         this.#decoding = true
+        this.#firstError = `error ${e.code} ${e.message}`
         this.#startAt = this.#startAt || el.currentTime
         el.src = `${this.#url}?decode`
         if (this.#wantPlay) this.#playElement()
@@ -152,12 +157,13 @@ export class AudioEngine {
       const url = this.#url
       const code = e?.code ?? 0
       const message = e?.message ?? ''
+      const first = this.#decoding ? this.#firstError : undefined
       // A network error (2) is the file not coming through, never its format.
       // Only a decode or format error needs asking whether the file is there.
       const check = code === 3 || code === 4 ? fileGone(url) : Promise.resolve(true)
       void check.then((gone) => {
         // a newer song came first
-        if (url === this.#url) this.#on.error?.({ code, message, gone })
+        if (url === this.#url) this.#on.error?.({ code, message, gone, first })
       })
     })
   }

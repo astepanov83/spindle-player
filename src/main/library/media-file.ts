@@ -38,7 +38,9 @@ export async function openMedia(path: string): Promise<MediaFile | undefined> {
         void file.close().catch(() => {})
       }
     }
-  } catch {
+  } catch (e) {
+    // the page only sees a 404, so say why here
+    console.error(`Could not open ${path}: ${(e as Error).message}`)
     await fh?.close().catch(() => {})
     return undefined
   }

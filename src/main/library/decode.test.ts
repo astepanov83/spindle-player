@@ -107,6 +107,7 @@ describe('ffmpegArgs', () => {
 // A fake ffmpeg: the test writes its output and ends it.
 class FakeDecoder extends EventEmitter implements Decoder {
   stdout = new PassThrough()
+  stderr = new PassThrough()
   killed: string[] = []
   kill(signal?: NodeJS.Signals): boolean {
     this.killed.push(signal ?? 'SIGTERM')
@@ -205,6 +206,15 @@ describe('DecodeStream', () => {
     await new Promise((r) => setImmediate(r))
     child.finish(1)
     await expect(all).rejects.toThrow(/ffmpeg ended with code 1/)
+  })
+
+  it("puts ffmpeg's own message in the error", async () => {
+    const { s, child } = stream(44, 100)
+    const all = readAll(s)
+    await new Promise((r) => setImmediate(r))
+    child.stderr.write('file:/x.ape: Input/output error\n')
+    child.finish(1)
+    await expect(all).rejects.toThrow('ffmpeg ended with code 1: file:/x.ape: Input/output error')
   })
 
   it('stops ffmpeg when the reader goes away', async () => {

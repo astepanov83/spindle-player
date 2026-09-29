@@ -99,6 +99,8 @@ export function ffmpegArgs(path: string, seconds: number, f: WavFormat): string[
 // The part of a ChildProcess used here, so tests can hand in a fake.
 export interface Decoder {
   stdout: Readable
+  // ffmpeg's own words on why it failed (-loglevel error)
+  stderr?: Readable | null
   kill(signal?: NodeJS.Signals): boolean
   on(event: 'close', listener: (code: number | null) => void): this
   on(event: 'error', listener: (e: Error) => void): this
@@ -117,7 +119,7 @@ export function stopAllDecoders(): void {
 }
 
 export function startFfmpeg(bin: string, args: string[]): Decoder {
-  return spawn(bin, args, { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true })
+  return spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
 }
 
 const silence = new Uint8Array(64 * 1024)
@@ -126,6 +128,12 @@ const silence = new Uint8Array(64 * 1024)
 // with nothing read, the stream ends with an error and ffmpeg goes; Chromium
 // asks again from where it was when it needs more.
 export const idleMs = 20000
+
+// The stream ended for a paused song (idleMs). Normal, so not logged.
+export class IdleError extends Error {}
+
+// how much of ffmpeg's error output is kept
+const stderrKept = 1000
 
 // Bytes `from` to `to` (inclusive) of the WAV file. ffmpeg starts on the first
 // read, is paused while the reader is full, and is killed once the range is
@@ -184,11 +192,14 @@ export class DecodeStream extends Readable {
     }
     this.#child = child
     running.add(child)
+    let said = ''
+    child.stderr?.on('data', (b: Buffer) => (said = (said + b.toString()).slice(-stderrKept)))
     child.on('error', (e) => this.destroy(e))
     child.on('close', (code) => {
       running.delete(child)
       if (this.#ended || this.destroyed) return
-      if (code !== 0 && !this.#got) this.destroy(new Error(`ffmpeg ended with code ${code}`))
+      if (code !== 0 && !this.#got)
+        this.destroy(new Error(`ffmpeg ended with code ${code}: ${said.trim() || 'no message'}`))
       else this.#pad()
     })
     child.stdout.on('data', (b: Buffer) => this.#data(b))
@@ -213,7 +224,7 @@ export class DecodeStream extends Readable {
       this.#child?.stdout.pause()
       clearTimeout(this.#idle)
       this.#idle = setTimeout(
-        () => this.destroy(new Error('Nothing read for a while')),
+        () => this.destroy(new IdleError('Nothing read for a while')),
         this.idleAfter
       )
     }

@@ -301,6 +301,24 @@ describe('radioStream', () => {
       expect(streams.lastAnswer('metal-only')).toEqual({ ok: false, bytes: 0 })
     })
 
+    it('forgets the last answer while a new request waits for its server (final fix 1)', async () => {
+      const streams = new RadioStreams()
+      let hang = false
+      const { o } = setup(() => (hang ? new Promise<Response>(() => {}) : Promise.resolve(audio())))
+      o.streams = streams
+      const res = await radioStream('metal-only', '0', o)
+      const reader = res.body!.getReader()
+      await reader.read()
+      await reader.read()
+      expect(streams.lastAnswer('metal-only')).toEqual({ ok: true, bytes: 8 })
+      await reader.cancel()
+      // the server now takes the connection and never answers
+      hang = true
+      void radioStream('metal-only', '0', o)
+      expect(streams.lastAnswer('metal-only')).toEqual({ ok: false, bytes: 0 })
+      streams.stop()
+    })
+
     it('a new request stops the one still waiting for its server', async () => {
       const streams = new RadioStreams()
       let first: AbortSignal | undefined

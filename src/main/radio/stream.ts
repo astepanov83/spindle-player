@@ -141,6 +141,8 @@ export async function radioStream(
     ac.abort(new Error('another radio request came'))
   }
   o.streams?.begin(stop)
+  // the last connection's answer must not stand for this one while it waits
+  o.streams?.answered(id, { ok: false, bytes: 0 })
   const timer = setTimeout(
     () => ac.abort(new Error(`no answer in ${(o.timeoutMs ?? 10000) / 1000}s`)),
     o.timeoutMs ?? 10000

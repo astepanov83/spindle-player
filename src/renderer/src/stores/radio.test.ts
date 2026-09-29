@@ -275,7 +275,9 @@ describe('reconnecting', () => {
     expect(loads()).toEqual(['load spindle://radio/w?stream=1 live'])
     // a live WMA stream never fails: it loads on with no sound
     ev.waiting!()
-    await vi.advanceTimersByTimeAsync(8000)
+    await vi.advanceTimersByTimeAsync(11999)
+    expect(notice.text).toBe('')
+    await vi.advanceTimersByTimeAsync(1)
     expect(notice.text).toBe("Format can't be played: W")
     expect(player.playing).toBe(false)
   })
@@ -295,6 +297,44 @@ describe('reconnecting', () => {
     await vi.advanceTimersByTimeAsync(1000)
     expect(loads()).toEqual(['load spindle://radio/y?stream=0 live'])
     expect(lastAnswer).not.toHaveBeenCalled()
+  })
+
+  it('a server that played, then hangs, is retried at 1, 2 and 4 s, not taken for a format (final fix 1)', async () => {
+    // main still says what the connection that played got until its 10 s timeout
+    answer = { ok: true, bytes: 900000 }
+    await start(st('z', [64, 128]))
+    ev.playing!()
+    // the server stops sending
+    ev.waiting!()
+    await vi.advanceTimersByTimeAsync(8000)
+    fake.calls = []
+    for (const ms of [1000, 2000, 4000]) {
+      await vi.advanceTimersByTimeAsync(ms)
+      expect(loads()).toEqual(['load spindle://radio/z?stream=0 live'])
+      fake.calls = []
+      // the new connection waits for a server that never answers
+      ev.waiting!()
+      await vi.advanceTimersByTimeAsync(9999)
+      expect(fake.calls).toEqual([])
+      await vi.advanceTimersByTimeAsync(1)
+      // main gives up after 10 s and answers 502
+      answer = { ok: false, bytes: 0 }
+      ev.error!(four)
+      await vi.advanceTimersByTimeAsync(0)
+      fake.calls = []
+      answer = { ok: true, bytes: 900000 }
+    }
+    // 3 failed retries: the next stream, as for any network error
+    expect(notice.text).toBe('')
+    expect(radio.stream).toBe(1)
+    answer = { ok: false, bytes: 0 }
+    for (const ms of [8000, 16000, 30000]) {
+      ev.error!(net)
+      await vi.advanceTimersByTimeAsync(ms)
+    }
+    ev.error!(net)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(notice.text).toBe("Station can't be reached: Z")
   })
 
   it('reconnects after waiting more than 8 s for data, not less', async () => {

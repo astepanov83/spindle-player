@@ -26,6 +26,9 @@ import { player } from './player.svelte'
 
 // A stream stuck this long with no data is taken for dropped.
 const stallMs = 8000
+// Before a connection's first sound: longer than main waits for the server
+// (10 s, stream.ts), so main's answer comes first and says what happened.
+const firstSoundMs = 12000
 // failed retries of one stream before the next stream
 const retriesPerStream = 3
 
@@ -94,7 +97,8 @@ class RadioStore {
       this.#soundStops()
       if (!this.#wanted) return
       clearTimeout(this.#stallTimer)
-      this.#stallTimer = setTimeout(() => this.#lost('no data for 8 s'), stallMs)
+      const ms = this.#sound ? stallMs : firstSoundMs
+      this.#stallTimer = setTimeout(() => this.#lost(`no data for ${ms / 1000} s`), ms)
     },
     // the server closed the stream
     ended: () => this.#lost('the stream ended'),

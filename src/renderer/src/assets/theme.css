@@ -24,6 +24,8 @@
   --close-hover: #c42b1c;
   /* text on --close-hover, the same in both themes */
   --on-danger: #fff;
+  /* the dot of "LIVE" while a station sounds */
+  --live: #ff5a52;
   /* marks drawn on a cover picture (the eq on a thumbnail), the same in both themes */
   --on-cover: #fff;
   --on-cover-shadow: rgba(0, 0, 0, 0.8);
@@ -67,6 +69,7 @@
     --raised: #ffffff;
     --glass: rgba(255, 255, 255, 0.7);
     --shadow: rgba(30, 32, 40, 0.25);
+    --live: #d42a20;
     --tint: 35%;
     --tint-max-l: 1;
     --wash-top: 45%;

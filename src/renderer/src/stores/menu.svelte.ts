@@ -4,6 +4,8 @@ export interface MenuItem {
   run: () => void
   // shown under a heading, a bit to the right
   indent?: boolean
+  // the one picked of a few, like the stream playing
+  checked?: boolean
 }
 
 export type MenuEntry = MenuItem | { heading: string } | 'line'

@@ -58,6 +58,8 @@ const choose = vi.fn(async (id: string, url: string) =>
   mine.map((s) => (s.id === id ? { ...s, chosen: url } : s))
 )
 const history = vi.fn(async () => [{ at: 1, title: 'Old - Song' }])
+// main adds a new station to the end of My stations
+const save = vi.fn(async (s: Station) => [...mine, s])
 // what main last answered for the stream: by default, the server was not reached
 let answer: LastAnswer | undefined
 const lastAnswer = vi.fn(async () => answer)
@@ -70,6 +72,7 @@ vi.stubGlobal('window', {
   radioApi: {
     play,
     choose,
+    save,
     history,
     lastAnswer,
     stop,
@@ -446,5 +449,69 @@ describe('the station’s logo', () => {
     await start({ ...mine[0], logo })
     logoListener!({ id: 'a' })
     expect(radio.art?.palette).toEqual(defaultPalettes)
+  })
+})
+
+describe('the time listened', () => {
+  const at = (): number => Math.round(radio.listened() / 1000)
+
+  it('counts only while sound comes out', async () => {
+    await start(mine[0])
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(at()).toBe(0)
+    ev.playing!()
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(at()).toBe(10)
+    // buffering, and a dropped stream until it plays again
+    ev.waiting!()
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(at()).toBe(10)
+    ev.playing!()
+    await vi.advanceTimersByTimeAsync(2000)
+    ev.error!(net)
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(at()).toBe(12)
+  })
+
+  it('stop keeps it; play again on the same station goes on from there', async () => {
+    // another station than the test before, whose time would go on
+    await start(mine[2])
+    ev.playing!()
+    await vi.advanceTimersByTimeAsync(7000)
+    radio.pause()
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(at()).toBe(7)
+    await radio.resume()
+    ev.playing!()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(at()).toBe(8)
+  })
+
+  it('starts from 0 on another station', async () => {
+    await start(mine[0])
+    ev.playing!()
+    await vi.advanceTimersByTimeAsync(7000)
+    await start(mine[1])
+    expect(at()).toBe(0)
+    ev.playing!()
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(at()).toBe(3)
+  })
+})
+
+describe('saving the station', () => {
+  it('a station from search is not saved until Save; then it is in My stations', async () => {
+    const found = st('rb-1', [64, 128])
+    await start(found)
+    expect(radio.saved).toBe(false)
+    await radio.save()
+    expect(save).toHaveBeenCalledWith(found)
+    expect(radio.saved).toBe(true)
+    expect(radio.stations.at(-1)?.id).toBe('rb-1')
+  })
+
+  it('a station of My stations is saved already', async () => {
+    await start(mine[1])
+    expect(radio.saved).toBe(true)
   })
 })

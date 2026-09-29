@@ -60,8 +60,12 @@
       {:else if 'heading' in entry}
         <div class="head">{entry.heading}</div>
       {:else}
-        <button role="menuitem" class:indent={entry.indent} onclick={() => pick(entry)}
-          >{entry.label}</button
+        <button
+          role={entry.checked === undefined ? 'menuitem' : 'menuitemradio'}
+          aria-checked={entry.checked}
+          class:indent={entry.indent}
+          class:checked={entry.checked}
+          onclick={() => pick(entry)}>{entry.label}</button
         >
       {/if}
     {/each}
@@ -103,6 +107,14 @@
   }
   button.indent {
     padding-left: 18px;
+  }
+  button.checked {
+    font-weight: 600;
+  }
+  button.checked::after {
+    content: '✓';
+    float: right;
+    margin-left: 12px;
   }
   button:hover,
   button:focus-visible {

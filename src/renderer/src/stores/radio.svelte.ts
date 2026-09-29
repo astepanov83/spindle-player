@@ -41,6 +41,13 @@ class RadioStore {
   history: HistoryEntry[] = $state.raw([])
   // the logo as a cover (ticket 030); a tile in the fixed colors until main made it
   art: Art | undefined = $derived(this.station && stationArt(this.station))
+  // the station is in My stations; else the controls offer Save
+  saved = $derived(!!this.station && this.stations.some((s) => s.id === this.station!.id))
+
+  // Time listened to this station: ms with sound before now, and since when
+  // sound comes out. Stop keeps it; another station starts from 0.
+  #heardMs = $state(0)
+  #soundSince: number | undefined = $state()
 
   // the user wants sound: reconnect while this holds
   #wanted = false
@@ -65,6 +72,7 @@ class RadioStore {
   readonly events: Partial<EngineEvents> = {
     playing: () => {
       clearTimeout(this.#stallTimer)
+      this.#soundStarts()
       this.#sound = true
       this.#retries = 0
       this.#reconnects = 0
@@ -72,6 +80,7 @@ class RadioStore {
       this.#formatFailed.clear()
     },
     waiting: () => {
+      this.#soundStops()
       if (!this.#wanted) return
       clearTimeout(this.#stallTimer)
       this.#stallTimer = setTimeout(() => this.#lost('no data for 8 s'), stallMs)
@@ -145,12 +154,35 @@ class RadioStore {
     clearTimeout(this.#retryTimer)
     clearTimeout(this.#stallTimer)
     player.playing = false
+    this.#soundStops()
     engine.pause()
     window.radioApi.stop()
   }
 
   get wanted(): boolean {
     return this.#wanted
+  }
+
+  // sound comes out now: LIVE lights up
+  get sounding(): boolean {
+    return this.#soundSince !== undefined
+  }
+
+  // ms of sound from this station since it was picked
+  listened(now = Date.now()): number {
+    return this.#heardMs + (this.#soundSince === undefined ? 0 : now - this.#soundSince)
+  }
+
+  // Save: a station tried from search goes into My stations.
+  async save(): Promise<void> {
+    const s = this.station
+    if (!s || this.saved) return
+    try {
+      this.stations = await window.radioApi.save($state.snapshot(s) as Station)
+    } catch (e) {
+      window.playbackApi.log(`Radio ${s.id}: radio:save failed: ${String(e)}`)
+      notice.show(`Couldn't save ${s.name}`)
+    }
   }
 
   // The user picked another stream: kept as the station's choice.
@@ -193,6 +225,8 @@ class RadioStore {
   #show(station: Station): void {
     if (station.id === this.station?.id) return
     this.station = station
+    this.#heardMs = 0
+    this.#soundSince = undefined
     this.title = ''
     this.history = []
     const id = station.id
@@ -204,7 +238,17 @@ class RadioStore {
     )
   }
 
+  #soundStarts(): void {
+    this.#soundSince ??= Date.now()
+  }
+
+  #soundStops(): void {
+    this.#heardMs = this.listened()
+    this.#soundSince = undefined
+  }
+
   #connect(): void {
+    this.#soundStops()
     this.#connects++
     this.#sound = false
     this.#down = false
@@ -220,6 +264,7 @@ class RadioStore {
   #lost(why: string): void {
     if (!this.#wanted || this.#down) return
     this.#down = true
+    this.#soundStops()
     clearTimeout(this.#retryTimer)
     clearTimeout(this.#stallTimer)
     // closes a stalled connection too

@@ -1,0 +1,219 @@
+<!-- Radio's controls: no seek, Next, Previous, Shuffle or Repeat (decision 150).
+     LIVE and the time listened, the stream picker, stop and play, and Save. -->
+<script lang="ts">
+  import Cover from '../ui/Cover.svelte'
+  import Icon from '../ui/Icon.svelte'
+  import Slot from '../layout/Slot.svelte'
+  import Stage from '../visualizer/Stage.svelte'
+  import PlayButton from './PlayButton.svelte'
+  import StreamPicker from './StreamPicker.svelte'
+  import VizButton from './VizButton.svelte'
+  import Volume from './Volume.svelte'
+  import { fmtClock } from '../format'
+  import { player } from '../stores/player.svelte'
+  import { playing } from '../stores/playing.svelte'
+  import { radio } from '../stores/radio.svelte'
+
+  let { style }: { style: 'stack' | 'bar' } = $props()
+
+  // the time listened moves on its own, so a tick redraws it
+  let now = $state(Date.now())
+  $effect(() => {
+    const t = setInterval(() => (now = Date.now()), 1000)
+    return () => clearInterval(t)
+  })
+  const listened = $derived(fmtClock(radio.listened(now) / 1000))
+</script>
+
+<!-- Stop, since it closes the connection; play opens a new one at the live edge.
+     player.playing is radio's wish for sound while radio plays (radio.wanted isn't reactive). -->
+{#snippet stopPlay()}
+  <PlayButton
+    icon={player.playing ? 'stop' : 'play'}
+    label={player.playing ? 'Stop' : 'Play'}
+    onclick={() => playing.togglePlay()}
+  />
+{/snippet}
+
+{#snippet live()}
+  <span class="live" class:on={radio.sounding}><span class="dot">●</span> LIVE</span>
+  <span class="time" title="Time listened">{listened}</span>
+{/snippet}
+
+{#snippet save()}
+  {#if radio.station && !radio.saved}
+    <button class="save" title="Add to My stations" onclick={() => radio.save()}
+      ><Icon name="star" size={16} />Save</button
+    >
+  {/if}
+{/snippet}
+
+{#if style === 'bar'}
+  <div class="ctl bar">
+    <div class="bl">
+      <div class="minicv"><Cover src={playing.art?.cover} /></div>
+      <div class="meta">
+        <div class="song-title">{playing.title}</div>
+        <div class="song-sub">{playing.sub}</div>
+      </div>
+      {@render save()}
+    </div>
+    <div class="bc">
+      {@render stopPlay()}
+      <div class="liverow">
+        {@render live()}
+        <StreamPicker short />
+      </div>
+    </div>
+    <div class="br">
+      <Stage cover={false} />
+      <Volume width={80} />
+      <VizButton />
+      <Slot name="player.buttons" />
+    </div>
+  </div>
+{:else}
+  <!-- no station name: NowPlaying shows it right above in every template with a stack -->
+  <div class="ctl stack">
+    <div class="liverow">
+      {@render live()}
+      <span class="gap"></span>
+      <StreamPicker />
+      {@render save()}
+    </div>
+    <div class="center">{@render stopPlay()}</div>
+    <div class="btnrow">
+      <Volume />
+      <div class="right">
+        <VizButton />
+        <Slot name="player.buttons" />
+      </div>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .live {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .live.on {
+    color: var(--ink);
+  }
+  /* red while sound comes out */
+  .live.on .dot {
+    color: var(--live);
+  }
+  .time {
+    font-size: 12px;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .liverow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .gap {
+    flex: 1;
+  }
+  .save {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px 5px 9px;
+    border-radius: 99px;
+    background: var(--field);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    flex: none;
+  }
+  .save:hover {
+    background: var(--active);
+  }
+
+  .stack {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 22px 18px;
+  }
+  .center {
+    display: flex;
+    justify-content: center;
+  }
+  .btnrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .right {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+  }
+
+  .bar {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 20px;
+    padding: 0 18px;
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--c1) calc(var(--tint) / 2), var(--bg-title)),
+      var(--bg-title) 55%
+    );
+    --playbtn: 40px;
+    --playico: 22px;
+    --icobtn: 34px;
+  }
+  .bl {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+  }
+  .minicv {
+    width: 60px;
+    height: 60px;
+    border-radius: 6px;
+    overflow: hidden;
+    flex: none;
+    box-shadow: 0 6px 16px var(--shadow);
+  }
+  .meta {
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+  .song-title {
+    font-size: 16px;
+  }
+  .bc {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    min-width: 0;
+  }
+  .br {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .br > :global(.vstage) {
+    width: 120px;
+    height: 48px;
+    flex: none;
+  }
+</style>

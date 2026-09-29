@@ -6,7 +6,8 @@ import {
   nextStream,
   parseTitle,
   retryDelayMs,
-  stepStation
+  stepStation,
+  streamChoices
 } from './logic'
 
 describe('parseTitle (from webmusicmo)', () => {
@@ -107,5 +108,42 @@ describe('cantPlayFormat', () => {
     expect(cantPlayFormat(false, undefined)).toBe(false)
     expect(cantPlayFormat(true, { ok: true, bytes: 900000 })).toBe(false)
     expect(cantPlayFormat(false, { ok: true, bytes: 1000 })).toBe(false)
+  })
+})
+
+describe('streamChoices', () => {
+  const s = (url: string, bitrate?: number, codec?: string): Stream => ({ url, bitrate, codec })
+
+  it('lists the highest bitrate first, with its codec', () => {
+    const list = streamChoices([s('a', 128, 'mp3'), s('b', 320, 'mp3'), s('c', 64, 'aac')])
+    expect(list).toEqual([
+      { index: 1, label: '320 kbps mp3', short: '320' },
+      { index: 0, label: '128 kbps mp3', short: '128' },
+      { index: 2, label: '64 kbps aac', short: '64' }
+    ])
+  })
+
+  it('puts streams of unknown bitrate last, in list order', () => {
+    const list = streamChoices([s('a'), s('b', 128), s('c', undefined, 'mp3')])
+    expect(list.map((c) => [c.index, c.label, c.short])).toEqual([
+      [1, '128 kbps', '128'],
+      [0, 'Bitrate unknown', 'Stream'],
+      [2, 'mp3, bitrate unknown', 'mp3']
+    ])
+  })
+
+  it('numbers streams that would read the same, keeping list order for a tie', () => {
+    const list = streamChoices([s('a', 192, 'mp3'), s('b', 320), s('c', 192, 'mp3'), s('d')])
+    expect(list.map((c) => c.label)).toEqual([
+      '320 kbps',
+      '192 kbps mp3',
+      '192 kbps mp3 (2)',
+      'Bitrate unknown'
+    ])
+    expect(list.map((c) => c.index)).toEqual([1, 0, 2, 3])
+  })
+
+  it('is empty for a station with no streams yet', () => {
+    expect(streamChoices([])).toEqual([])
   })
 })

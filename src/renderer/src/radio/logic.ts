@@ -76,6 +76,37 @@ export function nextStream(streams: Stream[], from: number, failed: Set<number>)
   return known[0].i
 }
 
+export interface StreamChoice {
+  // into station.streams
+  index: number
+  // "320 kbps mp3", for the list
+  label: string
+  // "320", for the bar's button
+  short: string
+}
+
+// The bitrate picker's list: the highest bitrate first, a tie in list order.
+// A Shoutcast v1 server tells its bitrate only in the stream (decision 153),
+// so those come last, in list order, as "Bitrate unknown". Labels that would
+// read the same get a number, so mirrors of one stream can be told apart.
+export function streamChoices(streams: Stream[]): StreamChoice[] {
+  const order = streams
+    .map((s, index) => ({ s, index }))
+    .sort((a, b) => (b.s.bitrate ?? 0) - (a.s.bitrate ?? 0) || a.index - b.index)
+  const seen = new Map<string, number>()
+  return order.map(({ s, index }) => {
+    let label = s.bitrate
+      ? [`${s.bitrate} kbps`, s.codec].filter(Boolean).join(' ')
+      : s.codec
+        ? `${s.codec}, bitrate unknown`
+        : 'Bitrate unknown'
+    const n = (seen.get(label) ?? 0) + 1
+    seen.set(label, n)
+    if (n > 1) label += ` (${n})`
+    return { index, label, short: s.bitrate ? String(s.bitrate) : (s.codec ?? 'Stream') }
+  })
+}
+
 const delaysMs = [1000, 2000, 4000, 8000, 16000, 30000]
 
 // The wait before the n-th reconnect (0 is the first) of a station.

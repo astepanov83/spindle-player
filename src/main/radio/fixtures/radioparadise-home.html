@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <script type="text/javascript">
+    console.log('rpv3');
+    window._rpconstants_clientVersion = "1.0.0";
+    window._rpconstants_apiVersion = "1.0.0";
+  </script>
+  <script>
+    (function () { // Scoping function to avoid globals
+      if (window.location.search.includes('tizen=1')) {
+        document.write('<script src="/rpassets/tizen/cordova.js"><\/script>');
+        document.write('<script src="/rpassets/tizen/toast.js"><\/script>');
+      }
+    })();
+  </script>
+  <!--
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bowser/1.9.4/bowser.min.js"></script>
+  <script src="/rpassets/lib/browser_redirect/browser_test.js"></script>
+  -->
+  <script type="text/javascript">
+
+    if ((window.location.host.startsWith('new.') || window.location.host.startsWith('www.'))) {
+      window.location = 'https://radioparadise.com' + window.location.pathname + window.location.search + window.location.hash;
+    } else if (window.location.protocol != 'https:' && window.location.host !== 'localdev.radioparadise.com') {
+      window.location.href = 'https://' + window.location.host + window.location.pathname + window.location.search + window.location.hash;
+    }
+
+  </script>
+    <title>An eclectic musical adventure...</title>
+  <meta name="description" content="Radio Paradise streams highly curated, eclectic mixes of music -- chosen by real humans -- with unparalleled audio quality.">
+
+  <!-- Facebook Meta Tags -->
+  <meta property="og:url" content="https://radioparadise.com">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="An eclectic musical adventure...">
+  <meta property="og:description" content="Radio Paradise streams highly curated, eclectic mixes of music -- chosen by real humans -- with unparalleled audio quality.">
+  <meta property="og:image" content="https://vsh-smedia.radioparadise.com/uploads/RP_Logo_Flat_HCR_Green_1_18a033c355.png">
+  
+  <!-- Twitter Meta Tags -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta property="twitter:domain" content="radioparadise.com">
+  <meta property="twitter:url" content="https://radioparadise.com">
+  <meta name="twitter:title" content="An eclectic musical adventure...">
+  <meta name="twitter:description" content="Radio Paradise streams highly curated, eclectic mixes of music -- chosen by real humans -- with unparalleled audio quality.">
+  <meta name="twitter:image" content="https://vsh-smedia.radioparadise.com/uploads/RP_Logo_Flat_HCR_Green_1_18a033c355.png">		  <meta property="og:image:width" content="1000" />
+  <meta property="og:image:height" content="1000" />
+  <!-- For IE <= 9 -->
+  <!--[if IE]>
+  <script type="text/javascript">
+    window.location = "https://legacy.radioparadise.com?redirect=ie";
+  </script>
+  <![endif]-->
+
+  <!-- For IE > 9 -->
+  <script type="text/javascript">
+    if (window.navigator.msPointerEnabled) {
+      window.location = "https://legacy.radioparadise.com?redirect=ie";
+    }
+  </script>
+
+  <base href="/">
+
+  <meta charset="utf-8">
+
+  <meta name="keywords" content="radio, rock, progressive, FM, DJ, HD, music, free, free-form, freeform, high fidelity, high bitrate, 320k, 192k, flac, high resolution, 24bit, 24 bit, commercial-free">
+  <meta name="COPYRIGHT" content="Copyright (c) 1999-2023 by radioparadise.com">
+  <meta name="author" content="Radio Paradise">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!-- FUSE Splash Screen CSS -->
+  <style type="text/css">
+    #fuse-splash-screen {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #000;
+      z-index: 99999;
+      pointer-events: none;
+    }
+
+    #fuse-splash-screen .center {
+      display: block;
+      width: 100%;
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    #fuse-splash-screen .logo-animation-wrapper {
+      margin: 0 auto;
+      width: clamp(80px,20vw,120px);
+      height: clamp(80px,20vw,120px);
+      position: relative;
+    }
+
+    #fuse-splash-screen .logo-animation-wrapper img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      opacity: 0;
+    }
+
+    .animation-index-loader-frame1 {
+      animation-name: index-loader-frame1;
+      animation-duration: 3s;
+      animation-iteration-count: infinite;
+    }
+
+    @keyframes index-loader-frame1 {
+      20% {
+        opacity: 1;
+      }
+      40% {
+        opacity: 1;
+      }
+      60% {
+        opacity: 1
+      }
+      80% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+      }
+    }
+
+    .animation-index-loader-frame2 {
+      animation-name: index-loader-frame2;
+      animation-duration: 3s;
+      animation-iteration-count: infinite;
+    }
+
+    @keyframes index-loader-frame2 {
+      20% {
+        opacity: 0.3;
+      }
+      40% {
+        opacity: 1;
+      }
+      60% {
+        opacity: 1;
+      }
+      80% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+      }
+    }
+
+    .animation-index-loader-frame3 {
+      animation-name: index-loader-frame3;
+      animation-duration: 3s;
+      animation-iteration-count: infinite;
+    }
+
+    @keyframes index-loader-frame3 {
+      20%{
+        opacity: 0.15;
+      }
+      40% {
+        opacity: 0.3;
+      }
+      60% {
+        opacity: 1;
+      }
+      80% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+      }
+    }
+
+    .animation-index-loader-frame4 {
+      animation-name: index-loader-frame4;
+      animation-duration: 3s;
+      animation-iteration-count: infinite;
+    }
+
+    @keyframes index-loader-frame4 {
+      20%{
+        opacity: 0.075;
+      }
+      40% {
+        opacity: 0.15;
+      }
+      60% {
+        opacity: 0.3;
+      }
+      80% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+      }
+    }
+  </style>
+  <!-- / FUSE Splash Screen CSS -->
+
+  <!-- Matomo -->
+  <script>
+    var _paq = window._paq = window._paq || [];
+    /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+    _paq.push(['trackPageView']);
+    _paq.push(['enableLinkTracking']);
+    (function() {
+      var u="//matomo.radioparadise.com/";
+      _paq.push(['setTrackerUrl', u+'matomo.php']);
+      _paq.push(['setSiteId', '1']);
+      var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+      g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+    })();
+  </script>
+  <!-- End Matomo Code -->
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#FEB246">
+  <meta name="msapplication-TileColor" content="#da532c">
+  <meta name="theme-color" content="#000000">
+
+  <!-- VR
+  <script src="//cdn.delight-vr.com/latest/dl8-68d95e42d9b70267a985b5e564187ec974a9af61.js" async></script>
+  <meta name="dl8-customization-primary-color" content="#feb296">
+  <meta name="dl8-customization-brand-name" content="Radio Paradise">
+  <meta name="dl8-customization-brand-logo"
+        content="https://radioparadise.com/rpassets/images/logo/logo_2022_nav_244x64.svg">
+  <meta name="dl8-customization-brand-url" content="https://radioparadise.com">
+  END VR -->
+
+  <script async="" src="https://talk.hyvor.com/embed/embed.js" type="module"></script>
+
+  <!-- Begin SpeakPipe code -->
+  <script type="text/javascript">
+    (function(d){
+      var app = d.createElement('script'); app.type = 'text/javascript'; app.async = true;
+      app.src = 'https://www.speakpipe.com/loader/unne5w8ze6pn43sml1zv9pc4f83kn4u8.js';
+      var s = d.getElementsByTagName('script')[0]; s.parentNode.insertBefore(app, s);
+    })(document);
+  </script>
+  <!-- End SpeakPipe code -->
+
+<link rel="stylesheet" href="styles.d9140a2a59bea13e.css"></head>
+
+<body>
+
+<!-- FUSE Splash Screen -->
+<fuse-splash-screen id="fuse-splash-screen">
+
+  <div class="center">
+
+    <div class="logo-animation-wrapper">
+      <img class="animation-index-loader-frame1" src="/rpassets/images/indexloader/sigil-animation.1.svg">
+      <img class="animation-index-loader-frame2" src="/rpassets/images/indexloader/sigil-animation.2.svg">
+      <img class="animation-index-loader-frame3" src="/rpassets/images/indexloader/sigil-animation.3.svg">
+      <img class="animation-index-loader-frame4" src="/rpassets/images/indexloader/sigil-animation.4.svg">
+    </div>
+
+
+  </div>
+
+</fuse-splash-screen>
+<!-- / FUSE Splash Screen -->
+
+<fuse-root></fuse-root>
+<!--<script>
+  if (!window.location.search.includes('embedded=1')) {
+    var head = document.getElementsByTagName('head')[0], script = document.createElement('script');
+    script.type = 'text/javascript', script.src = 'https://banner.urlgeni.us/smart_banners/f80ee581731b98cc.js?url=' + encodeURI(window.location), head.appendChild(script);
+  }
+</script>-->
+<noscript>Please enable JavaScript to continue using this application.</noscript>
+<script src="runtime.9cb37e5450aff6de.js" type="module"></script><script src="polyfills.6fe0ef3579deeea9.js" type="module"></script><script src="scripts.0b07b97013cacbed.js" defer></script><script src="main.4a4c30736a906d92.js" type="module"></script></body>
+
+</html>

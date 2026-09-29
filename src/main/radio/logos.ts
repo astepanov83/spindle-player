@@ -16,6 +16,21 @@ export function logoSource(s: Station): string | undefined {
   return s.id === 'metal-only' ? metalOnlyLogo : undefined
 }
 
+// A station's homepage as a logo source: its icons (ticket 033). Kept as the
+// logo's `from`, so a logo url that shows up later, or a new site, makes it again.
+export const sitePrefix = 'site:'
+
+// Where to look for a station's logo, best first: its logo address (or the
+// one shipped), then the icons on its homepage, when the first is missing or
+// fails this run.
+export function logoSources(s: Station): string[] {
+  const out: string[] = []
+  const first = logoSource(s)
+  if (first) out.push(first)
+  if (s.site) out.push(sitePrefix + s.site)
+  return out
+}
+
 // A station whose logo ships with the app and is not made yet (Metal Only on
 // the first run): made at start from the file, with no request.
 export function needsBundledLogo(s: Station): boolean {
@@ -34,7 +49,8 @@ export interface LogoCache {
 }
 
 export interface LogoDeps {
-  // the picture from a source (a web address or metalOnlyLogo); throws with the reason
+  // the picture from a source (a web address, metalOnlyLogo or a sitePrefix
+  // homepage); throws with the reason
   load(source: string): Promise<Uint8Array>
   cache: LogoCache
   // keptThisRun() grew: the cover prune must hear of it before the files are written
@@ -66,18 +82,19 @@ export class StationLogos {
     return this.#kept
   }
 
-  // The logo the station should have now: the one it has while its files are
-  // in the cache and it came from the station's source, else one made from
-  // that source, else none. A logo with no `from` (made before it was kept)
-  // may be from an older address, so it is made again from the source once;
-  // if that fails it is kept while its files are there.
+  // The logo the station should have now, from its sources in order: the one
+  // it has while its files are in the cache and it came from that source,
+  // else one made from that source; if that fails, the next source. None
+  // left: no logo. A logo with no `from` (made before it was kept) may be
+  // from an older address, so it is made again from the sources once; if
+  // that fails it is kept while its files are there.
   async logoFor(station: Station): Promise<StationLogo | undefined> {
-    const source = logoSource(station)
     const have = station.logo
-    if (have?.from && have.from === source && (await this.#has(have)))
-      return this.#withNewColors(have)
-    const made = source ? await this.#fromSource(source) : undefined
-    if (made) return made
+    for (const source of logoSources(station)) {
+      if (have?.from === source && (await this.#has(have))) return this.#withNewColors(have)
+      const made = await this.#fromSource(source)
+      if (made) return made
+    }
     if (have && !have.from && (await this.#has(have))) return this.#withNewColors(have)
     return undefined
   }

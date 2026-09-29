@@ -25,7 +25,8 @@ import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
 import { findStreams } from './radio/find-streams'
 import { fetchLogo } from './radio/logo-fetch'
-import { keptLogos, metalOnlyLogo, needsBundledLogo, StationLogos } from './radio/logos'
+import { keptLogos, metalOnlyLogo, needsBundledLogo, sitePrefix, StationLogos } from './radio/logos'
+import { fetchSiteLogo } from './radio/site-icons'
 import { PlayedStations } from './radio/play'
 import { RadioBrowser, resolveMirrors } from './radio/radio-browser'
 import { ResultLogos } from './radio/result-logos'
@@ -281,10 +282,16 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     ]
   )
   logos = new StationLogos({
-    load: async (source) =>
-      source === metalOnlyLogo
-        ? new Uint8Array(await readFile(metalOnlyLogoPath))
-        : fetchLogo(source, { fetch: radioFetch, userAgent: radioAgent }),
+    load: async (source) => {
+      if (source === metalOnlyLogo) return new Uint8Array(await readFile(metalOnlyLogoPath))
+      // a station with no logo, or one that failed: its homepage's icons (ticket 033)
+      if (source.startsWith(sitePrefix))
+        return fetchSiteLogo(source.slice(sitePrefix.length), {
+          fetch: radioFetch,
+          userAgent: radioAgent
+        })
+      return fetchLogo(source, { fetch: radioFetch, userAgent: radioAgent })
+    },
     cache: library.covers,
     kept: () => library.coversKept(),
     log: radioLog

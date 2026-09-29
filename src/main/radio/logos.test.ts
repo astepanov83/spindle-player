@@ -5,6 +5,7 @@ import type { Station, StationLogo } from '../../shared/stations'
 import {
   keptLogos,
   logoSource,
+  logoSources,
   metalOnlyLogo,
   needsBundledLogo,
   StationLogos,
@@ -65,6 +66,18 @@ describe('logoSource', () => {
     )
     expect(logoSource(st('metal-only'))).toBe(metalOnlyLogo)
     expect(logoSource(st('a'))).toBeUndefined()
+  })
+})
+
+describe('logoSources', () => {
+  it('is the logo url, then the homepage’s icons (ticket 033)', () => {
+    const site = 'https://a.example/'
+    expect(logoSources(st('a', { logoUrl: 'https://a.example/l.png', site }))).toEqual([
+      'https://a.example/l.png',
+      'site:https://a.example/'
+    ])
+    expect(logoSources(st('a', { site }))).toEqual(['site:https://a.example/'])
+    expect(logoSources(st('a'))).toEqual([])
   })
 })
 
@@ -221,6 +234,74 @@ describe('StationLogos', () => {
     apply.mockClear()
     await logos.update(st('a', { logoUrl: url, logo: made }), apply)
     expect(apply).not.toHaveBeenCalled()
+  })
+})
+
+describe('StationLogos from the homepage (ticket 033)', () => {
+  const url = 'https://a.example/l.png'
+  const site = 'https://a.example/'
+  const fromSite: StationLogo = { hash: picHash, palette, from: `site:${site}`, v: paletteVersion }
+
+  it('makes the logo from the homepage when the station has no logo url', async () => {
+    const d = deps()
+    const logos = new StationLogos(d)
+    expect(await logos.logoFor(st('a', { site }))).toEqual(fromSite)
+    expect(d.loads).toEqual([`site:${site}`])
+  })
+
+  it('goes to the homepage when the logo url fails', async () => {
+    const d = deps()
+    d.load.mockImplementation(async (source: string) => {
+      d.loads.push(source)
+      if (source === url) throw new Error('HTTP 404')
+      return pic
+    })
+    const logos = new StationLogos(d)
+    expect(await logos.logoFor(st('a', { logoUrl: url, site }))).toEqual(fromSite)
+    expect(d.loads).toEqual([url, `site:${site}`])
+  })
+
+  it('reads a homepage once a run, also when it has no icon (the station keeps the tile)', async () => {
+    const d = deps()
+    d.load.mockRejectedValue(new Error('no icon on the page'))
+    const logos = new StationLogos(d)
+    expect(await logos.logoFor(st('a', { site }))).toBeUndefined()
+    expect(await logos.logoFor(st('a', { site }))).toBeUndefined()
+    expect(d.load).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a homepage logo with no new request while the logo url still fails', async () => {
+    const d = deps()
+    d.load.mockRejectedValue(new Error('HTTP 404'))
+    d.files.add(picHash)
+    const logos = new StationLogos(d)
+    expect(await logos.logoFor(st('a', { logoUrl: url, site, logo: fromSite }))).toBe(fromSite)
+    // the logo url is tried once this run, the homepage not again
+    expect(d.load).toHaveBeenCalledTimes(1)
+    expect(d.load).toHaveBeenCalledWith(url)
+  })
+
+  it('takes the logo url’s logo once it appears or loads', async () => {
+    const d = deps()
+    d.files.add(picHash)
+    const logos = new StationLogos(d)
+    expect(await logos.logoFor(st('a', { logoUrl: url, site, logo: fromSite }))).toEqual({
+      ...fromSite,
+      from: url
+    })
+    expect(d.loads).toEqual([url])
+  })
+
+  it('reads the homepage again when the station’s site changed', async () => {
+    const d = deps()
+    d.files.add(picHash)
+    const logos = new StationLogos(d)
+    const other = 'https://b.example/'
+    expect(await logos.logoFor(st('a', { site: other, logo: fromSite }))).toEqual({
+      ...fromSite,
+      from: `site:${other}`
+    })
+    expect(d.loads).toEqual([`site:${other}`])
   })
 })
 

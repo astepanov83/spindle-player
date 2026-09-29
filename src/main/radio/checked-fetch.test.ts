@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
 import type { ClientRequest, ClientRequestConstructorOptions } from 'electron'
 import { describe, expect, it } from 'vitest'
-import { checkedFetch, maxRedirects } from './checked-fetch'
+import { checkedFetch, maxRedirects, RefusedAddress } from './checked-fetch'
 
 // A stand-in for net.request: redirects to follow, then an answer.
 class FakeRequest extends EventEmitter {
@@ -84,6 +84,22 @@ describe('checkedFetch', () => {
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toBe('image/png')
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
+  })
+
+  it('asks with the caller’s method: a stream is probed with HEAD (025)', async () => {
+    const n = net()
+    const p = checkedFetch(n.request, false)('https://a.example/stream', { method: 'HEAD' })
+    await tick()
+    n.res.emit('end')
+    await p
+    expect(n.made[0].opts.method).toBe('HEAD')
+  })
+
+  it('says a refusal is one, so a caller can drop what led to it', async () => {
+    const n = net(['http://192.168.1.1/admin'])
+    const f = checkedFetch(n.request, false)
+    await expect(f('https://a.example/')).rejects.toBeInstanceOf(RefusedAddress)
+    await expect(f('http://127.0.0.1/')).rejects.toBeInstanceOf(RefusedAddress)
   })
 
   it('follows redirects on the web and says where it ended up', async () => {

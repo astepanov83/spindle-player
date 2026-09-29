@@ -256,7 +256,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   const radioFetch: typeof fetch = (url, init) => net.fetch(url as string, init)
   const radioLog = (text: string): void => console.warn(text)
   const radioAgent = `Spindle/${app.getVersion()}`
-  // logos and homepages: each redirect checked, local addresses only for a local station
+  // logos, homepages and finding streams: each redirect checked, local
+  // addresses only for a local station
   const logoFetch = (privateOk: boolean): typeof fetch =>
     checkedFetch((o) => net.request(o), privateOk)
   // before the library starts, so its first prune keeps these covers
@@ -269,7 +270,15 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   songCoverFile = songFile
   played = new PlayedStations(
     stations,
-    (station) => findStreams(station, { fetch: radioFetch, log: radioLog }),
+    (station) => {
+      const privateOk = onLocalNetwork(station)
+      return findStreams(station, {
+        fetch: logoFetch(privateOk),
+        log: radioLog,
+        userAgent: radioAgent,
+        privateOk
+      })
+    },
     radioLog,
     // not waited for: the stream matters more than the picture
     (station) => void logos.update(station, setLogo)

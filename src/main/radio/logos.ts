@@ -32,10 +32,15 @@ export function logoSources(s: Station): string[] {
   return out
 }
 
-// A station on the local network (its site or a stream there) may have its
-// logo there too; for any other, local addresses are refused.
+// A station on the local network (its site, a stream or its playlist file
+// there) may have its logo and streams there too; for any other, local
+// addresses are refused.
 export function onLocalNetwork(s: Station): boolean {
-  return localAddress(s.site) || s.streams.some((x) => localAddress(x.url))
+  return (
+    localAddress(s.site) ||
+    s.streams.some((x) => localAddress(x.url)) ||
+    (s.pls ?? []).some(localAddress)
+  )
 }
 
 // A station whose logo ships with the app and is not made yet (Metal Only on

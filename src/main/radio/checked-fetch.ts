@@ -1,4 +1,5 @@
-// The fetch main uses for logos and homepages (tickets 030, 029, 033). net.fetch
+// The fetch main uses for logos, homepages and finding a station's streams
+// (tickets 030, 029, 033, 025). net.fetch
 // can't check a redirect before it is followed ('manual' throws "Redirect was
 // cancelled") and leaves Response.url empty, so this goes through net.request:
 // each hop's address is checked with refusedAddress before it is asked, and
@@ -7,6 +8,10 @@ import type { ClientRequest, ClientRequestConstructorOptions, IncomingMessage } 
 import { refusedAddress } from './logo-fetch'
 
 export const maxRedirects = 10
+
+// An address this fetch won't ask: a caller drops what led to it (a stream
+// that redirects to the local network is not kept as it was).
+export class RefusedAddress extends Error {}
 
 // statuses a Response may not have a body for
 const noBody = new Set([101, 204, 205, 304])
@@ -19,10 +24,10 @@ export function checkedFetch(
     new Promise<Response>((resolve, reject) => {
       let url = String(input)
       const refused = refusedAddress(url, privateOk)
-      if (refused) return reject(new Error(refused))
+      if (refused) return reject(new RefusedAddress(refused))
       const signal = init?.signal ?? undefined
       if (signal?.aborted) return reject(signal.reason)
-      const req = request({ url, method: 'GET', redirect: 'manual' })
+      const req = request({ url, method: init?.method ?? 'GET', redirect: 'manual' })
       new Headers(init?.headers).forEach((v, k) => req.setHeader(k, v))
       let settled = false
       // after the answer, a stop errors its body instead
@@ -39,7 +44,7 @@ export function checkedFetch(
       req.on('redirect', (_status, _method, to) => {
         if (++hops > maxRedirects) return fail(new Error('too many redirects'))
         const why = refusedAddress(to, privateOk)
-        if (why) return fail(new Error(why))
+        if (why) return fail(new RefusedAddress(why))
         url = to
         req.followRedirect()
       })

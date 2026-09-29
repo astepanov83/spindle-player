@@ -88,6 +88,11 @@ describe('onLocalNetwork', () => {
     expect(onLocalNetwork(st('a', { streams: [{ url: 'http://10.0.0.3:8000/s' }] }))).toBe(true)
     expect(onLocalNetwork(st('a', { site: 'https://a.example/' }))).toBe(false)
   })
+
+  it('counts the station’s own playlist file too (final fix 3)', () => {
+    expect(onLocalNetwork(st('a', { pls: ['http://192.168.1.2/listen.pls'] }))).toBe(true)
+    expect(onLocalNetwork(st('a', { pls: ['https://a.example/listen.pls'] }))).toBe(false)
+  })
 })
 
 describe('needsBundledLogo', () => {

@@ -1,17 +1,32 @@
 // On play, asks a station's server which streams it has: reads the PLS files,
 // probes each stream, and lists the Icecast mounts. Ported from webmusicmo lib/app.js.
 import { mergeStreams, type Station, type Stream } from '../../shared/stations'
+import { RefusedAddress } from './checked-fetch'
+import { refusedAddress } from './logo-fetch'
+import { readCapped } from '../library/cover-http'
 import { parsePls } from './pls'
 
 export interface FindOptions {
-  // net.fetch in the app (it also reads Shoutcast v1 answers); a fake in tests
+  // checkedFetch in the app: each redirect is checked, and the answer says
+  // where it ended up (net.fetch leaves that empty). A fake in tests.
   fetch?: typeof fetch
   log?: (text: string) => void
+  // Spindle/<version>
+  userAgent?: string
+  // local network addresses too: only for a station that is on one itself
+  privateOk?: boolean
 }
 
-const userAgent = 'Spindle'
 const textTimeoutMs = 8000
 const probeTimeoutMs = 6000
+// a playlist or status page bigger than this is not one
+const maxText = 1024 * 1024
+
+interface Asker {
+  f: typeof fetch
+  userAgent: string
+  privateOk: boolean
+}
 
 // 'audio/mpeg' -> 'mp3', so a probe and a status page name a codec the same way.
 export function codecOf(contentType: string): string | undefined {
@@ -31,16 +46,21 @@ function withoutQuery(url: string): string {
   return u.toString()
 }
 
-// The stream's own headers, followed through redirects. Any failure gives the
-// address as it is, with nothing known about it.
-async function probe(url: string, f: typeof fetch, log: (t: string) => void): Promise<Stream> {
+// The stream's own headers, with each redirect checked and followed (the
+// address kept is the last one). Any failure gives the address as it is, with
+// nothing known about it; undefined when it is, or leads to, an address
+// refused, so a playlist can't point main at the user's network.
+async function probe(url: string, a: Asker, log: (t: string) => void): Promise<Stream | undefined> {
   try {
-    const res = await f(url, {
+    const refused = refusedAddress(url, a.privateOk)
+    if (refused) throw new RefusedAddress(refused)
+    const res = await a.f(url, {
       method: 'HEAD',
-      redirect: 'follow',
-      headers: { 'user-agent': userAgent },
+      headers: { 'user-agent': a.userAgent },
       signal: AbortSignal.timeout(probeTimeoutMs)
     })
+    // a Shoutcast v1 server sends its stream even for HEAD
+    void res.body?.cancel().catch(() => {})
     const final = withoutQuery(res.ok && res.url ? res.url : url)
     const stream: Stream = { url: final }
     const br = parseInt(res.headers.get('icy-br') ?? '', 10)
@@ -50,17 +70,24 @@ async function probe(url: string, f: typeof fetch, log: (t: string) => void): Pr
     return stream
   } catch (error) {
     log(`Could not probe ${url}: ${String(error)}`)
-    return { url }
+    return error instanceof RefusedAddress ? undefined : { url }
   }
 }
 
-async function getText(url: string, f: typeof fetch): Promise<string> {
-  const res = await f(url, {
-    headers: { 'user-agent': userAgent },
+async function getText(url: string, a: Asker): Promise<string> {
+  const refused = refusedAddress(url, a.privateOk)
+  if (refused) throw new Error(refused)
+  const res = await a.f(url, {
+    headers: { 'user-agent': a.userAgent },
     signal: AbortSignal.timeout(textTimeoutMs)
   })
-  if (!res.ok) throw new Error(`answered ${res.status}`)
-  return res.text()
+  if (!res.ok) {
+    await res.body?.cancel().catch(() => {})
+    throw new Error(`answered ${res.status}`)
+  }
+  const bytes = await readCapped(res, maxText)
+  if (!bytes) throw new Error('too big')
+  return new TextDecoder().decode(bytes)
 }
 
 // Icecast's status page: one source, or a list of them.
@@ -94,16 +121,21 @@ export async function findStreams(
   station: Pick<Station, 'pls' | 'streams'>,
   opts: FindOptions = {}
 ): Promise<Stream[]> {
-  const f = opts.fetch ?? fetch
+  const a: Asker = {
+    f: opts.fetch ?? fetch,
+    userAgent: opts.userAgent ?? 'Spindle',
+    privateOk: opts.privateOk ?? false
+  }
   const log = opts.log ?? ((t) => console.warn(t))
   const resolved: Stream[] = []
 
   // the first entry of each playlist is one stream
   for (const url of station.pls ?? []) {
     try {
-      const first = parsePls(await getText(url, f))[0]
+      const first = parsePls(await getText(url, a))[0]
       if (!first) throw new Error('no entries')
-      resolved.push(await probe(first.url, f, log))
+      const stream = await probe(first.url, a, log)
+      if (stream) resolved.push(stream)
     } catch (error) {
       log(`Could not read playlist ${url}: ${String(error)}`)
     }
@@ -114,8 +146,8 @@ export async function findStreams(
   const learned: Stream[] = []
   for (const saved of station.streams) {
     if (saved.bitrate && saved.codec) continue
-    const p = await probe(saved.url, f, log)
-    learned.push({ ...p, url: saved.url })
+    const p = await probe(saved.url, a, log)
+    if (p) learned.push({ ...p, url: saved.url })
   }
 
   // the mounts, on the server the first stream came from
@@ -125,7 +157,7 @@ export async function findStreams(
     const statusUrl = new URL('/status-json.xsl', origin.url).toString()
     try {
       const from = new URL(origin.url)
-      for (const m of mountsOf(JSON.parse(await getText(statusUrl, f)))) {
+      for (const m of mountsOf(JSON.parse(await getText(statusUrl, a)))) {
         const u = new URL(m.url)
         u.protocol = from.protocol
         // setting host alone would keep the mount's own port

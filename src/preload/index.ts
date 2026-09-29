@@ -12,6 +12,7 @@ import {
   type PlaybackApi,
   type PlaylistsApi,
   type RadioApi,
+  type RadioTitle,
   type SendChannel,
   type SettingsApi,
   type WinApi
@@ -105,7 +106,12 @@ const radioApi: RadioApi = {
   remove: (id) => invoke(RadioChannel.remove, id),
   move: (id, by) => invoke(RadioChannel.move, id, by),
   choose: (id, url) => invoke(RadioChannel.choose, id, url),
-  history: (id) => invoke(RadioChannel.history, id)
+  history: (id) => invoke(RadioChannel.history, id),
+  onTitle: (listener) => {
+    const handler = (_: Electron.IpcRendererEvent, title: RadioTitle): void => listener(title)
+    ipcRenderer.on(RadioChannel.title, handler)
+    return () => ipcRenderer.off(RadioChannel.title, handler)
+  }
 }
 
 contextBridge.exposeInMainWorld('win', win)

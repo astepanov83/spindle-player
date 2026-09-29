@@ -1,7 +1,7 @@
 // first, so main's libuv pool is made at this size
 import './pool-size'
 import { join } from 'path'
-import { app, BrowserWindow, nativeTheme, session } from 'electron'
+import { app, BrowserWindow, nativeTheme, net, session } from 'electron'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import {
   LibraryChannel,
@@ -9,7 +9,8 @@ import {
   PlaylistChannel,
   RadioChannel,
   SettingsChannel,
-  WinChannel
+  WinChannel,
+  type RadioTitle
 } from '../shared/ipc'
 import { pageSettings } from '../shared/settings'
 import { stopAllDecoders } from './library/decode'
@@ -17,6 +18,7 @@ import { handleProtocol, registerScheme } from './library/protocol'
 import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
 import { RadioHistoryStore, StationsStore } from './radio/stations-store'
+import { radioStream } from './radio/stream'
 import { PlaylistFile, QueueFile } from './page-files'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
@@ -62,6 +64,10 @@ function createWindow(splash?: Splash): void {
     // a hidden cover window would keep the app running with no window
     library.pause()
   })
+}
+
+function toPage(channel: string, data: unknown): void {
+  if (main && !main.win.isDestroyed()) main.win.webContents.send(channel, data)
 }
 
 // Only the app window's page may use these; see page-ipc.ts.
@@ -162,9 +168,7 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   // Starts reading the index now, while the window loads.
   library = new LibraryService(
     store,
-    (channel, data) => {
-      if (main && !main.win.isDestroyed()) main.win.webContents.send(channel, data)
-    },
+    toPage,
     (moves) => {
       // both, even when the first fails
       const lists = playlists.moveIds(moves)
@@ -173,7 +177,21 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     },
     join(__dirname, '../preload/covers.js')
   )
-  handleProtocol(library)
+  handleProtocol(library, (id, stream) =>
+    radioStream(id, stream, {
+      // 027 adds the stations played from search
+      lookup: (id) => stations.get(id),
+      fetch: (url, init) => net.fetch(url as string, init),
+      onTitle: (stationId, title) => {
+        const at = Date.now()
+        // kept for any station played, not only saved ones
+        radioHistory.add(stationId, title, at)
+        toPage(RadioChannel.title, { stationId, title, at } satisfies RadioTitle)
+      },
+      log: (text) => console.warn(text),
+      userAgent: `Spindle/${app.getVersion()}`
+    })
+  )
 
   // F12 opens DevTools in dev, and Ctrl+R reload is blocked in production.
   app.on('browser-window-created', (_, window) => {

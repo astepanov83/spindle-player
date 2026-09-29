@@ -119,8 +119,17 @@ export const RadioChannel = {
   remove: 'radio:remove',
   move: 'radio:move',
   choose: 'radio:choose',
-  history: 'radio:history'
+  history: 'radio:history',
+  // main to page: a new song title in the stream playing
+  title: 'radio:title'
 } as const
+
+// A title read from the stream's ICY metadata, as main heard it.
+export interface RadioTitle {
+  stationId: string
+  title: string
+  at: number
+}
 
 // What the preload exposes to the page as `window.radioApi`.
 // Main owns My stations and checks every change; each one answers with the list as it is now.
@@ -135,6 +144,8 @@ export interface RadioApi {
   choose(id: string, url: string): Promise<Station[]>
   // the last 50 titles, oldest first
   history(id: string): Promise<HistoryEntry[]>
+  // Returns a function that stops listening.
+  onTitle(listener: (title: RadioTitle) => void): () => void
 }
 
 // Which API method each page-to-main channel carries. The preload's calls and

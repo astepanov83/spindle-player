@@ -1,5 +1,6 @@
 // spindle:// serves covers and audio to the sandboxed page:
 //   spindle://cover/small/<hash>, spindle://cover/large/<hash>, spindle://media/<file id>
+//   spindle://radio/<station id>?stream=<n> (see radio/stream.ts)
 // Only files the index knows are served. The page can't name a path.
 // spindle://media/<file id>?decode asks for the file as WAV decoded by ffmpeg
 // (see decode.ts); files Chromium can't play are always served that way.
@@ -174,13 +175,18 @@ async function media(
   }
 }
 
-export function handleProtocol(lib: LibraryService): void {
+export function handleProtocol(
+  lib: LibraryService,
+  radio: (id: string, stream: string | null) => Promise<Response>
+): void {
   protocol.handle(scheme, async (req) => {
     const url = new URL(req.url)
     const parts = url.pathname.split('/').filter(Boolean)
     if (url.hostname === 'cover' && parts.length === 2) return cover(lib, parts[0], parts[1])
     if (url.hostname === 'media' && parts.length === 1)
       return media(lib, parts[0], req, url.searchParams.has('decode'))
+    if (url.hostname === 'radio' && parts.length === 1)
+      return radio(parts[0], url.searchParams.get('stream'))
     return notFound()
   })
 }

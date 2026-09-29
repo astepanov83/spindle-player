@@ -12,6 +12,7 @@ import {
   type PlaybackApi,
   type PlaylistsApi,
   type RadioApi,
+  type RadioCover,
   type RadioLogo,
   type RadioTitle,
   type SendChannel,
@@ -122,6 +123,11 @@ const radioApi: RadioApi = {
     const handler = (_: Electron.IpcRendererEvent, logo: RadioLogo): void => listener(logo)
     ipcRenderer.on(RadioChannel.logo, handler)
     return () => ipcRenderer.off(RadioChannel.logo, handler)
+  },
+  onCover: (listener) => {
+    const handler = (_: Electron.IpcRendererEvent, cover: RadioCover): void => listener(cover)
+    ipcRenderer.on(RadioChannel.cover, handler)
+    return () => ipcRenderer.off(RadioChannel.cover, handler)
   }
 }
 

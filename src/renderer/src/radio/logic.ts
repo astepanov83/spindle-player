@@ -7,56 +7,11 @@ import {
   type Stream
 } from '../../../shared/stations'
 import type { LastAnswer } from '../../../shared/ipc'
+import { coverUrls } from '../../../shared/library'
+import { parseTitle } from '../../../shared/radio-title'
 
-const entities: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  '#39': "'"
-}
-
-function decodeEntities(s: string): string {
-  return s.replace(/&(amp|lt|gt|quot|apos|#39);/g, (_, k: string) => entities[k])
-}
-
-export interface RadioTitleParts {
-  raw: string
-  // "Artist - Song", without the DJ and show parts
-  track: string
-  artist: string
-  song: string
-  dj: string
-  show: string
-}
-
-// From webmusicmo lib/nowplaying.js. Titles look like
-// "Artist - Song * DJ OnAir * Show name * " (Metal Only), or only
-// "Artist - Song", or have no dash at all (jingles, ads).
-export function parseTitle(raw: string): RadioTitleParts {
-  const text = decodeEntities(raw || '').trim()
-  const parts = text
-    .split('*')
-    .map((p) => p.trim())
-    .filter(Boolean)
-  const track = parts[0] || ''
-  let dj = ''
-  let show = ''
-  for (const part of parts.slice(1)) {
-    const onAir = /^(.*?)\s+OnAir$/i.exec(part)
-    if (onAir && !dj) dj = onAir[1].trim()
-    else if (!show) show = part
-  }
-  let artist = ''
-  let song = track
-  const dash = track.indexOf(' - ')
-  if (dash > 0) {
-    artist = track.slice(0, dash).trim()
-    song = track.slice(dash + 3).trim()
-  }
-  return { raw: text, track, artist, song, dj, show }
-}
+// in shared/, since main looks song covers up by the same parts (ticket 032)
+export { parseTitle, type RadioTitleParts } from '../../../shared/radio-title'
 
 // The stream to start with: the user's choice, else the first. -1 for none.
 export function firstStream(station: Station): number {
@@ -172,6 +127,8 @@ export interface RecentRow {
   song: string
   // the title playing now
   now: boolean
+  // the small cover found for the song (ticket 032), or ''
+  cover: string
 }
 
 // The Queue part's rows while radio plays: newest first. `current` is the
@@ -191,7 +148,8 @@ export function recentRows(
         time: heardAt(e.at, now),
         artist: t.artist,
         song: t.song,
-        now: i === history.length - 1 && e.title === playingNow
+        now: i === history.length - 1 && e.title === playingNow,
+        cover: e.cover ? coverUrls(e.cover.hash).cover : ''
       }
     })
     .reverse()

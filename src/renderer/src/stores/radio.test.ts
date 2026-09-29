@@ -2,9 +2,9 @@
 // next stream after 3 failed retries, and stopping when all streams fail.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EngineError, EngineEvents } from '../audio/engine'
-import type { LastAnswer, RadioLogo, RadioTitle } from '../../../shared/ipc'
+import type { LastAnswer, RadioCover, RadioLogo, RadioTitle } from '../../../shared/ipc'
 import { defaultPalettes, fallbackPalettes } from '../../../shared/palette'
-import type { Station } from '../../../shared/stations'
+import type { HistoryEntry, Station } from '../../../shared/stations'
 
 const fake = vi.hoisted(() => ({
   on: {} as Partial<EngineEvents>,
@@ -57,7 +57,7 @@ const play = vi.fn(async (s: Station) => known(s))
 const choose = vi.fn(async (id: string, url: string) =>
   mine.map((s) => (s.id === id ? { ...s, chosen: url } : s))
 )
-const history = vi.fn(async () => [{ at: 1, title: 'Old - Song' }])
+const history = vi.fn(async (): Promise<HistoryEntry[]> => [{ at: 1, title: 'Old - Song' }])
 // main adds a new station to the end of My stations
 const save = vi.fn(async (s: Station) => [...mine, s])
 const remove = vi.fn(async (id: string) => mine.filter((s) => s.id !== id))
@@ -74,6 +74,7 @@ const lastAnswer = vi.fn(async () => answer)
 const stop = vi.fn()
 let titleListener: ((t: RadioTitle) => void) | undefined
 let logoListener: ((l: RadioLogo) => void) | undefined
+let coverListener: ((c: RadioCover) => void) | undefined
 const log = vi.fn()
 vi.stubGlobal('window', {
   playbackApi: { log, saveQueue: vi.fn(), savePlace: vi.fn(), savePlaying: vi.fn() },
@@ -92,6 +93,10 @@ vi.stubGlobal('window', {
     },
     onLogo: (l: (t: RadioLogo) => void) => {
       logoListener = l
+      return () => {}
+    },
+    onCover: (l: (c: RadioCover) => void) => {
+      coverListener = l
       return () => {}
     }
   }
@@ -499,6 +504,73 @@ describe('the station’s logo', () => {
     await start({ ...mine[0], logo })
     logoListener!({ id: 'a' })
     expect(radio.art?.palette).toEqual(defaultPalettes)
+  })
+})
+
+describe('the song’s cover (ticket 032)', () => {
+  const logoHash = 'a'.repeat(40)
+  const logo = { hash: logoHash, palette: fallbackPalettes('logo') }
+  const cover = { hash: 'b'.repeat(40), palette: fallbackPalettes('song') }
+  // a new station each test, so no history is left from the last one
+  let n = 0
+  let id = ''
+  const fresh = (): Station => ({ ...st(`c${++n}`, [128]), logo })
+  const heard = (title: string, at = 5, stationId = id): void =>
+    titleListener!({ stationId, title, at })
+  beforeEach(() => {
+    id = `c${n + 1}`
+  })
+
+  it('shows the cover main found for the title playing, with its colors', async () => {
+    await start(fresh())
+    heard('Iron Maiden - The Trooper')
+    coverListener!({ stationId: id, title: 'Iron Maiden - The Trooper', cover })
+    expect(radio.art).toEqual({
+      palette: cover.palette,
+      cover: `spindle://cover/small/${cover.hash}`,
+      coverLarge: `spindle://cover/large/${cover.hash}`
+    })
+    // the recent songs' row has it too
+    expect(radio.history.at(-1)?.cover).toEqual(cover)
+  })
+
+  it('goes back to the logo on the next title', async () => {
+    await start(fresh())
+    heard('Iron Maiden - The Trooper')
+    coverListener!({ stationId: id, title: 'Iron Maiden - The Trooper', cover })
+    heard('Station Jingle', 6)
+    expect(radio.art?.cover).toBe(`spindle://cover/small/${logoHash}`)
+    // the row keeps its cover
+    expect(radio.history.at(-2)?.cover).toEqual(cover)
+  })
+
+  it('drops a late answer for a title that changed', async () => {
+    await start(fresh())
+    heard('A - One')
+    heard('B - Two', 6)
+    coverListener!({ stationId: id, title: 'A - One', cover })
+    expect(radio.art?.palette).toEqual(logo.palette)
+    expect(radio.history.some((e) => e.cover)).toBe(false)
+  })
+
+  it('drops an answer for another station', async () => {
+    await start(fresh())
+    heard('A - One')
+    coverListener!({ stationId: 'b', title: 'A - One', cover })
+    expect(radio.art?.palette).toEqual(logo.palette)
+  })
+
+  it('takes the covers that come with main’s history, the title playing too', async () => {
+    history.mockResolvedValueOnce([
+      { at: 1, title: 'Old - Song', cover },
+      { at: 2, title: 'Now - Playing', cover: { ...cover, small: true } }
+    ])
+    await start(fresh())
+    heard('Now - Playing', 3)
+    expect(radio.history[0].cover).toEqual(cover)
+    // a small cover stays off the stage, as a small logo does
+    expect(radio.art?.cover).toBe(`spindle://cover/small/${cover.hash}`)
+    expect(radio.art?.coverLarge).toBe('')
   })
 })
 

@@ -2,6 +2,7 @@
      under a row that gives the player back to the queue (decision 147). -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
+  import Thumb from '../ui/Thumb.svelte'
   import { player } from '../stores/player.svelte'
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
@@ -23,6 +24,9 @@
   // player.playing is radio's wish for sound while radio plays
   const rows = $derived(recentRows(radio.history, player.playing ? radio.title : undefined, now))
   const note = $derived(backNote(queue.from, queue.items.length))
+  // the cover column shows only once a song has one (ticket 032): with the
+  // setting off, rows keep their width for the text
+  const thumbs = $derived(rows.some((r) => r.cover))
 </script>
 
 <div class="body">
@@ -35,9 +39,12 @@
     <p class="empty">Songs this station plays show up here.</p>
   {/if}
   {#each rows as r (r.key)}
-    <!-- 032 puts the song's cover in front of the text -->
-    <div class="rrow" class:cur-row={r.now}>
+    <!-- a song with no cover found (a jingle, a miss) leaves its place empty -->
+    <div class="rrow" class:cur-row={r.now} class:thumbs>
       <span class="t">{r.time}</span>
+      {#if thumbs}
+        {#if r.cover}<Thumb src={r.cover} size={40} />{:else}<span></span>{/if}
+      {/if}
       <span class="qt">
         <span class="nm" title={r.song}>{r.song}</span>
         {#if r.artist}<span class="ar" title={r.artist}>{r.artist}</span>{/if}
@@ -89,6 +96,9 @@
     align-items: center;
     padding: 8px 12px;
     border-radius: 10px;
+  }
+  .rrow.thumbs {
+    grid-template-columns: 48px 40px 1fr auto;
   }
   /* what plays now, tinted like the queue's current song */
   .rrow.cur-row {

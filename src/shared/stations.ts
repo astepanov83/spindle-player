@@ -54,6 +54,16 @@ export interface SavedStations {
 export interface HistoryEntry {
   at: number
   title: string
+  // the song's cover found online (ticket 032); only in main's answer, never in the file
+  cover?: SongCover
+}
+
+// A radio song's cover, found online and made into the cover cache by main
+// (ticket 032). small: under 64px, left off the stage like a small logo.
+export interface SongCover {
+  hash: string
+  palette: ThemePalettes
+  small?: boolean
 }
 
 export interface RadioHistory {
@@ -245,6 +255,12 @@ export function stationArt(s: Station): Art {
     cover: urls.cover,
     coverLarge: s.logo.small ? '' : urls.coverLarge
   }
+}
+
+// A song's cover as the stage, the colors and the media controls take it.
+export function songArt(c: SongCover): Art {
+  const urls = coverUrls(c.hash)
+  return { palette: c.palette, cover: urls.cover, coverLarge: c.small ? '' : urls.coverLarge }
 }
 
 // Adds streams found on the server. A stream with the same bitrate and codec as

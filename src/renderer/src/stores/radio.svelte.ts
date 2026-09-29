@@ -2,9 +2,11 @@
 // drops. See work/specs/radio.md, "Playing a live stream". The moves are plain
 // functions in radio/logic.ts; playing.svelte.ts says when radio has the player.
 import type { Art } from '../../../shared/library'
-import type { RadioLogo, RadioTitle } from '../../../shared/ipc'
+import type { RadioCover, RadioLogo, RadioTitle } from '../../../shared/ipc'
 import {
   addEntry,
+  historyTitle,
+  songArt,
   stationArt,
   withLogo,
   type HistoryEntry,
@@ -39,8 +41,15 @@ class RadioStore {
   now = $derived(parseTitle(this.title))
   // the station's last titles, oldest first
   history: HistoryEntry[] = $state.raw([])
-  // the logo as a cover (ticket 030); a tile in the fixed colors until main made it
-  art: Art | undefined = $derived(this.station && stationArt(this.station))
+  // The cover main found for the title playing (ticket 032), else the logo as a
+  // cover (ticket 030), a tile in the fixed colors until main made it. The
+  // cover is kept on the title's history entry, so the row shows it too.
+  art: Art | undefined = $derived.by(() => {
+    if (!this.station) return undefined
+    const last = this.history.at(-1)
+    const song = this.title && last?.title === historyTitle(this.title) ? last.cover : undefined
+    return song ? songArt(song) : stationArt(this.station)
+  })
   // the station is in My stations; else the controls offer Save
   saved = $derived(!!this.station && this.stations.some((s) => s.id === this.station!.id))
 
@@ -110,6 +119,7 @@ class RadioStore {
     this.#listening = true
     window.radioApi.onTitle((t) => this.#heard(t))
     window.radioApi.onLogo((l) => this.#logo(l))
+    window.radioApi.onCover((c) => this.#cover(c))
   }
 
   // Picked but not playing: after a restart.
@@ -346,6 +356,14 @@ class RadioStore {
   #logo({ id, logo }: RadioLogo): void {
     this.stations = this.stations.map((s) => (s.id === id ? withLogo(s, logo) : s))
     if (this.station?.id === id) this.station = withLogo(this.station, logo)
+  }
+
+  // Only for the title playing: an answer for one that changed since is dropped.
+  #cover({ stationId, title, cover }: RadioCover): void {
+    if (stationId !== this.station?.id || title !== this.title) return
+    const last = this.history.at(-1)
+    if (last?.title !== historyTitle(title)) return
+    this.history = [...this.history.slice(0, -1), { ...last, cover }]
   }
 
   #heard(t: RadioTitle): void {

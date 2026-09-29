@@ -12,6 +12,7 @@ import {
   RadioChannel,
   SettingsChannel,
   WinChannel,
+  type RadioCover,
   type RadioLogo,
   type RadioTitle
 } from '../shared/ipc'
@@ -30,6 +31,7 @@ import { RadioBrowser, resolveMirrors } from './radio/radio-browser'
 import { ResultLogos } from './radio/result-logos'
 import { RadioHistoryStore, StationsStore } from './radio/stations-store'
 import { RadioStreams, radioStream } from './radio/stream'
+import { foundHashes, openSongCovers, SongCovers } from './radio/song-covers'
 import { PlaylistFile, QueueFile } from './page-files'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
@@ -50,6 +52,9 @@ let logos: StationLogos
 // Radio Browser search and click counts, and the logos of its results (ticket 029)
 let radioBrowser: RadioBrowser
 let resultLogos: ResultLogos
+// the covers of songs playing on the radio (ticket 032)
+let songCovers: SongCovers
+let songCoverFile: ReturnType<typeof openSongCovers> | undefined
 // counts searches, so only the newest one's rows get logos
 let searches = 0
 const radioStreams = new RadioStreams()
@@ -127,8 +132,11 @@ page.on(SettingsChannel.save, (_, raw, toFile) => {
   if (
     next.fetchCovers !== before.fetchCovers ||
     JSON.stringify(next.coverSources) !== JSON.stringify(before.coverSources)
-  )
+  ) {
+    // first, so the library process has the new setting before a song lookup
     library.setFetch(next.fetchCovers, next.coverSources)
+    songCovers.settingChanged()
+  }
 })
 
 page.handle(LibraryChannel.load, () => library.load())
@@ -157,7 +165,15 @@ page.handle(RadioChannel.remove, (_, id) => {
 })
 page.handle(RadioChannel.move, (_, id, by) => stations.move(id, by))
 page.handle(RadioChannel.choose, (_, id, url) => stations.choose(id, url))
-page.handle(RadioChannel.history, (_, id) => (typeof id === 'string' ? radioHistory.get(id) : []))
+// with the covers found for its songs, for the recent songs' rows
+page.handle(RadioChannel.history, (_, id) =>
+  typeof id === 'string'
+    ? radioHistory.get(id).map((e) => {
+        const cover = songCovers.known(e.title)
+        return cover ? { ...e, cover } : e
+      })
+    : []
+)
 page.handle(RadioChannel.play, async (_, station) => {
   const known = await played.play(station)
   // the click is counted when a stream opens, behind the answer
@@ -227,6 +243,14 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   const radioFetch: typeof fetch = (url, init) => net.fetch(url as string, init)
   const radioLog = (text: string): void => console.warn(text)
   const radioAgent = `Spindle/${app.getVersion()}`
+  // before the library starts, so its first prune keeps these covers
+  const songFile = openSongCovers(
+    join(userData, 'radio-covers.json'),
+    radioHistory.titles(),
+    Date.now(),
+    radioLog
+  )
+  songCoverFile = songFile
   played = new PlayedStations(
     stations,
     (station) => findStreams(station, { fetch: radioFetch, log: radioLog }),
@@ -246,8 +270,11 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
       return lists && queue
     },
     join(__dirname, '../preload/covers.js'),
-    // asked at once for the start data, before logos is made
-    () => keptLogos(stations.list(), logos ? logos.keptThisRun() : new Set())
+    // asked at once for the start data, before logos and songCovers are made
+    () => [
+      ...keptLogos(stations.list(), logos ? logos.keptThisRun() : new Set()),
+      ...(songCovers ? songCovers.hashes() : foundHashes(songFile.map))
+    ]
   )
   logos = new StationLogos({
     load: async (source) =>
@@ -261,6 +288,18 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   // Metal Only's logo ships with the app: made at start from the file, so My
   // stations shows it before it is played (no request)
   for (const s of stations.list()) if (needsBundledLogo(s)) void logos.update(s, setLogo)
+  songCovers = new SongCovers({
+    // live: with settings.json unreadable, the page's choice still counts this run
+    setting: () => ({ on: store.live().fetchCovers, sources: store.live().coverSources }),
+    find: (q, signal) => library.songCover(q, signal),
+    cache: library.covers,
+    map: songFile.map,
+    save: songFile.save,
+    kept: () => library.coversKept(),
+    send: (c) => toPage(RadioChannel.cover, c satisfies RadioCover),
+    log: radioLog,
+    now: Date.now
+  })
   radioBrowser = new RadioBrowser({
     fetch: radioFetch,
     mirrors: () => resolveMirrors(dns),
@@ -284,6 +323,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
         // kept for any station played, not only saved ones
         radioHistory.add(stationId, title, at)
         toPage(RadioChannel.title, { stationId, title, at } satisfies RadioTitle)
+        // after the title, so the page has it when the cover comes
+        songCovers.heard(stationId, title, played.lookup(stationId)?.name ?? '')
       },
       log: radioLog,
       streams: radioStreams,
@@ -324,6 +365,7 @@ app.on('will-quit', (e) => {
   savedQueue?.flushSync()
   stations?.flushSync()
   radioHistory?.flushSync()
+  songCoverFile?.flushSync()
   if (!library || libraryFlushed) return
   e.preventDefault()
   void library.flush().then(() => {

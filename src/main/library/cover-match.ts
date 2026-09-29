@@ -97,14 +97,19 @@ function credits(s: string): string[] {
 }
 
 function artistMatches(q: CoverQuery, found: string): boolean {
+  if (q.compilation) return various.has(cleanArtist(found))
+  return sameArtist(q.artist, found)
+}
+
+// Ours and the service's artist are one: equal after cleanup, or one is a
+// joint credit holding the other. A name that only contains the other
+// ("Кино Фильм" for "Кино") is another artist. Radio song covers use it too.
+export function sameArtist(ours: string, found: string): boolean {
   const f = cleanArtist(found)
-  if (q.compilation) return various.has(f)
-  const a = cleanArtist(q.artist)
+  const a = cleanArtist(ours)
   if (!a || !f) return false
   if (a === f) return true
-  // one is a joint credit holding the other; a name that only contains the
-  // other ("Кино Фильм" for "Кино") is another artist
-  return credits(found).includes(a) || credits(q.artist).includes(f)
+  return credits(found).includes(a) || credits(ours).includes(f)
 }
 
 // Many compilations share a title ("Love Songs"), so one is taken only when

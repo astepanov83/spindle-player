@@ -17,6 +17,7 @@ import {
   stepStation,
   streamChoices
 } from './logic'
+import { fallbackPalettes } from '../../../shared/palette'
 
 describe('parseTitle (from webmusicmo)', () => {
   it('splits "artist - song * dj OnAir * show *" into parts', () => {
@@ -183,6 +184,18 @@ describe('recent songs (031)', () => {
     const history = [{ at: now, title: 'A - B' }]
     expect(recentRows(history, undefined, now)[0].now).toBe(false)
     expect(recentRows(history, 'C - D', now)[0].now).toBe(false)
+  })
+
+  it('gives a row the small cover found for its song, and none to the others (ticket 032)', () => {
+    const cover = { hash: 'b'.repeat(40), palette: fallbackPalettes('x') }
+    const history = [
+      { at: now - 1, title: 'Station Jingle' },
+      { at: now, title: 'A - B', cover }
+    ]
+    expect(recentRows(history, 'A - B', now).map((r) => r.cover)).toEqual([
+      `spindle://cover/small/${'b'.repeat(40)}`,
+      ''
+    ])
   })
 
   it('marks a title too long for the file, which keeps it cut', () => {

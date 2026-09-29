@@ -139,6 +139,11 @@ export class RadioHistoryStore {
     return this.#data.byStation[id] ?? []
   }
 
+  // Every station's titles, for the song covers kept (ticket 032).
+  titles(): string[] {
+    return Object.values(this.#data.byStation).flatMap((list) => list.map((e) => e.title))
+  }
+
   add(id: string, title: string, at = this.now()): void {
     const next = pruneHistory(addTitle(this.#data, id, title, at), this.isSaved, this.now())
     if (next === this.#data) return

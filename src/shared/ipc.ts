@@ -4,7 +4,7 @@ import type { ScanStatus } from './library'
 import type { Playlist } from './playlists'
 import type { QueuePlace, SavedPlaying, SavedQueue } from './saved-queue'
 import type { Settings } from './settings'
-import type { HistoryEntry, Station, StationLogo } from './stations'
+import type { HistoryEntry, SongCover, Station, StationLogo } from './stations'
 
 // Channel names used by both main and preload, so a typo is a type error.
 export const WinChannel = {
@@ -130,7 +130,9 @@ export const RadioChannel = {
   // main to page: a new song title in the stream playing
   title: 'radio:title',
   // main to page: main made or dropped a station's logo (ticket 030)
-  logo: 'radio:logo'
+  logo: 'radio:logo',
+  // main to page: the cover of the song playing, found online (ticket 032)
+  cover: 'radio:cover'
 } as const
 
 // A title read from the stream's ICY metadata, as main heard it.
@@ -145,6 +147,15 @@ export interface RadioTitle {
 export interface RadioLogo {
   id: string
   logo?: StationLogo
+}
+
+// The cover main found for a title of the stream playing. Sent only while
+// that title is the station's newest; a title with none found gets nothing.
+export interface RadioCover {
+  stationId: string
+  // as sent with radio:title
+  title: string
+  cover: SongCover
 }
 
 // Radio Browser's stations for a search, grouped, best voted first (ticket
@@ -189,6 +200,8 @@ export interface RadioApi {
   onTitle(listener: (title: RadioTitle) => void): () => void
   // Main fetches a logo when a station is saved or played, after it answered.
   onLogo(listener: (logo: RadioLogo) => void): () => void
+  // A song's cover, when "Find missing covers online" found one.
+  onCover(listener: (cover: RadioCover) => void): () => void
 }
 
 // Which API method each page-to-main channel carries. The preload's calls and

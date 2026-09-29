@@ -24,7 +24,8 @@
   </label>
   {#if settings.fetchCovers}
     <p class="hint">
-      Sends artist and album names to the services below. Artist photos come from Deezer.
+      Sends artist and album names, and the songs radio plays, to the services below. Artist photos
+      come from Deezer; radio song covers from Deezer and iTunes.
     </p>
     <div class="sources">
       {#each coverSources as s (s)}

@@ -226,6 +226,17 @@ export class LibraryService {
     return (await this.#client.ask({ type: 'find-track', id })).media
   }
 
+  // A radio song's cover from the online lookup (ticket 032): the picture,
+  // not found, or later (a failure, the setting off, or stopped by `signal`).
+  async songCover(
+    q: { artist: string; song: string },
+    signal: AbortSignal
+  ): Promise<Uint8Array | 'none' | 'later'> {
+    const r = await this.#client.ask({ type: 'song-cover', ...q }, signal)
+    if (r.song === 'found' && r.data) return r.data
+    return r.song === 'none' ? 'none' : 'later'
+  }
+
   // The picture a cover hash was made from, to make the large size.
   async coverSource(hash: string): Promise<Uint8Array | undefined> {
     return (await this.#client.ask({ type: 'cover-source', hash })).data

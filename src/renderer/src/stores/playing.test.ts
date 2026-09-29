@@ -48,7 +48,8 @@ vi.stubGlobal('window', {
     lastAnswer: async () => undefined,
     stop: () => {},
     onTitle: () => () => {},
-    onLogo: () => () => {}
+    onLogo: () => () => {},
+    onCover: () => () => {}
   }
 })
 

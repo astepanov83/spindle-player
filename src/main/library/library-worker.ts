@@ -48,6 +48,7 @@ import { pictureWithHash } from './cover-source'
 import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from './cover-names'
 import { CoverFetcher } from './cover-fetch'
+import { findSongCover } from './song-cover'
 import { PublishTimer } from './publish'
 import { diffLibrary, type LibraryMessage } from '../../shared/library-patch'
 import { CoverHttp, defaultLimits, NetError } from './cover-http'
@@ -208,7 +209,39 @@ const abortableSleep = (ms: number, signal: AbortSignal): Promise<void> =>
 function setFetch(on: boolean, sources: Record<CoverSource, boolean>): void {
   fetchSetting = { on, sources }
   fetcher?.setOptions(on, sources)
-  if (!on) setStatus({ fetch: undefined })
+  if (!on) {
+    setStatus({ fetch: undefined })
+    stopSongLookups()
+  }
+}
+
+// --- radio song covers (ticket 032) ---
+
+// the album lookup's, so both keep to the same limits
+let http: CoverHttp | undefined
+// song cover lookups running, by main's request number
+const songLookups = new Map<number, AbortController>()
+
+function stopSongLookups(): void {
+  for (const stop of songLookups.values()) stop.abort()
+}
+
+// Looks the song up with the setting as it is now; main makes the cover.
+async function songCover(req: number, artist: string, song: string): Promise<void> {
+  const s = fetchSetting
+  if (!s?.on || !http || closing) return post({ type: 'reply', req, song: 'later' })
+  const stop = new AbortController()
+  songLookups.set(req, stop)
+  try {
+    const r = await findSongCover(http, s.sources, { artist, song }, stop.signal)
+    if (typeof r === 'string') post({ type: 'reply', req, song: r })
+    else post({ type: 'reply', req, song: 'found', data: r.data })
+  } catch (e) {
+    if (!stop.signal.aborted) log(`Song cover lookup failed: ${e}`)
+    post({ type: 'reply', req, song: 'later' })
+  } finally {
+    songLookups.delete(req)
+  }
 }
 
 // the downloaded pictures, to make the large cover from
@@ -230,13 +263,14 @@ async function startFetcher(s: WorkerStart): Promise<void> {
       (e) => log(`Could not save ${s.fetchedPath}: ${e}`),
       0
     )
+  http = new CoverHttp({
+    fetch: (u, i) => fetch(u, i),
+    sleep: abortableSleep,
+    userAgent: s.userAgent,
+    limits: defaultLimits()
+  })
   fetcher = new CoverFetcher({
-    http: new CoverHttp({
-      fetch: (u, i) => fetch(u, i),
-      sleep: abortableSleep,
-      userAgent: s.userAgent,
-      limits: defaultLimits()
-    }),
+    http,
     addCover: addFetchedCover,
     // with no source picture there is no large cover, so it is downloaded again
     hasCover: (h) => cached.has(h) && sources.has(h),
@@ -764,6 +798,15 @@ port.on('message', (e: Electron.MessageEvent) => {
     case 'fetch-covers':
       setFetch(m.on, m.sources)
       break
+    case 'song-cover':
+      ready.then(
+        () => songCover(m.req, m.artist, m.song),
+        () => post({ type: 'reply', req: m.req, song: 'later' })
+      )
+      break
+    case 'cancel':
+      songLookups.get(m.req)?.abort()
+      break
     case 'artist-overrides':
       void ready.then(() => setOverrides(m.changes))
       break
@@ -780,6 +823,7 @@ port.on('message', (e: Electron.MessageEvent) => {
     case 'stop':
       chain.stop()
       fetcher?.hold()
+      stopSongLookups()
       break
     case 'cover-done':
       sent.delete(m.hash)
@@ -824,6 +868,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       saveIndex()
       writer?.flushSync()
       fetcher?.hold()
+      stopSongLookups()
       fetchedWriter?.flushSync()
       overridesWriter?.flushSync()
       closing = true

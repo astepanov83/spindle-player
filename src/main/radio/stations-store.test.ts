@@ -187,6 +187,13 @@ describe('RadioHistoryStore', () => {
     expect(again.get('fresh')).toHaveLength(1)
   })
 
+  it('lists every station’s titles, for the song covers kept (ticket 032)', () => {
+    const h = new RadioHistoryStore(hpath(), () => true)
+    h.add('a', 'A - One', 1)
+    h.add('b', 'B - Two', 2)
+    expect(h.titles().sort()).toEqual(['A - One', 'B - Two'])
+  })
+
   it('keeps a broken file aside and starts empty', () => {
     writeFileSync(hpath(), 'nope')
     const h = new RadioHistoryStore(hpath(), () => true)

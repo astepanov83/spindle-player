@@ -70,6 +70,24 @@ describe('LibraryClient requests', () => {
     })
   })
 
+  it('tells the process to stop a song cover lookup the caller gave up on (ticket 032)', async () => {
+    const { client, sent } = setup()
+    const stop = new AbortController()
+    const r = client.ask({ type: 'song-cover', artist: 'A', song: 'B' }, stop.signal)
+    const req = (sent[0] as { req: number }).req
+    stop.abort()
+    expect(sent[1]).toEqual({ type: 'cancel', req })
+    client.onMessage({ type: 'reply', req, song: 'later' })
+    expect((await r).song).toBe('later')
+    // one that answered already is not stopped
+    const done = new AbortController()
+    const r2 = client.ask({ type: 'song-cover', artist: 'A', song: 'B' }, done.signal)
+    client.onMessage({ type: 'reply', req: req + 1, song: 'none' })
+    await r2
+    done.abort()
+    expect(sent).toHaveLength(3)
+  })
+
   it('answers empty when the process dies first', async () => {
     const { client } = setup()
     const r = client.ask({ type: 'get-library' })

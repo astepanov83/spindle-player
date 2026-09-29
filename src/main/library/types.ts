@@ -158,6 +158,11 @@ export type WorkerIn =
   | { type: 'artist-overrides'; changes: ArtistChanges }
   // the covers main uses changed (station logos); the prune keeps them
   | { type: 'keep-covers'; hashes: string[] }
+  // the cover of a song playing on the radio (ticket 032), looked up only
+  // while the online cover setting is on; answered with `song`
+  | { type: 'song-cover'; req: number; artist: string; song: string }
+  // main gave up on an ask (a new title came): stop it
+  | { type: 'cancel'; req: number }
 
 // the library process to main
 export type WorkerOut =
@@ -167,7 +172,14 @@ export type WorkerOut =
   // a picture main should resize into the cover cache and pick the palette of;
   // with paletteOnly, a cached small cover that only needs its palette
   | { type: 'cover'; hash: string; data: Uint8Array; paletteOnly?: boolean }
-  | { type: 'reply'; req: number; media?: MediaInfo; data?: Uint8Array }
+  // song: a song cover lookup's outcome; found comes with the picture in data
+  | {
+      type: 'reply'
+      req: number
+      media?: MediaInfo
+      data?: Uint8Array
+      song?: 'found' | 'none' | 'later'
+    }
   | { type: 'log'; text: string }
   | { type: 'flushed' }
   // a scan ran to the end or failed; a stopped one sends nothing

@@ -16,6 +16,7 @@ export type Ask =
   | { type: 'find-track'; id: string }
   | { type: 'cover-source'; hash: string }
   | { type: 'get-library' }
+  | { type: 'song-cover'; artist: string; song: string }
 
 // What the page gets when the process can't give it a library.
 // No epoch a process makes, so a patch from a process that comes back later
@@ -85,14 +86,23 @@ export class LibraryClient {
   }
 
   // An answer from the process; an empty one if there is none or it dies first.
-  ask(m: Ask): Promise<Reply> {
+  // An abort before the answer tells the process to stop; the answer still comes.
+  ask(m: Ask, signal?: AbortSignal): Promise<Reply> {
     const req = ++this.#nextReq
     return new Promise<Reply>((r) => {
       this.#replies.set(req, r)
       if (!this.o.post({ ...m, req })) {
         this.#replies.delete(req)
         r({ type: 'reply', req })
+        return
       }
+      signal?.addEventListener(
+        'abort',
+        () => {
+          if (this.#replies.has(req)) this.o.post({ type: 'cancel', req })
+        },
+        { once: true }
+      )
     })
   }
 

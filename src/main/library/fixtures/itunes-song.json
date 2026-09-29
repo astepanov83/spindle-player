@@ -1,0 +1,66 @@
+{
+  "resultCount": 6,
+  "results": [
+    {
+      "wrapperType": "track",
+      "kind": "song",
+      "artistName": "Iron Maiden",
+      "collectionName": "Piece of Mind (2015 Remaster)",
+      "trackName": "The Trooper (2015 Remaster)",
+      "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/f8/cd/38/f8cd3816-a840-209a-e9f6-cf3f3e47da21/0881034134455.jpg/100x100bb.jpg",
+      "releaseDate": "1983-05-16T12:00:00Z",
+      "trackCount": 9
+    },
+    {
+      "wrapperType": "track",
+      "kind": "song",
+      "artistName": "Iron Maiden",
+      "collectionName": "Stranger Things: Soundtrack from the Netflix Series, Season 5",
+      "collectionArtistName": "Various Artists",
+      "trackName": "The Trooper",
+      "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/7a/d3/cf/7ad3cf5d-c594-ff05-f3ca-d7a9d2d123bb/196873833422.jpg/100x100bb.jpg",
+      "releaseDate": "1999-09-21T12:00:00Z",
+      "trackCount": 14
+    },
+    {
+      "wrapperType": "track",
+      "kind": "song",
+      "artistName": "Iron Maiden",
+      "collectionName": "En Vivo! (Live At Estadio Nacional, Santiago)",
+      "trackName": "The Trooper (Live At Estadio Nacional, Santiago)",
+      "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/24/33/5a/24335ab6-404c-419e-f79d-2f7dfaa30685/0602527979274.jpg/100x100bb.jpg",
+      "releaseDate": "2012-03-23T12:00:00Z",
+      "trackCount": 9
+    },
+    {
+      "wrapperType": "track",
+      "kind": "song",
+      "artistName": "Iron Maiden",
+      "collectionName": "Live After Death",
+      "trackName": "The Trooper ((Live Long Beach Arena) [2015 Remaster])",
+      "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/a9/d8/35/a9d835e1-782a-1c7e-ce4f-e3262bc13e36/0881034134479.jpg/100x100bb.jpg",
+      "releaseDate": "1982-03-22T12:00:00Z",
+      "trackCount": 13
+    },
+    {
+      "wrapperType": "track",
+      "kind": "song",
+      "artistName": "Iron Maiden",
+      "collectionName": "Death On the Road",
+      "trackName": "The Trooper (Live Dortmund, Germany)",
+      "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/6a/f2/01/6af20110-3a0e-4137-fb68-4a67ae787945/0602527778006.jpg/100x100bb.jpg",
+      "releaseDate": "2005-08-29T12:00:00Z",
+      "trackCount": 9
+    },
+    {
+      "wrapperType": "track",
+      "kind": "song",
+      "artistName": "Iron Maiden",
+      "collectionName": "The Book of Souls: Live Chapter",
+      "trackName": "The Trooper (Live at Estadio Jorge Magico Gonzalez, San Salvador, El Salvador – Sunday 6th March 2016)",
+      "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/8a/c9/ea/8ac9eae2-176c-67b9-8a74-7263938e1928/4050538321272.jpg/100x100bb.jpg",
+      "releaseDate": "2017-11-17T12:00:00Z",
+      "trackCount": 15
+    }
+  ]
+}

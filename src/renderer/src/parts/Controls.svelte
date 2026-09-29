@@ -9,7 +9,7 @@
   import { fmtTime } from '../format'
   import { layout } from '../stores/layout.svelte'
   import { player } from '../stores/player.svelte'
-  import { queue } from '../stores/queue.svelte'
+  import { playing } from '../stores/playing.svelte'
   import { settings } from '../stores/settings.svelte'
 
   let { style }: { style: 'stack' | 'bar' } = $props()
@@ -27,11 +27,11 @@
 {#if style === 'bar'}
   <div class="ctl bar">
     <div class="bl">
-      <div class="minicv"><Cover src={queue.currentArt?.cover} /></div>
+      <div class="minicv"><Cover src={playing.art?.cover} /></div>
       <div class="meta">
-        {#if queue.current}
-          <div class="song-title">{queue.current.title}</div>
-          <div class="song-sub">{queue.current.artist} · {queue.current.album}</div>
+        {#if playing.title}
+          <div class="song-title">{playing.title}</div>
+          <div class="song-sub">{playing.sub}</div>
         {:else}
           <div class="song-title">Nothing playing</div>
         {/if}

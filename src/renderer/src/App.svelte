@@ -12,9 +12,11 @@
     setupMediaSession,
     showInMediaSession,
     showPositionInMediaSession,
+    showSeekInMediaSession,
     showStateInMediaSession
   } from './stores/media-session'
-  import { togglePlay, player } from './stores/player.svelte'
+  import { player } from './stores/player.svelte'
+  import { playing } from './stores/playing.svelte'
   import { queue } from './stores/queue.svelte'
   import { settings, settingsState } from './stores/settings.svelte'
   import { theme } from './stores/theme.svelte'
@@ -22,7 +24,7 @@
   import { setLook } from './visualizer/loop'
 
   // each cover has a palette per theme; the light one has a darker accent
-  const palettes = $derived(queue.currentArt?.palette ?? defaultPalettes)
+  const palettes = $derived(playing.art?.palette ?? defaultPalettes)
   const palette = $derived(palettes[theme.light ? 'light' : 'dark'])
 
   $effect(() => engine.setVolume(settings.volume))
@@ -40,7 +42,8 @@
   $effect(() => window.playbackApi.playing(player.playing))
 
   setupMediaSession()
-  $effect(() => showInMediaSession(queue.current, queue.currentArt))
+  $effect(() => showInMediaSession(playing.media, playing.art))
+  $effect(() => showSeekInMediaSession(playing.kind))
   $effect(() => showStateInMediaSession())
   $effect(() => showPositionInMediaSession(player.pos, player.duration))
 
@@ -64,7 +67,7 @@
     if (e.ctrlKey || e.altKey || e.metaKey) return
     if (e.code === 'Space' && t.tagName !== 'BUTTON') {
       e.preventDefault()
-      togglePlay()
+      playing.togglePlay()
     }
     if (e.key === 'v') layout.cycleVisualizer()
     if (e.key === 'q') layout.toggleQueue()

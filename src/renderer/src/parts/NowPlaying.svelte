@@ -1,6 +1,6 @@
 <script lang="ts">
   import Stage from '../visualizer/Stage.svelte'
-  import { queue } from '../stores/queue.svelte'
+  import { playing } from '../stores/playing.svelte'
 
   let { style }: { style: 'panel' | 'full' } = $props()
 </script>
@@ -8,9 +8,9 @@
 <div class="np {style}">
   <Stage />
   <div class="meta">
-    {#if queue.current}
-      <div class="song-title">{queue.current.title}</div>
-      <div class="song-sub">{queue.current.artist} · {queue.current.album}</div>
+    {#if playing.title}
+      <div class="song-title">{playing.title}</div>
+      <div class="song-sub">{playing.sub}</div>
     {:else}
       <div class="song-title">Nothing playing</div>
       <div class="song-sub">Pick an album or a song to start</div>

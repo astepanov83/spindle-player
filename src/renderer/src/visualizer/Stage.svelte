@@ -6,7 +6,7 @@
 <script lang="ts">
   import Cover from '../ui/Cover.svelte'
   import { layout } from '../stores/layout.svelte'
-  import { queue } from '../stores/queue.svelte'
+  import { playing } from '../stores/playing.svelte'
   import { settings } from '../stores/settings.svelte'
   import { addStage } from './loop'
 
@@ -50,7 +50,7 @@
   {#if cover}
     <!-- the cover changes size with the style, so draw again when it settles -->
     <div class="cover" bind:this={coverEl} ontransitionend={() => handle?.moved()}>
-      <div class="img"><Cover src={queue.currentArt?.coverLarge} /></div>
+      <div class="img"><Cover src={playing.art?.coverLarge} /></div>
     </div>
   {/if}
   <div class="vz-label" class:show={layout.vzLabel}>{names[settings.visualizer]}</div>

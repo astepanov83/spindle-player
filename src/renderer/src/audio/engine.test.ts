@@ -306,3 +306,50 @@ describe('a file Chromium can’t read', () => {
     expect(el.currentTime).toBe(50)
   })
 })
+
+describe('a live stream', () => {
+  const radio = 'spindle://radio/metal-only?stream=0'
+
+  it('fails at once with the element’s error: no ?decode, no HEAD', async () => {
+    e.load(radio, 0, undefined, { live: true })
+    e.play()
+    el.error = { code: 4, message: 'DEMUXER_ERROR_COULD_NOT_OPEN' }
+    el.fire('error')
+    await vi.runAllTimersAsync()
+    expect(el.loads).toEqual([radio])
+    expect(heads).toEqual([])
+    expect(got).toEqual(['error 4'])
+  })
+
+  it('sends no length', () => {
+    e.load(radio, 0, undefined, { live: true })
+    el.meta(Infinity)
+    el.duration = 12
+    el.fire('durationchange')
+    expect(got.filter((g) => g.startsWith('duration'))).toEqual([])
+  })
+
+  it('sends waiting', () => {
+    const waits: string[] = []
+    e.on({ waiting: () => waits.push('waiting') })
+    e.load(radio, 0, undefined, { live: true })
+    el.fire('waiting')
+    expect(waits).toEqual(['waiting'])
+  })
+
+  it('opens a new connection when loaded again, even at the same address', () => {
+    e.load(radio, 0, undefined, { live: true })
+    e.load(radio, 0, undefined, { live: true })
+    expect(el.loads).toEqual([radio, radio])
+  })
+
+  it('a song loaded after it is a file again', async () => {
+    e.load(radio, 0, undefined, { live: true })
+    e.load('spindle://media/wav', 0)
+    el.error = { code: 4, message: '' }
+    el.fire('error')
+    expect(el.loads.at(-1)).toBe('spindle://media/wav?decode')
+    el.meta(100)
+    expect(got).toContain('duration 100')
+  })
+})

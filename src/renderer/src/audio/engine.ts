@@ -9,6 +9,9 @@
 // ticket 012). Times in and out of the engine are then from the part's start,
 // and `ended` comes at the part's end. The next part of the same file carries
 // on without a reload (continueWith), so there is no gap between them.
+//
+// A radio stream is loaded with { live: true } (ticket 027): it has no length,
+// and its errors go straight to the radio store, which reconnects.
 
 export type EngineError = {
   // MediaError code: 2 network, 3 decode, 4 format not supported
@@ -35,6 +38,13 @@ export interface EngineEvents {
   // play() was refused (for example NotAllowedError); not the song's fault
   refused(message: string): void
   error(e: EngineError): void
+  // no data to play for now; the radio store sees a stall by it
+  waiting(): void
+}
+
+export interface LoadOptions {
+  // a radio stream: no ?decode retry, no HEAD, no length
+  live?: boolean
 }
 
 import { gain } from './volume'
@@ -88,6 +98,7 @@ export class AudioEngine {
   #endTimer: ReturnType<typeof setTimeout> | undefined
   // play() was asked for last, not pause()
   #wantPlay = false
+  #live = false
 
   constructor() {
     const el = new Audio()
@@ -141,10 +152,16 @@ export class AudioEngine {
       this.#on.seeked?.()
       this.#watchEnd()
     })
+    el.addEventListener('waiting', () => this.#on.waiting?.())
     el.addEventListener('error', () => {
       // an error with no source is our own clear(), not a bad file
       if (!el.getAttribute('src')) return
       const e = el.error
+      // a stream can't be decoded by ffmpeg or asked with a HEAD: the radio store decides
+      if (this.#live) {
+        this.#on.error?.({ code: e?.code ?? 0, message: e?.message ?? '', gone: false })
+        return
+      }
       // Chromium can't read it (3 decode, 4 format): once more, decoded by ffmpeg
       if ((e?.code === 3 || e?.code === 4) && !this.#decoding && this.#url) {
         this.#decoding = true
@@ -174,6 +191,8 @@ export class AudioEngine {
   }
 
   #sendDuration(): void {
+    // a stream's length is Infinity
+    if (this.#live) return
     const { start, end } = this.#part
     if (end !== undefined) this.#on.duration?.(end - start)
     else if (Number.isFinite(this.el.duration)) this.#on.duration?.(this.el.duration - start)
@@ -205,9 +224,11 @@ export class AudioEngine {
 
   // Starts loading a song, `at` seconds into it (into `part`, if it is a part
   // of the file). Call play() to hear it. Another part of the file already
-  // loaded is only a seek.
-  load(url: string, at = 0, part: Part = wholeFile): void {
-    const same = url === this.#url && this.loaded && !this.el.error
+  // loaded is only a seek. A live stream always opens a new connection.
+  load(url: string, at = 0, part: Part = wholeFile, opts: LoadOptions = {}): void {
+    const live = !!opts.live
+    const same = !live && !this.#live && url === this.#url && this.loaded && !this.el.error
+    this.#live = live
     this.#part = part
     this.#endSent = false
     if (same) {
@@ -273,6 +294,7 @@ export class AudioEngine {
   clear(): void {
     this.#wantPlay = false
     this.#url = ''
+    this.#live = false
     this.#part = wholeFile
     clearTimeout(this.#endTimer)
     this.el.pause()

@@ -44,6 +44,8 @@ const savePlace = vi.fn()
 vi.stubGlobal('window', { playbackApi: { log, saveQueue, savePlace } })
 
 const { queue } = await import('./queue.svelte')
+// playing.svelte.ts passes the engine's events on; here they go to the queue straight
+Object.assign(fake.on, queue.events)
 const { player } = await import('./player.svelte')
 const { library } = await import('./library.svelte')
 const { notice } = await import('./notice.svelte')

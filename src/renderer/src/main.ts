@@ -11,7 +11,9 @@ import App from './App.svelte'
 import { decodeLibrary, library } from './stores/library.svelte'
 import { LibraryFeed } from './stores/library-feed'
 import { playlists } from './stores/playlists.svelte'
+import { playing } from './stores/playing.svelte'
 import { queue } from './stores/queue.svelte'
+import { radio } from './stores/radio.svelte'
 import { loadSettings } from './stores/settings.svelte'
 import { orFallback } from './start'
 import { emptyQueue } from '../../shared/saved-queue'
@@ -35,7 +37,7 @@ for (const type of ['dragover', 'drop'] as const)
 // template and the albums. The window stays hidden until then, so the wait doesn't show.
 // A failed ask shows the app with defaults. Settings and playlists that failed
 // to load are not saved this run, so the defaults can't replace the user's files.
-const [saved, lib, lists, lastQueue] = await Promise.all([
+const [saved, lib, lists, lastQueue, stations] = await Promise.all([
   orFallback(() => window.settingsApi.load(), defaultSettings(), 'the settings'),
   orFallback<{ library?: Uint8Array; status: ScanStatus; moves?: IdMoves }>(
     () => window.libraryApi.load(),
@@ -43,7 +45,8 @@ const [saved, lib, lists, lastQueue] = await Promise.all([
     'the library'
   ),
   orFallback(() => window.playlistsApi.load(), [], 'the playlists'),
-  orFallback(() => window.playbackApi.loadQueue(), emptyQueue(), 'the queue')
+  orFallback(() => window.playbackApi.loadQueue(), emptyQueue(), 'the queue'),
+  orFallback(() => window.radioApi.stations(), [], 'the radio stations')
 ])
 loadSettings(saved.value, saved.ok)
 library.status = lib.value.status
@@ -65,8 +68,10 @@ if (moves) {
   moves = Object.keys(later).length ? later : undefined
 }
 playlists.load(startLists, lists.ok)
-// paused where it was; songs no longer in the library leave the queue
-queue.restore(startQueue)
+radio.load(stations.value)
+// paused where it was; songs no longer in the library leave the queue.
+// Radio comes back with its station, paused.
+playing.restore(startQueue)
 
 // A library that can't be read leaves the one shown as it is.
 function loadLibrary(bytes: Uint8Array): boolean {

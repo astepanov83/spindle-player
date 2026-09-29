@@ -1,0 +1,262 @@
+// The station playing, its stream and titles, and reconnecting when the stream
+// drops. See work/specs/radio.md, "Playing a live stream". The moves are plain
+// functions in radio/logic.ts; playing.svelte.ts says when radio has the player.
+import type { Art } from '../../../shared/library'
+import type { RadioTitle } from '../../../shared/ipc'
+import { defaultPalettes } from '../../../shared/palette'
+import { maxHistory, type HistoryEntry, type Station } from '../../../shared/stations'
+import { engine, type EngineEvents } from '../audio/engine'
+import {
+  cantPlayFormat,
+  firstStream,
+  nextStream,
+  parseTitle,
+  radioUrl,
+  retryDelayMs
+} from '../radio/logic'
+import { notice } from './notice.svelte'
+import { player } from './player.svelte'
+
+// A stream stuck this long with no data is taken for dropped.
+const stallMs = 8000
+// failed retries of one stream before the next stream
+const retriesPerStream = 3
+
+// Until station logos (ticket 030): a tile in a fixed color.
+const noLogo: Art = { palette: defaultPalettes, cover: '', coverLarge: '' }
+
+class RadioStore {
+  // My stations, in the user's order
+  stations: Station[] = $state.raw([])
+  // the station playing, or picked and paused
+  station: Station | undefined = $state.raw()
+  // index into station.streams
+  stream = $state(-1)
+  // the stream's title as it came, and its parts
+  title = $state('')
+  now = $derived(parseTitle(this.title))
+  // the station's last titles, oldest first
+  history: HistoryEntry[] = $state.raw([])
+  art: Art | undefined = $derived(this.station && noLogo)
+
+  // the user wants sound: reconnect while this holds
+  #wanted = false
+  // counts plays, so an answer for an older one is dropped
+  #seq = 0
+  // failed retries of the current stream, and reconnects of the station
+  #retries = 0
+  #reconnects = 0
+  #failed = new Set<number>()
+  #formatFailed = new Set<number>()
+  // counts connections, so a late answer about an older one is dropped
+  #connects = 0
+  // sound came out of this connection
+  #sound = false
+  // this connection failed already: 'error' can follow 'ended'
+  #down = false
+  #retryTimer: ReturnType<typeof setTimeout> | undefined
+  #stallTimer: ReturnType<typeof setTimeout> | undefined
+  #listening = false
+
+  // The engine's events while radio has the player (playing.svelte.ts passes them on).
+  readonly events: Partial<EngineEvents> = {
+    playing: () => {
+      clearTimeout(this.#stallTimer)
+      this.#sound = true
+      this.#retries = 0
+      this.#reconnects = 0
+      this.#failed.clear()
+      this.#formatFailed.clear()
+    },
+    waiting: () => {
+      if (!this.#wanted) return
+      clearTimeout(this.#stallTimer)
+      this.#stallTimer = setTimeout(() => this.#lost('no data for 8 s'), stallMs)
+    },
+    // the server closed the stream
+    ended: () => this.#lost('the stream ended'),
+    error: (e) => this.#lost(`error ${e.code} ${e.message}`),
+    refused: (message) => {
+      window.playbackApi.log(`Radio refused: ${message}`)
+      this.pause()
+    }
+  }
+
+  // My stations from main, at start. Titles come from then on.
+  load(stations: Station[]): void {
+    this.stations = stations
+    if (this.#listening) return
+    this.#listening = true
+    window.radioApi.onTitle((t) => this.#heard(t))
+  }
+
+  // Picked but not playing: after a restart.
+  select(station: Station): void {
+    this.pause()
+    this.#show(station)
+    this.stream = firstStream(station)
+  }
+
+  // Asks main for the station's streams, then opens one at the live edge.
+  async play(station: Station): Promise<void> {
+    const n = this.#start()
+    // the song or the last station stops now, not when main answers
+    engine.clear()
+    const same = station.id === this.station?.id
+    this.#show(station)
+    let known: Station | undefined
+    try {
+      known = await window.radioApi.play($state.snapshot(station) as Station)
+    } catch (e) {
+      window.playbackApi.log(`Radio ${station.id}: radio:play failed: ${String(e)}`)
+    }
+    if (n !== this.#seq) return
+    if (!known) return this.#giveUp()
+    this.station = known
+    this.stations = this.stations.map((s) => (s.id === known.id ? known : s))
+    // play again after a pause keeps the stream it had
+    if (!same || !known.streams[this.stream]) this.stream = firstStream(known)
+    if (this.stream < 0) return this.#giveUp()
+    this.#connect()
+  }
+
+  // Play after pause: a new connection at the live edge.
+  async resume(): Promise<void> {
+    if (this.station) await this.play(this.station)
+  }
+
+  // Drops the connection, so nothing old plays after a long pause. Main ends
+  // the stream; the element keeps it, paused: with no source Chromium drops the
+  // system's media controls (MPRIS said Stopped and Play did nothing).
+  pause(): void {
+    this.#seq++
+    this.#wanted = false
+    clearTimeout(this.#retryTimer)
+    clearTimeout(this.#stallTimer)
+    player.playing = false
+    engine.pause()
+    window.radioApi.stop()
+  }
+
+  get wanted(): boolean {
+    return this.#wanted
+  }
+
+  // The user picked another stream: kept as the station's choice.
+  choose(index: number): void {
+    const s = this.station
+    const stream = s?.streams[index]
+    if (!s || !stream) return
+    this.stream = index
+    this.#failed.clear()
+    this.#formatFailed.clear()
+    this.#retries = 0
+    this.station = { ...s, chosen: stream.url }
+    if (this.stations.some((x) => x.id === s.id)) {
+      void window.radioApi.choose(s.id, stream.url).then((list) => {
+        this.stations = list
+      })
+    }
+    if (!this.#wanted) return
+    clearTimeout(this.#retryTimer)
+    clearTimeout(this.#stallTimer)
+    engine.clear()
+    this.#connect()
+  }
+
+  // A new try for the user: all counts start again.
+  #start(): number {
+    clearTimeout(this.#retryTimer)
+    clearTimeout(this.#stallTimer)
+    this.#retries = 0
+    this.#reconnects = 0
+    this.#failed.clear()
+    this.#formatFailed.clear()
+    this.#wanted = true
+    player.playing = true
+    return ++this.#seq
+  }
+
+  #show(station: Station): void {
+    if (station.id === this.station?.id) return
+    this.station = station
+    this.title = ''
+    this.history = []
+    const id = station.id
+    void window.radioApi.history(id).then(
+      (h) => {
+        if (this.station?.id === id && !this.history.length) this.history = h
+      },
+      () => {}
+    )
+  }
+
+  #connect(): void {
+    this.#connects++
+    this.#sound = false
+    this.#down = false
+    engine.load(radioUrl(this.station!.id, this.stream, this.#connects), 0, undefined, {
+      live: true
+    })
+    engine.play()
+  }
+
+  // The connection failed, ended or stalled. Before any sound, main is asked what
+  // it answered: audio with no sound is a format Chromium can't play (next
+  // stream at once); anything else is the network (the same stream, after a wait).
+  #lost(why: string): void {
+    if (!this.#wanted || this.#down) return
+    this.#down = true
+    clearTimeout(this.#retryTimer)
+    clearTimeout(this.#stallTimer)
+    // closes a stalled connection too
+    engine.clear()
+    const s = this.station!
+    window.playbackApi.log(`Radio ${s.id}: stream ${this.stream}: ${why}`)
+    if (this.#sound) return this.#retry()
+    const at = this.#connects
+    void window.radioApi
+      .lastAnswer(s.id)
+      .catch(() => undefined)
+      .then((a) => {
+        if (!this.#wanted || at !== this.#connects) return
+        if (!cantPlayFormat(false, a)) return this.#retry()
+        window.playbackApi.log(`Radio ${s.id}: stream ${this.stream}: audio came, but no sound`)
+        this.#formatFailed.add(this.stream)
+        this.#nextStream()
+      })
+  }
+
+  // The same stream again after a wait, or the next one after 3 failed retries.
+  #retry(): void {
+    if (this.#retries >= retriesPerStream) return this.#nextStream()
+    this.#retries++
+    this.#retryTimer = setTimeout(() => this.#connect(), retryDelayMs(this.#reconnects++))
+  }
+
+  #nextStream(): void {
+    const s = this.station!
+    this.#failed.add(this.stream)
+    const next = nextStream(s.streams, this.stream, this.#failed)
+    if (next < 0) return this.#giveUp()
+    this.stream = next
+    this.#retries = 0
+    this.#connect()
+  }
+
+  #giveUp(): void {
+    const name = this.station?.name ?? ''
+    const format = this.#formatFailed.size > 0 && this.#formatFailed.size === this.#failed.size
+    this.pause()
+    notice.show(format ? `Format can't be played: ${name}` : `Station can't be reached: ${name}`)
+  }
+
+  #heard(t: RadioTitle): void {
+    if (t.stationId !== this.station?.id) return
+    this.title = t.title
+    if (this.history.at(-1)?.title === t.title) return
+    this.history = [...this.history, { at: t.at, title: t.title }].slice(-maxHistory)
+  }
+}
+
+export const radio = new RadioStore()

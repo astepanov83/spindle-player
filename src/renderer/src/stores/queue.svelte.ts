@@ -3,7 +3,7 @@
 import { moveIds, type IdMoves } from '../../../shared/id-moves'
 import type { Album, Art, Track } from '../../../shared/library'
 import type { SavedQueue } from '../../../shared/saved-queue'
-import { engine, mediaUrl, type EngineError } from '../audio/engine'
+import { engine, mediaUrl, type EngineError, type EngineEvents } from '../audio/engine'
 import {
   advance,
   afterFailure,
@@ -38,33 +38,46 @@ class QueueStore {
   // the playing song's picture and colors
   currentArt: Art | undefined = $derived(this.current && library.art(this.current))
 
+  // False while radio has the player (ticket 027): the queue waits with its
+  // list and place, and a library change must not load a song.
+  active = true
+  // Takes the player back from radio; playing.svelte.ts sets it.
+  takeOver: () => void = () => {}
+
   #fails = 0
   #savedPos = 0
 
-  constructor() {
-    engine.on({
-      time: (t) => {
-        player.pos = t
-        if (Math.abs(t - this.#savedPos) >= savePosEverySec) this.savePos()
-      },
-      duration: (d) => (player.duration = d),
-      ended: () => this.#ended(),
-      // follow the element, so a pause from media keys or the system shows too
-      playing: () => {
-        this.#fails = 0
-        player.playing = true
-      },
-      paused: () => {
-        player.playing = false
-        this.savePos()
-      },
-      refused: (message) => {
-        window.playbackApi.log(`Playback refused: ${message}`)
-        player.playing = false
-      },
-      seeked: () => this.savePos(),
-      error: (e) => this.#failed(e)
-    })
+  // The engine's events while the queue has the player (playing.svelte.ts passes them on).
+  readonly events: Partial<EngineEvents> = {
+    time: (t) => {
+      player.pos = t
+      if (Math.abs(t - this.#savedPos) >= savePosEverySec) this.savePos()
+    },
+    duration: (d) => (player.duration = d),
+    ended: () => this.#ended(),
+    // follow the element, so a pause from media keys or the system shows too
+    playing: () => {
+      this.#fails = 0
+      player.playing = true
+    },
+    paused: () => {
+      player.playing = false
+      this.savePos()
+    },
+    refused: (message) => {
+      window.playbackApi.log(`Playback refused: ${message}`)
+      player.playing = false
+    },
+    seeked: () => this.savePos(),
+    error: (e) => this.#failed(e)
+  }
+
+  // The user played something from the queue or the library.
+  // True when radio had it, so nothing of the song is loaded.
+  #claim(): boolean {
+    if (this.active) return false
+    this.takeOver()
+    return true
   }
 
   // The list can hold 50k ids, so it goes to main only when it changes. A new
@@ -82,6 +95,10 @@ class QueueStore {
     const t = this.current
     player.pos = at
     this.savePos()
+    if (!this.active) {
+      player.duration = t?.duration ?? 0
+      return
+    }
     if (!t) {
       player.playing = false
       player.duration = 0
@@ -107,6 +124,7 @@ class QueueStore {
   // Replaces the queue with a list and plays the clicked song.
   playList(ids: string[], index: number, from: string): void {
     if (!ids.length) return
+    this.#claim()
     this.#fails = 0
     this.#set({ items: ids, index: Math.min(index, ids.length - 1), from })
     this.#start()
@@ -119,6 +137,7 @@ class QueueStore {
 
   // Clicking a row; the current one starts again.
   jump(index: number): void {
+    this.#claim()
     this.#fails = 0
     this.#set(jump(this.#state(), index))
     this.#start()
@@ -137,6 +156,7 @@ class QueueStore {
   // The Next button.
   next(): void {
     if (!this.items.length) return
+    this.#claim()
     this.#fails = 0
     this.#move(true)
   }
@@ -174,8 +194,10 @@ class QueueStore {
 
   prev(): void {
     if (!this.items.length) return
+    const fromRadio = this.#claim()
     const r = back(this.#state(), player.pos)
-    if (r.restart) {
+    if (r.restart && fromRadio) this.#start()
+    else if (r.restart) {
       player.pos = 0
       engine.seek(0)
       play()
@@ -227,6 +249,11 @@ class QueueStore {
   moveIds(moves: IdMoves): void {
     const items = moveIds(this.items, moves)
     if (items !== this.items) this.#set({ ...this.#state(), items })
+  }
+
+  // "Back to queue": the song loaded paused at its place.
+  resume(): void {
+    this.#start(false, player.pos)
   }
 
   // The queue from the last run, loaded paused where it was.

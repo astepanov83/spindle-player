@@ -1,8 +1,8 @@
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
   import IconButton from '../ui/IconButton.svelte'
-  import { player, togglePlay } from '../stores/player.svelte'
-  import { queue } from '../stores/queue.svelte'
+  import { player } from '../stores/player.svelte'
+  import { playing } from '../stores/playing.svelte'
 </script>
 
 <div class="transport">
@@ -12,11 +12,15 @@
     on={player.shuffle}
     onclick={() => (player.shuffle = !player.shuffle)}
   />
-  <IconButton icon="prev" label="Previous" onclick={() => queue.prev()} />
-  <button class="playbtn" aria-label={player.playing ? 'Pause' : 'Play'} onclick={togglePlay}>
+  <IconButton icon="prev" label="Previous" onclick={() => playing.prev()} />
+  <button
+    class="playbtn"
+    aria-label={player.playing ? 'Pause' : 'Play'}
+    onclick={() => playing.togglePlay()}
+  >
     <Icon name={player.playing ? 'pause' : 'play'} size={26} />
   </button>
-  <IconButton icon="next" label="Next" onclick={() => queue.next()} />
+  <IconButton icon="next" label="Next" onclick={() => playing.next()} />
   <IconButton
     icon="repeat"
     label="Repeat"

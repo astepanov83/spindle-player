@@ -87,7 +87,8 @@ function mountsOf(json: unknown): Stream[] {
   return out
 }
 
-// The streams the server has that the station does not list yet. Never throws:
+// The streams to add to the station: new ones, and saved ones with data filled in.
+// Give them to mergeStreams. Never throws:
 // a failed request is logged and the saved streams stay as they are.
 export async function findStreams(
   station: Pick<Station, 'pls' | 'streams'>,
@@ -106,6 +107,15 @@ export async function findStreams(
     } catch (error) {
       log(`Could not read playlist ${url}: ${String(error)}`)
     }
+  }
+
+  // A saved stream with no bitrate or codec is probed too, so the mounts below
+  // can be compared with what it really is. Its saved address is kept.
+  const learned: Stream[] = []
+  for (const saved of station.streams) {
+    if (saved.bitrate && saved.codec) continue
+    const p = await probe(saved.url, f, log)
+    learned.push({ ...p, url: saved.url })
   }
 
   // the mounts, on the server the first stream came from
@@ -128,10 +138,9 @@ export async function findStreams(
     }
   }
 
-  // Merged against what is saved, so this only gives streams not listed yet.
-  // The playlist streams come first and win a tie with a mount.
-  const all = mergeStreams(station.streams, [...resolved, ...mounts])
-  const known = new Set(station.streams.map((s) => s.url))
-  const kept = new Set(mergeStreams([], [...resolved, ...mounts]).map((s) => s.url))
-  return all.filter((s) => !known.has(s.url) && kept.has(s.url))
+  // The playlist streams and probed data come before the mounts, so they win a tie.
+  // mergeStreams keeps a saved stream's object when it has nothing to add, so what
+  // is not in the saved list by identity is new or filled in.
+  const merged = mergeStreams(station.streams, [...resolved, ...learned, ...mounts])
+  return merged.filter((s) => !station.streams.includes(s))
 }

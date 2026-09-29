@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { describe, expect, it, vi } from 'vitest'
+import { mergeStreams } from '../../shared/stations'
 import { codecOf, findStreams } from './find-streams'
 
 const read = (name: string): string => readFileSync(join(__dirname, 'fixtures', name), 'utf8')
@@ -108,7 +109,7 @@ describe('findStreams', () => {
   it('logs a playlist with nothing in it and a status page that is not JSON', async () => {
     const f = fakeFetch({ [plsUrl]: { body: '<html>' }, [statusUrl]: { body: 'nope' } })
     const log = vi.fn()
-    const saved = [{ url: 'http://metalonly.spcast.eu/stream' }]
+    const saved = [{ url: 'http://metalonly.spcast.eu/stream', bitrate: 192, codec: 'mp3' }]
     const found = await findStreams({ pls: [plsUrl], streams: saved }, { fetch: f, log })
     expect(found).toEqual([])
     expect(log).toHaveBeenCalledTimes(2)
@@ -117,9 +118,38 @@ describe('findStreams', () => {
   it('logs a status page that answers 404', async () => {
     const f = fakeFetch({ [statusUrl]: { status: 404 } })
     const log = vi.fn()
-    const saved = [{ url: 'http://metalonly.spcast.eu/stream' }]
+    const saved = [{ url: 'http://metalonly.spcast.eu/stream', bitrate: 192, codec: 'mp3' }]
     expect(await findStreams({ streams: saved }, { fetch: f, log })).toEqual([])
     expect(log).toHaveBeenCalledOnce()
+  })
+})
+
+describe('a saved stream with missing data', () => {
+  const mount = (name: string, br: number): object => ({
+    listenurl: `http://a.example/${name}`,
+    bitrate: br,
+    server_type: 'audio/mpeg'
+  })
+
+  it('gets its bitrate and codec from the probe, so a repeat mount is skipped', async () => {
+    const f = fakeFetch({
+      'http://a.example/stream': {
+        headers: { 'icy-br': '128', 'content-type': 'audio/mpeg' }
+      },
+      'http://a.example/status-json.xsl': {
+        body: JSON.stringify({
+          icestats: { source: [mount('autodj', 128), mount('low', 64)] }
+        })
+      }
+    })
+    const saved = [{ url: 'http://a.example/stream' }]
+    const found = await findStreams({ streams: saved }, { fetch: f, log: vi.fn() })
+    expect(found).toEqual([
+      { url: 'http://a.example/stream', bitrate: 128, codec: 'mp3' },
+      { url: 'http://a.example/low', bitrate: 64, codec: 'mp3' }
+    ])
+    // what the store does with it
+    expect(mergeStreams(saved, found)).toEqual(found)
   })
 })
 

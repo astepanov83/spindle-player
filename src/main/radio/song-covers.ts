@@ -18,6 +18,8 @@ import { isCoverHash } from '../library/cover-names'
 import { cleanSong, type SongSource } from '../library/song-cover'
 import type { LogoCache } from './logos'
 
+const sources = ['deezer', 'itunes'] as const
+
 // a miss is looked up again after this long, as for albums
 export const notFoundMs = 30 * 24 * 3600 * 1000
 
@@ -165,17 +167,25 @@ export class SongCovers {
     if (q && key) void this.#show(stationId, title, q, key)
   }
 
-  // The setting changed. Off: lookups stop. On, or a service turned on: misses
-  // are looked up again, and so is the title playing.
+  // Radio stopped (radio:stop): the title is no longer playing, so a later
+  // setting change looks nothing up and a lookup running now is dropped.
+  stopped(): void {
+    this.#current = undefined
+    this.#stopAll()
+  }
+
+  // The setting changed. Off: lookups stop. A service turned off: lookups
+  // stop (the library process stops them too, since they may be about to ask
+  // it) and the title playing is looked up again with the others. On, or a
+  // service turned on: misses are looked up again, and so is the title playing.
   settingChanged(): void {
     const before = this.#setting
     const now = this.d.setting()
     this.#setting = now
-    if (!now.on) {
-      for (const l of this.#lookups.values()) l.stop.abort()
-      return
-    }
-    const added = (['deezer', 'itunes'] as const).some((s) => now.sources[s] && !before.sources[s])
+    if (!now.on) return this.#stopAll()
+    const removed = sources.some((s) => before.sources[s] && !now.sources[s])
+    if (removed) this.#stopAll()
+    const added = sources.some((s) => now.sources[s] && !before.sources[s])
     if (added) {
       let dropped = false
       for (const [key, e] of this.d.map)
@@ -186,7 +196,11 @@ export class SongCovers {
       if (dropped) this.d.save()
     }
     const c = this.#current
-    if (c && (added || !before.on)) this.heard(c.stationId, c.title, c.station)
+    if (c && (added || removed || !before.on)) this.heard(c.stationId, c.title, c.station)
+  }
+
+  #stopAll(): void {
+    for (const l of this.#lookups.values()) l.stop.abort()
   }
 
   // The cover found for a title, for the recent songs; no request.
@@ -218,8 +232,9 @@ export class SongCovers {
     // read now: the setting can change while radio plays
     const { on, sources } = this.d.setting()
     if (!on || (!sources.deezer && !sources.itunes)) return undefined
+    // a stopped one may still answer (its cancel was lost) but is not waited on
     const running = this.#lookups.get(key)
-    if (running) return running.job
+    if (running && !running.stop.signal.aborted) return running.job
     const stop = new AbortController()
     const job = this.#lookUp(q, key, stop.signal).finally(() => {
       if (this.#lookups.get(key)?.stop === stop) this.#lookups.delete(key)

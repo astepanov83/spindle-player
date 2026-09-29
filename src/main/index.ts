@@ -187,7 +187,11 @@ page.handle(RadioChannel.search, async (_, q) => {
   if (found.ok && n === searches) resultLogos.searched(found.stations)
   return found
 })
-page.on(RadioChannel.stop, () => radioStreams.stop())
+page.on(RadioChannel.stop, () => {
+  radioStreams.stop()
+  // a new connection sends its title again
+  songCovers.stopped()
+})
 page.handle(RadioChannel.lastAnswer, (_, id) =>
   typeof id === 'string' ? radioStreams.lastAnswer(id) : undefined
 )

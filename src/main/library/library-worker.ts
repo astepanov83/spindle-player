@@ -48,7 +48,7 @@ import { pictureWithHash } from './cover-source'
 import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from './cover-names'
 import { CoverFetcher } from './cover-fetch'
-import { findSongCover } from './song-cover'
+import { findSongCover, stopsSongLookups } from './song-cover'
 import { PublishTimer } from './publish'
 import { diffLibrary, type LibraryMessage } from '../../shared/library-patch'
 import { CoverHttp, defaultLimits, NetError } from './cover-http'
@@ -207,12 +207,12 @@ const abortableSleep = (ms: number, signal: AbortSignal): Promise<void> =>
   })
 
 function setFetch(on: boolean, sources: Record<CoverSource, boolean>): void {
+  const before = fetchSetting
   fetchSetting = { on, sources }
   fetcher?.setOptions(on, sources)
-  if (!on) {
-    setStatus({ fetch: undefined })
-    stopSongLookups()
-  }
+  if (!on) setStatus({ fetch: undefined })
+  // a lookup holds the services it started with; main asks again
+  if (stopsSongLookups(before, fetchSetting)) stopSongLookups()
 }
 
 // --- radio song covers (ticket 032) ---

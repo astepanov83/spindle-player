@@ -44,14 +44,29 @@ export function songSearchUrl(source: SongSource, q: SongQuery): string {
 // "(feat. X)", "[Radio Edit]": the same song, the same cover
 const extra = /\b(feat\.?|ft\.?|featuring|edit)\b/i
 
+const live = /\blive\b/i
+
 // The song's name for comparing: album cleanup, and without feat and edit
-// brackets. A bracket saying "live" stays a word even when it says
-// "remaster" too ("Live at Long Beach Arena; 1998 Remaster").
+// brackets. A bracket or a " - " suffix saying "live" stays a word even when
+// it says "remaster" too ("Live at Long Beach Arena; 1998 Remaster"), since
+// the album cleanup would drop it.
 export function cleanSong(s: string): string {
-  const marked = s.replace(/[([]([^)\]]*)[)\]]/g, (m, inner: string) =>
-    /\blive\b/i.test(inner) ? ' live ' : extra.test(inner) ? ' ' : m
-  )
+  const marked = s
+    .replace(/[([]([^)\]]*)[)\]]/g, (m, inner: string) =>
+      live.test(inner) ? ' live ' : extra.test(inner) ? ' ' : m
+    )
+    .replace(/\s[-–]\s[^-–]*$/, (m) => (live.test(m) ? ' live' : m))
   return cleanAlbum(marked)
+}
+
+// The setting went off, or a service did: a running song lookup may be about
+// to ask a service the user no longer wants asked.
+export function stopsSongLookups(
+  before: { on: boolean; sources: Record<SongSource, boolean> } | undefined,
+  after: { on: boolean; sources: Record<SongSource, boolean> }
+): boolean {
+  if (!after.on) return true
+  return !!before && songSources.some((s) => before.sources[s] && !after.sources[s])
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> =>

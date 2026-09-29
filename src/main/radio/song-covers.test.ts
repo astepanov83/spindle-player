@@ -24,8 +24,9 @@ const palette = fallbackPalettes('song')
 const on = { on: true, sources: { deezer: true, itunes: true } }
 const off = { on: false, sources: { deezer: true, itunes: true } }
 
-// A find the test answers by hand, one call at a time.
-function manualFind(): {
+// A find the test answers by hand, one call at a time. ignoreAbort: the
+// cancel was lost on the way, so the library process answers anyway.
+function manualFind(ignoreAbort = false): {
   find: FindSong
   calls: { artist: string; song: string; signal: AbortSignal }[]
   answer: (r: Uint8Array | 'none' | 'later', i?: number) => Promise<void>
@@ -39,7 +40,7 @@ function manualFind(): {
         calls.push({ ...q, signal })
         waiting.push(r)
         // an abort ends the lookup the way the library process does
-        signal.addEventListener('abort', () => r('later'))
+        if (!ignoreAbort) signal.addEventListener('abort', () => r('later'))
       }),
     answer: async (r, i = waiting.length - 1) => {
       waiting[i](r)
@@ -63,9 +64,15 @@ interface Rig {
 }
 
 function setup(
-  opts: { setting?: typeof on; map?: SongCoverMap; files?: boolean; now?: number } = {}
+  opts: {
+    setting?: typeof on
+    map?: SongCoverMap
+    files?: boolean
+    now?: number
+    ignoreAbort?: boolean
+  } = {}
 ): Rig {
-  const m = manualFind()
+  const m = manualFind(opts.ignoreAbort)
   let setting = opts.setting ?? on
   const sent: RadioCover[] = []
   const order: string[] = []
@@ -161,6 +168,69 @@ describe('SongCovers (ticket 032)', () => {
     await m.answer(jpeg, 0)
     expect(sent).toEqual([])
     await m.answer('none', 1)
+    expect(sent).toEqual([])
+  })
+
+  it('drops a picture that comes after its lookup was stopped, but keeps it for the song', async () => {
+    const { covers, m, sent, map } = setup({ ignoreAbort: true })
+    covers.heard('a', 'A - One', 'X')
+    covers.heard('a', 'B - Two', 'X')
+    expect(m.calls[0].signal.aborted).toBe(true)
+    await m.answer(jpeg, 0)
+    expect(sent).toEqual([])
+    expect(map.get(songKey({ artist: 'A', song: 'One' }))?.cover?.hash).toBe(h)
+  })
+
+  it('does not wait on a stopped lookup when the title comes back (A, B, A)', async () => {
+    const { covers, m, sent } = setup({ ignoreAbort: true })
+    covers.heard('a', 'A - One', 'X')
+    covers.heard('a', 'B - Two', 'X')
+    covers.heard('a', 'A - One', 'X')
+    expect(m.calls.map((c) => c.artist)).toEqual(['A', 'B', 'A'])
+    await m.answer(jpeg, 2)
+    expect(sent.map((c) => c.title)).toEqual(['A - One'])
+  })
+
+  it('looks up again when the setting goes off and on before the library process answered', async () => {
+    const { covers, m, set } = setup({ ignoreAbort: true })
+    covers.heard('a', 'A - B', 'X')
+    set(off)
+    covers.settingChanged()
+    set(on)
+    covers.settingChanged()
+    expect(m.calls).toHaveLength(2)
+    expect(m.calls[0].signal.aborted).toBe(true)
+    expect(m.calls[1].signal.aborted).toBe(false)
+  })
+
+  it('stops a lookup when a service is turned off, and asks again with the others', async () => {
+    const { covers, m, set, sent } = setup()
+    covers.heard('a', 'A - B', 'X')
+    set({ on: true, sources: { deezer: true, itunes: false } })
+    covers.settingChanged()
+    expect(m.calls[0].signal.aborted).toBe(true)
+    expect(m.calls).toHaveLength(2)
+    await m.answer(jpeg, 1)
+    expect(sent).toHaveLength(1)
+  })
+
+  it('forgets the title when radio stops: turning the setting on later looks nothing up', async () => {
+    const { covers, m, set, sent } = setup({ setting: off })
+    covers.heard('a', 'A - B', 'X')
+    covers.stopped()
+    set(on)
+    covers.settingChanged()
+    await flush()
+    expect(m.calls).toEqual([])
+    expect(sent).toEqual([])
+  })
+
+  it('stops the lookup and drops its answer when radio stops', async () => {
+    const { covers, m, sent } = setup({ ignoreAbort: true })
+    covers.heard('a', 'A - B', 'X')
+    covers.stopped()
+    expect(m.calls[0].signal.aborted).toBe(true)
+    await m.answer(jpeg, 0)
     expect(sent).toEqual([])
   })
 
@@ -283,6 +353,15 @@ describe('SongCovers (ticket 032)', () => {
     await m.answer(jpeg)
     expect(covers.known('A - B (Remastered)')).toEqual({ hash: h, palette })
     expect(covers.known('Jingle')).toBeUndefined()
+  })
+})
+
+describe('songKey', () => {
+  it('keeps a live recording apart from the studio song, with brackets or " - "', () => {
+    const studio = songKey({ artist: 'Iron Maiden', song: 'The Trooper' })
+    expect(songKey({ artist: 'Iron Maiden', song: 'The Trooper - Live Version' })).not.toBe(studio)
+    expect(songKey({ artist: 'Iron Maiden', song: 'The Trooper (Live Version)' })).not.toBe(studio)
+    expect(songKey({ artist: 'Iron Maiden', song: 'The Trooper - 2015 Remaster' })).toBe(studio)
   })
 })
 

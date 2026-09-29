@@ -8,6 +8,7 @@ import {
   parseSongAnswer,
   pickSongs,
   songSearchUrl,
+  stopsSongLookups,
   type SongHttp
 } from './song-cover'
 
@@ -39,6 +40,31 @@ describe('cleanSong', () => {
     expect(cleanSong('Numb [feat. Someone]')).toBe('numb')
     expect(cleanSong('The Trooper (Live 2003)')).toBe('the trooper live')
     expect(cleanSong('The Trooper (Live at Donington; 1998 Remaster)')).toBe('the trooper live')
+  })
+
+  it('keeps "live" from a " - " suffix too', () => {
+    expect(cleanSong('The Trooper - Live at Long Beach Arena; 1998 Remaster')).toBe(
+      'the trooper live'
+    )
+    expect(cleanSong('The Trooper - Live Version')).toBe('the trooper live')
+    expect(cleanSong('The Trooper - 2015 Remaster')).toBe('the trooper')
+    // not the studio song
+    const c = { image: 'https://x.dzcdn.net/1.jpg', rank: 0, artist: 'Iron Maiden' }
+    expect(pickSongs(trooper, [{ ...c, song: 'The Trooper - Live Version' }])).toEqual([])
+  })
+})
+
+describe('stopsSongLookups', () => {
+  const all = { musicbrainz: true, deezer: true, itunes: true }
+  it('stops running song lookups when the setting or any service is turned off', () => {
+    const before = { on: true, sources: all }
+    expect(stopsSongLookups(before, { on: false, sources: all })).toBe(true)
+    expect(stopsSongLookups(before, { on: true, sources: { ...all, itunes: false } })).toBe(true)
+    expect(stopsSongLookups(before, { on: true, sources: all })).toBe(false)
+    // a service turned on takes nothing away
+    const fewer = { on: true, sources: { ...all, deezer: false } }
+    expect(stopsSongLookups(fewer, before)).toBe(false)
+    expect(stopsSongLookups(undefined, before)).toBe(false)
   })
 })
 

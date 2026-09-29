@@ -3,6 +3,7 @@ import {
   LibraryChannel,
   PlaybackChannel,
   PlaylistChannel,
+  RadioChannel,
   SettingsChannel,
   WinChannel,
   type InvokeChannel,
@@ -10,6 +11,7 @@ import {
   type PageChannels,
   type PlaybackApi,
   type PlaylistsApi,
+  type RadioApi,
   type SendChannel,
   type SettingsApi,
   type WinApi
@@ -97,8 +99,18 @@ const playbackApi: PlaybackApi = {
   log: (text) => send(PlaybackChannel.log, text)
 }
 
+const radioApi: RadioApi = {
+  stations: () => invoke(RadioChannel.stations),
+  save: (station) => invoke(RadioChannel.save, station),
+  remove: (id) => invoke(RadioChannel.remove, id),
+  move: (id, by) => invoke(RadioChannel.move, id, by),
+  choose: (id, url) => invoke(RadioChannel.choose, id, url),
+  history: (id) => invoke(RadioChannel.history, id)
+}
+
 contextBridge.exposeInMainWorld('win', win)
 contextBridge.exposeInMainWorld('playlistsApi', playlistsApi)
 contextBridge.exposeInMainWorld('playbackApi', playbackApi)
+contextBridge.exposeInMainWorld('radioApi', radioApi)
 contextBridge.exposeInMainWorld('libraryApi', libraryApi)
 contextBridge.exposeInMainWorld('settingsApi', settingsApi)

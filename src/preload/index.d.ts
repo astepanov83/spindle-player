@@ -1,4 +1,11 @@
-import type { LibraryApi, PlaybackApi, PlaylistsApi, SettingsApi, WinApi } from '../shared/ipc'
+import type {
+  LibraryApi,
+  PlaybackApi,
+  PlaylistsApi,
+  RadioApi,
+  SettingsApi,
+  WinApi
+} from '../shared/ipc'
 
 declare global {
   interface Window {
@@ -6,6 +13,7 @@ declare global {
     settingsApi: SettingsApi
     libraryApi: LibraryApi
     playlistsApi: PlaylistsApi
+    radioApi: RadioApi
     playbackApi: PlaybackApi
   }
 }

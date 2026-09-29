@@ -7,6 +7,7 @@ import {
   LibraryChannel,
   PlaybackChannel,
   PlaylistChannel,
+  RadioChannel,
   SettingsChannel,
   WinChannel
 } from '../shared/ipc'
@@ -15,6 +16,7 @@ import { stopAllDecoders } from './library/decode'
 import { handleProtocol, registerScheme } from './library/protocol'
 import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
+import { RadioHistoryStore, StationsStore } from './radio/stations-store'
 import { PlaylistFile, QueueFile } from './page-files'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
@@ -25,6 +27,9 @@ let store: SettingsStore
 let library: LibraryService
 let playlists: PlaylistFile
 let savedQueue: QueueFile
+// 025 and 027 look stations up here and add heard titles to the history
+let stations: StationsStore
+let radioHistory: RadioHistoryStore
 let main: MainWindow | null = null
 
 registerScheme()
@@ -99,6 +104,12 @@ page.on(LibraryChannel.setArtists, (_, changes) => library.setArtists(changes))
 
 page.handle(PlaylistChannel.load, () => playlists.get())
 page.on(PlaylistChannel.save, (_, raw) => playlists.setFromPage(raw))
+page.handle(RadioChannel.stations, () => stations.list())
+page.handle(RadioChannel.save, (_, raw) => stations.save(raw))
+page.handle(RadioChannel.remove, (_, id) => stations.remove(id))
+page.handle(RadioChannel.move, (_, id, by) => stations.move(id, by))
+page.handle(RadioChannel.choose, (_, id, url) => stations.choose(id, url))
+page.handle(RadioChannel.history, (_, id) => (typeof id === 'string' ? radioHistory.get(id) : []))
 page.handle(PlaybackChannel.loadQueue, () => savedQueue.get())
 page.on(PlaybackChannel.saveQueue, (_, raw) => savedQueue.setFromPage(raw))
 page.on(PlaybackChannel.savePlace, (_, raw) => savedQueue.setPlace(raw))
@@ -141,6 +152,12 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   const splash = new Splash()
   playlists = new PlaylistFile()
   savedQueue = new QueueFile()
+  const userData = app.getPath('userData')
+  stations = new StationsStore(join(userData, 'stations.json'))
+  radioHistory = new RadioHistoryStore(
+    join(userData, 'radio-history.json'),
+    (id) => !!stations.get(id)
+  )
 
   // Starts reading the index now, while the window loads.
   library = new LibraryService(
@@ -188,6 +205,8 @@ app.on('will-quit', (e) => {
   store?.flushSync()
   playlists?.flushSync()
   savedQueue?.flushSync()
+  stations?.flushSync()
+  radioHistory?.flushSync()
   if (!library || libraryFlushed) return
   e.preventDefault()
   void library.flush().then(() => {

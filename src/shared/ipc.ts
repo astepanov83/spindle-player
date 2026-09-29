@@ -4,6 +4,7 @@ import type { ScanStatus } from './library'
 import type { Playlist } from './playlists'
 import type { QueuePlace, SavedQueue } from './saved-queue'
 import type { Settings } from './settings'
+import type { HistoryEntry, Station } from './stations'
 
 // Channel names used by both main and preload, so a typo is a type error.
 export const WinChannel = {
@@ -112,6 +113,30 @@ export interface PlaybackApi {
   log(text: string): void
 }
 
+export const RadioChannel = {
+  stations: 'radio:stations',
+  save: 'radio:save',
+  remove: 'radio:remove',
+  move: 'radio:move',
+  choose: 'radio:choose',
+  history: 'radio:history'
+} as const
+
+// What the preload exposes to the page as `window.radioApi`.
+// Main owns My stations and checks every change; each one answers with the list as it is now.
+export interface RadioApi {
+  stations(): Promise<Station[]>
+  // a new station goes to the end; a known one is replaced where it is
+  save(station: Station): Promise<Station[]>
+  remove(id: string): Promise<Station[]>
+  // one place up (-1) or down (1)
+  move(id: string, by: -1 | 1): Promise<Station[]>
+  // the stream url the user picked for the station
+  choose(id: string, url: string): Promise<Station[]>
+  // the last 50 titles, oldest first
+  history(id: string): Promise<HistoryEntry[]>
+}
+
 // Which API method each page-to-main channel carries. The preload's calls and
 // main's handlers are both typed from this, so a change on one side and not
 // the other is a type error.
@@ -130,6 +155,12 @@ export interface PageChannels {
   [LibraryChannel.setArtists]: LibraryApi['setArtists']
   [PlaylistChannel.load]: PlaylistsApi['load']
   [PlaylistChannel.save]: PlaylistsApi['save']
+  [RadioChannel.stations]: RadioApi['stations']
+  [RadioChannel.save]: RadioApi['save']
+  [RadioChannel.remove]: RadioApi['remove']
+  [RadioChannel.move]: RadioApi['move']
+  [RadioChannel.choose]: RadioApi['choose']
+  [RadioChannel.history]: RadioApi['history']
   [PlaybackChannel.loadQueue]: PlaybackApi['loadQueue']
   [PlaybackChannel.saveQueue]: PlaybackApi['saveQueue']
   [PlaybackChannel.savePlace]: PlaybackApi['savePlace']

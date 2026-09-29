@@ -21,14 +21,21 @@
 
   // Keep the current song in view when the track changes, not on other redraws.
   let seen = ''
+  const currentKey = (): string => queue.index + ':' + queue.current?.id
   $effect(() => {
-    const key = queue.index + ':' + queue.current?.id
+    const key = currentKey()
     if (key === seen || !body) return
     seen = key
     // one row above the current song, as in the prototype; wait for the list to get its height
     const index = Math.max(0, queue.index - 1)
     tick().then(() => v.scrollToIndex(index))
   })
+
+  // A clicked row is already on screen, so leave the scroll where it is.
+  function playRow(index: number): void {
+    queue.jump(index)
+    seen = currentKey()
+  }
 </script>
 
 <div class="qpart">
@@ -57,7 +64,7 @@
           class:cur
           class:past={item.index < queue.index}
           style:transform="translateY({v.offset(item)}px)"
-          onclick={() => queue.jump(item.index)}
+          onclick={() => playRow(item.index)}
           oncontextmenu={(e) => openSongMenu(e, [id])}
         >
           <Thumb src={library.art(t).cover} eq={cur && player.playing} />

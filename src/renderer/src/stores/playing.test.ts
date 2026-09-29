@@ -221,6 +221,16 @@ describe('after a restart', () => {
     expect(savePlaying).not.toHaveBeenCalled()
   })
 
+  it('after that, playing a song saves the queue, so the next start brings the song back', async () => {
+    playing.restore({ ...saved, kind: 'radio', station: 'gone' }, false)
+    savePlaying.mockClear()
+    queue.jump(0)
+    expect(savePlaying).toHaveBeenCalledWith({ kind: 'queue' })
+    savePlaying.mockClear()
+    queue.jump(1)
+    expect(savePlaying).not.toHaveBeenCalled()
+  })
+
   it('a station no longer in My stations gives the queue back', async () => {
     fake.calls = []
     playing.restore({ ...saved, kind: 'radio', station: 'gone' })

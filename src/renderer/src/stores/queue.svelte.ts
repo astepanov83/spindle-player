@@ -41,7 +41,9 @@ class QueueStore {
   // False while radio has the player (ticket 027): the queue waits with its
   // list and place, and a library change must not load a song.
   active = true
-  // Takes the player back from radio; playing.svelte.ts sets it.
+  // Called whenever the user plays from the queue or the library: takes the
+  // player back from radio, and makes sure queue.json says the queue plays.
+  // playing.svelte.ts sets it.
   takeOver: () => void = () => {}
 
   #fails = 0
@@ -75,9 +77,9 @@ class QueueStore {
   // The user played something from the queue or the library.
   // True when radio had it, so nothing of the song is loaded.
   #claim(): boolean {
-    if (this.active) return false
+    const fromRadio = !this.active
     this.takeOver()
-    return true
+    return fromRadio
   }
 
   // The list can hold 50k ids, so it goes to main only when it changes. A new

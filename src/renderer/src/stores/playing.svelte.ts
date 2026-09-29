@@ -89,8 +89,10 @@ class PlayingStore {
     if (was === 'radio') queue.resume()
   }
 
+  // Also when the queue already has the player: after a start that could not
+  // read My stations, queue.json still says radio until a song is played.
   #toQueue(): void {
-    if (this.kind === 'queue') return
+    if (this.kind === 'queue') return this.#save({ kind: 'queue' })
     radio.pause()
     this.kind = 'queue'
     queue.active = true

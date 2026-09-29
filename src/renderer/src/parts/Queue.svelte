@@ -6,7 +6,7 @@
   import { virtualList } from '../ui/virtual-list.svelte'
   import { layout } from '../stores/layout.svelte'
   import { library } from '../stores/library.svelte'
-  import { player } from '../stores/player.svelte'
+  import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from '../library/song-menu'
 
@@ -67,7 +67,7 @@
           onclick={() => playRow(item.index)}
           oncontextmenu={(e) => openSongMenu(e, [id])}
         >
-          <Thumb src={library.art(t).cover} eq={cur && player.playing} />
+          <Thumb src={library.art(t).cover} eq={cur && playing.songPlaying} />
           <span class="qt"><span class="nm">{t.title}</span><span class="ar">{t.artist}</span></span
           >
           <span class="d">{fmtTime(t.duration)}</span>

@@ -127,6 +127,7 @@ export async function radioStream(
   const stream = station?.streams[n]
   if (!station || !stream) {
     o.log(`spindle://radio/${id}?stream=${streamParam}: no such station or stream; answered 404`)
+    o.streams?.answered(id, { ok: false, bytes: 0 })
     return answer(404, 'Not found')
   }
 

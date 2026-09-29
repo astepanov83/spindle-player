@@ -71,7 +71,7 @@ playlists.load(startLists, lists.ok)
 radio.load(stations.value)
 // paused where it was; songs no longer in the library leave the queue.
 // Radio comes back with its station, paused.
-playing.restore(startQueue)
+playing.restore(startQueue, stations.ok)
 
 // A library that can't be read leaves the one shown as it is.
 function loadLibrary(bytes: Uint8Array): boolean {

@@ -19,6 +19,7 @@ vi.mock('../audio/engine', () => ({
     get loaded() {
       return fake.loaded
     },
+    el: { paused: true },
     load: (url: string, at = 0, _part?: unknown, opts?: { live?: boolean }) => {
       fake.loaded = true
       fake.calls.push(`load ${url.replace(/&c=\d+$/, '')}${opts?.live ? ' live' : ` at ${at}`}`)
@@ -210,11 +211,43 @@ describe('after a restart', () => {
     expect(fake.calls).toEqual(['load media/s2 at 30'])
   })
 
+  it('when My stations could not be read, the queue plays but radio stays saved', async () => {
+    fake.calls = []
+    savePlaying.mockClear()
+    // the stations list is empty then, so the station is not found
+    playing.restore({ ...saved, kind: 'radio', station: 'gone' }, false)
+    expect(playing.kind).toBe('queue')
+    expect(fake.calls).toEqual(['load media/s2 at 30'])
+    expect(savePlaying).not.toHaveBeenCalled()
+  })
+
   it('a station no longer in My stations gives the queue back', async () => {
     fake.calls = []
     playing.restore({ ...saved, kind: 'radio', station: 'gone' })
     expect(playing.kind).toBe('queue')
     expect(fake.calls).toEqual(['load media/s2 at 30'])
     expect(savePlaying).toHaveBeenLastCalledWith({ kind: 'queue' })
+  })
+})
+
+describe('what shows as playing while radio plays (027 fix round 1)', () => {
+  it('songs are not playing, and a seek does nothing to the queue’s place', async () => {
+    fake.on.playing!()
+    expect(playing.songPlaying).toBe(true)
+    await playing.playStation(mine[0])
+    fake.on.playing!()
+    expect(player.playing).toBe(true)
+    expect(playing.songPlaying).toBe(false)
+    fake.calls = []
+    playing.seek(90)
+    expect(player.pos).toBe(42)
+    expect(fake.calls).toEqual([])
+  })
+
+  it('a seek still works for a song', () => {
+    player.duration = 100
+    playing.seek(50)
+    expect(player.pos).toBe(50)
+    expect(fake.calls).toContain('seek 50')
   })
 })

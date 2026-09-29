@@ -9,6 +9,7 @@
   import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
   import { library } from '../stores/library.svelte'
+  import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
 
   let {
@@ -80,7 +81,9 @@
             </button>
           </div>
           <div class="t">
-            {#if al.id === queue.currentAlbum?.id}<Eq />{/if}<span>{al.title}</span>
+            {#if playing.kind === 'queue' && al.id === queue.currentAlbum?.id}<Eq />{/if}<span
+              >{al.title}</span
+            >
           </div>
           <div class="a">{al.artist}</div>
         </div>

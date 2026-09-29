@@ -5,7 +5,7 @@
 import type { Art } from '../../../shared/library'
 import { CoverBlob, fetchBlob } from './cover-blob'
 import { paletteTile, tileKey } from './cover-tile'
-import { player, seek } from './player.svelte'
+import { player } from './player.svelte'
 import { playing, type MediaText, type PlayingKind } from './playing.svelte'
 
 export function setupMediaSession(): void {
@@ -26,7 +26,7 @@ export function showSeekInMediaSession(kind: PlayingKind): void {
     kind === 'radio'
       ? null
       : (d) => {
-          if (d.seekTime !== undefined) seek(d.seekTime)
+          if (d.seekTime !== undefined) playing.seek(d.seekTime)
         }
   )
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { player, seek } from '../stores/player.svelte'
+  import { player } from '../stores/player.svelte'
+  import { playing } from '../stores/playing.svelte'
 
   let el: HTMLDivElement
   // while dragging, the knob follows the mouse and the song jumps on release
@@ -24,7 +25,7 @@
 
   function onpointerup(e: PointerEvent): void {
     if (drag === null) return
-    seek(at(e))
+    playing.seek(at(e))
     drag = null
   }
 </script>

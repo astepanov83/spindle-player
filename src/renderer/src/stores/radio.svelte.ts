@@ -76,6 +76,13 @@ class RadioStore {
     // the server closed the stream
     ended: () => this.#lost('the stream ended'),
     error: (e) => this.#lost(`error ${e.code} ${e.message}`),
+    // Chromium paused the element itself (the system's audio, not our handlers):
+    // a pause like the user's. Our own pauses leave no source (a reconnect, a
+    // new station) or are followed by a new play (another stream) before this comes.
+    paused: () => {
+      if (!this.#wanted || this.#down || !engine.loaded || !engine.el.paused) return
+      this.pause()
+    },
     refused: (message) => {
       window.playbackApi.log(`Radio refused: ${message}`)
       this.pause()
@@ -174,6 +181,8 @@ class RadioStore {
     this.#formatFailed.clear()
     this.#wanted = true
     player.playing = true
+    // an answer about the last connection must not act on this one
+    this.#connects++
     return ++this.#seq
   }
 
@@ -215,11 +224,12 @@ class RadioStore {
     window.playbackApi.log(`Radio ${s.id}: stream ${this.stream}: ${why}`)
     if (this.#sound) return this.#retry()
     const at = this.#connects
+    const seq = this.#seq
     void window.radioApi
       .lastAnswer(s.id)
       .catch(() => undefined)
       .then((a) => {
-        if (!this.#wanted || at !== this.#connects) return
+        if (!this.#wanted || at !== this.#connects || seq !== this.#seq) return
         if (!cantPlayFormat(false, a)) return this.#retry()
         window.playbackApi.log(`Radio ${s.id}: stream ${this.stream}: audio came, but no sound`)
         this.#formatFailed.add(this.stream)

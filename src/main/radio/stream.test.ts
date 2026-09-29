@@ -290,6 +290,17 @@ describe('radioStream', () => {
       await reader.cancel()
     })
 
+    it('records a 404 too, so an older answer is not taken for this one', async () => {
+      const streams = new RadioStreams()
+      const { o } = setup(async () => audio())
+      o.streams = streams
+      const res = await radioStream('metal-only', '0', o)
+      await res.body!.cancel()
+      expect(streams.lastAnswer('metal-only')?.ok).toBe(true)
+      expect((await radioStream('metal-only', '9', o)).status).toBe(404)
+      expect(streams.lastAnswer('metal-only')).toEqual({ ok: false, bytes: 0 })
+    })
+
     it('a new request stops the one still waiting for its server', async () => {
       const streams = new RadioStreams()
       let first: AbortSignal | undefined

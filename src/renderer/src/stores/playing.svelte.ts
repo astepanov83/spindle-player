@@ -6,7 +6,7 @@ import type { SavedPlaying, SavedQueue } from '../../../shared/saved-queue'
 import type { Station } from '../../../shared/stations'
 import { engine, type EngineEvents } from '../audio/engine'
 import { stepStation } from '../radio/logic'
-import { player, togglePlay as toggleSong } from './player.svelte'
+import { player, seek as seekSong, togglePlay as toggleSong } from './player.svelte'
 import { queue } from './queue.svelte'
 import { radio } from './radio.svelte'
 
@@ -45,6 +45,9 @@ class PlayingStore {
       : queue.current && `${queue.current.artist} · ${queue.current.album}`
   )
   art: Art | undefined = $derived(this.kind === 'radio' ? radio.art : queue.currentArt)
+  // A song sounds: the queue's playing marks (the bouncing bars) follow this,
+  // not player.playing, which is the radio's while radio plays.
+  songPlaying: boolean = $derived(this.kind === 'queue' && player.playing)
   // Radio: the title is the song, the artist the station.
   media: MediaText | undefined = $derived.by(() => {
     if (this.kind === 'radio') {
@@ -113,6 +116,11 @@ class PlayingStore {
     else if (player.playing) toggleSong()
   }
 
+  // A stream can't be sought, and player.pos is the queue's place while radio plays.
+  seek(pos: number): void {
+    if (this.kind === 'queue') seekSong(pos)
+  }
+
   // Next and Previous: songs in the queue, or My stations on the radio.
   async next(): Promise<void> {
     if (this.kind === 'queue') return queue.next()
@@ -132,16 +140,19 @@ class PlayingStore {
 
   // After a restart: radio comes back with its station, paused. A station no
   // longer in My stations (or one from search) gives the queue back.
-  restore(saved: SavedQueue): void {
+  // `stationsRead` false: My stations could not be read this run, so radio is
+  // not forgotten in queue.json; it comes back when they can be read.
+  restore(saved: SavedQueue, stationsRead = true): void {
     const station =
       saved.kind === 'radio' ? radio.stations.find((s) => s.id === saved.station) : undefined
-    this.#saved = station ? `radio:${station.id}` : 'queue'
+    // what queue.json holds now
+    this.#saved = saved.kind === 'radio' ? `radio:${saved.station}` : 'queue'
     if (station) {
       this.kind = 'radio'
       queue.active = false
       radio.select(station)
-    } else if (saved.kind === 'radio') {
-      window.playbackApi.savePlaying({ kind: 'queue' })
+    } else if (saved.kind === 'radio' && stationsRead) {
+      this.#save({ kind: 'queue' })
     }
     queue.restore(saved)
   }

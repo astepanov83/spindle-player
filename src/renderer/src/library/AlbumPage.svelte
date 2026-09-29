@@ -5,6 +5,7 @@
   import { fmtTime } from '../format'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
+  import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
 
@@ -49,7 +50,7 @@
       oncontextmenu={(e) => openSongMenu(e, [t.id])}
     >
       <span class="n"
-        >{#if cur && player.playing}<Eq />{:else}{i + 1}{/if}</span
+        >{#if cur && playing.songPlaying}<Eq />{:else}{i + 1}{/if}</span
       >
       <span class="nm">{t.title}</span>
       <span class="d">{fmtTime(t.duration)}</span>

@@ -1,4 +1,4 @@
-<!-- Little bars that bounce while playing (the app root has .playing). -->
+<!-- Little bars that bounce while a song plays (the app root has .song-playing; not for radio). -->
 <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
 
 <style>
@@ -15,7 +15,7 @@
     border-radius: 1px;
     height: 40%;
   }
-  :global(.playing) i {
+  :global(.song-playing) i {
     animation: eq 0.9s ease-in-out infinite alternate;
   }
   i:nth-child(2) {

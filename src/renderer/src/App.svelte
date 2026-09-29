@@ -80,6 +80,7 @@
 <div
   class="app vz-{settings.visualizer}"
   class:playing={player.playing}
+  class:song-playing={playing.songPlaying}
   style:--c1={palette[0]}
   style:--c2={palette[1]}
   style:--c3={palette[2]}

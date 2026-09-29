@@ -9,7 +9,7 @@
   import { keepPlace } from '../ui/keep-place.svelte'
   import { nextSort, sortRows, type Sort, type SortKey } from './views'
   import { library } from '../stores/library.svelte'
-  import { player } from '../stores/player.svelte'
+  import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
 
@@ -110,7 +110,7 @@
         oncontextmenu={(e) => openSongMenu(e, [t.id], playlistId)}
       >
         <span class="n"
-          >{#if cur && player.playing}<Eq />{:else}{item.index + 1}{/if}</span
+          >{#if cur && playing.songPlaying}<Eq />{:else}{item.index + 1}{/if}</span
         >
         <span class="tt">
           <Thumb src={library.art(t).cover} size={36} radius={4} />

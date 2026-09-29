@@ -8,6 +8,7 @@ import type { Station } from '../../../shared/stations'
 const fake = vi.hoisted(() => ({
   on: {} as Partial<EngineEvents>,
   loaded: false,
+  paused: true,
   calls: [] as string[],
   urls: [] as string[]
 }))
@@ -19,6 +20,11 @@ vi.mock('../audio/engine', () => ({
     get loaded() {
       return fake.loaded
     },
+    el: {
+      get paused() {
+        return fake.paused
+      }
+    },
     load: (url: string, ...rest: [number?, unknown?, { live?: boolean }?]) => {
       const opts = rest[2]
       fake.loaded = true
@@ -26,11 +32,18 @@ vi.mock('../audio/engine', () => ({
       fake.urls.push(url)
       fake.calls.push(`load ${url.replace(/&c=\d+$/, '')}${opts?.live ? ' live' : ''}`)
     },
-    play: () => fake.calls.push('play'),
-    pause: () => fake.calls.push('pause'),
+    play: () => {
+      fake.paused = false
+      fake.calls.push('play')
+    },
+    pause: () => {
+      fake.paused = true
+      fake.calls.push('pause')
+    },
     seek: () => {},
     clear: () => {
       fake.loaded = false
+      fake.paused = true
       fake.calls.push('clear')
     },
     setVolume: () => {}
@@ -340,5 +353,55 @@ describe('titles', () => {
       at: 3,
       title: 'Iron Maiden - Powerslave * Blacky OnAir *'
     })
+  })
+})
+
+describe('late answers and outside pauses (027 fix round 1)', () => {
+  it('main’s answer about the last station’s connection does not act on the new one', async () => {
+    answer = { ok: true, bytes: 64000 }
+    let reply: (a: LastAnswer) => void = () => {}
+    lastAnswer.mockImplementationOnce(() => new Promise<LastAnswer>((r) => (reply = r)))
+    await start(st('p', [128]))
+    // p fails before any sound; main has not answered yet
+    ev.error!(four)
+    let known: (s: Station | undefined) => void = () => {}
+    play.mockImplementationOnce(() => new Promise<Station | undefined>((r) => (known = r)))
+    const q = st('q', [128])
+    const playing = radio.play(q)
+    // the reply about p comes while q waits for radio:play
+    reply({ ok: true, bytes: 64000 })
+    await vi.advanceTimersByTimeAsync(0)
+    known(q)
+    await playing
+    expect(notice.text).toBe('')
+    expect(radio.wanted).toBe(true)
+    expect(loads()).toEqual(['load spindle://radio/q?stream=0 live'])
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(loads()).toEqual(['load spindle://radio/q?stream=0 live'])
+  })
+
+  it('a pause from outside the app (the system) is a pause: the stream stops', async () => {
+    await start(mine[0])
+    ev.playing!()
+    fake.paused = true
+    ev.paused!()
+    expect(radio.wanted).toBe(false)
+    expect(player.playing).toBe(false)
+    expect(stop).toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(loads()).toEqual([])
+  })
+
+  it('its own pauses (a reconnect, another stream) are not taken for one', async () => {
+    await start(mine[1])
+    // a reconnect clears the element: the pause event comes with no source
+    ev.error!(net)
+    ev.paused!()
+    expect(radio.wanted).toBe(true)
+    await vi.advanceTimersByTimeAsync(1000)
+    // choosing a stream loads the next at once: the pause event finds it playing
+    radio.choose(2)
+    ev.paused!()
+    expect(radio.wanted).toBe(true)
   })
 })

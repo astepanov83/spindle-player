@@ -39,9 +39,12 @@
     </div>
     <div class="bc">
       <Transport />
-      <div class="seekrow">
-        <span>{fmtTime(player.pos)}</span><Seek /><span>{fmtTime(player.duration)}</span>
-      </div>
+      <!-- the queue's song: a stream has no length (028 brings radio's own controls) -->
+      {#if playing.kind === 'queue'}
+        <div class="seekrow">
+          <span>{fmtTime(player.pos)}</span><Seek /><span>{fmtTime(player.duration)}</span>
+        </div>
+      {/if}
     </div>
     <div class="br">
       <Stage cover={false} />
@@ -52,12 +55,14 @@
   </div>
 {:else}
   <div class="ctl stack">
-    <div>
-      <Seek />
-      <div class="times">
-        <span>{fmtTime(player.pos)}</span><span>{fmtTime(player.duration)}</span>
+    {#if playing.kind === 'queue'}
+      <div>
+        <Seek />
+        <div class="times">
+          <span>{fmtTime(player.pos)}</span><span>{fmtTime(player.duration)}</span>
+        </div>
       </div>
-    </div>
+    {/if}
     <Transport />
     <div class="btnrow">
       <Volume />

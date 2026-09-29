@@ -129,8 +129,14 @@ function streamOf(r: RbRecord): Stream {
 }
 
 // One station per group, where its first (best voted) record was. The station
-// takes that record's uuid, name, homepage, tags and country.
-export function groupStations(records: RbRecord[]): Station[] {
+// takes that record's name, homepage, tags and country. Its id must not change
+// from one search to the next (votes change, a record fails a check), or a
+// saved station would come back as another: the id main knows already (saved
+// or played), else the smallest uuid of the group.
+export function groupStations(
+  records: RbRecord[],
+  known: (id: string) => boolean = () => false
+): Station[] {
   const groups = new Map<string, RbRecord[]>()
   for (const r of records) {
     const k = groupKey(r)
@@ -150,12 +156,9 @@ export function groupStations(records: RbRecord[]): Station[] {
           .filter(Boolean)
       )
     ].slice(0, 20)
-    const s: Station = {
-      id: `rb-${first.stationuuid}`,
-      name: stationName(first.name),
-      tags,
-      streams
-    }
+    const ids = g.map((r) => `rb-${r.stationuuid}`)
+    const id = ids.find(known) ?? ids.reduce((a, b) => (b < a ? b : a))
+    const s: Station = { id, name: stationName(first.name), tags, streams }
     const site = webUrl(first.homepage)
     if (site) s.site = site
     if (first.countrycode.trim()) s.country = first.countrycode.trim().toUpperCase()
@@ -180,6 +183,8 @@ export async function resolveMirrors(
   const addrs = await dns.lookup('all.api.radio-browser.info', { all: true })
   const names = await Promise.all(addrs.map((a) => dns.reverse(a.address).catch(() => [])))
   const out = [...new Set(names.flat().map((n) => n.toLowerCase()))]
+  // no address has a name: the round-robin name itself still works over https
+  if (!out.length) return ['all.api.radio-browser.info']
   for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1))
     ;[out[i], out[j]] = [out[j], out[i]]
@@ -194,6 +199,8 @@ export interface RadioBrowserDeps {
   userAgent: string
   log(text: string): void
   timeoutMs?: number
+  // a station main knows (saved or played): a group keeps that id
+  known?: (id: string) => boolean
 }
 
 const timeoutMs = 10000
@@ -226,7 +233,7 @@ export class RadioBrowser {
     const records = mergeResults(usableRecords(byName), usableRecords(byTag))
     if (this.#uuidOf.size > maxKnown) this.#uuidOf.clear()
     for (const r of records) this.#uuidOf.set(r.url_resolved, r.stationuuid)
-    return { ok: true, stations: groupStations(records) }
+    return { ok: true, stations: groupStations(records, this.d.known) }
   }
 
   // radio:play for a station: its click is counted when a stream opens.

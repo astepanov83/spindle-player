@@ -222,3 +222,9 @@ export function stationLine(s: Station): string {
   const tags = s.tags.slice(0, 3).join(', ')
   return [tags, s.country?.toLowerCase() ?? ''].filter(Boolean).join(' · ')
 }
+
+// Radio Browser's stations less those in My stations, which show above them.
+export function searchRows(results: Station[], saved: Station[]): Station[] {
+  const ids = new Set(saved.map((s) => s.id))
+  return results.filter((s) => !ids.has(s.id))
+}

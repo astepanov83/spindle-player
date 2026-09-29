@@ -3,6 +3,7 @@ import type { Station, Stream } from '../../../shared/stations'
 import {
   backNote,
   bitrateLine,
+  searchRows,
   stationLine,
   stationMatches,
   cantPlayFormat,
@@ -240,5 +241,13 @@ describe('Radio view rows (ticket 029)', () => {
     expect(stationLine(s)).toBe('ambient, drone, space · us')
     expect(stationLine({ ...s, tags: [] })).toBe('us')
     expect(stationLine({ ...s, country: undefined })).toBe('ambient, drone, space')
+  })
+})
+
+describe('searchRows', () => {
+  it('leaves out stations in My stations: they show above', () => {
+    const st = (id: string): Station => ({ id, name: id, tags: [], streams: [] })
+    const rows = searchRows([st('rb-1'), st('rb-2'), st('rb-3')], [st('metal-only'), st('rb-2')])
+    expect(rows.map((s) => s.id)).toEqual(['rb-1', 'rb-3'])
   })
 })

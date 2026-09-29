@@ -175,6 +175,36 @@ describe('groupStations', () => {
     })
   })
 
+  it('keeps the same id when the order of the records changes', () => {
+    const a = record({ stationuuid: 'b2', name: 'Radio X 128k', votes: 50 })
+    const b = record({
+      stationuuid: 'a9',
+      name: 'Radio X (AAC)',
+      url_resolved: 'http://x.example/aac',
+      votes: 10
+    })
+    const once = groupStations([a, b])
+    // the next search: other votes, or the best voted record failed its last check
+    const again = groupStations([b, a])
+    const alone = groupStations([b])
+    expect(once[0].id).toBe('rb-a9')
+    expect(again[0].id).toBe('rb-a9')
+    expect(alone[0].id).toBe('rb-a9')
+  })
+
+  it('takes the id main knows already (a saved or played station)', () => {
+    const list = groupStations(
+      [
+        record({ stationuuid: 'a1' }),
+        record({ stationuuid: 'b2', name: 'Radio X HQ', url_resolved: 'http://x.example/hq' })
+      ],
+      (id) => id === 'rb-b2'
+    )
+    expect(list.map((s) => s.id)).toEqual(['rb-b2'])
+    // the rest still comes from the best voted record
+    expect(list[0].name).toBe('Radio X')
+  })
+
   it('groups the saved answer: SomaFM Drone Zone is one station with four streams', () => {
     const list = groupStations(mergeResults(usableRecords(byName), usableRecords(byTag)))
     const zone = list.find((s) => s.name === 'SomaFM Drone Zone')!
@@ -292,6 +322,23 @@ describe('RadioBrowser.search', () => {
     expect(r.ok && r.stations.length).toBeGreaterThan(5)
   })
 
+  it('gives a known station its own id', async () => {
+    const f = fakeFetch({
+      [nameUrl('a.example')]: { body: byName },
+      [tagUrl('a.example')]: { body: byTag }
+    })
+    const rb = new RadioBrowser({
+      fetch: f,
+      mirrors: async () => ['a.example'],
+      userAgent: 'Spindle/1.0',
+      log: () => {},
+      known: (id) => id === 'rb-ae7aeb65-5a30-4848-8059-91b2bc2dcfd9'
+    })
+    const r = await rb.search('drone')
+    const zone = r.ok ? r.stations.find((s) => s.name === 'SomaFM Drone Zone') : undefined
+    expect(zone?.id).toBe('rb-ae7aeb65-5a30-4848-8059-91b2bc2dcfd9')
+  })
+
   it('sends nothing for a blank search', async () => {
     const { rb, f } = browser({})
     expect(await rb.search('  ')).toEqual({ ok: true, stations: [] })
@@ -387,5 +434,25 @@ describe('resolveMirrors', () => {
     const names = await resolveMirrors(dns, () => 0)
     expect(dns.lookup).toHaveBeenCalledWith('all.api.radio-browser.info', { all: true })
     expect([...names].sort()).toEqual(['de1.api.radio-browser.info', 'nl1.api.radio-browser.info'])
+  })
+
+  it('uses all.api.radio-browser.info itself when no address has a name', async () => {
+    const dns = {
+      lookup: vi.fn(async () => [{ address: '1.1.1.1', family: 4 }]),
+      reverse: vi.fn(async () => {
+        throw new Error('ENOTFOUND')
+      })
+    }
+    expect(await resolveMirrors(dns)).toEqual(['all.api.radio-browser.info'])
+  })
+
+  it('fails when the lookup fails (no network)', async () => {
+    const dns = {
+      lookup: vi.fn(async () => {
+        throw new Error('getaddrinfo ENOTFOUND')
+      }),
+      reverse: vi.fn(async () => [])
+    }
+    await expect(resolveMirrors(dns)).rejects.toThrow('ENOTFOUND')
   })
 })

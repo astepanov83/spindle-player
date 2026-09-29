@@ -16,6 +16,12 @@ export function logoSource(s: Station): string | undefined {
   return s.id === 'metal-only' ? metalOnlyLogo : undefined
 }
 
+// A station whose logo ships with the app and is not made yet (Metal Only on
+// the first run): made at start from the file, with no request.
+export function needsBundledLogo(s: Station): boolean {
+  return !s.logo && logoSource(s) === metalOnlyLogo
+}
+
 // What this needs of CoverCache.
 export interface LogoCache {
   addLogo(

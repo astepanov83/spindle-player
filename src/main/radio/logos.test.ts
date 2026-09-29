@@ -2,7 +2,14 @@ import { hash } from 'crypto'
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import { fallbackPalettes, paletteVersion } from '../../shared/palette'
 import type { Station, StationLogo } from '../../shared/stations'
-import { keptLogos, logoSource, metalOnlyLogo, StationLogos, type LogoDeps } from './logos'
+import {
+  keptLogos,
+  logoSource,
+  metalOnlyLogo,
+  needsBundledLogo,
+  StationLogos,
+  type LogoDeps
+} from './logos'
 
 const palette = fallbackPalettes('x')
 const pic = new Uint8Array([1, 2, 3])
@@ -58,6 +65,15 @@ describe('logoSource', () => {
     )
     expect(logoSource(st('metal-only'))).toBe(metalOnlyLogo)
     expect(logoSource(st('a'))).toBeUndefined()
+  })
+})
+
+describe('needsBundledLogo', () => {
+  it('is true for a station with a shipped logo and no logo yet', () => {
+    expect(needsBundledLogo(st('metal-only'))).toBe(true)
+    expect(needsBundledLogo(st('a', { logoUrl: 'https://a.example/l.png' }))).toBe(false)
+    const logo: StationLogo = { hash: 'a'.repeat(40), palette }
+    expect(needsBundledLogo(st('metal-only', { logo }))).toBe(false)
   })
 })
 

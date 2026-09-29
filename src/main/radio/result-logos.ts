@@ -73,7 +73,8 @@ export class ResultLogos {
 
   // The logo of a station from search, or undefined for none.
   async get(id: string): Promise<ResultLogo | undefined> {
-    const url = this.#source.get(id)
+    // rows of an older search are gone; the page can't ask for any station
+    const url = this.#latest.has(id) ? this.#source.get(id) : undefined
     if (!url) return undefined
     const now = (this.d.now ?? Date.now)()
     const kept = this.#kept.get(url)
@@ -125,8 +126,19 @@ export class ResultLogos {
     w.start()
   }
 
+  // bytes kept now
+  get bytes(): number {
+    return this.#bytes
+  }
+
   #keep(url: string, logo: ResultLogo | undefined): void {
-    this.#kept.set(url, { at: (this.d.now ?? Date.now)(), logo })
+    const now = (this.d.now ?? Date.now)()
+    // oldest first: the expired ones are at the front
+    for (const [k, v] of this.#kept) {
+      if (now - v.at < keepMs) break
+      this.#forget(k)
+    }
+    this.#kept.set(url, { at: now, logo })
     this.#bytes += logo?.data.length ?? 0
     const limit = this.d.maxBytes ?? maxBytes
     for (const k of this.#kept.keys()) {

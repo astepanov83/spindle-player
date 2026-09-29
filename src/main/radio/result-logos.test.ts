@@ -146,6 +146,34 @@ describe('ResultLogos', () => {
   })
 })
 
+describe('ResultLogos and the newest search', () => {
+  it('serves only stations of the newest search', async () => {
+    const load = vi.fn(async () => png)
+    const logos = new ResultLogos({ load, log: () => {} })
+    logos.searched([station('rb-a', 'https://a.example/a.png')])
+    logos.searched([station('rb-b', 'https://b.example/b.png')])
+    expect(await logos.get('rb-a')).toBeUndefined()
+    expect(await logos.get('rb-b')).toEqual({ data: png, type: 'image/png' })
+    expect(load).toHaveBeenCalledOnce()
+  })
+
+  it('drops expired logos when it keeps a new one, asked for or not', async () => {
+    let now = 0
+    const big = new Uint8Array(600)
+    big.set(png)
+    const load = vi.fn(async () => big)
+    const logos = new ResultLogos({ load, log: () => {}, now: () => now, maxBytes: 1000 })
+    logos.searched([
+      station('rb-a', 'https://a.example/a.png'),
+      station('rb-b', 'https://b.example/b.png')
+    ])
+    await logos.get('rb-a')
+    now += 11 * 60_000
+    await logos.get('rb-b')
+    expect(logos.bytes).toBe(600)
+  })
+})
+
 describe('logoType', () => {
   it('names the picture type from its first bytes', () => {
     expect(logoType(png)).toBe('image/png')

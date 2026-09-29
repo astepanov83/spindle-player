@@ -15,7 +15,7 @@ import {
   type RadioLogo,
   type RadioTitle
 } from '../shared/ipc'
-import { isStationId, parseStation, type StationLogo } from '../shared/stations'
+import { parseStation, type StationLogo } from '../shared/stations'
 import metalOnlyLogoPath from '../../resources/metal-only.png?asset'
 import { pageSettings } from '../shared/settings'
 import { stopAllDecoders } from './library/decode'
@@ -24,7 +24,7 @@ import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
 import { findStreams } from './radio/find-streams'
 import { fetchLogo } from './radio/logo-fetch'
-import { keptLogos, metalOnlyLogo, StationLogos } from './radio/logos'
+import { keptLogos, metalOnlyLogo, needsBundledLogo, StationLogos } from './radio/logos'
 import { PlayedStations } from './radio/play'
 import { RadioBrowser, resolveMirrors } from './radio/radio-browser'
 import { ResultLogos } from './radio/result-logos'
@@ -158,11 +158,11 @@ page.handle(RadioChannel.remove, (_, id) => {
 page.handle(RadioChannel.move, (_, id, by) => stations.move(id, by))
 page.handle(RadioChannel.choose, (_, id, url) => stations.choose(id, url))
 page.handle(RadioChannel.history, (_, id) => (typeof id === 'string' ? radioHistory.get(id) : []))
-page.handle(RadioChannel.play, (_, station) => {
+page.handle(RadioChannel.play, async (_, station) => {
+  const known = await played.play(station)
   // the click is counted when a stream opens, behind the answer
-  const id = (station as { id?: unknown } | null)?.id
-  if (isStationId(id)) radioBrowser.played(id)
-  return played.play(station)
+  if (known) radioBrowser.played(known.id)
+  return known
 })
 page.handle(RadioChannel.search, async (_, q) => {
   if (typeof q !== 'string') return { ok: true, stations: [] }
@@ -258,11 +258,16 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     kept: () => library.coversKept(),
     log: radioLog
   })
+  // Metal Only's logo ships with the app: made at start from the file, so My
+  // stations shows it before it is played (no request)
+  for (const s of stations.list()) if (needsBundledLogo(s)) void logos.update(s, setLogo)
   radioBrowser = new RadioBrowser({
     fetch: radioFetch,
     mirrors: () => resolveMirrors(dns),
     userAgent: radioAgent,
-    log: radioLog
+    log: radioLog,
+    // a saved or played station keeps its id in search results
+    known: (id) => !!played.lookup(id)
   })
   resultLogos = new ResultLogos({
     load: (url, signal) => fetchLogo(url, { fetch: radioFetch, userAgent: radioAgent, signal }),

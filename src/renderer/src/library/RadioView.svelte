@@ -4,7 +4,7 @@
   import Icon from '../ui/Icon.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import { stationArt, type Station } from '../../../shared/stations'
-  import { bitrateLine, stationLine, stationMatches } from '../radio/logic'
+  import { bitrateLine, searchRows, stationLine, stationMatches } from '../radio/logic'
   import { library } from '../stores/library.svelte'
   import { menu, type MenuEntry } from '../stores/menu.svelte'
   import { playing } from '../stores/playing.svelte'
@@ -14,6 +14,8 @@
   const q = $derived(library.query.trim())
   const mine = $derived(radio.stations.filter((s) => stationMatches(s, q)))
   const saved = $derived(new Map(radio.stations.map((s) => [s.id, s])))
+  // a saved station shows only under My stations
+  const found = $derived(searchRows(radioSearch.results, radio.stations))
 
   // Radio Browser is asked 400ms after typing stops (the store waits)
   $effect(() => radioSearch.want(library.query))
@@ -95,13 +97,17 @@
     <h3>From Radio Browser</h3>
     {#if radioSearch.status === 'unreachable'}
       <p class="hint">Radio Browser can't be reached. My stations still play.</p>
-    {:else if radioSearch.status === 'searching' && !radioSearch.results.length}
+    {:else if radioSearch.status === 'searching' && !found.length}
       <p class="hint">Searching…</p>
-    {:else if radioSearch.status === 'done' && !radioSearch.results.length}
-      <p class="hint">No stations found.</p>
+    {:else if radioSearch.status === 'done' && !found.length}
+      <p class="hint">
+        {radioSearch.results.length
+          ? 'Every station found is in My stations.'
+          : 'No stations found.'}
+      </p>
     {:else}
       <div class="list" role="list" class:stale={radioSearch.status === 'searching'}>
-        {#each radioSearch.results as s (s.id)}
+        {#each found as s (s.id)}
           {@render row(s, true)}
         {/each}
       </div>

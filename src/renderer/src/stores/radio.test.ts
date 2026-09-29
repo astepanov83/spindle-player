@@ -396,12 +396,16 @@ describe('choosing a stream', () => {
     expect(radio.stream).toBe(1)
   })
 
-  it('keeps the choice of a station from search in the page', async () => {
+  it('tells main the choice for a station from search too, which keeps it on its copy (final fix 4)', async () => {
     const found = st('rb-1', [64, 128])
     await start(found)
     radio.choose(1)
-    expect(choose).not.toHaveBeenCalled()
+    expect(choose).toHaveBeenCalledWith('rb-1', 'https://rb-1/1')
     expect(radio.station?.chosen).toBe('https://rb-1/1')
+    await vi.advanceTimersByTimeAsync(0)
+    // still not in My stations
+    expect(radio.stations.map((s) => s.id)).toEqual(['a', 'b', 'c'])
+    expect(radio.saved).toBe(false)
   })
 })
 
@@ -746,5 +750,28 @@ describe('My stations from the Radio view (ticket 029)', () => {
     await radio.remove('a')
     expect(notice.text).toBe("Couldn't remove A")
     expect(radio.stations.map((s) => s.id)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('events from main at start (final fix 5)', () => {
+  it('hears logos from the start, and applies one sent before My stations came', async () => {
+    const before = { titleListener, logoListener, coverListener }
+    logoListener = undefined
+    vi.resetModules()
+    const { radio: fresh } = await import('./radio.svelte')
+    try {
+      // made at start from the shipped file, before the page has the list
+      expect(logoListener).toBeDefined()
+      const logo = { hash: 'c'.repeat(40), palette: fallbackPalettes('m') }
+      logoListener!({ id: 'b', logo })
+      fresh.load(mine)
+      expect(fresh.stations[1].logo).toEqual(logo)
+      expect(fresh.stations[0].logo).toBeUndefined()
+      // from then on straight into the list
+      logoListener!({ id: 'a', logo })
+      expect(fresh.stations[0].logo).toEqual(logo)
+    } finally {
+      ;({ titleListener, logoListener, coverListener } = before)
+    }
   })
 })

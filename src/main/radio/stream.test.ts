@@ -123,6 +123,22 @@ describe('radioStream', () => {
     expect(titles).toEqual(['metal-only: A - B', 'metal-only: C - D'])
   })
 
+  it('says a stream opened only when the answer is audio (final fix 6)', async () => {
+    const opened: string[] = []
+    const { o } = setup(async (url) =>
+      url.endsWith('/64')
+        ? new Response('bad', { status: 502 })
+        : new Response(body([bytes('ab')]).stream, { headers: { 'content-type': 'audio/mpeg' } })
+    )
+    o.opened = (id, url) => opened.push(`${id} ${url}`)
+    expect((await radioStream('metal-only', '0', o)).status).toBe(502)
+    expect((await radioStream('metal-only', '9', o)).status).toBe(404)
+    expect(opened).toEqual([])
+    const res = await radioStream('metal-only', '1', o)
+    expect(opened).toEqual(['metal-only http://a.example/320'])
+    await res.body!.cancel()
+  })
+
   it('answers 502 for an error status and logs why', async () => {
     const { o, logs } = setup(async () => new Response('gone', { status: 404 }))
     expect((await radioStream('metal-only', '0', o)).status).toBe(502)

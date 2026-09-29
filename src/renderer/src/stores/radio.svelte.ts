@@ -10,7 +10,8 @@ import {
   stationArt,
   withLogo,
   type HistoryEntry,
-  type Station
+  type Station,
+  type StationLogo
 } from '../../../shared/stations'
 import { engine, type EngineEvents } from '../audio/engine'
 import {
@@ -78,7 +79,8 @@ class RadioStore {
   #down = false
   #retryTimer: ReturnType<typeof setTimeout> | undefined
   #stallTimer: ReturnType<typeof setTimeout> | undefined
-  #listening = false
+  // logos main sent before My stations came, applied when they come
+  #early: Map<string, StationLogo | undefined> | undefined = new Map()
   // stations main is saving now
   #saving = new Set<string>()
 
@@ -116,14 +118,21 @@ class RadioStore {
     }
   }
 
-  // My stations from main, at start. Titles come from then on.
-  load(stations: Station[]): void {
-    this.stations = stations
-    if (this.#listening) return
-    this.#listening = true
+  // Heard from the start: main makes Metal Only's shipped logo at start, and
+  // its event can come before the page has My stations.
+  constructor() {
     window.radioApi.onTitle((t) => this.#heard(t))
     window.radioApi.onLogo((l) => this.#logo(l))
     window.radioApi.onCover((c) => this.#cover(c))
+  }
+
+  // My stations from main, at start.
+  load(stations: Station[]): void {
+    const early = this.#early
+    this.#early = undefined
+    this.stations = early?.size
+      ? stations.map((s) => (early.has(s.id) ? withLogo(s, early.get(s.id)) : s))
+      : stations
   }
 
   // Picked but not playing: after a restart.
@@ -240,11 +249,10 @@ class RadioStore {
     this.#formatFailed.clear()
     this.#retries = 0
     this.station = { ...s, chosen: stream.url }
-    if (this.stations.some((x) => x.id === s.id)) {
-      void window.radioApi.choose(s.id, stream.url).then((list) => {
-        this.stations = list
-      })
-    }
+    // main keeps it in My stations, or on its copy of a station from search
+    void window.radioApi.choose(s.id, stream.url).then((list) => {
+      this.stations = list
+    })
     if (!this.#wanted) return
     clearTimeout(this.#retryTimer)
     clearTimeout(this.#stallTimer)
@@ -358,6 +366,7 @@ class RadioStore {
   }
 
   #logo({ id, logo }: RadioLogo): void {
+    this.#early?.set(id, logo)
     this.stations = this.stations.map((s) => (s.id === id ? withLogo(s, logo) : s))
     if (this.station?.id === id) this.station = withLogo(this.station, logo)
   }

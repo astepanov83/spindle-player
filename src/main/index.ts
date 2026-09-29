@@ -159,8 +159,9 @@ page.handle(PlaylistChannel.load, () => playlists.get())
 page.on(PlaylistChannel.save, (_, raw) => playlists.setFromPage(raw))
 page.handle(RadioChannel.stations, () => stations.list())
 page.handle(RadioChannel.save, (_, raw) => {
-  // a station played from search brings the logo main made for it
-  const list = stations.save(raw, (id) => played.lookup(id)?.logo)
+  // A station played from search brings the logo, the streams and the choice
+  // main has for it: the page's copy is from before the server answered.
+  const list = stations.save(played.forSave(raw), (id) => played.lookup(id)?.logo)
   const saved = stations.get(parseStation(raw)?.id ?? '')
   // behind the answer; the page hears of the logo with radio:logo
   if (saved) void logos.update(saved, setLogo)
@@ -173,7 +174,11 @@ page.handle(RadioChannel.remove, (_, id) => {
   return list
 })
 page.handle(RadioChannel.move, (_, id, by) => stations.move(id, by))
-page.handle(RadioChannel.choose, (_, id, url) => stations.choose(id, url))
+page.handle(RadioChannel.choose, (_, id, url) => {
+  // a station from search keeps it on main's copy
+  if (typeof id === 'string' && typeof url === 'string') played.choose(id, url)
+  return stations.choose(id, url)
+})
 // with the covers found for its songs, for the recent songs' rows
 page.handle(RadioChannel.history, (_, id) =>
   typeof id === 'string'
@@ -342,10 +347,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
       fetchLogo(url, { fetch: logoFetch(false), userAgent: radioAgent, signal }),
     log: radioLog
   })
-  const radioRequest = (id: string, stream: string | null): Promise<Response> => {
-    // the first stream to open after a play counts a Radio Browser click
-    void radioBrowser.opened(id, played.lookup(id)?.streams[Number(stream)]?.url)
-    return radioStream(id, stream, {
+  const radioRequest = (id: string, stream: string | null): Promise<Response> =>
+    radioStream(id, stream, {
       lookup: (id) => played.lookup(id),
       fetch: radioFetch,
       onTitle: (stationId, title) => {
@@ -358,9 +361,10 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
       },
       log: radioLog,
       streams: radioStreams,
-      userAgent: radioAgent
+      userAgent: radioAgent,
+      // the first stream to answer with audio after a play counts a Radio Browser click
+      opened: (stationId, url) => void radioBrowser.opened(stationId, url)
     })
-  }
   handleProtocol(library, radioRequest, (id) => resultLogos.get(id))
 
   // F12 opens DevTools in dev, and Ctrl+R reload is blocked in production.

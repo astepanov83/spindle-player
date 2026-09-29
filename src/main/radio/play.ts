@@ -84,6 +84,25 @@ export class PlayedStations {
     if (played) this.#remember({ ...played, streams: mergeStreams(played.streams, found) })
   }
 
+  // What the page sent to Save, with the streams main found for it and the
+  // choice made while it played: the page's copy is the one radio:play
+  // answered with, before the server was asked. Undefined for a bad message.
+  forSave(raw: unknown): Station | undefined {
+    const given = parseStation(raw)
+    const copy = given && this.#played.get(given.id)
+    if (!given || !copy) return given
+    const out = { ...given, streams: mergeStreams(given.streams, copy.streams) }
+    const chosen = given.chosen ?? copy.chosen
+    return chosen ? { ...out, chosen } : out
+  }
+
+  // The stream the user picked, on the copy kept here: a station from search
+  // has no other, and plays with it again after a pause.
+  choose(id: string, url: string): void {
+    const played = this.#played.get(id)
+    if (played?.streams.some((s) => s.url === url)) this.#played.set(id, { ...played, chosen: url })
+  }
+
   // The logo of the copy kept here; My stations keep their own.
   setLogo(id: string, logo: StationLogo | undefined): void {
     const played = this.#played.get(id)

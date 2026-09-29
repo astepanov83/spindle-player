@@ -190,3 +190,45 @@ describe('radio:play', () => {
     expect((await p.play(st('rb-1', [s128], { logo: page })))?.logo).toEqual(mine)
   })
 })
+
+describe('saving a station played from search (final fix 4)', () => {
+  it('keeps the streams main found for it, which the page’s copy lacks', async () => {
+    const f = finder()
+    const p = new PlayedStations(saved([]), f.find, log)
+    const found = st('rb', [s128])
+    await p.play(found)
+    f.answer([s320])
+    await vi.waitFor(() => expect(p.lookup('rb')?.streams).toHaveLength(2))
+    // the page still has the copy radio:play answered with
+    expect(p.forSave(found)).toEqual(st('rb', [s128, s320]))
+  })
+
+  it('keeps the choice made while it played', async () => {
+    const f = finder()
+    const p = new PlayedStations(saved([]), f.find, log)
+    await p.play(st('rb', [s128, s320]))
+    p.choose('rb', s320.url)
+    expect(p.forSave(st('rb', [s128, s320]))?.chosen).toBe(s320.url)
+    // the page’s own choice wins
+    expect(p.forSave(st('rb', [s128, s320], { chosen: s128.url }))?.chosen).toBe(s128.url)
+  })
+
+  it('gives what the page sent for a station never played, and nothing for a bad one', () => {
+    const p = new PlayedStations(saved([]), finder().find, log)
+    expect(p.forSave(st('rb'))).toEqual(st('rb'))
+    expect(p.forSave({ id: 'a/b' })).toBeUndefined()
+  })
+})
+
+describe('choosing a stream of a station from search (final fix 4)', () => {
+  it('keeps the choice on main’s copy, so a play after pause starts with it', async () => {
+    const f = finder()
+    const p = new PlayedStations(saved([]), f.find, log)
+    await p.play(st('rb', [s128, s320]))
+    p.choose('rb', s320.url)
+    expect(await p.play(st('rb', [s128, s320]))).toMatchObject({ chosen: s320.url })
+    // not one of its streams
+    p.choose('rb', 'https://x.example/')
+    expect(p.lookup('rb')?.chosen).toBe(s320.url)
+  })
+})

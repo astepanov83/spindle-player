@@ -18,6 +18,8 @@ export interface RadioOptions {
   userAgent: string
   timeoutMs?: number
   streams?: RadioStreams
+  // the stream answered with audio (a Radio Browser click counts then)
+  opened?: (stationId: string, url: string) => void
 }
 
 // The page has one audio element, so one radio stream at a time. Electron
@@ -165,6 +167,7 @@ export async function radioStream(
   const { reader } = opened
   const record: LastAnswer = { ok: true, bytes: 0 }
   o.streams?.answered(id, record)
+  o.opened?.(id, stream.url)
   const splitter = new IcySplitter(opened.metaint)
   let last: string | undefined
   let sent = 0

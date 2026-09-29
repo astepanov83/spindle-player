@@ -4,6 +4,7 @@ import {
   backNote,
   cantPlayFormat,
   heardAt,
+  msToMidnight,
   firstStream,
   nextStream,
   parseTitle,
@@ -178,6 +179,17 @@ describe('recent songs (031)', () => {
     const history = [{ at: now, title: 'A - B' }]
     expect(recentRows(history, undefined, now)[0].now).toBe(false)
     expect(recentRows(history, 'C - D', now)[0].now).toBe(false)
+  })
+
+  it('marks a title too long for the file, which keeps it cut', () => {
+    const long = 'A - ' + 'b'.repeat(600)
+    const history = [{ at: now, title: long.slice(0, 500) }]
+    expect(recentRows(history, long, now)[0].now).toBe(true)
+  })
+
+  it('waits until the next midnight to turn times into days', () => {
+    expect(msToMidnight(at(30, 23, 59))).toBe(60_000)
+    expect(msToMidnight(at(30, 0, 0))).toBe(86_400_000)
   })
 
   it('a title with no dash is all song', () => {

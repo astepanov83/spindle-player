@@ -3,6 +3,7 @@ import { defaultPalettes, type ThemePalettes } from './palette'
 import {
   addEntry,
   addTitle,
+  historyTitle,
   chooseStream,
   historyFile,
   isKnownHistoryFile,
@@ -280,6 +281,11 @@ describe('history', () => {
     for (let i = 0; i < 55; i++) long = addEntry(long, `song ${i}`, i)
     expect(long).toHaveLength(50)
     expect(long[0].title).toBe('song 5')
+  })
+
+  it('cuts a title as the file keeps it', () => {
+    expect(historyTitle('  A - B ')).toBe('A - B')
+    expect(historyTitle('x'.repeat(600))).toHaveLength(500)
   })
 
   it('drops a station that is not saved and was not played for 30 days', () => {

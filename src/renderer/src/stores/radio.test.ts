@@ -377,6 +377,19 @@ describe('recent songs (031)', () => {
     ])
   })
 
+  it('drops a late list for the last station after another is picked', async () => {
+    let reply: (h: { at: number; title: string }[]) => void = () => {}
+    history.mockImplementationOnce(() => new Promise((r) => (reply = r)))
+    await start(st('h2', [128]))
+    await start(st('h3', [128]))
+    await vi.waitFor(() => expect(radio.history).toEqual([{ at: 1, title: 'Old - Song' }]))
+    reply([{ at: 7, title: 'From - A' }])
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(radio.station?.id).toBe('h3')
+    expect(radio.history).toEqual([{ at: 1, title: 'Old - Song' }])
+  })
+
   it('keeps main’s list when a title came before it answered', async () => {
     let reply: (h: { at: number; title: string }[]) => void = () => {}
     history.mockImplementationOnce(() => new Promise((r) => (reply = r)))

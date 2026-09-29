@@ -6,12 +6,22 @@
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
   import { radio } from '../stores/radio.svelte'
-  import { backNote, recentRows } from '../radio/logic'
+  import { backNote, msToMidnight, recentRows } from '../radio/logic'
+
+  // Today's times turn into days at midnight, with no new title to redraw them.
+  let now = $state(Date.now())
+  $effect(() => {
+    let timer: ReturnType<typeof setTimeout>
+    const tick = (): void => {
+      now = Date.now()
+      timer = setTimeout(tick, msToMidnight(now) + 1000)
+    }
+    timer = setTimeout(tick, msToMidnight(Date.now()) + 1000)
+    return () => clearTimeout(timer)
+  })
 
   // player.playing is radio's wish for sound while radio plays
-  const rows = $derived(
-    recentRows(radio.history, player.playing ? radio.title : undefined, Date.now())
-  )
+  const rows = $derived(recentRows(radio.history, player.playing ? radio.title : undefined, now))
   const note = $derived(backNote(queue.from, queue.items.length))
 </script>
 

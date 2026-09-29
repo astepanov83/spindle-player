@@ -300,11 +300,16 @@ export function isKnownHistoryFile(raw: unknown): boolean {
   return JSON.stringify(parseHistory(raw)) === JSON.stringify(raw)
 }
 
+// A title as the file keeps it.
+export function historyTitle(title: string): string {
+  return title.trim().slice(0, maxTextLength)
+}
+
 // Oldest first, so the newest title is the last. A blank title, or the same one
 // again (a reconnect sends it twice), is not added: the same list comes back.
 // The page adds heard titles by this too, so its list matches the file.
 export function addEntry(list: HistoryEntry[], title: string, at: number): HistoryEntry[] {
-  const t = title.trim().slice(0, maxTextLength)
+  const t = historyTitle(title)
   if (!t || list[list.length - 1]?.title === t) return list
   return [...list, { at, title: t }].slice(-maxHistory)
 }

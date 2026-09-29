@@ -1,6 +1,11 @@
 // Radio moves as plain functions: the title's parts, which stream to try next,
 // how long to wait. stores/radio.svelte.ts plays what they pick.
-import type { HistoryEntry, Station, Stream } from '../../../shared/stations'
+import {
+  historyTitle,
+  type HistoryEntry,
+  type Station,
+  type Stream
+} from '../../../shared/stations'
 import type { LastAnswer } from '../../../shared/ipc'
 
 const entities: Record<string, string> = {
@@ -154,6 +159,12 @@ export function heardAt(at: number, now: number): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+// ms until the next local midnight, when today's times turn into days
+export function msToMidnight(now: number): number {
+  const d = new Date(now)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() - now
+}
+
 export interface RecentRow {
   key: string
   time: string
@@ -170,7 +181,8 @@ export function recentRows(
   current: string | undefined,
   now: number
 ): RecentRow[] {
-  const playingNow = current?.trim()
+  // the file keeps a long title cut
+  const playingNow = current === undefined ? undefined : historyTitle(current)
   return history
     .map((e, i) => {
       const t = parseTitle(e.title)

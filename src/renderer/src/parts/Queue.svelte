@@ -53,7 +53,7 @@
     <div class="head">
       <div class="title">
         {#if onRadio}
-          <b>{radio.station?.name} · recent songs</b>
+          <b>{radio.station?.name ?? 'Radio'} · recent songs</b>
         {:else}
           <b>Queue</b>{#if queue.from}<small>From {queue.from}</small>{/if}
         {/if}

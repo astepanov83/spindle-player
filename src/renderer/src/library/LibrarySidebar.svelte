@@ -174,6 +174,8 @@
   .main {
     flex: 1;
     overflow: auto;
+    /* grid sizes follow the width; a scrollbar that comes and goes would make them loop */
+    scrollbar-gutter: stable;
     padding: 20px 24px 24px;
     min-width: 0;
     position: relative;

@@ -112,6 +112,8 @@
     --scroll-pad-top: 4px;
     flex: 1;
     overflow: auto;
+    /* grid sizes follow the width; a scrollbar that comes and goes would make them loop */
+    scrollbar-gutter: stable;
     padding: 4px 22px 22px;
     min-height: 0;
     position: relative;

@@ -98,6 +98,10 @@ function parseStreams(raw: unknown): Stream[] {
 // Ids go into spindle://radio/<id>, so they stay plain.
 const idPattern = /^[A-Za-z0-9_-]{1,200}$/
 
+export function isStationId(v: unknown): v is string {
+  return typeof v === 'string' && idPattern.test(v)
+}
+
 export function parseStation(raw: unknown): Station | undefined {
   if (!isObject(raw) || typeof raw.id !== 'string' || !idPattern.test(raw.id)) return undefined
   if (typeof raw.name !== 'string') return undefined

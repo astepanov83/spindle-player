@@ -10,6 +10,7 @@ import {
 } from '../shared/playlists'
 import {
   applyPlace,
+  applyPlaying,
   isKnownQueueFile,
   parseSavedQueue,
   type SavedQueue
@@ -86,8 +87,18 @@ export class QueueFile {
     return this.#data
   }
 
+  // What plays comes on its own (setPlaying), so a new list keeps it.
   setFromPage(raw: unknown): void {
-    this.#data = parseSavedQueue(raw)
+    const { kind, station } = this.#data
+    this.#data = applyPlaying(parseSavedQueue(raw), kind ? { kind, station } : { kind: 'queue' })
+    this.#writer?.schedule(this.#data)
+  }
+
+  // Radio or the queue (ticket 027).
+  setPlaying(raw: unknown): void {
+    const next = applyPlaying(this.#data, raw)
+    if (next === this.#data) return
+    this.#data = next
     this.#writer?.schedule(this.#data)
   }
 

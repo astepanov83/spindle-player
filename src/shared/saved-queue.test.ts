@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { applyPlace, emptyQueue, isKnownQueueFile, parseSavedQueue } from './saved-queue'
+import {
+  applyPlace,
+  applyPlaying,
+  emptyQueue,
+  isKnownQueueFile,
+  parseSavedQueue
+} from './saved-queue'
 
 describe('parseSavedQueue', () => {
   it('gives an empty queue for no file or a wrong one', () => {
@@ -59,5 +65,41 @@ describe('isKnownQueueFile', () => {
     expect(isKnownQueueFile({ items: [] })).toBe(true)
     expect(isKnownQueueFile({ items: 'a' })).toBe(false)
     expect(isKnownQueueFile([])).toBe(false)
+  })
+})
+
+describe('what plays (ticket 027)', () => {
+  it('keeps radio and its station, even with no songs in the queue', () => {
+    const raw = { items: [], index: 0, from: '', pos: 0, kind: 'radio', station: 'metal-only' }
+    expect(parseSavedQueue(raw)).toEqual({ ...emptyQueue(), kind: 'radio', station: 'metal-only' })
+    const withSongs = { items: ['a'], index: 0, from: 'X', pos: 2, kind: 'radio', station: 'rb-1' }
+    expect(parseSavedQueue(withSongs)).toEqual(withSongs)
+  })
+
+  it('drops radio with no station or a bad one, and a kind it does not know', () => {
+    for (const extra of [
+      { kind: 'radio' },
+      { kind: 'radio', station: 'a/b' },
+      { kind: 'radio', station: 3 },
+      { kind: 'tv', station: 'x' },
+      { kind: 'queue', station: 'x' }
+    ])
+      expect(parseSavedQueue({ items: ['a'], ...extra })).toEqual({
+        items: ['a'],
+        index: 0,
+        from: '',
+        pos: 0
+      })
+  })
+
+  it('applyPlaying sets radio or the queue and keeps the list', () => {
+    const q = { items: ['a'], index: 0, from: 'X', pos: 3 }
+    const radio = applyPlaying(q, { kind: 'radio', station: 'metal-only' })
+    expect(radio).toEqual({ ...q, kind: 'radio', station: 'metal-only' })
+    expect(radio.items).toBe(q.items)
+    expect(applyPlaying(radio, { kind: 'queue' })).toEqual(q)
+    expect(applyPlaying(q, { kind: 'queue' })).toBe(q)
+    for (const bad of [null, 5, { kind: 'radio' }, { kind: 'radio', station: '../x' }, {}])
+      expect(applyPlaying(q, bad)).toBe(q)
   })
 })

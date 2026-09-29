@@ -2,7 +2,7 @@ import type { ArtistChanges } from './artist-overrides'
 import type { IdMoves } from './id-moves'
 import type { ScanStatus } from './library'
 import type { Playlist } from './playlists'
-import type { QueuePlace, SavedQueue } from './saved-queue'
+import type { QueuePlace, SavedPlaying, SavedQueue } from './saved-queue'
 import type { Settings } from './settings'
 import type { HistoryEntry, Station } from './stations'
 
@@ -95,6 +95,7 @@ export const PlaybackChannel = {
   loadQueue: 'queue:load',
   saveQueue: 'queue:save',
   savePlace: 'queue:save-place',
+  savePlaying: 'queue:save-playing',
   playing: 'playback:playing',
   log: 'playback:log'
 } as const
@@ -107,6 +108,8 @@ export interface PlaybackApi {
   saveQueue(queue: SavedQueue): void
   // the current song and seconds into it; sent on every song change and while playing
   savePlace(place: QueuePlace): void
+  // radio or the queue, and the station; kept in queue.json too (ticket 027)
+  savePlaying(playing: SavedPlaying): void
   // play or pause; while a song plays, the library scan slows down
   playing(playing: boolean): void
   // a song that would not play, written to main's log
@@ -120,6 +123,9 @@ export const RadioChannel = {
   move: 'radio:move',
   choose: 'radio:choose',
   history: 'radio:history',
+  play: 'radio:play',
+  lastAnswer: 'radio:last-answer',
+  stop: 'radio:stop',
   // main to page: a new song title in the stream playing
   title: 'radio:title'
 } as const
@@ -129,6 +135,14 @@ export interface RadioTitle {
   stationId: string
   title: string
   at: number
+}
+
+// What main last answered to spindle://radio/<id>: audio (ok) or 502/404, and
+// how many bytes of audio it passed on. Lets the page tell a format it can't
+// play (audio came, no sound) from a server that can't be reached.
+export interface LastAnswer {
+  ok: boolean
+  bytes: number
 }
 
 // What the preload exposes to the page as `window.radioApi`.
@@ -144,6 +158,16 @@ export interface RadioApi {
   choose(id: string, url: string): Promise<Station[]>
   // the last 50 titles, oldest first
   history(id: string): Promise<HistoryEntry[]>
+  // Before the page loads a station's stream: main keeps the station (one from
+  // search too) and asks its server for streams. Answers with the station as
+  // main knows it now, whose streams spindle://radio/<id>?stream=<n> counts in;
+  // undefined for a station it refused.
+  play(station: Station): Promise<Station | undefined>
+  // what main last answered for the station's stream, if it was asked
+  lastAnswer(id: string): Promise<LastAnswer | undefined>
+  // Pause: main ends the stream. The page's element keeps it, paused, so the
+  // system's media controls stay; play opens a new connection.
+  stop(): void
   // Returns a function that stops listening.
   onTitle(listener: (title: RadioTitle) => void): () => void
 }
@@ -172,9 +196,13 @@ export interface PageChannels {
   [RadioChannel.move]: RadioApi['move']
   [RadioChannel.choose]: RadioApi['choose']
   [RadioChannel.history]: RadioApi['history']
+  [RadioChannel.play]: RadioApi['play']
+  [RadioChannel.lastAnswer]: RadioApi['lastAnswer']
+  [RadioChannel.stop]: RadioApi['stop']
   [PlaybackChannel.loadQueue]: PlaybackApi['loadQueue']
   [PlaybackChannel.saveQueue]: PlaybackApi['saveQueue']
   [PlaybackChannel.savePlace]: PlaybackApi['savePlace']
+  [PlaybackChannel.savePlaying]: PlaybackApi['savePlaying']
   [PlaybackChannel.playing]: PlaybackApi['playing']
   [PlaybackChannel.log]: PlaybackApi['log']
 }

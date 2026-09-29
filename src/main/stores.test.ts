@@ -214,4 +214,25 @@ describe('QueueFile', () => {
       pos: 7
     })
   })
+
+  it('keeps radio apart from the list: a new list or place leaves it', () => {
+    const path = join(dir, 'queue.json')
+    const file = new QueueFile(path)
+    file.setFromPage({ items: ['a', 'b'], index: 0, from: 'X', pos: 0 })
+    file.setPlaying({ kind: 'radio', station: 'metal-only' })
+    file.setFromPage({ items: ['c'], index: 0, from: 'Y', pos: 0 })
+    file.setPlace({ index: 0, pos: 9 })
+    file.flushSync()
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
+      items: ['c'],
+      index: 0,
+      from: 'Y',
+      pos: 9,
+      kind: 'radio',
+      station: 'metal-only'
+    })
+    file.setPlaying({ kind: 'queue' })
+    file.flushSync()
+    expect(JSON.parse(readFileSync(path, 'utf8')).kind).toBeUndefined()
+  })
 })

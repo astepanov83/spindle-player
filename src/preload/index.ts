@@ -96,6 +96,7 @@ const playbackApi: PlaybackApi = {
   loadQueue: () => savedQueue,
   saveQueue: (q) => send(PlaybackChannel.saveQueue, q),
   savePlace: (place) => send(PlaybackChannel.savePlace, place),
+  savePlaying: (playing) => send(PlaybackChannel.savePlaying, playing),
   playing: (playing) => send(PlaybackChannel.playing, playing),
   log: (text) => send(PlaybackChannel.log, text)
 }
@@ -107,6 +108,9 @@ const radioApi: RadioApi = {
   move: (id, by) => invoke(RadioChannel.move, id, by),
   choose: (id, url) => invoke(RadioChannel.choose, id, url),
   history: (id) => invoke(RadioChannel.history, id),
+  play: (station) => invoke(RadioChannel.play, station),
+  lastAnswer: (id) => invoke(RadioChannel.lastAnswer, id),
+  stop: () => send(RadioChannel.stop),
   onTitle: (listener) => {
     const handler = (_: Electron.IpcRendererEvent, title: RadioTitle): void => listener(title)
     ipcRenderer.on(RadioChannel.title, handler)

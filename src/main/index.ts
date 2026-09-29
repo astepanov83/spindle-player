@@ -17,8 +17,10 @@ import { stopAllDecoders } from './library/decode'
 import { handleProtocol, registerScheme } from './library/protocol'
 import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
+import { findStreams } from './radio/find-streams'
+import { PlayedStations } from './radio/play'
 import { RadioHistoryStore, StationsStore } from './radio/stations-store'
-import { radioStream } from './radio/stream'
+import { RadioStreams, radioStream } from './radio/stream'
 import { PlaylistFile, QueueFile } from './page-files'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
@@ -32,6 +34,9 @@ let savedQueue: QueueFile
 // 025 and 027 look stations up here and add heard titles to the history
 let stations: StationsStore
 let radioHistory: RadioHistoryStore
+// stations played this run, saved or not; spindle://radio looks them up here
+let played: PlayedStations
+const radioStreams = new RadioStreams()
 let main: MainWindow | null = null
 
 registerScheme()
@@ -116,9 +121,15 @@ page.handle(RadioChannel.remove, (_, id) => stations.remove(id))
 page.handle(RadioChannel.move, (_, id, by) => stations.move(id, by))
 page.handle(RadioChannel.choose, (_, id, url) => stations.choose(id, url))
 page.handle(RadioChannel.history, (_, id) => (typeof id === 'string' ? radioHistory.get(id) : []))
+page.handle(RadioChannel.play, (_, station) => played.play(station))
+page.on(RadioChannel.stop, () => radioStreams.stop())
+page.handle(RadioChannel.lastAnswer, (_, id) =>
+  typeof id === 'string' ? radioStreams.lastAnswer(id) : undefined
+)
 page.handle(PlaybackChannel.loadQueue, () => savedQueue.get())
 page.on(PlaybackChannel.saveQueue, (_, raw) => savedQueue.setFromPage(raw))
 page.on(PlaybackChannel.savePlace, (_, raw) => savedQueue.setPlace(raw))
+page.on(PlaybackChannel.savePlaying, (_, raw) => savedQueue.setPlaying(raw))
 page.on(PlaybackChannel.playing, (_, playing) => library.setPlaying(playing === true))
 page.on(PlaybackChannel.log, (_, text) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
@@ -164,6 +175,13 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     join(userData, 'radio-history.json'),
     (id) => !!stations.get(id)
   )
+  const radioFetch: typeof fetch = (url, init) => net.fetch(url as string, init)
+  const radioLog = (text: string): void => console.warn(text)
+  played = new PlayedStations(
+    stations,
+    (station) => findStreams(station, { fetch: radioFetch, log: radioLog }),
+    radioLog
+  )
 
   // Starts reading the index now, while the window loads.
   library = new LibraryService(
@@ -179,16 +197,16 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   )
   handleProtocol(library, (id, stream) =>
     radioStream(id, stream, {
-      // 027 adds the stations played from search
-      lookup: (id) => stations.get(id),
-      fetch: (url, init) => net.fetch(url as string, init),
+      lookup: (id) => played.lookup(id),
+      fetch: radioFetch,
       onTitle: (stationId, title) => {
         const at = Date.now()
         // kept for any station played, not only saved ones
         radioHistory.add(stationId, title, at)
         toPage(RadioChannel.title, { stationId, title, at } satisfies RadioTitle)
       },
-      log: (text) => console.warn(text),
+      log: radioLog,
+      streams: radioStreams,
       userAgent: `Spindle/${app.getVersion()}`
     })
   )

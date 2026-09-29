@@ -2,6 +2,7 @@
 // passes the audio to the page, so the page never loads a radio URL itself. The
 // CSP stays closed and the visualizer gets sound, since most radio servers send
 // no CORS headers (decision 149). The ICY titles are taken out on the way.
+import type { LastAnswer } from '../../shared/ipc'
 import type { Station } from '../../shared/stations'
 import { IcySplitter, readIcyHead } from './icy'
 
@@ -16,6 +17,41 @@ export interface RadioOptions {
   // a browser's User-Agent gets Shoutcast v1's HTML page, not the stream
   userAgent: string
   timeoutMs?: number
+  streams?: RadioStreams
+}
+
+// The page has one audio element, so one radio stream at a time. Electron
+// doesn't tell a handler that the page dropped a request still waiting for its
+// server (the request's signal never aborts), so a new request stops the old one.
+// Also keeps what main last answered for each station (ticket 027).
+export class RadioStreams {
+  #last = new Map<string, LastAnswer>()
+  #stop: (() => void) | undefined
+
+  lastAnswer(id: string): LastAnswer | undefined {
+    const a = this.#last.get(id)
+    return a && { ...a }
+  }
+
+  begin(stop: () => void): void {
+    this.#stop?.()
+    this.#stop = stop
+  }
+
+  // The page paused the radio: its element keeps the stream, so main ends it.
+  stop(): void {
+    this.#stop?.()
+    this.#stop = undefined
+  }
+
+  end(stop: () => void): void {
+    if (this.#stop === stop) this.#stop = undefined
+  }
+
+  // kept as it is: the stream counts its bytes in it
+  answered(id: string, a: LastAnswer): void {
+    this.#last.set(id, a)
+  }
 }
 
 const common = { 'Access-Control-Allow-Origin': '*' }
@@ -94,8 +130,16 @@ export async function radioStream(
     return answer(404, 'Not found')
   }
 
-  // one controller for the timeout and for the page closing the request
+  // one controller for the timeout, the page closing the request, and a newer request
   const ac = new AbortController()
+  // a newer radio request came: this one ends quietly
+  let replaced = false
+  // aborting the fetch also stops its body
+  const stop = (): void => {
+    replaced = true
+    ac.abort(new Error('another radio request came'))
+  }
+  o.streams?.begin(stop)
   const timer = setTimeout(
     () => ac.abort(new Error(`no answer in ${(o.timeoutMs ?? 10000) / 1000}s`)),
     o.timeoutMs ?? 10000
@@ -107,6 +151,8 @@ export async function radioStream(
     // the timeout's reason, not the AbortError it caused
     const why = ac.signal.reason instanceof Error ? ac.signal.reason.message : String(e)
     ac.abort()
+    o.streams?.end(stop)
+    if (!replaced) o.streams?.answered(id, { ok: false, bytes: 0 })
     o.log(`Radio ${id}: ${stream.url} ${why}; answered 502`)
     return answer(502, 'Bad gateway')
   } finally {
@@ -114,6 +160,8 @@ export async function radioStream(
   }
 
   const { reader } = opened
+  const record: LastAnswer = { ok: true, bytes: 0 }
+  o.streams?.answered(id, record)
   const splitter = new IcySplitter(opened.metaint)
   let last: string | undefined
   let sent = 0
@@ -129,8 +177,14 @@ export async function radioStream(
     }
     if (audio.length === 0) return false
     sent += audio.length
+    record.bytes = sent
     c.enqueue(audio)
     return true
+  }
+
+  const end = (c: ReadableStreamDefaultController<Uint8Array>): void => {
+    void reader.cancel().catch(() => {})
+    c.close()
   }
 
   const body = new ReadableStream<Uint8Array>({
@@ -144,13 +198,17 @@ export async function radioStream(
           r = await reader.read()
         } catch (e) {
           if (closed) return
+          if (replaced) return end(c)
+          o.streams?.end(stop)
           // the page gets an error too, and reconnects
           o.log(`Radio ${id}: the stream failed after ${sent} bytes: ${String(e)}`)
           throw e
         }
         const { value, done } = r
         if (closed) return
+        if (replaced) return end(c)
         if (done) {
+          o.streams?.end(stop)
           // the page counts this as an error and reconnects
           o.log(`Radio ${id}: the server ended the stream after ${sent} bytes`)
           c.close()
@@ -162,6 +220,7 @@ export async function radioStream(
     // stop, another station or another bitrate: stop downloading at once
     cancel() {
       closed = true
+      o.streams?.end(stop)
       o.log(`Radio ${id}: closed by the page after ${sent} bytes`)
       ac.abort()
       void reader.cancel().catch(() => {})

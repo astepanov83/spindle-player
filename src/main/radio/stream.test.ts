@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Station } from '../../shared/stations'
-import { radioStream, type RadioOptions } from './stream'
+import { RadioStreams, radioStream, type RadioOptions } from './stream'
 
 const station: Station = {
   id: 'metal-only',
@@ -263,5 +263,92 @@ describe('radioStream', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('RadioStreams (ticket 027)', () => {
+    const audio = (): Response =>
+      new Response(body([bytes('abcd'), bytes('efgh')], false).stream, {
+        headers: { 'content-type': 'audio/mpeg' }
+      })
+
+    it('keeps what it last answered for each station, and how much audio it passed', async () => {
+      const streams = new RadioStreams()
+      const { o } = setup(async (url) => {
+        if (url.endsWith('/64')) throw new Error('ECONNREFUSED')
+        return audio()
+      })
+      o.streams = streams
+      expect(streams.lastAnswer('metal-only')).toBeUndefined()
+      await radioStream('metal-only', '0', o)
+      expect(streams.lastAnswer('metal-only')).toEqual({ ok: false, bytes: 0 })
+      const res = await radioStream('metal-only', '1', o)
+      expect(streams.lastAnswer('metal-only')).toEqual({ ok: true, bytes: 0 })
+      const reader = res.body!.getReader()
+      await reader.read()
+      await reader.read()
+      expect(streams.lastAnswer('metal-only')).toEqual({ ok: true, bytes: 8 })
+      await reader.cancel()
+    })
+
+    it('a new request stops the one still waiting for its server', async () => {
+      const streams = new RadioStreams()
+      let first: AbortSignal | undefined
+      const { o, logs } = setup((url, init) => {
+        if (url.endsWith('/320')) return Promise.resolve(audio())
+        first = init.signal!
+        return new Promise((_, reject) =>
+          first!.addEventListener('abort', () => reject(first!.reason))
+        )
+      })
+      o.streams = streams
+      const waiting = radioStream('metal-only', '0', o)
+      await new Promise((r) => setTimeout(r, 0))
+      const res = await radioStream('metal-only', '1', o)
+      expect(first?.aborted).toBe(true)
+      expect((await waiting).status).toBe(502)
+      expect(logs.join()).toMatch(/another radio request came/)
+      // the answer of the newer one is the one kept
+      expect(streams.lastAnswer('metal-only')?.ok).toBe(true)
+      await res.body!.cancel()
+    })
+
+    it('stop() ends the stream passing audio, for a pause', async () => {
+      const streams = new RadioStreams()
+      const signals: AbortSignal[] = []
+      const { o } = setup(async (_, init) => {
+        signals.push(init.signal!)
+        return audio()
+      })
+      o.streams = streams
+      const res = await radioStream('metal-only', '0', o)
+      const reader = res.body!.getReader()
+      await reader.read()
+      streams.stop()
+      expect(signals[0].aborted).toBe(true)
+      await reader.read()
+      expect((await reader.read()).done).toBe(true)
+      // nothing left to stop
+      streams.stop()
+    })
+
+    it('a new request stops one that is still passing audio', async () => {
+      const streams = new RadioStreams()
+      const signals: AbortSignal[] = []
+      const { o, logs } = setup(async (_, init) => {
+        signals.push(init.signal!)
+        return audio()
+      })
+      o.streams = streams
+      const old = await radioStream('metal-only', '0', o)
+      const reader = old.body!.getReader()
+      await reader.read()
+      const res = await radioStream('metal-only', '1', o)
+      expect(signals[0].aborted).toBe(true)
+      expect(signals[1].aborted).toBe(false)
+      // the old answer just ends; it is not the server's doing
+      await reader.read()
+      expect(logs.join('\n')).not.toMatch(/failed|ended the stream/)
+      await res.body!.cancel()
+    })
   })
 })

@@ -2,6 +2,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { Track } from '../../../shared/library'
+  import type { QueueLink } from '../../../shared/saved-queue'
   import Eq from '../ui/Eq.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import { fmtTime } from '../format'
@@ -21,6 +22,7 @@
     sort: given,
     onsort = (k) => (library.sort = nextSort(library.sort, k)),
     playlistId,
+    link,
     head
   }: {
     title: string
@@ -32,6 +34,8 @@
     onsort?: (k: SortKey) => void
     // set in a playlist, so the menu can take songs out of it
     playlistId?: string
+    // what "From" opens after playing from here
+    link?: QueueLink
     // replaces the title block (a playlist's name can be edited)
     head?: Snippet
   } = $props()
@@ -64,7 +68,8 @@
     queue.playList(
       rows.map((t) => t.id),
       i,
-      title
+      title,
+      link
     )
   }
 </script>
@@ -107,7 +112,8 @@
         class:first={item.index === 0}
         style:transform="translateY({v.offset(item)}px)"
         onclick={() => play(item.index)}
-        oncontextmenu={(e) => openSongMenu(e, [t.id], { inPlaylist: playlistId, from: title })}
+        oncontextmenu={(e) =>
+          openSongMenu(e, [t.id], { inPlaylist: playlistId, from: title, link })}
       >
         <span class="n"
           >{#if cur && playing.songPlaying}<Eq />{:else}{item.index + 1}{/if}</span

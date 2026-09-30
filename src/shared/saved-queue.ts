@@ -1,10 +1,19 @@
 // The queue and position, saved in queue.json so a restart carries on where you left off.
 import { isStationId } from './stations'
 
+// What "From <from>" opens (ticket 040): an album or playlist by id, an
+// artist by key, a folder by its path key. None for a list with no page of
+// its own (a search, Classic's Songs).
+export interface QueueLink {
+  kind: 'album' | 'artist' | 'folder' | 'playlist'
+  id: string
+}
+
 export interface SavedQueue {
   items: string[]
   index: number
   from: string
+  link?: QueueLink
   // seconds into the current song
   pos: number
   // songs right after the current one put there with "Play next" (ticket 037)
@@ -26,6 +35,14 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+const linkKinds: readonly string[] = ['album', 'artist', 'folder', 'playlist']
+
+export function parseLink(raw: unknown): QueueLink | undefined {
+  if (!isObject(raw) || typeof raw.kind !== 'string' || !linkKinds.includes(raw.kind)) return
+  if (typeof raw.id !== 'string' || !raw.id || raw.id.length > 5000) return
+  return { kind: raw.kind as QueueLink['kind'], id: raw.id }
+}
+
 // Anything wrong with the list gives an empty queue; a bad index or position
 // is pulled back into range.
 export function parseSavedQueue(raw: unknown): SavedQueue {
@@ -40,8 +57,17 @@ export function parseSavedQueue(raw: unknown): SavedQueue {
       : 0
   const pos = typeof raw.pos === 'number' && Number.isFinite(raw.pos) ? Math.max(0, raw.pos) : 0
   const from = typeof raw.from === 'string' ? raw.from.slice(0, 500) : ''
+  const link = parseLink(raw.link)
   const next = isCount(raw.next) ? Math.min(raw.next, items.length - 1 - index) : 0
-  return { items, index, from, pos, ...(next > 0 ? { next } : {}), ...playing }
+  return {
+    items,
+    index,
+    from,
+    ...(link ? { link } : {}),
+    pos,
+    ...(next > 0 ? { next } : {}),
+    ...playing
+  }
 }
 
 // Sets what plays, keeping the list and place. Returns the same object when

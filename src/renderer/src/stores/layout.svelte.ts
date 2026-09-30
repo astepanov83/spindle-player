@@ -3,7 +3,7 @@
 import type { QueueMode, TemplateId } from '../../../shared/layout'
 import { queueModeFor, visualizerStyles, type VisualizerStyle } from '../../../shared/settings'
 import { templates } from '../../../shared/templates'
-import { buildLayout, type BuiltLayout, type Slots } from '../layout/build'
+import { buildLayout, partsOf, type BuiltLayout, type Slots } from '../layout/build'
 import { library } from './library.svelte'
 import { settings } from './settings.svelte'
 
@@ -11,6 +11,8 @@ class LayoutStore {
   template = $derived(templates[settings.template])
   queueMode: QueueMode = $derived(queueModeFor(this.template, settings.queue[settings.template]))
   built: BuiltLayout = $derived(buildLayout(this.template, this.queueMode))
+  // Focus has none: links to an album or artist are plain text there (ticket 040)
+  hasLibrary: boolean = $derived(partsOf(this.built.root).some((p) => p.part === 'library'))
   get slots(): Slots {
     return this.built.slots
   }

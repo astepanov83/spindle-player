@@ -1,13 +1,26 @@
 // The Artists view (ticket 021): search, what Play plays, the covers for an
 // artist's picture, and mouse Back and Forward between the grid, an artist
 // and an album. No DOM. Who counts as an artist is in shared/artists.ts.
-import type { Artist } from '../../../shared/artists'
-import type { Track } from '../../../shared/library'
+import { artistKey, namesOf, type Artist } from '../../../shared/artists'
+import type { ArtistCredit, Track } from '../../../shared/library'
 import { foldedName, foldQuery, sortRows, type Sort } from './views'
 
 export function filterArtists(artists: Artist[], q: string): Artist[] {
   const s = foldQuery(q)
   return s ? artists.filter((a) => foldedName(a).includes(s)) : artists
+}
+
+// The artists of a song or album as links (ticket 040): one per name of a
+// split credit (an artist override), since each has its own page. key is
+// null for a name with no page.
+export function artistLinks(
+  c: ArtistCredit,
+  has: (key: string) => boolean
+): { name: string; key: string | null }[] {
+  return namesOf(c).map((name) => {
+    const key = artistKey(name)
+    return { name, key: has(key) ? key : null }
+  })
 }
 
 // Their albums in order, then their songs on other albums.

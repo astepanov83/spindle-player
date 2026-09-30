@@ -284,6 +284,7 @@ describe('saving', () => {
       items: ['b0', 'b1'],
       index: 1,
       from: 'Album b',
+      link: { kind: 'album', id: 'b' },
       pos: 0
     })
   })
@@ -397,6 +398,21 @@ describe('queue actions (ticket 037)', () => {
     expect(playing()).toBe('b0')
     expect(fake.calls).toEqual(['load media/b0'])
     expect(player.playing).toBe(false)
+  })
+
+  it('keeps what "From" opens, from a list, a menu and the last run (ticket 040)', () => {
+    expect(queue.link).toEqual({ kind: 'album', id: 'a' })
+    queue.playList(['b0'], 0, 'search "b"')
+    expect(queue.link).toBeUndefined()
+    queue.clear()
+    queue.clear()
+    queue.playNext(['b0'], 'Mix', { kind: 'playlist', id: 'p1' })
+    expect(queue.link).toEqual({ kind: 'playlist', id: 'p1' })
+    expect(saveQueue).toHaveBeenLastCalledWith(
+      expect.objectContaining({ from: 'Mix', link: { kind: 'playlist', id: 'p1' } })
+    )
+    queue.restore({ items: ['a1'], index: 0, from: 'X', link: { kind: 'artist', id: 'x' }, pos: 0 })
+    expect(queue.link).toEqual({ kind: 'artist', id: 'x' })
   })
 
   it('removing a row before the current song keeps it playing', () => {

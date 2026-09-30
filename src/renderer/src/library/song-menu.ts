@@ -1,6 +1,10 @@
-// The menu for songs: the queue first, then the playlists. Each part is a
-// function; a new part is one more argument to `sections`.
-import { menu, type MenuEntry } from '../stores/menu.svelte'
+// The menu for songs: the queue first, then Go to, then the playlists. Each
+// part is a function; a new part is one more argument to `sections`.
+import type { QueueLink } from '../../../shared/saved-queue'
+import { artistLinks } from './artists'
+import { layout } from '../stores/layout.svelte'
+import { library } from '../stores/library.svelte'
+import { menu, type MenuEntry, type MenuItem } from '../stores/menu.svelte'
 import { playlists } from '../stores/playlists.svelte'
 import { queue } from '../stores/queue.svelte'
 
@@ -13,6 +17,8 @@ export interface SongMenuOptions {
   queueRow?: number
   // names the songs when they start an empty queue ("From ...")
   from?: string
+  // what "From" opens then
+  link?: QueueLink
 }
 
 // The parts in order, with a line between, leaving out empty ones.
@@ -24,8 +30,8 @@ function queuePart(ids: string[], o: SongMenuOptions): MenuEntry[] {
   const row = o.queueRow
   if (row === undefined) {
     return [
-      { label: 'Play next', run: () => queue.playNext(ids, o.from) },
-      { label: 'Add to queue', run: () => queue.append(ids, o.from) }
+      { label: 'Play next', run: () => queue.playNext(ids, o.from, o.link) },
+      { label: 'Add to queue', run: () => queue.append(ids, o.from, o.link) }
     ]
   }
   // the queue may have changed while the menu was open
@@ -35,6 +41,27 @@ function queuePart(ids: string[], o: SongMenuOptions): MenuEntry[] {
   ]
   if (row !== queue.index) {
     entries.push({ label: 'Play next', run: () => same() && queue.playRowNext(row) })
+  }
+  return entries
+}
+
+// One song only: several can come from many albums. Focus has no library to go to.
+function goToPart(ids: string[]): MenuEntry[] {
+  if (ids.length !== 1 || !layout.hasLibrary || !library.has(ids[0])) return []
+  const t = library.track(ids[0])
+  // the queue's drawer would cover the page opened
+  const go = (show: () => void) => (): void => {
+    layout.showQueue = false
+    show()
+  }
+  const entries: MenuItem[] = [
+    { label: 'Go to album', run: go(() => library.showAlbum(t.albumId, t.id)) }
+  ]
+  const artists = artistLinks(t, (key) => !!library.getArtist(key))
+  for (const { name, key } of artists) {
+    if (!key) continue
+    const label = artists.length > 1 ? `Go to ${name}` : 'Go to artist'
+    entries.push({ label, run: go(() => library.showArtist(key)) })
   }
   return entries
 }
@@ -57,7 +84,7 @@ function playlistPart(ids: string[], o: SongMenuOptions): MenuEntry[] {
 }
 
 export function songMenu(trackIds: string[], o: SongMenuOptions = {}): MenuEntry[] {
-  return sections(queuePart(trackIds, o), playlistPart(trackIds, o))
+  return sections(queuePart(trackIds, o), goToPart(trackIds), playlistPart(trackIds, o))
 }
 
 // Only the playlists, for the "Add to playlist" buttons on page headers.

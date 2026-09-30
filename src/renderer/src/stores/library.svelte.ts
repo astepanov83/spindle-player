@@ -35,6 +35,7 @@ import {
   type FolderNav,
   type FolderTree
 } from '../library/folders'
+import type { QueueLink } from '../../../shared/saved-queue'
 import {
   artistBack,
   artistForward,
@@ -117,6 +118,10 @@ class LibraryStore {
   // After an edit, the key the open artist has in the library that comes
   // back: a rename or split changes it.
   #follow: string | null = null
+  // A link just opened a page (ticket 040): it starts at the top, also when
+  // it was open already, or at `song`'s row. The library part's scroll code
+  // takes it once.
+  landing: { song: string | null } | null = $state.raw(null)
   // the page mouse Back last closed, for Forward to reopen
   #closed: { page: Page; id: string } | null = null
   // which library main sent last, so a patch is only put on the one it was made from
@@ -269,6 +274,59 @@ class LibraryStore {
 
   openArtistAlbum(id: string): void {
     this.#artistNav = goToArtist(this.#artistNav, { artist: this.artist, album: id })
+  }
+
+  // Links from what plays and "Go to" in the song menu (ticket 040). Each is a
+  // new step, like picking a chip or section, in both templates, since the
+  // store doesn't know which one shows. Something a rescan removed opens nothing.
+  #leave(chip: Chip, section: Section, song: string | null = null): void {
+    this.pickChip(chip)
+    this.pickSection(section)
+    this.landing = { song }
+  }
+
+  // `song`: the row to scroll into view
+  showAlbum(id: string, song?: string): void {
+    if (!this.#albumIndex.has(id)) return
+    this.#leave('albums', 'albums', song ?? null)
+    this.open = id
+  }
+
+  showArtist(key: string): void {
+    if (!this.#artistIndex.has(key)) return
+    this.#leave('artists', 'artists')
+    this.openArtist(key)
+  }
+
+  showFolder(key: string): void {
+    this.#leave('folders', 'folders')
+    this.openFolder(key)
+  }
+
+  showPlaylist(id: string): void {
+    this.#leave('playlists', `pl:${id}`)
+    this.openPlaylist = id
+  }
+
+  showRadio(): void {
+    this.#leave('radio', 'radio')
+  }
+
+  // Whether a link still has something to open after a rescan. Playlists
+  // are not the library's: the caller checks those.
+  canShow(link: QueueLink): boolean {
+    void this.#version
+    if (link.kind === 'album') return this.#albumIndex.has(link.id)
+    if (link.kind === 'artist') return this.#artistIndex.has(link.id)
+    if (link.kind === 'folder') return this.folders.byKey.has(link.id)
+    return true
+  }
+
+  showFrom(link: QueueLink): void {
+    if (link.kind === 'album') this.showAlbum(link.id)
+    else if (link.kind === 'artist') this.showArtist(link.id)
+    else if (link.kind === 'folder') this.showFolder(link.id)
+    else this.showPlaylist(link.id)
   }
 
   sortArtist(k: SortKey): void {

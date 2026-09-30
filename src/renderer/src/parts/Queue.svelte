@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte'
+  import GoLink from '../ui/GoLink.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import RecentSongs from './RecentSongs.svelte'
@@ -9,6 +10,7 @@
   import { layout } from '../stores/layout.svelte'
   import { library } from '../stores/library.svelte'
   import { playing } from '../stores/playing.svelte'
+  import { playlists } from '../stores/playlists.svelte'
   import { queue } from '../stores/queue.svelte'
   import { radio } from '../stores/radio.svelte'
   import { openSongMenu } from '../library/song-menu'
@@ -51,16 +53,21 @@
   }
 
   const total = $derived(queue.items.reduce((s, id) => s + library.track(id).duration, 0))
-  // the tab has no head, so "From" goes here there
   const sum = $derived(
-    [
-      !header && queue.from ? `From ${queue.from}` : '',
-      `${queue.items.length.toLocaleString()} ${queue.items.length === 1 ? 'song' : 'songs'}`,
-      fmtLength(total)
-    ]
-      .filter(Boolean)
-      .join(' · ')
+    `${queue.items.length.toLocaleString()} ${queue.items.length === 1 ? 'song' : 'songs'}` +
+      ` · ${fmtLength(total)}`
   )
+  // "From" opens the album, artist, folder or playlist, while it is still there
+  const openFrom = $derived.by(() => {
+    const link = queue.link
+    if (!link || !library.canShow(link)) return undefined
+    if (link.kind === 'playlist' && !playlists.get(link.id)) return undefined
+    return () => {
+      // the drawer would cover the page opened
+      layout.showQueue = false
+      library.showFrom(link)
+    }
+  })
 
   // Alt+Up / Alt+Down move the focused row; focus goes with it.
   function onrowkey(e: KeyboardEvent, i: number): void {
@@ -155,6 +162,9 @@
 
   // Radio: its recent songs in place of the queue, with a head even in a tab.
   const onRadio = $derived(playing.kind === 'radio')
+
+  // in the markup this would lose its spaces next to a block
+  const dot = ' · '
 </script>
 
 <svelte:window
@@ -172,7 +182,8 @@
         {#if onRadio}
           <b>{radio.station?.name ?? 'Radio'} · recent songs</b>
         {:else}
-          <b>Queue</b>{#if queue.from}<small>From {queue.from}</small>{/if}
+          <b>Queue</b>{#if queue.from}<small>From <GoLink go={openFrom}>{queue.from}</GoLink></small
+            >{/if}
         {/if}
       </div>
       {#if close}
@@ -182,7 +193,11 @@
   {/if}
   {#if !onRadio && queue.items.length}
     <div class="sum" class:tab={!header}>
-      <span class="count">{sum}</span>
+      <!-- the tab has no head, so "From" goes here there -->
+      <span class="count"
+        >{#if !header && queue.from}From <GoLink go={openFrom}>{queue.from}</GoLink
+          >{dot}{/if}{sum}</span
+      >
       <button
         class="clear"
         title={queue.items.length > 1 ? 'Keep only the song playing' : 'Empty the queue'}

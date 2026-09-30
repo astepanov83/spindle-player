@@ -40,7 +40,7 @@
 
   function play(): void {
     if (!p) return
-    queue.playList(playIds(), 0, p.name)
+    queue.playList(playIds(), 0, p.name, { kind: 'playlist', id })
   }
 
   // the text filtered this playlist's rows; the list would take it as a name
@@ -82,6 +82,7 @@
     sort={library.playlistSort(id)}
     onsort={(k) => library.sortPlaylist(id, k)}
     playlistId={id}
+    link={{ kind: 'playlist', id }}
   >
     {#snippet head()}
       <div class="head">
@@ -119,8 +120,13 @@
             aria-label="More"
             title="Play next, add to the queue or another playlist"
             disabled={!shown.length}
-            onclick={(e) => p && openSongMenu(e, playIds(), { onPlaylist: id, from: p.name })}
-            ><Icon name="more" size={18} /></button
+            onclick={(e) =>
+              p &&
+              openSongMenu(e, playIds(), {
+                onPlaylist: id,
+                from: p.name,
+                link: { kind: 'playlist', id }
+              })}><Icon name="more" size={18} /></button
           >
         </div>
       </div>

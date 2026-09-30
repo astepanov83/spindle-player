@@ -373,3 +373,82 @@ describe('search text (ticket 039)', () => {
     expect(library.searchAll).toBeNull()
   })
 })
+
+describe('links from what plays (ticket 040)', () => {
+  it('opens an album in Albums, from any chip or section, with no search', () => {
+    library.chip = 'radio'
+    library.section = 'pl:p1'
+    library.openArtist('x')
+    library.query = 'blue'
+    library.showAlbum('a', 'a/1')
+    expect([library.chip, library.section, library.open, library.artist]).toEqual([
+      'albums',
+      'albums',
+      'a',
+      null
+    ])
+    expect(library.query).toBe('')
+    expect(library.landing).toEqual({ song: 'a/1' })
+  })
+
+  it('does nothing for an album a rescan removed', () => {
+    library.chip = 'radio'
+    library.showAlbum('gone')
+    expect([library.chip, library.open]).toEqual(['radio', null])
+  })
+
+  it('opens an artist in Artists, as a new step for Forward', () => {
+    library.openArtist('x')
+    library.openArtistAlbum('a')
+    library.back('artist')
+    library.chip = 'albums'
+    library.open = 'b'
+    library.showArtist('x')
+    expect([library.chip, library.section, library.artist, library.open]).toEqual([
+      'artists',
+      'artists',
+      'x',
+      null
+    ])
+    // a new step: Forward has nothing to reopen
+    library.forward('artist')
+    expect(library.open).toBeNull()
+    library.landing = null
+    library.showArtist('nobody')
+    expect(library.artist).toBe('x')
+    // nothing opened, so nothing to scroll
+    expect(library.landing).toBeNull()
+  })
+
+  it('opens a playlist in both templates, and Radio', () => {
+    library.showPlaylist('p1')
+    expect([library.chip, library.openPlaylist, library.section]).toEqual([
+      'playlists',
+      'p1',
+      'pl:p1'
+    ])
+    library.showRadio()
+    expect([library.chip, library.section, library.openPlaylist]).toEqual(['radio', 'radio', null])
+  })
+
+  it('opens what "From" names', () => {
+    library.showFrom({ kind: 'album', id: 'b' })
+    expect([library.chip, library.open, library.landing]).toEqual(['albums', 'b', { song: null }])
+    library.showFrom({ kind: 'artist', id: 'x' })
+    expect([library.chip, library.artist]).toEqual(['artists', 'x'])
+    library.showFrom({ kind: 'playlist', id: 'p1' })
+    expect(library.openPlaylist).toBe('p1')
+    library.showFrom({ kind: 'folder', id: 'k' })
+    expect([library.chip, library.section, library.folder]).toEqual(['folders', 'folders', 'k'])
+    // every link starts its page at the top, also one already open
+    expect(library.landing).toEqual({ song: null })
+  })
+
+  it('says whether "From" still has something to open', () => {
+    expect(library.canShow({ kind: 'album', id: 'a' })).toBe(true)
+    expect(library.canShow({ kind: 'album', id: 'gone' })).toBe(false)
+    expect(library.canShow({ kind: 'artist', id: 'x' })).toBe(true)
+    expect(library.canShow({ kind: 'artist', id: 'y' })).toBe(false)
+    expect(library.canShow({ kind: 'folder', id: 'nowhere' })).toBe(false)
+  })
+})

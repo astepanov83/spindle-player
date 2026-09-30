@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PlayingText from './PlayingText.svelte'
   import Stage from '../visualizer/Stage.svelte'
   import { playing } from '../stores/playing.svelte'
 
@@ -9,8 +10,8 @@
   <Stage />
   <div class="meta">
     {#if playing.title}
-      <div class="song-title">{playing.title}</div>
-      <div class="song-sub">{playing.sub}</div>
+      <div class="song-title"><PlayingText line="title" /></div>
+      <div class="song-sub"><PlayingText line="sub" /></div>
     {:else}
       <div class="song-title">Nothing playing</div>
       <div class="song-sub">Pick an album or a song to start</div>

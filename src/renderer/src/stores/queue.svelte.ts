@@ -2,7 +2,7 @@
 // The moves are plain functions in queue/logic.ts; this store plays what they pick.
 import { moveIds, type IdMoves } from '../../../shared/id-moves'
 import type { Album, Art, Track } from '../../../shared/library'
-import type { QueuePlace, SavedQueue } from '../../../shared/saved-queue'
+import type { QueueLink, QueuePlace, SavedQueue } from '../../../shared/saved-queue'
 import { engine, mediaUrl, type EngineError, type EngineEvents } from '../audio/engine'
 import {
   advance,
@@ -33,6 +33,8 @@ class QueueStore {
   items: string[] = $state.raw([])
   index = $state(0)
   from = $state('')
+  // what "From" opens (ticket 040)
+  link: QueueLink | undefined = $state.raw()
   // Play next songs right after the current one (see queue/logic.ts)
   #next = 0
   // Goes up each time a song is loaded, so the queue scrolls to a new song
@@ -96,10 +98,11 @@ class QueueStore {
   // The list can hold 50k ids, so it goes to main only when it changes. A new
   // current song alone goes from #start, which always follows, with its position.
   #set(s: QueueState): void {
-    const listChanged = s.items !== this.items || s.from !== this.from
+    const listChanged = s.items !== this.items || s.from !== this.from || s.link !== this.link
     this.items = s.items
     this.index = s.index
     this.from = s.from
+    this.link = s.link
     this.#next = s.next ?? 0
     if (listChanged) this.#saveList()
   }
@@ -138,17 +141,19 @@ class QueueStore {
   }
 
   // Replaces the queue with a list and plays the clicked song.
-  playList(ids: string[], index: number, from: string): void {
+  playList(ids: string[], index: number, from: string, link?: QueueLink): void {
     if (!ids.length) return
     this.#claim()
     this.#fails = 0
-    this.#set({ items: ids, index: Math.min(index, ids.length - 1), from })
+    const s: QueueState = { items: ids, index: Math.min(index, ids.length - 1), from }
+    if (link) s.link = link
+    this.#set(s)
     this.#start()
   }
 
   playAlbum(albumId: string, index: number): void {
     const al = library.album(albumId)
-    this.playList(al.trackIds, index, al.title)
+    this.playList(al.trackIds, index, al.title, { kind: 'album', id: al.id })
   }
 
   // Clicking a row; the current one starts again.
@@ -161,13 +166,15 @@ class QueueStore {
 
   // "Play next" from a menu. An empty queue takes the songs, the first one
   // loaded paused; `from` names them then.
-  playNext(ids: string[], from = ''): void {
-    this.#add(insertNext(this.#state(), ids, from), queueNotice('next', ids, this.#title(ids)))
+  playNext(ids: string[], from = '', link?: QueueLink): void {
+    const s = insertNext(this.#state(), ids, from, link)
+    this.#add(s, queueNotice('next', ids, this.#title(ids)))
   }
 
   // "Add to queue" from a menu.
-  append(ids: string[], from = ''): void {
-    this.#add(append(this.#state(), ids, from), queueNotice('add', ids, this.#title(ids)))
+  append(ids: string[], from = '', link?: QueueLink): void {
+    const s = append(this.#state(), ids, from, link)
+    this.#add(s, queueNotice('add', ids, this.#title(ids)))
   }
 
   #add(s: QueueState, text: string): void {
@@ -340,6 +347,7 @@ class QueueStore {
     this.items = s.items
     this.index = s.index
     this.from = s.from
+    this.link = s.link
     this.#next = s.next ?? 0
     // a different current song means the old one is gone: start it from the top
     const same = s.items[s.index] === saved.items[saved.index]
@@ -348,6 +356,7 @@ class QueueStore {
 
   #state(): QueueState {
     const s: QueueState = { items: this.items, index: this.index, from: this.from }
+    if (this.link) s.link = this.link
     if (this.#next) s.next = this.#next
     return s
   }

@@ -29,6 +29,25 @@ describe('parseSavedQueue', () => {
     expect(parseSavedQueue({ items: ['a'], index: 0.5, pos: Infinity }).index).toBe(0)
   })
 
+  it('keeps what "From" opens, and drops a bad one (ticket 040)', () => {
+    const good = { items: ['a'], index: 0, from: 'Blue', pos: 0 }
+    for (const link of [
+      { kind: 'album', id: 'al1' },
+      { kind: 'artist', id: 'marinavale' },
+      { kind: 'folder', id: '/music/a' },
+      { kind: 'playlist', id: 'p1' }
+    ])
+      expect(parseSavedQueue({ ...good, link })).toEqual({ ...good, link })
+    for (const link of [
+      null,
+      'al1',
+      { kind: 'song', id: 'x' },
+      { kind: 'album' },
+      { kind: 'album', id: '' }
+    ])
+      expect(parseSavedQueue({ ...good, link })).toEqual(good)
+  })
+
   it('drops ids that are not strings', () => {
     expect(parseSavedQueue({ items: ['a', 3, '', 'b'] }).items).toEqual(['a', 'b'])
   })

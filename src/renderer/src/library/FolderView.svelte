@@ -9,6 +9,7 @@
   import { crumbs, filterFolder, folderPlaySongs, folderSongs, shownFolder } from './folders'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
+  import type { QueueLink } from '../../../shared/saved-queue'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
@@ -59,11 +60,14 @@
       (t) => t.id
     )
 
+  // the top list of music folders has no key to open again
+  const link = $derived<QueueLink | undefined>(node && { kind: 'folder', id: node.key })
+
   function play(shuffle: boolean): void {
     const ids = playIds()
     if (!ids.length) return
     if (shuffle) player.shuffle = true
-    queue.playList(ids, shuffle ? Math.floor(Math.random() * ids.length) : 0, title)
+    queue.playList(ids, shuffle ? Math.floor(Math.random() * ids.length) : 0, title, link)
   }
 </script>
 
@@ -108,7 +112,7 @@
       aria-label="More"
       title="Play next, add to the queue or a playlist"
       disabled={!total}
-      onclick={(e) => openSongMenu(e, playIds(), { from: title })}
+      onclick={(e) => openSongMenu(e, playIds(), { from: title, link })}
       ><Icon name="more" size={18} /></button
     >
   </div>
@@ -130,7 +134,8 @@
       class:first={item.index === 0}
       style:transform="translateY({v.offset(item)}px)"
       onclick={() => library.openFolder(f.key)}
-      oncontextmenu={(e) => openSongMenu(e, songIds(i), { from: f.name })}
+      oncontextmenu={(e) =>
+        openSongMenu(e, songIds(i), { from: f.name, link: { kind: 'folder', id: f.key } })}
     >
       <Thumb src={f.cover} size={40} radius={6} />
       <span class="nm">
@@ -154,6 +159,7 @@
     {scrollEl}
     sort={library.folderSort}
     onsort={(k) => library.sortFolder(k)}
+    {link}
   >
     {#snippet head()}
       <h3 class="songs">Songs in this folder</h3>

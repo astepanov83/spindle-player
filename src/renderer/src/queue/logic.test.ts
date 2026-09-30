@@ -231,6 +231,15 @@ describe('insertNext', () => {
     })
   })
 
+  it('takes what "From" opens with the songs it names (ticket 040)', () => {
+    const empty = { items: [], index: 0, from: '' }
+    const link = { kind: 'album' as const, id: 'blue' }
+    expect(insertNext(empty, ['x'], 'Blue', link).link).toEqual(link)
+    expect(insertNext({ ...q(0), link }, ['x'], 'Other', { kind: 'album', id: 'o' }).link).toBe(
+      link
+    )
+  })
+
   it('does nothing with no songs', () => {
     const s = q(1)
     expect(insertNext(s, [])).toBe(s)
@@ -252,6 +261,17 @@ describe('append', () => {
 
   it('keeps where the list came from when it had songs', () => {
     expect(append(q(0), ['x'], 'Other').from).toBe('A')
+    expect(append(q(0), ['x'], 'Other', { kind: 'album', id: 'o' }).link).toBeUndefined()
+  })
+
+  it('takes what "From" opens when it fills an empty queue (ticket 040)', () => {
+    const link = { kind: 'playlist' as const, id: 'p1' }
+    expect(append({ items: [], index: 0, from: '' }, ['x'], 'Mix', link)).toEqual({
+      items: ['x'],
+      index: 0,
+      from: 'Mix',
+      link
+    })
   })
 })
 
@@ -274,6 +294,8 @@ describe('removeRow', () => {
 
   it('empties the queue with its last song', () => {
     expect(removeRow(q(0, ['a/0']), 0)).toEqual({ items: [], index: 0, from: '' })
+    const link = { kind: 'album' as const, id: 'a' }
+    expect(removeRow({ ...q(0, ['a/0']), link }, 0)).toEqual({ items: [], index: 0, from: '' })
   })
 
   it('counts one Play next song less when one of them goes', () => {
@@ -339,6 +361,9 @@ describe('clearQueue', () => {
 
   it('empties a queue that holds only the current song', () => {
     expect(clearQueue(q(0, ['a/0']))).toEqual({ items: [], index: 0, from: '' })
+    const link = { kind: 'album' as const, id: 'a' }
+    expect(clearQueue({ ...q(0, ['a/0']), link })).toEqual({ items: [], index: 0, from: '' })
+    expect(clearQueue({ ...qn(1, 1), link }).link).toBe(link)
   })
 })
 

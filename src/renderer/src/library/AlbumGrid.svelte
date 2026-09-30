@@ -77,7 +77,11 @@
         <div
           class="card"
           role="group"
-          oncontextmenu={(e) => openSongMenu(e, al.trackIds, { from: al.title })}
+          oncontextmenu={(e) =>
+            openSongMenu(e, al.trackIds, {
+              from: al.title,
+              link: { kind: 'album', id: al.id }
+            })}
         >
           <div class="cvwrap">
             <button class="cv" aria-label="Open {al.title}" onclick={() => onopen(al.id)}

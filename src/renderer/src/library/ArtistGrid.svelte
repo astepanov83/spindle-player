@@ -112,9 +112,13 @@
           oncontextmenu={(e) =>
             menu.showFor(
               e,
-              sections(songMenu(artistSongs(a, album), { from: a.name }), [
-                { label: 'Edit artist', run: () => edit(a) }
-              ])
+              sections(
+                songMenu(artistSongs(a, album), {
+                  from: a.name,
+                  link: { kind: 'artist', id: a.key }
+                }),
+                [{ label: 'Edit artist', run: () => edit(a) }]
+              )
             )}
         >
           <div class="picwrap">
@@ -127,7 +131,8 @@
             <button
               class="qp"
               aria-label="Play {a.name}"
-              onclick={() => queue.playList(artistSongs(a, album), 0, a.name)}
+              onclick={() =>
+                queue.playList(artistSongs(a, album), 0, a.name, { kind: 'artist', id: a.key })}
             >
               <Icon name="play" />
             </button>

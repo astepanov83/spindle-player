@@ -7,7 +7,9 @@
   import Slot from '../layout/Slot.svelte'
   import Stage from '../visualizer/Stage.svelte'
   import PlayButton from './PlayButton.svelte'
+  import PlayingText from './PlayingText.svelte'
   import StreamPicker from './StreamPicker.svelte'
+  import TabLine from './TabLine.svelte'
   import VizButton from './VizButton.svelte'
   import Volume from './Volume.svelte'
   import { fmtClock } from '../format'
@@ -71,8 +73,8 @@
       <div class="minicv"><Cover src={playing.art?.cover} /></div>
       <div class="meta">
         <!-- cut sooner when Save shows: the tooltip has it whole -->
-        <div class="song-title" title={playing.title}>{playing.title}</div>
-        <div class="song-sub" title={playing.sub}>{playing.sub}</div>
+        <div class="song-title" title={playing.title}><PlayingText line="title" /></div>
+        <div class="song-sub" title={playing.sub}><PlayingText line="sub" /></div>
       </div>
       {@render save()}
     </div>
@@ -91,8 +93,9 @@
     </div>
   </div>
 {:else}
-  <!-- no station name: NowPlaying shows it right above in every template with a stack -->
+  <!-- no station name: NowPlaying shows it right above, or TabLine while the Queue tab hides it -->
   <div class="ctl stack">
+    <TabLine />
     <div class="liverow">
       {@render live()}
       <span class="gap"></span>

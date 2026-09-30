@@ -36,6 +36,8 @@ export function libraryView(top: string): View {
 interface Place {
   top: number
   row?: { grid: string; index: string; y: number }
+  // a song row (data-song) to show in the middle, when it is drawn (ticket 040)
+  song?: string
 }
 
 // Grid rows carry data-index inside a data-grid (AlbumGrid, ArtistGrid). A
@@ -62,6 +64,8 @@ function placeOf(el: HTMLElement): Place {
 }
 
 // Call during component setup: `view` reads whatever picks the view.
+// library.landing (a link from what plays, ticket 040) wins over a kept
+// place: the top, or a song's row, also when the page was open already.
 export function scrollTopOnChange(box: () => HTMLElement | undefined, view: () => View): void {
   const places = new ScrollPlaces<Place>()
   let last: View | undefined
@@ -69,13 +73,21 @@ export function scrollTopOnChange(box: () => HTMLElement | undefined, view: () =
   // .pre: the old view is still drawn, so its place is not cut short yet
   $effect.pre(() => {
     const to = view()
+    const landing = library.landing
+    // read here so a landing waits for the box to be drawn
+    const el = box()
     untrack(() => {
-      const el = box()
-      const place = places.move(last, el ? placeOf(el) : { top: 0 }, to)
+      const moved = places.move(last, el ? placeOf(el) : { top: 0 }, to)
       last = to
-      if (place === undefined || !el) return
+      if (!el) return
+      let place: Place
+      if (landing) {
+        library.landing = null
+        place = landing.song ? { top: 0, song: landing.song } : { top: 0 }
+      } else if (moved === undefined) return
+      else place = moved === 'top' ? { top: 0 } : moved
       stop?.()
-      stop = scrollWhenDrawn(el, place === 'top' ? { top: 0 } : place)
+      stop = scrollWhenDrawn(el, place)
     })
   })
 }
@@ -95,11 +107,25 @@ function scrollWhenDrawn(el: HTMLElement, place: Place): () => void {
     el.removeEventListener('keydown', stop)
   }
   // how far off the place is: by the row once it is drawn, else by pixels
-  const miss = (): number => {
+  const off = (): number => {
+    const box = el.getBoundingClientRect()
+    const song =
+      place.song && el.querySelector<HTMLElement>(`[data-song="${CSS.escape(place.song)}"]`)
+    if (song) {
+      const b = song.getBoundingClientRect()
+      return b.top - box.top - (box.height - b.height) / 2
+    }
     const want = place.row
     const r = want && [...rows(el, want.grid)].find((r) => r.dataset.index === want.index)
     if (!want || !r) return place.top - el.scrollTop
-    return r.getBoundingClientRect().top - el.getBoundingClientRect().top - want.y
+    return r.getBoundingClientRect().top - box.top - want.y
+  }
+  // A song near the end can't reach the middle: as far as the box scrolls.
+  // Not for the other places: a virtual list is still getting its height.
+  const miss = (): number => {
+    if (!place.song) return off()
+    const to = Math.min(Math.max(el.scrollTop + off(), 0), el.scrollHeight - el.clientHeight)
+    return to - el.scrollTop
   }
   const step = (): void => {
     if (done) return

@@ -1,11 +1,23 @@
 // The song menu's entries, with the queue faked.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Track } from '../../../shared/library'
+import { defaultPalettes } from '../../../shared/palette'
 import type { MenuEntry, MenuItem } from '../stores/menu.svelte'
 
 const fake = vi.hoisted(() => ({
   calls: [] as string[],
   items: ['a', 'b', 'c'],
-  index: 1
+  index: 1,
+  hasLibrary: true
+}))
+
+vi.mock('../stores/layout.svelte', () => ({
+  layout: {
+    get hasLibrary() {
+      return fake.hasLibrary
+    },
+    showQueue: true
+  }
 }))
 
 vi.mock('../stores/queue.svelte', () => ({
@@ -16,8 +28,10 @@ vi.mock('../stores/queue.svelte', () => ({
     get index() {
       return fake.index
     },
-    playNext: (ids: string[], from = '') => fake.calls.push(`next ${ids} ${from}`),
-    append: (ids: string[], from = '') => fake.calls.push(`add ${ids} ${from}`),
+    playNext: (ids: string[], from = '', link?: { kind: string; id: string }) =>
+      fake.calls.push(`next ${ids} ${from}` + (link ? ` ${link.kind}:${link.id}` : '')),
+    append: (ids: string[], from = '', link?: { kind: string; id: string }) =>
+      fake.calls.push(`add ${ids} ${from}` + (link ? ` ${link.kind}:${link.id}` : '')),
     remove: (i: number) => fake.calls.push(`remove ${i}`),
     playRowNext: (i: number) => fake.calls.push(`row next ${i}`)
   }
@@ -26,6 +40,8 @@ vi.stubGlobal('window', { playlistsApi: { save: vi.fn() } })
 
 const { playlistMenu, songMenu, sections } = await import('./song-menu')
 const { playlists } = await import('../stores/playlists.svelte')
+const { library } = await import('../stores/library.svelte')
+const { layout } = await import('../stores/layout.svelte')
 
 const labels = (entries: MenuEntry[]): string[] =>
   entries.map((e) => (e === 'line' ? '---' : 'heading' in e ? `# ${e.heading}` : e.label))
@@ -38,6 +54,7 @@ beforeEach(() => {
   fake.calls = []
   fake.items = ['a', 'b', 'c']
   fake.index = 1
+  fake.hasLibrary = true
   playlists.load([{ id: 'p1', name: 'Mix', trackIds: [] }])
 })
 
@@ -58,6 +75,13 @@ describe('songMenu', () => {
     pick(m, 'Play next')
     pick(m, 'Add to queue')
     expect(fake.calls).toEqual(['next x,y Blue Hours', 'add x,y Blue Hours'])
+  })
+
+  it('names where the songs come from, so "From" can open it (ticket 040)', () => {
+    const m = songMenu(['x'], { from: 'Mix', link: { kind: 'playlist', id: 'p1' } })
+    pick(m, 'Play next')
+    pick(m, 'Add to queue')
+    expect(fake.calls).toEqual(['next x Mix playlist:p1', 'add x Mix playlist:p1'])
   })
 
   it('a queue row can leave the queue or move up to play next', () => {
@@ -113,5 +137,79 @@ describe('sections', () => {
     const a: MenuEntry[] = [{ label: 'A', run: () => {} }]
     const b: MenuEntry[] = [{ label: 'B', run: () => {} }]
     expect(labels(sections(a, [], b))).toEqual(['A', '---', 'B'])
+  })
+})
+
+describe('Go to (ticket 040)', () => {
+  const song = (artist: string, artists?: string[]): void => {
+    const album = {
+      id: 'al',
+      title: 'Blue Hours',
+      artist,
+      year: 0,
+      palette: defaultPalettes,
+      cover: '',
+      coverLarge: '',
+      trackIds: ['s1', 's2']
+    }
+    const track = (id: string): Track => ({
+      id,
+      title: id,
+      duration: 1,
+      albumId: 'al',
+      artist,
+      ...(artists ? { artists, artistTag: artist } : {}),
+      album: 'Blue Hours',
+      no: 1,
+      disc: 1,
+      codec: '',
+      folder: 0
+    })
+    library.load({ albums: [album], tracks: [track('s1'), track('s2')], folders: [] })
+    library.chip = 'radio'
+  }
+
+  it('one song goes to its album and its artist, between the queue and the playlists', () => {
+    song('Marina Vale')
+    const m = songMenu(['s2'])
+    expect(labels(m)).toEqual([
+      'Play next',
+      'Add to queue',
+      '---',
+      'Go to album',
+      'Go to artist',
+      '---',
+      '# Add to playlist',
+      'Mix',
+      'New playlist'
+    ])
+    pick(m, 'Go to album')
+    expect([library.chip, library.open, library.landing]).toEqual(['albums', 'al', { song: 's2' }])
+    // the queue's drawer closes, so the page shows
+    expect(layout.showQueue).toBe(false)
+    pick(m, 'Go to artist')
+    expect([library.chip, library.artist]).toEqual(['artists', 'marinavale'])
+  })
+
+  it('a split artist gives one item per artist', () => {
+    song('A, B', ['A', 'B'])
+    const m = songMenu(['s1'], { queueRow: 1 })
+    expect(labels(m).slice(0, 6)).toEqual([
+      'Remove from queue',
+      '---',
+      'Go to album',
+      'Go to A',
+      'Go to B',
+      '---'
+    ])
+    pick(m, 'Go to B')
+    expect(library.artist).toBe('b')
+  })
+
+  it('is left out for several songs, and where there is no library (Focus)', () => {
+    song('Marina Vale')
+    expect(labels(songMenu(['s1', 's2']))).not.toContain('Go to album')
+    fake.hasLibrary = false
+    expect(labels(songMenu(['s1']))).not.toContain('Go to album')
   })
 })

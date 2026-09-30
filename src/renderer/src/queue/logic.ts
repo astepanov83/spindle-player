@@ -1,12 +1,15 @@
 // Queue moves as plain functions. See work/specs/queue.md.
 // stores/queue.svelte.ts plays what they pick.
 import type { Track } from '../../../shared/library'
+import type { QueueLink } from '../../../shared/saved-queue'
 
 export interface QueueState {
   items: string[]
   index: number
   // shown as "From <from>" in the queue header
   from: string
+  // what "From" opens; left out when it opens nothing
+  link?: QueueLink
   // How many songs right after the current one were put there with "Play
   // next". Shuffle plays them first, in order. Left out when none.
   next?: number
@@ -79,19 +82,24 @@ export function jump(q: QueueState, index: number): QueueState {
   return withNext({ ...q, index }, countNext(nextMarks(q), index))
 }
 
+// An empty queue takes the songs, the first one current.
+function filled(items: string[], from: string, link: QueueLink | undefined): QueueState {
+  return link ? { items, index: 0, from, link } : { items, index: 0, from }
+}
+
 // "Play next": the songs go right after the current one, before other Play
 // next songs. An empty queue takes them, the first one current.
-export function insertNext(q: QueueState, ids: string[], from = ''): QueueState {
+export function insertNext(q: QueueState, ids: string[], from = '', link?: QueueLink): QueueState {
   if (!ids.length) return q
-  if (!q.items.length) return { items: ids, index: 0, from }
+  if (!q.items.length) return filled(ids, from, link)
   const items = [...q.items.slice(0, q.index + 1), ...ids, ...q.items.slice(q.index + 1)]
   return withNext({ ...q, items }, (q.next ?? 0) + ids.length)
 }
 
 // "Add to queue": the songs go at the end.
-export function append(q: QueueState, ids: string[], from = ''): QueueState {
+export function append(q: QueueState, ids: string[], from = '', link?: QueueLink): QueueState {
   if (!ids.length) return q
-  if (!q.items.length) return { items: ids, index: 0, from }
+  if (!q.items.length) return filled(ids, from, link)
   return { ...q, items: [...q.items, ...ids] }
 }
 

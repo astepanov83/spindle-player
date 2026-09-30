@@ -3,6 +3,7 @@ import type { Artist } from '../../../shared/artists'
 import type { Track } from '../../../shared/library'
 import {
   artistBack,
+  artistLinks,
   artistCovers,
   artistForward,
   artistPageSongs,
@@ -125,5 +126,27 @@ describe('Back and Forward in Artists', () => {
     expect(artistForward(closed, () => false)).toMatchObject({ artist: null, ahead: [] })
     const other = { ...closed, artist: 'b' }
     expect(artistForward(other, all)).toMatchObject({ artist: 'b', ahead: [] })
+  })
+})
+
+describe('artistLinks (ticket 040)', () => {
+  const has = (key: string): boolean => key !== 'nobody'
+
+  it('gives one link per name of a split credit, by artist key', () => {
+    const split = { artist: 'Sadness, Stellafera', artists: ['Sadness', 'Stellafera'] }
+    expect(artistLinks(split, has)).toEqual([
+      { name: 'Sadness', key: 'sadness' },
+      { name: 'Stellafera', key: 'stellafera' }
+    ])
+  })
+
+  it('keeps a joint credit with no override whole, as the Artists view does', () => {
+    expect(artistLinks({ artist: 'A feat. B' }, has)).toEqual([
+      { name: 'A feat. B', key: 'afeat.b' }
+    ])
+  })
+
+  it('gives no key to a name with no artist page', () => {
+    expect(artistLinks({ artist: 'Nobody' }, has)).toEqual([{ name: 'Nobody', key: null }])
   })
 })

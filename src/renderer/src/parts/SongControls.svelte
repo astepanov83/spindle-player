@@ -2,7 +2,9 @@
   import Cover from '../ui/Cover.svelte'
   import Slot from '../layout/Slot.svelte'
   import Stage from '../visualizer/Stage.svelte'
+  import PlayingText from './PlayingText.svelte'
   import Seek from './Seek.svelte'
+  import TabLine from './TabLine.svelte'
   import Transport from './Transport.svelte'
   import VizButton from './VizButton.svelte'
   import Volume from './Volume.svelte'
@@ -19,8 +21,8 @@
       <div class="minicv"><Cover src={playing.art?.cover} /></div>
       <div class="meta">
         {#if playing.title}
-          <div class="song-title">{playing.title}</div>
-          <div class="song-sub">{playing.sub}</div>
+          <div class="song-title"><PlayingText line="title" /></div>
+          <div class="song-sub"><PlayingText line="sub" /></div>
         {:else}
           <div class="song-title">Nothing playing</div>
         {/if}
@@ -41,6 +43,7 @@
   </div>
 {:else}
   <div class="ctl stack">
+    <TabLine />
     <div>
       <Seek />
       <div class="times">

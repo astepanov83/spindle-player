@@ -39,7 +39,10 @@
     const ids = playIds()
     if (!ids.length) return
     if (shuffle) player.shuffle = true
-    queue.playList(ids, shuffle ? Math.floor(Math.random() * ids.length) : 0, a.name)
+    queue.playList(ids, shuffle ? Math.floor(Math.random() * ids.length) : 0, a.name, {
+      kind: 'artist',
+      id: a.key
+    })
   }
 
   // the names in the editor: one renames, two or more split
@@ -166,8 +169,11 @@
           aria-haspopup="menu"
           aria-label="More"
           title="Play next, add to the queue or a playlist"
-          onclick={(e) => openSongMenu(e, playIds(), { from: a.name })}
-          ><Icon name="more" size={18} /></button
+          onclick={(e) =>
+            openSongMenu(e, playIds(), {
+              from: a.name,
+              link: { kind: 'artist', id: a.key }
+            })}><Icon name="more" size={18} /></button
         >
       {/if}
     </div>
@@ -187,6 +193,7 @@
     {scrollEl}
     sort={library.artistSort}
     onsort={(k) => library.sortArtist(k)}
+    link={{ kind: 'artist', id: a.key }}
   >
     {#snippet head()}
       <h3 class="part">Also on</h3>

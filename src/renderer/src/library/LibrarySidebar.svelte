@@ -12,7 +12,7 @@
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
   import { onSideButton } from './side-buttons'
-  import { scrollTopOnChange } from '../ui/scroll-top.svelte'
+  import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { songRows } from './views'
   import { library, type Page, type Section } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
@@ -47,7 +47,7 @@
 
   scrollTopOnChange(
     () => scrollEl,
-    () => [library.open, library.section, library.folder, library.artist]
+    () => libraryView(library.section)
   )
 
   const pages: Partial<Record<Section, Page>> = {

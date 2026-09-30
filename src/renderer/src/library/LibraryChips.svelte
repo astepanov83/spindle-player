@@ -10,7 +10,7 @@
   import RadioView from './RadioView.svelte'
   import SearchBox from './SearchBox.svelte'
   import { onSideButton } from './side-buttons'
-  import { scrollTopOnChange } from '../ui/scroll-top.svelte'
+  import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { library, type Chip, type Page } from '../stores/library.svelte'
 
   const chips: [Chip, string][] = [
@@ -40,7 +40,7 @@
 
   scrollTopOnChange(
     () => scrollEl,
-    () => [library.open, library.openPlaylist, library.chip, library.folder, library.artist]
+    () => libraryView(library.chip)
   )
 </script>
 

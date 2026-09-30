@@ -6,6 +6,7 @@
   import Menu from './ui/Menu.svelte'
   import Notice from './ui/Notice.svelte'
   import { engine } from './audio/engine'
+  import { isTyping, spaceAction } from './keys'
   import { layout } from './stores/layout.svelte'
   import { menu } from './stores/menu.svelte'
   import {
@@ -59,16 +60,16 @@
   function onkeydown(e: KeyboardEvent): void {
     const t = e.target as HTMLElement
     if (e.key === 'Escape' && menu.open) return menu.close()
-    if (/INPUT|TEXTAREA/.test(t.tagName) || t.isContentEditable) return
+    if (isTyping(t)) return
     if (e.key === 'Escape') {
       if (layout.settingsOpen) layout.settingsOpen = false
       else if (layout.showQueue) layout.showQueue = false
     }
+    // Space never presses a focused button, with or without a modifier.
+    const space = spaceAction(e, t, !!menu.open)
+    if (space !== 'none') e.preventDefault()
+    if (space === 'toggle') playing.togglePlay()
     if (e.ctrlKey || e.altKey || e.metaKey) return
-    if (e.code === 'Space' && t.tagName !== 'BUTTON') {
-      e.preventDefault()
-      playing.togglePlay()
-    }
     if (e.key === 'v') layout.cycleVisualizer()
     if (e.key === 'q') layout.toggleQueue()
   }

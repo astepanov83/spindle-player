@@ -1,15 +1,22 @@
 // The built layout plus what is open in it. Rebuilds only when the template
-// or the queue setting changes; track changes only update the parts.
+// or the queue that is drawn changes; track changes only update the parts.
 import type { QueueMode, TemplateId } from '../../../shared/layout'
 import { queueModeFor, visualizerStyles, type VisualizerStyle } from '../../../shared/settings'
 import { templates } from '../../../shared/templates'
 import { buildLayout, partsOf, type BuiltLayout, type Slots } from '../layout/build'
+import { shownQueueMode } from '../layout/narrow'
 import { library } from './library.svelte'
 import { settings } from './settings.svelte'
 
 class LayoutStore {
   template = $derived(templates[settings.template])
-  queueMode: QueueMode = $derived(queueModeFor(this.template, settings.queue[settings.template]))
+  // the page's width, so a narrow window builds its Drawer from the start;
+  // 0 (not known) outside a page
+  width = $state(typeof window === 'undefined' ? 0 : window.innerWidth)
+  // what Settings shows and saves
+  queueSetting: QueueMode = $derived(queueModeFor(this.template, settings.queue[settings.template]))
+  // what is drawn: a Column is a Drawer while the window is too narrow for it
+  queueMode: QueueMode = $derived(shownQueueMode(this.template, this.queueSetting, this.width))
   built: BuiltLayout = $derived(buildLayout(this.template, this.queueMode))
   // Focus has none: links to an album or artist are plain text there (ticket 040)
   hasLibrary: boolean = $derived(partsOf(this.built.root).some((p) => p.part === 'library'))
@@ -42,6 +49,14 @@ class LayoutStore {
   chooseQueueMode(mode: QueueMode): void {
     settings.queue[settings.template] = mode
     this.#reset()
+  }
+
+  // An open drawer closes when it turns back into a Column, so it does not
+  // come back open on the next narrow resize. The Column shows the queue anyway.
+  resized(width: number): void {
+    const was = this.queueMode
+    this.width = width
+    if (this.queueMode !== was) this.showQueue = false
   }
 
   chooseVisualizer(v: VisualizerStyle): void {

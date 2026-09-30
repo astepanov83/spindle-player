@@ -37,9 +37,9 @@
 >
 <div class="albhead">
   <div class="cv"><Cover src={al.coverLarge} /></div>
-  <div>
+  <div class="words">
     <div class="page-meta">Album{al.year ? ` · ${al.year}` : ''}</div>
-    <h2 class="page-title">{al.title}</h2>
+    <h2 class="page-title clamp" title={al.title}>{al.title}</h2>
     <div class="page-meta">
       {#each artists as a, i (i)}{#if i}{comma}{/if}<GoLink
           go={a.key ? () => library.showArtist(a.key!) : undefined}>{a.name}</GoLink
@@ -98,12 +98,14 @@
   .back:hover {
     color: var(--ink);
   }
+  /* The cover stays beside the title at any width, so the songs stay in view;
+     it and the title get smaller in a narrow library. */
   .albhead {
+    container-type: inline-size;
     display: flex;
     gap: 22px;
     align-items: flex-end;
     padding: 8px 0 22px;
-    flex-wrap: wrap;
   }
   .cv {
     width: 160px;
@@ -113,10 +115,45 @@
     box-shadow: 0 14px 30px -12px var(--shadow);
     flex: none;
   }
+  .words {
+    flex: 1;
+    min-width: 0;
+  }
   .acts {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-top: 16px;
+  }
+  @container (max-width: 560px) {
+    .cv {
+      width: 112px;
+    }
+    .page-title {
+      font-size: var(--title-l);
+    }
+    .acts {
+      margin-top: 12px;
+    }
+  }
+  /* smaller pills, so they stay on one line beside the cover in Studio's
+     narrowest library */
+  @container (max-width: 480px) {
+    .acts {
+      gap: 6px;
+    }
+    .acts .pill {
+      padding: 7px 12px;
+      font-size: var(--text-s);
+    }
+    .acts .pill.more {
+      padding: 7px 8px;
+    }
+  }
+  @container (max-width: 400px) {
+    .cv {
+      width: 88px;
+    }
   }
   .srow {
     display: grid;

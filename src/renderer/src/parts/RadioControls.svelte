@@ -87,7 +87,7 @@
     </div>
     <div class="br">
       <Stage cover={false} />
-      <Volume width={80} />
+      <Volume width={80} pop />
       <VizButton />
       <Slot name="player.buttons" />
     </div>
@@ -250,15 +250,26 @@
     gap: 16px;
     min-width: 0;
   }
+  /* Its width comes from the grid, not its buttons. As it gets narrower the
+     stage shrinks, then goes, then Volume turns into a button (Volume.svelte). */
   .br {
+    container: bar-end / inline-size;
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
   }
-  .br > :global(.vstage) {
-    width: 120px;
-    height: 48px;
+  .br > :global(*) {
     flex: none;
+  }
+  .br > :global(.vstage) {
+    flex: 0 1 120px;
+    min-width: 0;
+    height: 48px;
+  }
+  @container bar-end (max-width: 279px) {
+    .br > :global(.vstage) {
+      display: none;
+    }
   }
 </style>

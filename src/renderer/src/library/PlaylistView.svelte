@@ -102,7 +102,7 @@
             {onkeydown}
           />
         {:else}
-          <h2 class="page-title">{p.name}</h2>
+          <h2 class="page-title clamp" title={p.name}>{p.name}</h2>
         {/if}
         <div class="acts">
           <button class="pill" disabled={!shown.length} onclick={play}>Play</button>

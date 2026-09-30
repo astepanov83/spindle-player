@@ -93,6 +93,7 @@
       {@const on = sort?.k === k}
       <span
         role="columnheader"
+        class="h-{k}"
         class:end={k === 'd'}
         aria-sort={on ? (sort?.dir === 1 ? 'ascending' : 'descending') : undefined}
       >
@@ -127,10 +128,14 @@
         >
         <span class="tt">
           <Thumb src={library.art(t).cover} size={36} radius={4} />
-          <span class="nm" title={t.title}>{t.title}</span>
+          <span class="words">
+            <span class="nm" title={t.title}>{t.title}</span>
+            <!-- shown only when the Artist column is gone -->
+            <span class="sub" title={t.artist}>{t.artist}</span>
+          </span>
         </span>
-        <span class="o" title={t.artist}>{t.artist}</span>
-        <span class="o" title={t.album}>{t.album}</span>
+        <span class="o ar" title={t.artist}>{t.artist}</span>
+        <span class="o al" title={t.album}>{t.album}</span>
         <span class="d">{fmtTime(t.duration)}</span>
       </button>
     {/each}
@@ -146,11 +151,12 @@
     padding-bottom: 16px;
   }
   .tbl {
-    /* 44px, not 36: row numbers reach five digits in a big library */
-    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 56px;
+    container-type: inline-size;
   }
   .th,
   .tr {
+    /* 44px, not 36: row numbers reach five digits in a big library */
+    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 56px;
     display: grid;
     grid-template-columns: var(--cols);
     gap: 16px;
@@ -173,6 +179,10 @@
     color: var(--ink-3);
     text-align: left;
     font-weight: 600;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .th button:hover,
   .th button.on {
@@ -218,15 +228,54 @@
     gap: 12px;
     color: var(--ink);
   }
-  .nm {
+  .words {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .nm,
+  .sub {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .sub {
+    display: none;
+    color: var(--ink-2);
+    font-size: var(--text-s);
+    margin-top: 2px;
+  }
+
+  /* A narrow table drops Album, then Artist, which moves under the title.
+     Sorting by a dropped column stays; its header comes back when wider. */
+  @container (max-width: 520px) {
+    .th,
+    .tr {
+      --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) 56px;
+    }
+    .al,
+    .h-al {
+      display: none;
+    }
+  }
+  @container (max-width: 380px) {
+    .th,
+    .tr {
+      --cols: 44px minmax(0, 1fr) 56px;
+      gap: 12px;
+    }
+    .ar,
+    .h-a {
+      display: none;
+    }
+    .sub {
+      display: block;
+    }
+  }
   .o {
     color: var(--ink-2);
   }
-  .cur-row .tt {
+  .cur-row .nm {
     font-weight: 600;
   }
 </style>

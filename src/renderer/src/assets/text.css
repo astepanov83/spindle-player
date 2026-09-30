@@ -14,6 +14,15 @@
   text-wrap: balance;
 }
 
+/* a long one stops at two lines; its title attribute shows it whole */
+.page-title.clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+
 /* the small line above or below it ("Album · 2020", "12 songs") */
 .page-meta {
   color: var(--ink-3);

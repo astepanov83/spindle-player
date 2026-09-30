@@ -92,7 +92,7 @@
   <div class="page-meta">
     {node ? (node.parent < 0 ? 'Music folder' : 'Folder') : 'Music folders'}
   </div>
-  <h2 class="page-title" {title}>{title}</h2>
+  <h2 class="page-title clamp" {title}>{title}</h2>
   <div class="page-meta">
     {[subfolders ? plural(subfolders, 'folder', 'folders') : '', plural(total, 'song', 'songs')]
       .filter(Boolean)
@@ -206,11 +206,6 @@
     padding: 8px 0 18px;
     margin-top: 4px;
     min-width: 0;
-  }
-  .head .page-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .acts {
     display: flex;

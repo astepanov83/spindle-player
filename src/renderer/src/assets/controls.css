@@ -48,7 +48,8 @@
 button.pill.more {
   display: grid;
   place-items: center;
-  padding: 0 10px;
+  /* 8 + 18 + 8: its own height, so it keeps it alone on a wrapped line */
+  padding: 8px 10px;
 }
 
 /* A small round button: the library chips, Clear, Save, the stream picker.

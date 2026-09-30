@@ -22,6 +22,9 @@
       'The queue slides in from the right. Open it with the queue button next to the visualizer button.',
     col: 'The queue is always visible in its own column.'
   }
+  // a Column drawn as a Drawer in a narrow window (layout/narrow.ts)
+  const narrowHint =
+    'The queue gets its own column when the window is wider. Until then it slides in from the right, from the queue button.'
   const vzNames: Record<VisualizerStyle, string> = {
     ring: 'Ring',
     spectrum: 'Spectrum',
@@ -78,10 +81,12 @@
     <Seg
       label="Queue"
       options={layout.template.queueOptions.map((q) => ({ value: q, label: queueNames[q] }))}
-      value={layout.queueMode}
+      value={layout.queueSetting}
       onchange={(q: QueueMode) => layout.chooseQueueMode(q)}
     />
-    <p class="hint">{queueHints[layout.queueMode]}</p>
+    <p class="hint">
+      {layout.queueMode === layout.queueSetting ? queueHints[layout.queueSetting] : narrowHint}
+    </p>
   </div>
   <div class="set">
     <span class="section-label">Visualizer</span>

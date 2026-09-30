@@ -16,6 +16,7 @@
     type KeyAction
   } from './keys'
   import { goBack, goForward, onSideButton } from './library/side-buttons'
+  import { drawerFocus, focusColumnQueue } from './layout/queue-focus'
   import { layout } from './stores/layout.svelte'
   import { menu } from './stores/menu.svelte'
   import {
@@ -101,6 +102,13 @@
     else if (to === 'drawer') layout.showQueue = false
   }
 
+  // A drawer that turns back into a Column hands its focus on to the Column.
+  function resized(width: number): void {
+    const at = layout.queueMode === 'drawer' ? drawerFocus() : null
+    layout.resized(width)
+    if (at !== null && layout.queueMode === 'col') focusColumnQueue(at)
+  }
+
   // Focus has no search box; there the key does nothing.
   function focusSearch(): void {
     const box = document.querySelector<HTMLInputElement>('input[data-search]')
@@ -111,8 +119,14 @@
   }
 </script>
 
-<!-- the last position goes to main before the window closes -->
-<svelte:window {onkeydown} onmouseup={onSideButton} onpagehide={() => queue.savePos()} />
+<!-- the last position goes to main before the window closes; the width picks
+     how a queue Column is drawn (layout/narrow.ts) -->
+<svelte:window
+  {onkeydown}
+  onmouseup={onSideButton}
+  onpagehide={() => queue.savePos()}
+  bind:innerWidth={null, resized}
+/>
 
 <div
   class="app vz-{settings.visualizer}"

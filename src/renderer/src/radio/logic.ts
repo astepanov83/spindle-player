@@ -13,11 +13,27 @@ import { parseTitle } from '../../../shared/radio-title'
 // in shared/, since main looks song covers up by the same parts (ticket 032)
 export { parseTitle, type RadioTitleParts } from '../../../shared/radio-title'
 
-// The stream to start with: the user's choice, else the first. -1 for none.
+// aac, opus and vorbis sound like mp3 at about 1.5 times the bitrate
+const codecWeight: Record<string, number> = { aac: 1.5, opus: 1.6, vorbis: 1.3 }
+
+// How good a stream should sound. 0 for an unknown bitrate (Shoutcast v1).
+function quality(s: Stream): number {
+  return (s.bitrate ?? 0) * (codecWeight[s.codec ?? ''] ?? 1)
+}
+
+// The stream to start with: the user's choice, else the best sounding, a tie
+// in list order. Starting high is safe: nextStream steps down if it fails.
+// -1 for none.
 export function firstStream(station: Station): number {
-  if (!station.streams.length) return -1
-  const at = station.streams.findIndex((s) => s.url === station.chosen)
-  return at >= 0 ? at : 0
+  const { streams } = station
+  if (!streams.length) return -1
+  const at = streams.findIndex((s) => s.url === station.chosen)
+  if (at >= 0) return at
+  let best = 0
+  streams.forEach((s, i) => {
+    if (quality(s) > quality(streams[best])) best = i
+  })
+  return best
 }
 
 // The stream to try after `from` failed, nearest bitrate first; a tie goes to
@@ -45,15 +61,19 @@ export interface StreamChoice {
   short: string
 }
 
-// The bitrate picker's list: the highest bitrate first, a tie in list order.
-// A Shoutcast v1 server tells its bitrate only in the stream (decision 153),
-// so those come last, in list order, as "Bitrate unknown". Labels that would
-// read the same get a number, so mirrors of one stream can be told apart.
+// The bitrate picker's list: the best sounding first (so firstStream's pick
+// is on top), a tie in list order. A Shoutcast v1 server tells its bitrate
+// only in the stream (decision 153), so those come last, in list order, as
+// "Bitrate unknown". Labels that would read the same get a number, so mirrors
+// of one stream can be told apart. The bar's short text names the codec when
+// another codec has the same bitrate ("128 aac", "128 mp3").
 export function streamChoices(streams: Stream[]): StreamChoice[] {
   const order = streams
     .map((s, index) => ({ s, index }))
-    .sort((a, b) => (b.s.bitrate ?? 0) - (a.s.bitrate ?? 0) || a.index - b.index)
+    .sort((a, b) => quality(b.s) - quality(a.s) || a.index - b.index)
   const seen = new Map<string, number>()
+  const sharedRate = (s: Stream): boolean =>
+    streams.some((o) => o.bitrate === s.bitrate && o.codec !== s.codec)
   return order.map(({ s, index }) => {
     let label = s.bitrate
       ? [`${s.bitrate} kbps`, s.codec].filter(Boolean).join(' ')
@@ -63,7 +83,10 @@ export function streamChoices(streams: Stream[]): StreamChoice[] {
     const n = (seen.get(label) ?? 0) + 1
     seen.set(label, n)
     if (n > 1) label += ` (${n})`
-    return { index, label, short: s.bitrate ? String(s.bitrate) : (s.codec ?? 'Stream') }
+    const short = s.bitrate
+      ? [String(s.bitrate), sharedRate(s) && s.codec].filter(Boolean).join(' ')
+      : (s.codec ?? 'Stream')
+    return { index, label, short }
   })
 }
 

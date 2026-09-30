@@ -44,6 +44,8 @@ describe('nameKey', () => {
     expect(nameKey('Radio X HQ')).toBe('radio x')
     expect(nameKey('Radio X - mp3 320 kbps')).toBe('radio x')
     expect(nameKey('SomaFM Drone Zone 2 (128k AAC) ')).toBe('somafm drone zone 2')
+    expect(nameKey('SomaFM - Deep Space One (128 kb/s AAC)')).toBe('somafm deep space one')
+    expect(nameKey('Radio X 256 kbit/s')).toBe('radio x')
   })
 
   it('keeps words that only start like one', () => {
@@ -60,6 +62,7 @@ describe('stationName', () => {
   it('drops brackets that only name the stream: the row lists the bitrates', () => {
     expect(stationName('SomaFM Drone Zone (128k MP3)')).toBe('SomaFM Drone Zone')
     expect(stationName('Radio X [AAC+ 64 kbps] ')).toBe('Radio X')
+    expect(stationName('SomaFM - Deep Space One (128 kb/s AAC)')).toBe('SomaFM - Deep Space One')
     expect(stationName('Drone Radio (MRG.fm)')).toBe('Drone Radio (MRG.fm)')
     expect(stationName('Radio X 128k')).toBe('Radio X 128k')
     expect(stationName('(MP3)')).toBe('(MP3)')

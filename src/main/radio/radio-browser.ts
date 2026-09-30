@@ -75,8 +75,9 @@ export function mergeResults(byName: RbRecord[], byTag: RbRecord[]): RbRecord[] 
 }
 
 // Words that name a stream, not a station: "128k", "320 kbps", "hq", "mp3", "(aac)".
+// The longer units go first: with "kb" first, "128 kb/s" left "/s" behind.
 const streamWords =
-  /(?<![\p{L}\p{N}])(\d{2,3}\s*(k|kb|kbps|kbit|kbit\/s|kb\/s)|kbps|hq|lq|mp3|aac\+?|he-aac|aacplus|ogg|vorbis|opus|flac)(?![\p{L}\p{N}])/giu
+  /(?<![\p{L}\p{N}])(\d{2,3}\s*(kbit\/s|kb\/s|kbps|kbit|kb|k)|kbps|hq|lq|mp3|aac\+?|he-aac|aacplus|ogg|vorbis|opus|flac)(?![\p{L}\p{N}])/giu
 
 // The name two records of one station share.
 export function nameKey(name: string): string {

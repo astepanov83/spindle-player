@@ -77,12 +77,35 @@ describe('nextStream: nearest bitrate first', () => {
 })
 
 describe('firstStream', () => {
-  it('is the chosen one, else the first', () => {
-    const st: Station = { id: 'x', name: 'X', tags: [], streams: [s('a'), s('b')] }
-    expect(firstStream(st)).toBe(0)
-    expect(firstStream({ ...st, chosen: 'b' })).toBe(1)
-    expect(firstStream({ ...st, chosen: 'gone' })).toBe(0)
-    expect(firstStream({ ...st, streams: [] })).toBe(-1)
+  const st = (...streams: Stream[]): Station => ({ id: 'x', name: 'X', tags: [], streams })
+  const b = (url: string, bitrate?: number, codec?: string): Stream => ({ url, bitrate, codec })
+
+  it('is the chosen one, else the best', () => {
+    const x = st(b('a', 32, 'aac'), b('b', 64, 'aac'))
+    expect(firstStream(x)).toBe(1)
+    expect(firstStream({ ...x, chosen: 'a' })).toBe(0)
+    expect(firstStream({ ...x, chosen: 'gone' })).toBe(1)
+    expect(firstStream(st())).toBe(-1)
+  })
+
+  it('counts aac, opus and vorbis above mp3 of the same bitrate', () => {
+    // SomaFM Deep Space One, in Radio Browser's vote order
+    const x = st(
+      b('32a', 32, 'aac'),
+      b('64a', 64, 'aac'),
+      b('128m', 128, 'mp3'),
+      b('128a', 128, 'aac')
+    )
+    expect(firstStream(x)).toBe(3)
+    expect(firstStream(st(b('m', 160, 'mp3'), b('a', 128, 'aac')))).toBe(1)
+    expect(firstStream(st(b('m', 320, 'mp3'), b('a', 128, 'aac')))).toBe(0)
+    expect(firstStream(st(b('m', 128, 'mp3'), b('o', 96, 'opus')))).toBe(1)
+  })
+
+  it('takes a stream of unknown bitrate only when none is known, and the first on a tie', () => {
+    expect(firstStream(st(b('a'), b('b', 32, 'mp3')))).toBe(1)
+    expect(firstStream(st(b('a'), b('b')))).toBe(0)
+    expect(firstStream(st(b('a', 128, 'mp3'), b('b', 128, 'mp3')))).toBe(0)
   })
 })
 
@@ -150,6 +173,15 @@ describe('streamChoices', () => {
       'Bitrate unknown'
     ])
     expect(list.map((c) => c.index)).toEqual([1, 0, 2, 3])
+  })
+
+  it('lists the same bitrate once per codec, the better codec first', () => {
+    const list = streamChoices([s('m', 128, 'mp3'), s('a', 128, 'aac'), s('x', 64, 'aac')])
+    expect(list).toEqual([
+      { index: 1, label: '128 kbps aac', short: '128 aac' },
+      { index: 0, label: '128 kbps mp3', short: '128 mp3' },
+      { index: 2, label: '64 kbps aac', short: '64' }
+    ])
   })
 
   it('is empty for a station with no streams yet', () => {

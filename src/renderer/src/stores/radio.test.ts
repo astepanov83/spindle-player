@@ -268,7 +268,7 @@ describe('reconnecting', () => {
 
   it('audio from main but no sound is a format: next stream at once; all: "Format can\'t be played"', async () => {
     answer = { ok: true, bytes: 64000 }
-    await start(st('w', [64, 128]))
+    await start(st('w', [128, 64]))
     ev.error!(four)
     await vi.advanceTimersByTimeAsync(0)
     expect(lastAnswer).toHaveBeenCalledWith('w')
@@ -283,7 +283,7 @@ describe('reconnecting', () => {
   })
 
   it('error 4 when main answered 502 is a server not reached: retry', async () => {
-    await start(st('x', [64, 128]))
+    await start(st('x', [128, 64]))
     ev.error!(four)
     await vi.advanceTimersByTimeAsync(1000)
     expect(loads()).toEqual(['load spindle://radio/x?stream=0 live'])
@@ -291,7 +291,7 @@ describe('reconnecting', () => {
 
   it('a stream that played and then failed is retried, even with lots of audio passed', async () => {
     answer = { ok: true, bytes: 900000 }
-    await start(st('y', [64, 128]))
+    await start(st('y', [128, 64]))
     ev.playing!()
     ev.ended!()
     await vi.advanceTimersByTimeAsync(1000)
@@ -302,7 +302,7 @@ describe('reconnecting', () => {
   it('a server that played, then hangs, is retried at 1, 2 and 4 s, not taken for a format (final fix 1)', async () => {
     // main still says what the connection that played got until its 10 s timeout
     answer = { ok: true, bytes: 900000 }
-    await start(st('z', [64, 128]))
+    await start(st('z', [128, 64]))
     ev.playing!()
     // the server stops sending
     ev.waiting!()
@@ -384,12 +384,12 @@ describe('status, next to the dot', () => {
     expect(radio.status).toBe('connecting')
     await p
     expect(radio.status).toBe('connecting')
-    expect(radio.statusDetail()).toBe('Connecting to 64 kbps')
+    expect(radio.statusDetail()).toBe('Connecting to 320 kbps')
     ev.waiting!()
     expect(radio.status).toBe('connecting')
     ev.playing!()
     expect(radio.status).toBe('live')
-    expect(radio.statusDetail()).toBe('Live on 64 kbps')
+    expect(radio.statusDetail()).toBe('Live on 320 kbps')
   })
 
   it('buffering when data stops for 1 s after sound came, live again when it comes back', async () => {

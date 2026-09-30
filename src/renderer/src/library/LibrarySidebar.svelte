@@ -11,8 +11,11 @@
   import SearchBox from './SearchBox.svelte'
   import SearchResults from './SearchResults.svelte'
   import SongTable from './SongTable.svelte'
+  import ViewHead from './ViewHead.svelte'
+  import { fmtCount } from '../format'
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
+  import { folderSearchText } from './folders'
   import { showPage } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { songRows } from './views'
@@ -50,7 +53,7 @@
     songs: 'Search songs',
     albums: 'Search library',
     artists: 'Search artists',
-    folders: 'Search this folder',
+    folders: 'Search folders',
     radio: 'Search stations'
   }
 
@@ -90,7 +93,11 @@
 <div class="lib2" data-notice-host>
   <aside class="side">
     <div class="search">
-      <SearchBox placeholder={placeholders[library.section] ?? 'Search this playlist'} />
+      <SearchBox
+        placeholder={library.section === 'folders'
+          ? folderSearchText(library.folders, library.folder)
+          : (placeholders[library.section] ?? 'Search this playlist')}
+      />
     </div>
     <div class="sidehead section-label">Library</div>
     {#each sections as [sec, icon, label] (sec)}
@@ -109,7 +116,7 @@
   </aside>
   <div class="main" bind:this={scrollEl}>
     {#if library.section === 'radio'}
-      <RadioView />
+      <RadioView searchAt="left" />
     {:else if !library.albums.length}
       <!-- radio needs no songs, so the sidebar stays -->
       <div class="fill"><NoLibrary /></div>
@@ -121,6 +128,7 @@
       {:else if library.open}
         <AlbumPage albumId={library.open} />
       {:else}
+        <ViewHead title="Albums" count={fmtCount(library.albums.length, 'album', 'albums')} />
         <AlbumGrid {scrollEl} />
       {/if}
     {:else if playlist}

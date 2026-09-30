@@ -213,7 +213,10 @@
   {:else}
     <div class="body" bind:this={body}>
       {#if !queue.items.length}
-        <p class="empty">The queue is empty. Songs you play show up here.</p>
+        <p class="empty">
+          The queue is empty. Songs you play{layout.hasLibrary ? '' : ' in Studio or Classic'} show up
+          here.
+        </p>
       {/if}
       <div
         class="rows"

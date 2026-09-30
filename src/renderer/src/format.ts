@@ -19,3 +19,8 @@ export function fmtLength(s: number): string {
   if (!h) return `${m} min`
   return m % 60 ? `${h} h ${m % 60} min` : `${h} h`
 }
+
+// 1 -> "1 album", 12000 -> "12,000 albums"
+export function fmtCount(n: number, one: string, many: string): string {
+  return `${n.toLocaleString()} ${n === 1 ? one : many}`
+}

@@ -1,6 +1,8 @@
 <!-- Studio's Playlists chip: the playlists, and a button to make one. -->
 <script lang="ts">
   import Empty from './Empty.svelte'
+  import ViewHead from './ViewHead.svelte'
+  import { fmtCount } from '../format'
   import Icon from '../ui/Icon.svelte'
   import { filterPlaylists } from './views'
   import { library } from '../stores/library.svelte'
@@ -22,6 +24,7 @@
   }
 </script>
 
+<ViewHead title="Playlists" count={fmtCount(playlists.list.length, 'playlist', 'playlists')} />
 <div class="pls lines">
   <button class="row new" onclick={create}>
     <span class="ic"><Icon name="plus" size={20} /></span>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import PlayingText from './PlayingText.svelte'
   import Stage from '../visualizer/Stage.svelte'
+  import { layout } from '../stores/layout.svelte'
   import { playing } from '../stores/playing.svelte'
 
   let { style }: { style: 'panel' | 'full' } = $props()
@@ -15,7 +16,14 @@
       <div class="song-sub" title={playing.sub}><PlayingText line="sub" /></div>
     {:else}
       <div class="song-title">Nothing playing</div>
-      <div class="song-sub">Pick an album or a song to start</div>
+      {#if layout.hasLibrary}
+        <div class="song-sub">Pick an album or a song to start</div>
+      {:else}
+        <!-- Focus has no library to pick from -->
+        <div class="song-sub">Switch to Studio or Classic to pick music</div>
+        <button class="chip open" onclick={() => (layout.settingsOpen = true)}>Open Settings</button
+        >
+      {/if}
     {/if}
   </div>
 </div>
@@ -42,6 +50,9 @@
   }
   .full .meta {
     text-align: center;
+  }
+  .open {
+    margin-top: 10px;
   }
   .full .song-title {
     font-size: var(--title-l);

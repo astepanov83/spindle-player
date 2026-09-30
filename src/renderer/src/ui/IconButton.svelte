@@ -7,6 +7,7 @@
     label,
     on = false,
     act,
+    disabled = false,
     onclick
   }: {
     icon: IconName
@@ -14,12 +15,13 @@
     on?: boolean
     // names a slot button, so focus can be handed to it
     act?: string
+    disabled?: boolean
     onclick: () => void
   } = $props()
 </script>
 
 <!-- the title shows the name on hover; the icon alone doesn't say it -->
-<button class="icobtn" class:on aria-label={label} title={label} data-act={act} {onclick}
+<button class="icobtn" class:on aria-label={label} title={label} data-act={act} {disabled} {onclick}
   ><Icon name={icon} /></button
 >
 
@@ -37,11 +39,15 @@
       background 0.15s,
       transform 0.1s;
   }
-  .icobtn:hover {
+  .icobtn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  .icobtn:hover:not(:disabled) {
     opacity: 1;
     background: var(--active);
   }
-  .icobtn:active {
+  .icobtn:active:not(:disabled) {
     transform: scale(0.92);
   }
   /* On (Shuffle, Repeat, an open queue) in the album accent, fitted to 3:1 on

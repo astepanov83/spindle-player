@@ -24,7 +24,8 @@
     onsort = (k) => (library.sort = nextSort(library.sort, k)),
     playlistId,
     link,
-    head
+    head,
+    count = true
   }: {
     title: string
     meta: string
@@ -39,6 +40,8 @@
     link?: QueueLink
     // replaces the title block (a playlist's name can be edited)
     head?: Snippet
+    // the song count on the right; off where the page's header says it already
+    count?: boolean
   } = $props()
 
   const ROW = 54
@@ -84,7 +87,9 @@
       <h2 class="page-title">{title}</h2>
     </div>
   {/if}
-  <div class="page-meta">{rows.length} {rows.length === 1 ? 'song' : 'songs'}</div>
+  {#if count}
+    <div class="page-meta">{rows.length} {rows.length === 1 ? 'song' : 'songs'}</div>
+  {/if}
 </div>
 <div class="tbl">
   <div class="th">

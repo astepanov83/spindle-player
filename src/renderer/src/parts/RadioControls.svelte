@@ -1,5 +1,5 @@
 <!-- Radio's controls: no seek, Next, Previous, Shuffle or Repeat (decision 150).
-     The status (LIVE, CONNECTING, BUFFERING, RECONNECTING) and the time listened,
+     The status (LIVE, CONNECTING, BUFFERING, RECONNECTING, STOPPED) and the time listened,
      the stream picker, stop and play, and Save. -->
 <script lang="ts">
   import Cover from '../ui/Cover.svelte'
@@ -28,7 +28,7 @@
   const listened = $derived(fmtClock(radio.listened(now) / 1000))
 
   const label: Record<RadioStatus, string> = {
-    off: 'LIVE',
+    off: 'STOPPED',
     connecting: 'CONNECTING',
     live: 'LIVE',
     buffering: 'BUFFERING',
@@ -56,7 +56,8 @@
       {/each}
     </span>
   </span>
-  <span class="time" title="Time listened">{listened}</span>
+  <!-- stopped: hidden, not gone, so the stream picker stays put; Play goes on counting -->
+  <span class="time" class:off={radio.status === 'off'} title="Time listened">{listened}</span>
 {/snippet}
 
 {#snippet save()}
@@ -163,6 +164,9 @@
     font-size: var(--text-xs);
     color: var(--ink-2);
     font-variant-numeric: tabular-nums;
+  }
+  .time.off {
+    visibility: hidden;
   }
   .liverow {
     display: flex;

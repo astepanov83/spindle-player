@@ -24,7 +24,7 @@ import {
 } from '../queue/logic'
 import { library } from './library.svelte'
 import { notice } from './notice.svelte'
-import { play, player } from './player.svelte'
+import { play, player, seek as seekSong } from './player.svelte'
 
 // The position goes to main this often while playing (plus on pause, seek and quit).
 const savePosEverySec = 5
@@ -40,6 +40,10 @@ class QueueStore {
   // Goes up each time a song is loaded, so the queue scrolls to a new song
   // but not when rows only move around it.
   starts = $state(0)
+  // The queue ran out (#stopAtEnd): its last song waits at 0:00. The album
+  // page's Play then plays the album again, not just that song. Any play,
+  // seek, song load or new list clears it.
+  ended = $state(false)
 
   // nothing until a song is picked
   current: Track | undefined = $derived(
@@ -73,6 +77,7 @@ class QueueStore {
     // follow the element, so a pause from media keys or the system shows too
     playing: () => {
       this.#fails = 0
+      this.ended = false
       player.playing = true
     },
     paused: () => {
@@ -99,6 +104,7 @@ class QueueStore {
   // current song alone goes from #start, which always follows, with its position.
   #set(s: QueueState): void {
     const listChanged = s.items !== this.items || s.from !== this.from || s.link !== this.link
+    if (s.items !== this.items) this.ended = false
     this.items = s.items
     this.index = s.index
     this.from = s.from
@@ -111,6 +117,7 @@ class QueueStore {
   #start(andPlay = true, at = 0): void {
     const t = this.current
     this.starts++
+    this.ended = false
     player.pos = at
     this.savePos()
     if (!this.active) {
@@ -276,6 +283,14 @@ class QueueStore {
     engine.seek(0)
     player.pos = 0
     this.savePos()
+    this.ended = true
+  }
+
+  // The seek bar, arrows and media keys (through playing.seek). Not the
+  // engine's seeked event: the seek to 0:00 above sends one too.
+  seek(pos: number): void {
+    this.ended = false
+    seekSong(pos)
   }
 
   prev(): void {

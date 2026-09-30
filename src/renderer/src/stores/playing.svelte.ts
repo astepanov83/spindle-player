@@ -6,7 +6,7 @@ import type { SavedPlaying, SavedQueue } from '../../../shared/saved-queue'
 import type { Station } from '../../../shared/stations'
 import { engine, type EngineEvents } from '../audio/engine'
 import { stepStation } from '../radio/logic'
-import { player, seek as seekSong, togglePlay as toggleSong } from './player.svelte'
+import { player, togglePlay as toggleSong } from './player.svelte'
 import { queue } from './queue.svelte'
 import { radio } from './radio.svelte'
 
@@ -45,6 +45,8 @@ class PlayingStore {
       : queue.current && `${queue.current.artist} · ${queue.current.album}`
   )
   art: Art | undefined = $derived(this.kind === 'radio' ? radio.art : queue.currentArt)
+  // No song and no station: Play, Previous and Next have nothing to act on.
+  nothing: boolean = $derived(this.kind === 'radio' ? !radio.station : !queue.current)
   // A song sounds: the queue's playing marks (the bouncing bars) follow this,
   // not player.playing, which is the radio's while radio plays.
   songPlaying: boolean = $derived(this.kind === 'queue' && player.playing)
@@ -127,7 +129,7 @@ class PlayingStore {
 
   // A stream can't be sought, and player.pos is the queue's place while radio plays.
   seek(pos: number): void {
-    if (this.kind === 'queue') seekSong(pos)
+    if (this.kind === 'queue') queue.seek(pos)
   }
 
   // Next and Previous: songs in the queue, or My stations on the radio.

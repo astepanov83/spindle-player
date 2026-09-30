@@ -1,6 +1,7 @@
 <!-- The Folders view: a path bar, the subfolders, then the folder's own songs.
      Both lists draw only the rows on screen. -->
 <script lang="ts">
+  import { fmtCount } from '../format'
   import Empty from './Empty.svelte'
   import SongTable from './SongTable.svelte'
   import Eq from '../ui/Eq.svelte'
@@ -52,8 +53,6 @@
   }))
 
   const songIds = (i: number | null): string[] => folderSongs(tree, i).map((t) => t.id)
-  const plural = (n: number, one: string, many: string): string =>
-    `${n.toLocaleString()} ${n === 1 ? one : many}`
 
   // what is shown: search and the table's sort
   const playIds = (): string[] =>
@@ -94,7 +93,7 @@
   </div>
   <h2 class="page-title clamp" {title}>{title}</h2>
   <div class="page-meta">
-    {[subfolders ? plural(subfolders, 'folder', 'folders') : '', plural(total, 'song', 'songs')]
+    {[subfolders ? fmtCount(subfolders, 'folder', 'folders') : '', fmtCount(total, 'song', 'songs')]
       .filter(Boolean)
       .join(' · ')}
   </div>
@@ -146,7 +145,7 @@
         >
         {#if f.parent < 0}<span class="where" title={f.key}>{f.key}</span>{/if}
       </span>
-      <span class="n">{plural(f.count, 'song', 'songs')}</span>
+      <span class="n">{fmtCount(f.count, 'song', 'songs')}</span>
       <span class="go"><Icon name="back" size={16} /></span>
     </button>
   {/each}

@@ -10,6 +10,7 @@
   import { player } from '../stores/player.svelte'
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { albumButton, albumLabel, albumLines } from './album'
   import { artistLinks } from './artists'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
 
@@ -22,6 +23,21 @@
   const artists = $derived(artistLinks(al, (key) => !!library.getArtist(key)))
   const link = $derived<QueueLink>({ kind: 'album', id: albumId })
   const minutes = $derived(Math.round(tracks.reduce((s, t) => s + t.duration, 0) / 60))
+  const lines = $derived(albumLines(tracks))
+  const btn = $derived(
+    albumButton(albumId, {
+      link: queue.link,
+      currentAlbum: queue.current?.albumId,
+      ended: queue.ended,
+      queuePlays: playing.kind === 'queue',
+      sounding: player.playing
+    })
+  )
+
+  function playOrPause(): void {
+    if (btn === 'play') queue.playAlbum(al.id, 0)
+    else playing.togglePlay()
+  }
 
   function shufflePlay(): void {
     player.shuffle = true
@@ -38,7 +54,7 @@
 <div class="albhead">
   <div class="cv"><Cover src={al.coverLarge} /></div>
   <div class="words">
-    <div class="page-meta">Album{al.year ? ` · ${al.year}` : ''}</div>
+    <div class="page-meta">{albumLabel(al)}</div>
     <h2 class="page-title clamp" title={al.title}>{al.title}</h2>
     <div class="page-meta">
       {#each artists as a, i (i)}{#if i}{comma}{/if}<GoLink
@@ -46,7 +62,7 @@
         >{/each} · {tracks.length} songs · {minutes} min
     </div>
     <div class="acts">
-      <button class="pill" onclick={() => queue.playAlbum(al.id, 0)}>Play</button>
+      <button class="pill play" onclick={playOrPause}>{btn === 'pause' ? 'Pause' : 'Play'}</button>
       <button class="pill ghost" onclick={shufflePlay}>Shuffle</button>
       <button
         class="pill ghost"
@@ -64,25 +80,31 @@
     </div>
   </div>
 </div>
+<!-- a "Disc 2" row is a label: not a [data-row], so Tab and the arrows skip it -->
 <div class="lines" use:roving={{ rows: tracks }}>
-  {#each tracks as t, i (t.id)}
-    {@const cur = playing.isSong(t.id)}
-    <button
-      class="srow row"
-      data-song={t.id}
-      class:cur-row={cur}
-      data-row
-      aria-current={cur ? 'true' : undefined}
-      onclick={() => queue.playAlbum(al.id, i)}
-      oncontextmenu={(e) => openSongMenu(e, [t.id], { from: al.title, link })}
-    >
-      <span class="n"
-        >{#if cur && playing.songPlaying}<Eq />{:else}{i + 1}{/if}</span
+  {#each lines as line ('disc' in line ? `disc ${line.disc}` : line.track.id)}
+    {#if 'disc' in line}
+      <div class="disc section-label">Disc {line.disc}</div>
+    {:else}
+      {@const t = line.track}
+      {@const cur = playing.isSong(t.id)}
+      <button
+        class="srow row"
+        data-song={t.id}
+        class:cur-row={cur}
+        data-row
+        aria-current={cur ? 'true' : undefined}
+        onclick={() => queue.playAlbum(al.id, line.at)}
+        oncontextmenu={(e) => openSongMenu(e, [t.id], { from: al.title, link })}
       >
-      <span class="nm" title={t.title}>{t.title}</span>
-      <span class="ar" title={t.artist}>{t.artist}</span>
-      <span class="d">{fmtTime(t.duration)}</span>
-    </button>
+        <span class="n"
+          >{#if cur && playing.songPlaying}<Eq />{:else if line.no}{line.no}{/if}</span
+        >
+        <span class="nm" title={t.title}>{t.title}</span>
+        <span class="ar" title={t.artist}>{t.artist}</span>
+        <span class="d">{fmtTime(t.duration)}</span>
+      </button>
+    {/if}
   {/each}
 </div>
 
@@ -154,6 +176,16 @@
     .cv {
       width: 88px;
     }
+  }
+  /* as wide for Pause as for Play, so the pills beside it stay put */
+  .play {
+    min-width: 5.6em;
+  }
+  .disc {
+    padding: 18px 14px 8px;
+  }
+  .disc:first-child {
+    padding-top: 0;
   }
   .srow {
     display: grid;

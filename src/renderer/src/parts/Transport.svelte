@@ -12,13 +12,19 @@
     on={player.shuffle}
     onclick={() => (player.shuffle = !player.shuffle)}
   />
-  <IconButton icon="prev" label="Previous" onclick={() => playing.prev()} />
+  <IconButton
+    icon="prev"
+    label="Previous"
+    disabled={playing.nothing}
+    onclick={() => playing.prev()}
+  />
   <PlayButton
     icon={player.playing ? 'pause' : 'play'}
     label={player.playing ? 'Pause' : 'Play'}
+    disabled={playing.nothing}
     onclick={() => playing.togglePlay()}
   />
-  <IconButton icon="next" label="Next" onclick={() => playing.next()} />
+  <IconButton icon="next" label="Next" disabled={playing.nothing} onclick={() => playing.next()} />
   <IconButton
     icon="repeat"
     label="Repeat"

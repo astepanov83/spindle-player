@@ -11,6 +11,9 @@
   import ScanLine from './ScanLine.svelte'
   import SearchBox from './SearchBox.svelte'
   import SearchResults from './SearchResults.svelte'
+  import ViewHead from './ViewHead.svelte'
+  import { fmtCount } from '../format'
+  import { folderSearchText } from './folders'
   import { showPage } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { library, type Chip, type Page } from '../stores/library.svelte'
@@ -39,7 +42,7 @@
   const placeholders: Record<Chip, string> = {
     albums: 'Search your library',
     artists: 'Search artists',
-    folders: 'Search this folder',
+    folders: 'Search folders',
     playlists: 'Search playlists',
     radio: 'Search stations'
   }
@@ -70,7 +73,9 @@
     <SearchBox
       placeholder={library.chip === 'playlists' && library.openPlaylist
         ? 'Search this playlist'
-        : placeholders[library.chip]}
+        : library.chip === 'folders'
+          ? folderSearchText(library.folders, library.folder)
+          : placeholders[library.chip]}
     />
     <!-- the scan line takes the row's spare room, so the grid never moves -->
     <div class="chiprow">
@@ -86,10 +91,12 @@
   </div>
   <div class="scroll" bind:this={scrollEl}>
     {#if library.chip === 'radio'}
-      <RadioView />
+      <RadioView searchAt="above" />
     {:else if !library.albums.length}
       <!-- radio needs no songs, so the chips stay -->
-      <div class="fill"><NoLibrary /></div>
+      <div class="fill">
+        <NoLibrary view={library.chip === 'playlists' ? 'playlists' : undefined} />
+      </div>
     {:else if library.chip === 'playlists'}
       {#if library.openPlaylist}
         <PlaylistView id={library.openPlaylist} {scrollEl} back />
@@ -105,6 +112,7 @@
     {:else if library.open}
       <AlbumPage albumId={library.open} />
     {:else}
+      <ViewHead title="Albums" count={fmtCount(library.albums.length, 'album', 'albums')} />
       <AlbumGrid {scrollEl} />
     {/if}
   </div>

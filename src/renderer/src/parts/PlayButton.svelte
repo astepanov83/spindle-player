@@ -3,10 +3,17 @@
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
 
-  let { icon, label, onclick }: { icon: IconName; label: string; onclick: () => void } = $props()
+  let {
+    icon,
+    label,
+    disabled = false,
+    onclick
+  }: { icon: IconName; label: string; disabled?: boolean; onclick: () => void } = $props()
 </script>
 
-<button class="playbtn" aria-label={label} {onclick}><Icon name={icon} size={26} /></button>
+<button class="playbtn" aria-label={label} {disabled} {onclick}
+  ><Icon name={icon} size={26} /></button
+>
 
 <style>
   /* this component's class wins over the global button reset */
@@ -25,10 +32,14 @@
     width: var(--playico, 26px) !important;
     height: var(--playico, 26px) !important;
   }
-  .playbtn:hover {
+  .playbtn:hover:not(:disabled) {
     transform: scale(1.06);
   }
-  .playbtn:active {
+  .playbtn:active:not(:disabled) {
     transform: scale(0.96);
+  }
+  .playbtn:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
 </style>

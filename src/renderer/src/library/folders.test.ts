@@ -6,6 +6,7 @@ import {
   folderBack,
   folderForward,
   folderPlaySongs,
+  folderSearchText,
   folderSongs,
   folderTree,
   folderUp,
@@ -336,5 +337,31 @@ describe('folderPlaySongs', () => {
     )
     expect(ids(folderPlaySongs(t, null, '', null, () => 0))).toEqual(['a', 'b'])
     expect(ids(folderPlaySongs(t, null, 'audio', null, () => 0))).toEqual(['b'])
+  })
+})
+
+describe('folderSearchText', () => {
+  it('names the folder shown', () => {
+    const t = tree()
+    expect(folderSearchText(t, null)).toBe('Search this folder')
+    expect(folderSearchText(t, key(t, 2))).toBe('Search this folder')
+  })
+
+  it('names the folders while they are listed, or when there are none', () => {
+    const two = folderTree(
+      [
+        { name: '/a', parent: -1 },
+        { name: '/b', parent: -1 }
+      ],
+      [track('x', 0), track('y', 1)],
+      () => ''
+    )
+    expect(folderSearchText(two, null)).toBe('Search folders')
+    expect(
+      folderSearchText(
+        folderTree([{ name: '/a', parent: -1 }], [], () => ''),
+        null
+      )
+    ).toBe('Search folders')
   })
 })

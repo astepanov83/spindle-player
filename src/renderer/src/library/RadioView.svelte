@@ -1,7 +1,9 @@
 <!-- Radio in Studio's chips and Classic's sidebar (ticket 029): My stations,
      filtered at once by the search box, then Radio Browser's stations for it. -->
 <script lang="ts">
+  import ViewHead from './ViewHead.svelte'
   import Icon from '../ui/Icon.svelte'
+  import { fmtCount } from '../format'
   import Thumb from '../ui/Thumb.svelte'
   import { roving } from '../ui/roving'
   import { stationArt, type Station } from '../../../shared/stations'
@@ -11,6 +13,9 @@
   import { playing } from '../stores/playing.svelte'
   import { radio } from '../stores/radio.svelte'
   import { radioSearch } from '../stores/radio-search.svelte'
+
+  // where the search box is, for the hint under the title
+  let { searchAt }: { searchAt: 'above' | 'left' } = $props()
 
   const q = $derived(library.query.trim())
   const mine = $derived(radio.stations.filter((s) => stationMatches(s, q)))
@@ -107,6 +112,12 @@
   </div>
 {/snippet}
 
+<ViewHead
+  title="Radio"
+  meta="Internet radio"
+  count={fmtCount(radio.stations.length, 'station', 'stations')}
+  hint="Find stations with the search box {searchAt === 'above' ? 'above' : 'on the left'}."
+/>
 <div class="radio">
   <h3 class="section-label">My stations</h3>
   <div class="list lines" role="list" use:roving={{ rows: mine }}>

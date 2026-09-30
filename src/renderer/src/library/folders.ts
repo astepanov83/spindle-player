@@ -103,6 +103,13 @@ export function shownFolder(tree: FolderTree, key: string | null): number | null
   return tree.roots.length === 1 ? tree.roots[0] : null
 }
 
+// The search box's text in Folders: no "this folder" while the music
+// folders are listed, or when there is none (no songs yet).
+export function folderSearchText(tree: FolderTree, key: string | null): string {
+  const i = shownFolder(tree, key)
+  return i !== null && tree.nodes[i]?.count ? 'Search this folder' : 'Search folders'
+}
+
 // From the music folder down to this one.
 export function crumbs(tree: FolderTree, i: number): number[] {
   const out: number[] = []

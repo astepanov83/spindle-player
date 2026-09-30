@@ -2,6 +2,7 @@
      songs on other albums in the song table. Edit renames or splits them
      (ticket 024). -->
 <script lang="ts">
+  import { fmtCount } from '../format'
   import { untrack } from 'svelte'
   import { artistKey, type Artist, type ArtistTag } from '../../../shared/artists'
   import { cleanNames, editArtist, maxNameLength } from '../../../shared/artist-overrides'
@@ -22,8 +23,6 @@
   const also = $derived(a.also.map((id) => library.track(id)))
   const songs = $derived(artistSongs(a, album))
   const covers = $derived(artistCovers(a, album, (id) => library.art(library.track(id)).cover))
-  const plural = (n: number, one: string, many: string): string =>
-    `${n.toLocaleString()} ${n === 1 ? one : many}`
 
   // their albums in order, then the "Also on" songs as sorted
   const playIds = (): string[] =>
@@ -145,8 +144,8 @@
     {/if}
     <div class="page-meta">
       {[
-        albums.length ? plural(albums.length, 'album', 'albums') : '',
-        plural(songs.length, 'song', 'songs')
+        albums.length ? fmtCount(albums.length, 'album', 'albums') : '',
+        fmtCount(songs.length, 'song', 'songs')
       ]
         .filter(Boolean)
         .join(' · ')}
@@ -182,7 +181,7 @@
 
 {#if albums.length}
   <h3 class="part section-label">Albums</h3>
-  <AlbumGrid {scrollEl} items={albums} onopen={(id) => library.openArtistAlbum(id)} />
+  <AlbumGrid {scrollEl} items={albums} sub="year" onopen={(id) => library.openArtistAlbum(id)} />
 {/if}
 
 {#if also.length}
@@ -194,9 +193,12 @@
     sort={library.artistSort}
     onsort={(k) => library.sortArtist(k)}
     link={{ kind: 'artist', id: a.key }}
+    count={albums.length > 0}
   >
+    <!-- with no albums above, "Also on" would head nothing, and the header
+         already counts the songs -->
     {#snippet head()}
-      <h3 class="part section-label">Also on</h3>
+      {#if albums.length}<h3 class="part section-label">Also on</h3>{/if}
     {/snippet}
   </SongTable>
 {/if}

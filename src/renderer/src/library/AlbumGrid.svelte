@@ -17,11 +17,14 @@
   let {
     scrollEl,
     items,
+    sub = 'artist',
     onopen = (id) => (library.open = id)
   }: {
     scrollEl: HTMLElement | undefined
     // these albums instead of the library's, with no search (an artist's)
     items?: Album[]
+    // the line under the title: an artist's page names the year, not them again
+    sub?: 'artist' | 'year'
     onopen?: (albumId: string) => void
   } = $props()
 
@@ -101,7 +104,7 @@
               title={al.title}>{al.title}</span
             >
           </div>
-          <div class="a">{al.artist}</div>
+          <div class="a">{sub === 'year' ? al.year || '' : al.artist}</div>
         </div>
       {/each}
     </div>

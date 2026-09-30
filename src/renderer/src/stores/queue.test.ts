@@ -133,6 +133,36 @@ describe('a song ends', () => {
     expect(player.pos).toBe(0)
   })
 
+  it('marks the queue as ended until something plays, seeks or changes it', () => {
+    queue.jump(2)
+    expect(queue.ended).toBe(false)
+    fake.on.ended!()
+    expect(queue.ended).toBe(true)
+    // the seek to 0:00 that stopping sends does not count
+    fake.on.seeked!()
+    expect(queue.ended).toBe(true)
+    fake.on.playing!()
+    expect(queue.ended).toBe(false)
+
+    queue.next()
+    expect(queue.ended).toBe(true)
+    queue.seek(10)
+    expect(queue.ended).toBe(false)
+
+    queue.next()
+    queue.jump(0)
+    expect(queue.ended).toBe(false)
+
+    queue.jump(2)
+    queue.next()
+    queue.append(['b0'])
+    expect(queue.ended).toBe(false)
+
+    queue.next()
+    queue.playAlbum('a', 0)
+    expect(queue.ended).toBe(false)
+  })
+
   it('replays the song with repeat on', () => {
     player.repeat = true
     fake.on.ended!()

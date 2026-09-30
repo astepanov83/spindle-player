@@ -1,6 +1,7 @@
 <!-- Artists as round pictures, drawn a row at a time like the album grid, so
      10k artists stay fast. -->
 <script lang="ts">
+  import { fmtCount } from '../format'
   import Empty from './Empty.svelte'
   import ArtistPic from './ArtistPic.svelte'
   import Eq from '../ui/Eq.svelte'
@@ -78,13 +79,11 @@
 
   const album = (id: string): { cover: string; trackIds: string[] } => library.album(id)
   const songCover = (id: string): string => library.art(library.track(id)).cover
-  const plural = (n: number, one: string, many: string): string =>
-    `${n.toLocaleString()} ${n === 1 ? one : many}`
   // albums, or songs for an artist with only songs on other albums
   const count = (a: Artist): string =>
     a.albums.length
-      ? plural(a.albums.length, 'album', 'albums')
-      : plural(a.also.length, 'song', 'songs')
+      ? fmtCount(a.albums.length, 'album', 'albums')
+      : fmtCount(a.also.length, 'song', 'songs')
 </script>
 
 {#if !items && !artists.length}

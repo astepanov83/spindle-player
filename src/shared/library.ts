@@ -71,6 +71,14 @@ export interface TrackPart {
   end?: number
 }
 
+// Album artist credits that mean a compilation, folded to lower case. Cover
+// and photo lookups skip them; the album page calls such an album a Compilation.
+export const various: ReadonlySet<string> = new Set(['various artists', 'various', 'va'])
+
+export function isVarious(credit: string): boolean {
+  return various.has(credit.trim().toLowerCase())
+}
+
 export interface Album extends Art {
   id: string
   title: string

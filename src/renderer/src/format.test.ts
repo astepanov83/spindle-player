@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { fmtClock, fmtLength, fmtTime } from './format'
+import { fmtClock, fmtCount, fmtLength, fmtTime } from './format'
 
 it('formats seconds as m:ss', () => {
   expect(fmtTime(0)).toBe('0:00')
@@ -24,4 +24,10 @@ it('formats the length of a list in minutes, with hours past an hour', () => {
   expect(fmtLength(3569)).toBe('59 min')
   expect(fmtLength(3600)).toBe('1 h')
   expect(fmtLength(3600 * 5 + 60 * 7 + 20)).toBe('5 h 7 min')
+})
+
+it('counts things with the word for one or many', () => {
+  expect(fmtCount(1, 'album', 'albums')).toBe('1 album')
+  expect(fmtCount(0, 'album', 'albums')).toBe('0 albums')
+  expect(fmtCount(12000, 'song', 'songs')).toBe(`${(12000).toLocaleString()} songs`)
 })

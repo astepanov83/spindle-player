@@ -198,8 +198,9 @@ page.handle(RadioChannel.search, async (_, q) => {
   if (typeof q !== 'string') return { ok: true, stations: [] }
   const n = ++searches
   const found = await radioBrowser.search(q)
-  if (found.ok && n === searches) resultLogos.searched(found.stations)
-  return found
+  if (!found.ok) return found
+  if (n === searches) resultLogos.searched(found.stations)
+  return played.searched(found.stations) ? { ...found, saved: stations.list() } : found
 })
 page.on(RadioChannel.stop, () => {
   radioStreams.stop()

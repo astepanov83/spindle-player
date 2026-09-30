@@ -13,6 +13,9 @@ const search = vi.fn(
     })
 )
 vi.stubGlobal('window', { radioApi: { search } })
+// the real one starts the audio engine
+const searched = vi.fn()
+vi.mock('./radio.svelte', () => ({ radio: { searched } }))
 
 const { radioSearch } = await import('./radio-search.svelte')
 
@@ -27,6 +30,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   radioSearch.want('')
   search.mockClear()
+  searched.mockClear()
   answers.clear()
 })
 afterEach(() => vi.useRealTimers())
@@ -124,5 +128,19 @@ describe('radioSearch in an effect', () => {
     expect(search).toHaveBeenCalledOnce()
     expect(radioSearch.status).toBe('unreachable')
     stop()
+  })
+
+  it('passes My stations on when the search added streams, even from an older answer', async () => {
+    radioSearch.want('drone')
+    await vi.advanceTimersByTimeAsync(400)
+    radioSearch.want('space')
+    await vi.advanceTimersByTimeAsync(400)
+    const mine = [found('rb-1')]
+    answers.get('drone')!({ ok: true, stations: [found('rb-1')], saved: mine })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(searched).toHaveBeenCalledWith(mine)
+    answers.get('space')!({ ok: true, stations: [] })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(searched).toHaveBeenCalledOnce()
   })
 })

@@ -21,10 +21,12 @@ function saved(list: Station[]): SavedStationsLike & { list: Station[] } {
     get(id) {
       return this.list.find((s) => s.id === id)
     },
+    // like StationsStore: the same list when nothing is new
     addStreams(id, found) {
-      this.list = this.list.map((s) =>
-        s.id === id ? { ...s, streams: mergeStreams(s.streams, found) } : s
-      )
+      const s = this.get(id)
+      const streams = s && mergeStreams(s.streams, found)
+      if (!s || streams === s.streams) return this.list
+      this.list = this.list.map((x) => (x === s ? { ...s, streams: streams! } : x))
       return this.list
     }
   }
@@ -230,5 +232,30 @@ describe('choosing a stream of a station from search (final fix 4)', () => {
     // not one of its streams
     p.choose('rb', 'https://x.example/')
     expect(p.lookup('rb')?.chosen).toBe(s320.url)
+  })
+})
+
+describe('streams a search found', () => {
+  const aac: Stream = { url: 'https://a.example/128-aac', bitrate: 128, codec: 'aac' }
+
+  it('are added to a saved station, keeping its streams and choice', () => {
+    const store = saved([st('rb-1', [s128], { chosen: s128.url }), st('other')])
+    const p = new PlayedStations(store, finder().find, log)
+    expect(p.searched([st('rb-1', [s128, aac]), st('rb-2', [s320])])).toBe(true)
+    expect(store.get('rb-1')).toEqual(st('rb-1', [s128, aac], { chosen: s128.url }))
+    // not saved, not played: nothing kept
+    expect(p.lookup('rb-2')).toBeUndefined()
+    // nothing new
+    const list = store.list
+    expect(p.searched([st('rb-1', [aac])])).toBe(false)
+    expect(store.list).toBe(list)
+  })
+
+  it('are added to a station played from search this run', async () => {
+    const f = finder()
+    const p = new PlayedStations(saved([]), f.find, log)
+    await p.play(st('rb-1', [s128]))
+    expect(p.searched([st('rb-1', [s128, aac])])).toBe(false)
+    expect(p.lookup('rb-1')?.streams).toEqual([s128, aac])
   })
 })

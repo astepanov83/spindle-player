@@ -3,6 +3,7 @@
 // here, not in the view, so a layout rebuild keeps the results.
 import type { RadioSearch } from '../../../shared/ipc'
 import type { Station } from '../../../shared/stations'
+import { radio } from './radio.svelte'
 
 const waitMs = 400
 
@@ -46,6 +47,8 @@ class RadioSearchStore {
     } catch {
       r = { ok: false }
     }
+    // main has changed My stations already, so an older answer counts too
+    if (r.ok && r.saved) radio.searched(r.saved)
     if (n !== this.#seq) return
     this.results = r.ok ? r.stations : []
     this.status = r.ok ? 'done' : 'unreachable'

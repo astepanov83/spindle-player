@@ -860,3 +860,25 @@ describe('events from main at start (final fix 5)', () => {
     }
   })
 })
+
+describe('streams a search added to My stations', () => {
+  it('update the list and the playing station, and the stream plays on', async () => {
+    await start(mine[0])
+    const more: Station = {
+      ...mine[0],
+      streams: [...mine[0].streams, { url: 'https://a/9', bitrate: 64 }]
+    }
+    radio.searched([more, mine[1], mine[2]])
+    expect(radio.stations[0]).toBe(more)
+    expect(radio.station).toBe(more)
+    expect(radio.stream).toBe(0)
+    expect(fake.calls).toEqual([])
+  })
+
+  it('leave a station from search alone', async () => {
+    const found = st('rb-1', [128])
+    await start(found)
+    radio.searched(mine)
+    expect(radio.station).toEqual(found)
+  })
+})

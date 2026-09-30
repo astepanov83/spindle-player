@@ -160,7 +160,8 @@ export interface RadioCover {
 
 // Radio Browser's stations for a search, grouped, best voted first (ticket
 // 029). ok false: no Radio Browser server could be reached.
-export type RadioSearch = { ok: true; stations: Station[] } | { ok: false }
+// `saved`: My stations, when the search added streams to one of them
+export type RadioSearch = { ok: true; stations: Station[]; saved?: Station[] } | { ok: false }
 
 // What main last answered to spindle://radio/<id>: audio (ok) or 502/404, and
 // how many bytes of audio it passed on. Lets the page tell a format it can't

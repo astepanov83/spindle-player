@@ -109,6 +109,28 @@ export class PlayedStations {
     if (played) this.#played.set(id, withLogo(played, logo))
   }
 
+  // A search found these stations. One saved, or played this run, gets the
+  // streams it lacks: Radio Browser may list a stream it did not have when the
+  // station was saved, or one grouped in only later. These come from main's
+  // own search, not from the page. True when My stations changed.
+  searched(found: Station[]): boolean {
+    let changed = false
+    for (const f of found) {
+      const saved = this.saved.get(f.id)
+      if (saved) {
+        this.saved.addStreams(f.id, f.streams)
+        if (this.saved.get(f.id)?.streams !== saved.streams) changed = true
+        continue
+      }
+      const played = this.#played.get(f.id)
+      if (!played) continue
+      const streams = mergeStreams(played.streams, f.streams)
+      // set on a key it has keeps its place among the played
+      if (streams !== played.streams) this.#played.set(f.id, { ...played, streams })
+    }
+    return changed
+  }
+
   // The newest last, so the oldest goes first when there are too many.
   #remember(station: Station): void {
     this.#played.delete(station.id)

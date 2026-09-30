@@ -155,6 +155,14 @@ class RadioStore {
       : stations
   }
 
+  // My stations after a search added streams to some. New streams go at the
+  // end, so this.stream still points at the one playing.
+  searched(stations: Station[]): void {
+    this.stations = stations
+    const now = stations.find((s) => s.id === this.station?.id)
+    if (now) this.station = now
+  }
+
   // Picked but not playing: after a restart.
   select(station: Station): void {
     this.pause()

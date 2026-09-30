@@ -138,6 +138,7 @@ function folderName(path: string): string {
 
 // The notice after folders were dropped on the window (ticket 047).
 export function dropText(r: DropResult): string | undefined {
+  if (r.unreadable) return settingsText
   if (r.added.length === 1) return `Added ${rootName(r.added[0])} to music folders`
   if (r.added.length) return `Added ${n(r.added.length)} music folders`
   if (r.known === 1) return 'That folder is a music folder already'

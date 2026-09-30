@@ -42,7 +42,7 @@ class QueueStore {
   starts = $state(0)
   // The queue ran out (#stopAtEnd): its last song waits at 0:00. The album
   // page's Play then plays the album again, not just that song. Any play,
-  // seek, song load or new list clears it.
+  // seek or song load clears it; moving or removing other rows does not.
   ended = $state(false)
 
   // nothing until a song is picked
@@ -104,7 +104,6 @@ class QueueStore {
   // current song alone goes from #start, which always follows, with its position.
   #set(s: QueueState): void {
     const listChanged = s.items !== this.items || s.from !== this.from || s.link !== this.link
-    if (s.items !== this.items) this.ended = false
     this.items = s.items
     this.index = s.index
     this.from = s.from
@@ -175,20 +174,23 @@ class QueueStore {
   // loaded paused; `from` names them then.
   playNext(ids: string[], from = '', link?: QueueLink): void {
     const s = insertNext(this.#state(), ids, from, link)
-    this.#add(s, queueNotice('next', ids, this.#title(ids)))
+    this.#add(s, this.index + 1, queueNotice('next', ids, this.#title(ids)))
   }
 
   // "Add to queue" from a menu.
   append(ids: string[], from = '', link?: QueueLink): void {
     const s = append(this.#state(), ids, from, link)
-    this.#add(s, queueNotice('add', ids, this.#title(ids)))
+    this.#add(s, this.items.length, queueNotice('add', ids, this.#title(ids)))
   }
 
-  #add(s: QueueState, text: string): void {
+  // `at` is where the first added song lands. A queue that ran out moves on
+  // to it, loaded paused, so Play plays what was added.
+  #add(s: QueueState, at: number, text: string): void {
     if (s.items === this.items) return
     const wasEmpty = !this.items.length
-    this.#set(s)
-    if (wasEmpty) this.#start(false)
+    const moveOn = this.ended && !wasEmpty
+    this.#set(moveOn ? jump(s, at) : s)
+    if (wasEmpty || moveOn) this.#start(false)
     notice.show(text)
   }
 

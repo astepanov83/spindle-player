@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { addDropped, droppedFolders, maxDropped } from './dropped'
+import { maxDropped } from '../../shared/ipc'
+import { addDropped, droppedFolders } from './dropped'
 
 // folders that exist on this made-up disk
 const dirs = new Set(['/music/jazz', '/music/rock', '/home/me/Music'])
@@ -57,7 +58,7 @@ describe('addDropped', () => {
     return store
   }
 
-  it('does nothing while the settings file could not be read', async () => {
+  it('does nothing while the settings file could not be read, and says so', async () => {
     const store = fakeStore([], false)
     const asked: string[] = []
     const set: string[][] = []
@@ -67,7 +68,7 @@ describe('addDropped', () => {
       async (p) => (asked.push(p), true),
       (f) => set.push(f)
     )
-    expect(r).toEqual({ added: [], known: 0, other: 0 })
+    expect(r).toEqual({ added: [], known: 0, other: 0, unreadable: true })
     expect(asked).toEqual([])
     expect(set).toEqual([])
   })

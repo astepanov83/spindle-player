@@ -133,7 +133,7 @@ describe('a song ends', () => {
     expect(player.pos).toBe(0)
   })
 
-  it('marks the queue as ended until something plays, seeks or changes it', () => {
+  it('marks the queue as ended until something plays, seeks or another song is current', () => {
     queue.jump(2)
     expect(queue.ended).toBe(false)
     fake.on.ended!()
@@ -161,6 +161,45 @@ describe('a song ends', () => {
     queue.next()
     queue.playAlbum('a', 0)
     expect(queue.ended).toBe(false)
+  })
+
+  it('stays ended when rows move or an earlier row goes (the song is the same)', () => {
+    queue.jump(2)
+    fake.on.ended!()
+    queue.move(0, 1)
+    expect(queue.ended).toBe(true)
+    queue.move(2, 0)
+    expect(queue.ended).toBe(true)
+    queue.remove(1)
+    expect(playing()).toBe('a2')
+    expect(queue.ended).toBe(true)
+  })
+
+  it('Add to queue after the end moves on to the first added song, paused', () => {
+    queue.jump(2)
+    fake.on.ended!()
+    fake.reset()
+    queue.append(['b0', 'b1'])
+    expect(queue.items).toEqual(['a0', 'a1', 'a2', 'b0', 'b1'])
+    expect(playing()).toBe('b0')
+    expect(queue.ended).toBe(false)
+    expect(player.playing).toBe(false)
+    expect(fake.calls).toEqual(['load media/b0'])
+    expect(savePlace).toHaveBeenLastCalledWith({ index: 3, pos: 0 })
+  })
+
+  it('Play next after the end moves on to the first added song, paused', () => {
+    queue.jump(2)
+    fake.on.ended!()
+    fake.reset()
+    queue.playNext(['b0', 'b1'])
+    expect(queue.items).toEqual(['a0', 'a1', 'a2', 'b0', 'b1'])
+    expect(playing()).toBe('b0')
+    expect(queue.ended).toBe(false)
+    expect(player.playing).toBe(false)
+    expect(fake.calls).toEqual(['load media/b0'])
+    // b1 is still a Play next song
+    expect(savePlace).toHaveBeenLastCalledWith({ index: 3, pos: 0, next: 1 })
   })
 
   it('replays the song with repeat on', () => {

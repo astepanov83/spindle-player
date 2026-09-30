@@ -298,6 +298,10 @@ describe('dropText', () => {
     expect(dropText(r({ other: 3 }))).toBe('Drop a folder to add it to music folders')
   })
 
+  it('says settings could not be read, as Settings does', () => {
+    expect(dropText(r({ unreadable: true }))).toBe(settingsText)
+  })
+
   it('says nothing when nothing came', () => {
     expect(dropText(r({}))).toBeUndefined()
   })

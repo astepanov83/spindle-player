@@ -3,11 +3,8 @@
 // which knows only files dragged in from the system. Main still checks every
 // path, since a message from the page can't be trusted: only absolute paths to
 // folders that exist are added.
-import type { DropResult } from '../../shared/ipc'
+import { maxDropped, type DropResult } from '../../shared/ipc'
 import { parseFolders } from '../../shared/settings'
-
-// More paths than a person drags at once; such a list is not taken at all.
-export const maxDropped = 50
 
 // `folders` are the music folders now; `isDir` asks the disk (fs.stat in main).
 export async function droppedFolders(
@@ -42,7 +39,7 @@ export async function addDropped(
   isDir: (path: string) => Promise<boolean>,
   setFolders: (folders: string[]) => void
 ): Promise<DropResult> {
-  if (!store.readable) return { added: [], known: 0, other: 0 }
+  if (!store.readable) return { added: [], known: 0, other: 0, unreadable: true }
   const r = await droppedFolders(paths, store.get().folders, isDir)
   if (r.added.length) setFolders([...store.get().folders, ...r.added])
   return r

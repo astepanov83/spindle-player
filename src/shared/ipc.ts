@@ -64,7 +64,13 @@ export interface DropResult {
   added: string[]
   known: number
   other: number
+  // settings.json could not be read, so nothing was added
+  unreadable?: true
 }
+
+// More paths than a person drags at once; such a list is not taken at all.
+// The preload sends at most one more, so main still sees it is too many.
+export const maxDropped = 50
 
 // What the preload exposes to the page as `window.libraryApi`.
 // Main owns the folder list and the index; the page only asks.

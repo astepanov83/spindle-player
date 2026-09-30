@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   LibraryChannel,
+  maxDropped,
   PlaybackChannel,
   PlaylistChannel,
   RadioChannel,
@@ -70,10 +71,11 @@ function latest<T>(
 }
 
 // Paths only for files dragged in from the system: a file the page made
-// itself has none, so the page can't name a path for main to add.
+// itself has none, so the page can't name a path for main to add. One more
+// than main takes is enough for main to turn a big drop down.
 function droppedPaths(files: unknown): string[] {
   if (!Array.isArray(files)) return []
-  return files.map((f) => {
+  return files.slice(0, maxDropped + 1).map((f) => {
     try {
       return webUtils.getPathForFile(f)
     } catch {

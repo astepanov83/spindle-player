@@ -46,11 +46,6 @@ export const songOrAlbumHas = (t: Track, s: string): boolean =>
 
 export const foldQuery = (q: string): string => fold(q.trim())
 
-export function albumMatches(album: Album, q: string): boolean {
-  const s = foldQuery(q)
-  return !s || albumText(album).includes(s)
-}
-
 // A song by its own title or artist. Not by its album: the search results
 // have a group for albums.
 export function songMatches(t: Track, q: string): boolean {

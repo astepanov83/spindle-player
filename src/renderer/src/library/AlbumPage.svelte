@@ -7,7 +7,7 @@
   import { player } from '../stores/player.svelte'
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
-  import { openSongMenu } from './song-menu'
+  import { openPlaylistMenu, openSongMenu } from './song-menu'
 
   // back: the label of the link back (an artist's name when opened from them)
   let { albumId, back = 'All albums' }: { albumId: string; back?: string } = $props()
@@ -34,8 +34,18 @@
     <div class="acts">
       <button class="pill" onclick={() => queue.playAlbum(al.id, 0)}>Play</button>
       <button class="pill ghost" onclick={shufflePlay}>Shuffle</button>
-      <button class="pill ghost" aria-haspopup="menu" onclick={(e) => openSongMenu(e, al.trackIds)}
-        >Add to playlist</button
+      <button
+        class="pill ghost"
+        aria-haspopup="menu"
+        onclick={(e) => openPlaylistMenu(e, al.trackIds)}>Add to playlist</button
+      >
+      <button
+        class="pill ghost more"
+        aria-haspopup="menu"
+        aria-label="More"
+        title="Play next, add to the queue or a playlist"
+        onclick={(e) => openSongMenu(e, al.trackIds, { from: al.title })}
+        ><Icon name="more" size={18} /></button
       >
     </div>
   </div>
@@ -47,7 +57,7 @@
       class="srow"
       class:cur
       onclick={() => queue.playAlbum(al.id, i)}
-      oncontextmenu={(e) => openSongMenu(e, [t.id])}
+      oncontextmenu={(e) => openSongMenu(e, [t.id], { from: al.title })}
     >
       <span class="n"
         >{#if cur && playing.songPlaying}<Eq />{:else}{i + 1}{/if}</span

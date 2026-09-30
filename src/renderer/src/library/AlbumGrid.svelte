@@ -11,6 +11,7 @@
   import { library } from '../stores/library.svelte'
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { openSongMenu } from './song-menu'
 
   let {
     scrollEl,
@@ -67,7 +68,11 @@
       style:transform="translateY({v.offset(item)}px)"
     >
       {#each rows[item.index] as al (al.id)}
-        <div class="card">
+        <div
+          class="card"
+          role="group"
+          oncontextmenu={(e) => openSongMenu(e, al.trackIds, { from: al.title })}
+        >
           <div class="cvwrap">
             <button class="cv" aria-label="Open {al.title}" onclick={() => onopen(al.id)}
               ><Cover src={al.cover} /></button

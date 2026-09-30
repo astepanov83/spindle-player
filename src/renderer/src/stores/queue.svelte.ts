@@ -2,17 +2,23 @@
 // The moves are plain functions in queue/logic.ts; this store plays what they pick.
 import { moveIds, type IdMoves } from '../../../shared/id-moves'
 import type { Album, Art, Track } from '../../../shared/library'
-import type { SavedQueue } from '../../../shared/saved-queue'
+import type { QueuePlace, SavedQueue } from '../../../shared/saved-queue'
 import { engine, mediaUrl, type EngineError, type EngineEvents } from '../audio/engine'
 import {
   advance,
   afterFailure,
+  append,
   back,
+  clearQueue,
   failNotice,
   follows,
+  insertNext,
   jump,
+  moveRow,
   onEnded,
   prune,
+  queueNotice,
+  removeRow,
   type NextOptions,
   type QueueState
 } from '../queue/logic'
@@ -27,6 +33,11 @@ class QueueStore {
   items: string[] = $state.raw([])
   index = $state(0)
   from = $state('')
+  // Play next songs right after the current one (see queue/logic.ts)
+  #next = 0
+  // Goes up each time a song is loaded, so the queue scrolls to a new song
+  // but not when rows only move around it.
+  starts = $state(0)
 
   // nothing until a song is picked
   current: Track | undefined = $derived(
@@ -89,12 +100,14 @@ class QueueStore {
     this.items = s.items
     this.index = s.index
     this.from = s.from
+    this.#next = s.next ?? 0
     if (listChanged) this.#saveList()
   }
 
   // Loads the current song at `at` seconds, and plays it if `andPlay`.
   #start(andPlay = true, at = 0): void {
     const t = this.current
+    this.starts++
     player.pos = at
     this.savePos()
     if (!this.active) {
@@ -117,6 +130,7 @@ class QueueStore {
   // track of a disc image): the sound goes on, with no reload and no gap.
   #carryOn(): void {
     const t = this.current!
+    this.starts++
     player.pos = 0
     player.duration = t.duration
     engine.continueWith(t.part!)
@@ -143,6 +157,67 @@ class QueueStore {
     this.#fails = 0
     this.#set(jump(this.#state(), index))
     this.#start()
+  }
+
+  // "Play next" from a menu. An empty queue takes the songs, the first one
+  // loaded paused; `from` names them then.
+  playNext(ids: string[], from = ''): void {
+    this.#add(insertNext(this.#state(), ids, from), queueNotice('next', ids, this.#title(ids)))
+  }
+
+  // "Add to queue" from a menu.
+  append(ids: string[], from = ''): void {
+    this.#add(append(this.#state(), ids, from), queueNotice('add', ids, this.#title(ids)))
+  }
+
+  #add(s: QueueState, text: string): void {
+    if (s.items === this.items) return
+    const wasEmpty = !this.items.length
+    this.#set(s)
+    if (wasEmpty) this.#start(false)
+    notice.show(text)
+  }
+
+  #title(ids: string[]): string {
+    return ids.length && library.has(ids[0]) ? library.track(ids[0]).title : ''
+  }
+
+  // "Play next" on a queue row: it moves up to right after the current song.
+  playRowNext(i: number): void {
+    if (i === this.index || i < 0 || i >= this.items.length) return
+    const id = this.items[i]
+    if (i === this.index + 1) {
+      // already next: it only has to count as a Play next song, for shuffle
+      this.#next ||= 1
+      this.savePos()
+    } else this.move(i, i < this.index ? this.index : this.index + 1)
+    notice.show(queueNotice('next', [id], this.#title([id])))
+  }
+
+  // Drag or Alt+Up / Alt+Down in the queue. The current song plays on.
+  move(from: number, to: number): void {
+    this.#set(moveRow(this.#state(), from, to))
+  }
+
+  // "Remove from queue". When the current song goes, the one after it loads,
+  // playing if it was. With none after, the one before loads paused: it has
+  // been heard already.
+  remove(i: number): void {
+    const wasCurrent = i === this.index
+    const q = this.#state()
+    const s = removeRow(q, i)
+    if (s === q) return
+    this.#set(s)
+    if (wasCurrent) this.#start(player.playing && s.index === i)
+  }
+
+  // The Clear button: all but the current song go, so it plays on. With only
+  // that one left, it goes too and the player stops.
+  clear(): void {
+    if (!this.items.length) return
+    this.#set(clearQueue(this.#state()))
+    if (!this.items.length) this.#start(false)
+    notice.show('Cleared the queue')
   }
 
   // skipping: while skipping songs that fail, don't add an album that is already
@@ -265,13 +340,16 @@ class QueueStore {
     this.items = s.items
     this.index = s.index
     this.from = s.from
+    this.#next = s.next ?? 0
     // a different current song means the old one is gone: start it from the top
     const same = s.items[s.index] === saved.items[saved.index]
     this.#start(false, same ? saved.pos : 0)
   }
 
   #state(): QueueState {
-    return { items: this.items, index: this.index, from: this.from }
+    const s: QueueState = { items: this.items, index: this.index, from: this.from }
+    if (this.#next) s.next = this.#next
+    return s
   }
 
   // the position follows right after, from #start
@@ -282,7 +360,9 @@ class QueueStore {
   // The current song and position, without the list.
   savePos(): void {
     this.#savedPos = player.pos
-    window.playbackApi.savePlace({ index: this.index, pos: player.pos })
+    const place: QueuePlace = { index: this.index, pos: player.pos }
+    if (this.#next) place.next = this.#next
+    window.playbackApi.savePlace(place)
   }
 }
 

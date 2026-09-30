@@ -13,6 +13,7 @@
   import { library } from '../stores/library.svelte'
   import { menu } from '../stores/menu.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { sections, songMenu } from './song-menu'
 
   let { scrollEl }: { scrollEl: HTMLElement | undefined } = $props()
 
@@ -87,7 +88,13 @@
         <div
           class="card"
           role="group"
-          oncontextmenu={(e) => menu.showFor(e, [{ label: 'Edit artist', run: () => edit(a) }])}
+          oncontextmenu={(e) =>
+            menu.showFor(
+              e,
+              sections(songMenu(artistSongs(a, album), { from: a.name }), [
+                { label: 'Edit artist', run: () => edit(a) }
+              ])
+            )}
         >
           <div class="picwrap">
             <button class="pic" aria-label="Open {a.name}" onclick={() => library.openArtist(a.key)}

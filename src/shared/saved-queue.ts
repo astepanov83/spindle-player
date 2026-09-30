@@ -7,6 +7,8 @@ export interface SavedQueue {
   from: string
   // seconds into the current song
   pos: number
+  // songs right after the current one put there with "Play next" (ticket 037)
+  next?: number
   // radio was playing (ticket 027): it comes back with this station, paused.
   // The queue waits with its list and place.
   kind?: 'radio'
@@ -38,7 +40,8 @@ export function parseSavedQueue(raw: unknown): SavedQueue {
       : 0
   const pos = typeof raw.pos === 'number' && Number.isFinite(raw.pos) ? Math.max(0, raw.pos) : 0
   const from = typeof raw.from === 'string' ? raw.from.slice(0, 500) : ''
-  return { items, index, from, pos, ...playing }
+  const next = isCount(raw.next) ? Math.min(raw.next, items.length - 1 - index) : 0
+  return { items, index, from, pos, ...(next > 0 ? { next } : {}), ...playing }
 }
 
 // Sets what plays, keeping the list and place. Returns the same object when
@@ -67,6 +70,12 @@ export function isKnownQueueFile(raw: unknown): boolean {
 export interface QueuePlace {
   index: number
   pos: number
+  // Play next songs after it; left out for none
+  next?: number
+}
+
+function isCount(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v > 0
 }
 
 // Moves the saved queue to a new place. Returns the same object when nothing
@@ -77,6 +86,11 @@ export function applyPlace(q: SavedQueue, raw: unknown): SavedQueue {
   if (typeof index !== 'number' || !Number.isInteger(index)) return q
   if (index < 0 || index >= q.items.length) return q
   if (typeof pos !== 'number' || !Number.isFinite(pos) || pos < 0) return q
-  if (index === q.index && pos === q.pos) return q
-  return { ...q, index, pos }
+  const next = raw.next ?? 0
+  if (next !== 0 && (!isCount(next) || index + next >= q.items.length)) return q
+  if (index === q.index && pos === q.pos && next === (q.next ?? 0)) return q
+  const moved = { ...q, index, pos }
+  if (next) moved.next = next
+  else delete moved.next
+  return moved
 }

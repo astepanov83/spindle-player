@@ -369,3 +369,178 @@ describe('tracks of a disc image', () => {
     expect(fake.calls).toEqual(['load media/img 100-250 at 30'])
   })
 })
+
+describe('queue actions (ticket 037)', () => {
+  it('Play next puts songs right after the current one, with nothing reloaded', () => {
+    queue.playNext(['b0', 'b1'])
+    expect(queue.items).toEqual(['a0', 'b0', 'b1', 'a1', 'a2'])
+    expect(playing()).toBe('a0')
+    expect(fake.calls).toEqual([])
+    expect(notice.text).toBe('Playing next: 2 songs')
+    expect(saveQueue).toHaveBeenLastCalledWith(expect.objectContaining({ next: 2 }))
+  })
+
+  it('Add to queue puts songs at the end', () => {
+    queue.append(['b1'])
+    expect(queue.items).toEqual(['a0', 'a1', 'a2', 'b1'])
+    expect(fake.calls).toEqual([])
+    expect(notice.text).toBe('Added to the queue: "B 1"')
+  })
+
+  it('an empty queue takes the songs, the first loaded paused', () => {
+    queue.clear()
+    queue.clear()
+    fake.reset()
+    queue.append(['b0', 'b1'], 'Album b')
+    expect(queue.items).toEqual(['b0', 'b1'])
+    expect(queue.from).toBe('Album b')
+    expect(playing()).toBe('b0')
+    expect(fake.calls).toEqual(['load media/b0'])
+    expect(player.playing).toBe(false)
+  })
+
+  it('removing a row before the current song keeps it playing', () => {
+    queue.jump(2)
+    fake.reset()
+    queue.remove(0)
+    expect(queue.items).toEqual(['a1', 'a2'])
+    expect(queue.index).toBe(1)
+    expect(playing()).toBe('a2')
+    expect(fake.calls).toEqual([])
+    expect(saveQueue).toHaveBeenLastCalledWith(expect.objectContaining({ index: 1 }))
+  })
+
+  it('removing the current song plays the next one', () => {
+    queue.remove(0)
+    expect(playing()).toBe('a1')
+    expect(fake.calls).toEqual(['load media/a1', 'play'])
+  })
+
+  it('removing the current song while paused loads the next one paused', () => {
+    player.playing = false
+    queue.remove(0)
+    expect(playing()).toBe('a1')
+    expect(fake.calls).toEqual(['load media/a1'])
+    expect(player.playing).toBe(false)
+  })
+
+  it('removing the playing song in the last row loads the one before, paused', () => {
+    queue.jump(2)
+    fake.reset()
+    queue.remove(2)
+    expect(playing()).toBe('a1')
+    expect(fake.calls).toEqual(['load media/a1'])
+    expect(player.playing).toBe(false)
+  })
+
+  it('removing the last song left stops and empties the player', () => {
+    queue.playList(['b0'], 0, 'B')
+    fake.reset()
+    queue.remove(0)
+    expect(queue.items).toEqual([])
+    expect(queue.current).toBeUndefined()
+    expect(fake.calls).toEqual(['clear'])
+    expect(player.playing).toBe(false)
+  })
+
+  it('moving rows past the current song keeps it playing', () => {
+    queue.jump(1)
+    fake.reset()
+    queue.move(2, 0)
+    expect(queue.items).toEqual(['a2', 'a0', 'a1'])
+    expect(queue.index).toBe(2)
+    expect(playing()).toBe('a1')
+    queue.move(2, 0)
+    expect(queue.index).toBe(0)
+    expect(playing()).toBe('a1')
+    expect(fake.calls).toEqual([])
+  })
+
+  it('Play next on a queue row moves it up to play next', () => {
+    queue.playRowNext(2)
+    expect(queue.items).toEqual(['a0', 'a2', 'a1'])
+    expect(notice.text).toBe('Playing next: "A 2"')
+    fake.on.ended!()
+    expect(playing()).toBe('a2')
+  })
+
+  it('Play next on the row right after the current one still plays it first with shuffle', () => {
+    player.shuffle = true
+    queue.playRowNext(1)
+    expect(queue.items).toEqual(['a0', 'a1', 'a2'])
+    expect(savePlace).toHaveBeenLastCalledWith({ index: 0, pos: 0, next: 1 })
+    fake.on.ended!()
+    expect(playing()).toBe('a1')
+  })
+
+  it('clear while playing keeps the song playing; a second clear stops it', () => {
+    queue.jump(1)
+    fake.reset()
+    queue.clear()
+    expect(queue.items).toEqual(['a1'])
+    expect(playing()).toBe('a1')
+    expect(fake.calls).toEqual([])
+    expect(notice.text).toBe('Cleared the queue')
+    queue.clear()
+    expect(queue.items).toEqual([])
+    expect(queue.from).toBe('')
+    expect(fake.calls).toEqual(['clear'])
+    expect(player.playing).toBe(false)
+  })
+
+  it('shuffle plays Play next songs first, in order', () => {
+    player.shuffle = true
+    queue.playNext(['b1'])
+    queue.playNext(['b0'])
+    fake.on.ended!()
+    expect(playing()).toBe('b0')
+    queue.next()
+    expect(playing()).toBe('b1')
+    expect(savePlace).toHaveBeenLastCalledWith({ index: 2, pos: 0 })
+  })
+
+  it('repeat replays the current song; Play next songs wait for Next', () => {
+    player.repeat = true
+    queue.playNext(['b0'])
+    fake.reset()
+    fake.on.ended!()
+    expect(playing()).toBe('a0')
+    expect(fake.calls).toEqual(['seek 0', 'play'])
+    queue.next()
+    expect(playing()).toBe('b0')
+  })
+
+  it('sends the Play next count with the place', () => {
+    queue.playNext(['b0', 'b1'])
+    queue.next()
+    expect(savePlace).toHaveBeenLastCalledWith({ index: 1, pos: 0, next: 1 })
+  })
+
+  it('comes back with the Play next songs after a restart', () => {
+    queue.restore({ items: ['a0', 'b0', 'a1', 'a2'], index: 0, from: 'X', pos: 3, next: 1 })
+    player.shuffle = true
+    fake.on.ended!()
+    expect(playing()).toBe('b0')
+  })
+
+  it('counts a new song start, not an edit, for the queue to scroll to', () => {
+    const before = queue.starts
+    queue.playNext(['b0'])
+    queue.move(2, 0)
+    queue.remove(0)
+    expect(queue.starts).toBe(before)
+    queue.next()
+    expect(queue.starts).toBe(before + 1)
+  })
+
+  it('while radio plays, a new song goes in the queue and nothing loads', () => {
+    queue.clear()
+    queue.clear()
+    fake.reset()
+    queue.active = false
+    queue.append(['b0'])
+    queue.active = true
+    expect(queue.items).toEqual(['b0'])
+    expect(fake.calls).toEqual([])
+  })
+})

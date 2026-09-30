@@ -107,7 +107,7 @@
         class:first={item.index === 0}
         style:transform="translateY({v.offset(item)}px)"
         onclick={() => play(item.index)}
-        oncontextmenu={(e) => openSongMenu(e, [t.id], playlistId)}
+        oncontextmenu={(e) => openSongMenu(e, [t.id], { inPlaylist: playlistId, from: title })}
       >
         <span class="n"
           >{#if cur && playing.songPlaying}<Eq />{:else}{item.index + 1}{/if}</span

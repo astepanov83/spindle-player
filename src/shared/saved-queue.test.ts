@@ -60,6 +60,25 @@ describe('applyPlace', () => {
   })
 })
 
+describe('Play next songs (ticket 037)', () => {
+  it('keeps their count, pulled into the list', () => {
+    const good = { items: ['a', 'b', 'c'], index: 0, from: 'X', pos: 0, next: 2 }
+    expect(parseSavedQueue(good)).toEqual(good)
+    expect(parseSavedQueue({ ...good, index: 1, next: 5 }).next).toBe(1)
+    for (const next of [0, -1, 1.5, 'x']) {
+      expect(parseSavedQueue({ ...good, next })).not.toHaveProperty('next')
+    }
+  })
+
+  it('moves with the place; a place with none drops them', () => {
+    const q = { items: ['a', 'b', 'c'], index: 0, from: 'X', pos: 0, next: 2 }
+    expect(applyPlace(q, { index: 1, pos: 0, next: 1 })).toEqual({ ...q, index: 1, next: 1 })
+    expect(applyPlace(q, { index: 0, pos: 0, next: 2 })).toBe(q)
+    expect(applyPlace(q, { index: 2, pos: 0 })).not.toHaveProperty('next')
+    for (const next of [-1, 0.5, 3]) expect(applyPlace(q, { index: 0, pos: 0, next })).toBe(q)
+  })
+})
+
 describe('isKnownQueueFile', () => {
   it('knows any object with a list', () => {
     expect(isKnownQueueFile({ items: [] })).toBe(true)

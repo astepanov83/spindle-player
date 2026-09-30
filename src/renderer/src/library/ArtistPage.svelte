@@ -10,7 +10,7 @@
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
   import { artistCovers, artistPageSongs, artistSongs } from './artists'
-  import { openSongMenu } from './song-menu'
+  import { openPlaylistMenu, openSongMenu } from './song-menu'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
   import { queue } from '../stores/queue.svelte'
@@ -155,10 +155,20 @@
       {:else}
         <button class="pill" onclick={() => play(false)}>Play</button>
         <button class="pill ghost" onclick={() => play(true)}>Shuffle</button>
-        <button class="pill ghost" aria-haspopup="menu" onclick={(e) => openSongMenu(e, playIds())}
-          >Add to playlist</button
+        <button
+          class="pill ghost"
+          aria-haspopup="menu"
+          onclick={(e) => openPlaylistMenu(e, playIds())}>Add to playlist</button
         >
         <button class="pill ghost" onclick={() => (library.editingArtist = a.key)}>Edit</button>
+        <button
+          class="pill ghost more"
+          aria-haspopup="menu"
+          aria-label="More"
+          title="Play next, add to the queue or a playlist"
+          onclick={(e) => openSongMenu(e, playIds(), { from: a.name })}
+          ><Icon name="more" size={18} /></button
+        >
       {/if}
     </div>
   </div>

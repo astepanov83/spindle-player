@@ -2,6 +2,7 @@
 <script lang="ts">
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
+  import { openSongMenu } from './song-menu'
   import { playlistRows, sortRows } from './views'
   import { library } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
@@ -31,14 +32,13 @@
     confirmDelete = false
   })
 
+  // as sorted in the table
+  const playIds = (): string[] =>
+    sortRows(view.rows, library.playlistSort(id), (t) => library.order(t)).map((t) => t.id)
+
   function play(): void {
     if (!p) return
-    const rows = sortRows(view.rows, library.playlistSort(id), (t) => library.order(t))
-    queue.playList(
-      rows.map((t) => t.id),
-      0,
-      p.name
-    )
+    queue.playList(playIds(), 0, p.name)
   }
 
   function focus(node: HTMLInputElement): void {
@@ -107,6 +107,15 @@
           {:else}
             <button class="pill ghost" onclick={() => (confirmDelete = true)}>Delete</button>
           {/if}
+          <button
+            class="pill ghost more"
+            aria-haspopup="menu"
+            aria-label="More"
+            title="Play next, add to the queue or another playlist"
+            disabled={!view.rows.length}
+            onclick={(e) => p && openSongMenu(e, playIds(), { onPlaylist: id, from: p.name })}
+            ><Icon name="more" size={18} /></button
+          >
         </div>
       </div>
     {/snippet}

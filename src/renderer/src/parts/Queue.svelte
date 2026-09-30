@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { tick } from 'svelte'
+  import { tick, untrack } from 'svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import RecentSongs from './RecentSongs.svelte'
-  import { fmtTime } from '../format'
+  import { fmtLength, fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
+  import { dropIndex, dropSlot, rowShift } from '../ui/drag-rows'
   import { layout } from '../stores/layout.svelte'
   import { library } from '../stores/library.svelte'
   import { playing } from '../stores/playing.svelte'
@@ -21,34 +22,150 @@
 
   const v = virtualList(() => ({ count: queue.items.length, scrollEl: body, list, size: ROW }))
 
-  // Keep the current song in view when the track changes, not on other redraws.
-  let seen = ''
-  const currentKey = (): string => queue.index + ':' + queue.current?.id
+  // Keep the current song in view when the track changes, not on other redraws
+  // or when rows move around it.
+  let seen = -1
+  const currentKey = (): number => queue.starts
   $effect(() => {
     const key = currentKey()
     // radio showed its songs here: back on the queue, show its current song again
     if (!body) {
-      seen = ''
+      seen = -1
       return
     }
     if (key === seen) return
     seen = key
     // one row above the current song, as in the prototype; wait for the list to get its height
-    const index = Math.max(0, queue.index - 1)
+    const index = Math.max(0, untrack(() => queue.index) - 1)
     tick().then(() => v.scrollToIndex(index))
   })
 
   // A clicked row is already on screen, so leave the scroll where it is.
   function playRow(index: number): void {
+    if (dragged) {
+      dragged = false
+      return
+    }
     queue.jump(index)
     seen = currentKey()
+  }
+
+  const total = $derived(queue.items.reduce((s, id) => s + library.track(id).duration, 0))
+  // the tab has no head, so "From" goes here there
+  const sum = $derived(
+    [
+      !header && queue.from ? `From ${queue.from}` : '',
+      `${queue.items.length.toLocaleString()} ${queue.items.length === 1 ? 'song' : 'songs'}`,
+      fmtLength(total)
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  )
+
+  // Alt+Up / Alt+Down move the focused row; focus goes with it.
+  function onrowkey(e: KeyboardEvent, i: number): void {
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+    e.preventDefault()
+    const to = e.key === 'ArrowUp' ? i - 1 : i + 1
+    if (to < 0 || to >= queue.items.length) return
+    queue.move(i, to)
+    tick().then(() => {
+      const row = list?.querySelector<HTMLElement>(`[data-index="${to}"]`)
+      row?.focus()
+      row?.scrollIntoView({ block: 'nearest' })
+    })
+  }
+
+  // Drag to reorder. The row follows the pointer as a copy drawn over the list
+  // (the row itself can leave the drawn rows while the list scrolls); the rows
+  // between make room where it would land.
+  // id: the song dragged, so a queue that changed meanwhile (a rescan) drops nothing
+  type Drag = { from: number; id: string; y: number; grab: number }
+  let drag = $state<Drag | null>(null)
+  let press: { i: number; y: number; grab: number } | null = null
+  // the click that ends a drag must not play the row
+  let dragged = false
+  let lastY = 0
+  let scrollTimer = 0
+
+  const slot = $derived(drag ? dropSlot(drag.y, ROW, queue.items.length) : -1)
+  const shift = (i: number): number => (drag ? rowShift(i, drag.from, slot, ROW) : 0)
+
+  function listY(clientY: number): number {
+    return clientY - (list?.getBoundingClientRect().top ?? 0)
+  }
+
+  function onrowdown(e: PointerEvent, i: number): void {
+    if (e.button !== 0) return
+    const y = listY(e.clientY)
+    press = { i, y, grab: y - i * ROW }
+  }
+
+  function onpointermove(e: PointerEvent): void {
+    lastY = e.clientY
+    if (!press) return
+    const y = listY(e.clientY)
+    if (!drag) {
+      if (Math.abs(y - press.y) < 5) return
+      drag = { from: press.i, id: queue.items[press.i], y, grab: press.grab }
+      scrollTimer = window.setInterval(edgeScroll, 16)
+    }
+    drag.y = y
+  }
+
+  // near the top or bottom of the list, it scrolls, faster closer to the edge
+  function edgeScroll(): void {
+    if (!drag || !body) return
+    const r = body.getBoundingClientRect()
+    const edge = 48
+    const up = lastY - r.top
+    const down = r.bottom - lastY
+    const step = up < edge ? -(edge - up) / 3 : down < edge ? (edge - down) / 3 : 0
+    if (!step) return
+    body.scrollTop += step
+    drag.y = listY(lastY)
+  }
+
+  function onpointerup(): void {
+    press = null
+    if (!drag) return
+    const { from, id } = drag
+    const to = dropIndex(from, slot)
+    clearInterval(scrollTimer)
+    drag = null
+    dragged = true
+    // no click comes when the pointer left the row it pressed
+    setTimeout(() => (dragged = false))
+    if (queue.items[from] === id) queue.move(from, to)
+  }
+
+  // Escape stops a drag only: in capture, so App's Escape (which closes the drawer) never sees it
+  function onescape(e: KeyboardEvent): void {
+    if (e.key !== 'Escape' || !drag) return
+    e.stopPropagation()
+    e.preventDefault()
+    oncancel()
+  }
+
+  function oncancel(): void {
+    press = null
+    clearInterval(scrollTimer)
+    drag = null
   }
 
   // Radio: its recent songs in place of the queue, with a head even in a tab.
   const onRadio = $derived(playing.kind === 'radio')
 </script>
 
-<div class="qpart">
+<svelte:window
+  {onpointermove}
+  {onpointerup}
+  onpointercancel={oncancel}
+  onblur={oncancel}
+  onkeydowncapture={onescape}
+/>
+
+<div class="qpart" class:dragging={!!drag}>
   {#if header || onRadio}
     <div class="head">
       <div class="title">
@@ -61,6 +178,16 @@
       {#if close}
         <IconButton icon="close" label="Close queue" onclick={() => (layout.showQueue = false)} />
       {/if}
+    </div>
+  {/if}
+  {#if !onRadio && queue.items.length}
+    <div class="sum" class:tab={!header}>
+      <span class="count">{sum}</span>
+      <button
+        class="clear"
+        title={queue.items.length > 1 ? 'Keep only the song playing' : 'Empty the queue'}
+        onclick={() => queue.clear()}>Clear</button
+      >
     </div>
   {/if}
   {#if onRadio}
@@ -80,9 +207,13 @@
             class:cur-row={cur}
             class:cur
             class:past={item.index < queue.index}
-            style:transform="translateY({v.offset(item)}px)"
+            class:lifted={drag?.from === item.index}
+            data-index={item.index}
+            style:transform="translateY({v.offset(item) + shift(item.index)}px)"
             onclick={() => playRow(item.index)}
-            oncontextmenu={(e) => openSongMenu(e, [id])}
+            onpointerdown={(e) => onrowdown(e, item.index)}
+            onkeydown={(e) => onrowkey(e, item.index)}
+            oncontextmenu={(e) => openSongMenu(e, [id], { queueRow: item.index })}
           >
             <Thumb src={library.art(t).cover} eq={cur && playing.songPlaying} />
             <span class="qt"
@@ -91,6 +222,21 @@
             <span class="d">{fmtTime(t.duration)}</span>
           </button>
         {/each}
+        {#if drag}
+          {@const t = library.track(queue.items[drag.from])}
+          <div
+            class="qrow ghost"
+            class:cur-row={drag.from === queue.index}
+            aria-hidden="true"
+            style:transform="translateY({drag.y - drag.grab}px)"
+          >
+            <Thumb src={library.art(t).cover} />
+            <span class="qt"
+              ><span class="nm">{t.title}</span><span class="ar">{t.artist}</span></span
+            >
+            <span class="d">{fmtTime(t.duration)}</span>
+          </div>
+        {/if}
       </div>
     </div>
   {/if}
@@ -155,6 +301,57 @@
     border-radius: 10px;
   }
   .qrow:hover {
+    background: var(--hover);
+  }
+  .dragging .qrow {
+    transition: transform 0.12s;
+    cursor: grabbing;
+  }
+  .dragging .qrow:not(.cur-row):hover {
+    background: none;
+  }
+  .qrow.lifted {
+    visibility: hidden;
+  }
+  .qrow.ghost,
+  .dragging .qrow.ghost {
+    transition: none;
+    z-index: 2;
+    background: var(--panel);
+    box-shadow: 0 10px 28px var(--shadow);
+    pointer-events: none;
+  }
+  .sum {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 16px 4px 20px;
+    font-size: 12px;
+    color: var(--ink-3);
+    flex: none;
+  }
+  .sum.tab {
+    padding-top: 10px;
+  }
+  .count {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+  }
+  .clear {
+    flex: none;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-2);
+    background: var(--field);
+  }
+  .clear:hover {
+    color: var(--ink);
     background: var(--hover);
   }
   /* the current song, tinted with the album accent */

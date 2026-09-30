@@ -37,3 +37,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* The ⋯ button next to the header pills (Play, Shuffle...): an icon, as tall
+   as the pills. button.pill.more outranks each page's own .pill padding. */
+button.pill.more {
+  display: grid;
+  place-items: center;
+  padding: 0 10px;
+}

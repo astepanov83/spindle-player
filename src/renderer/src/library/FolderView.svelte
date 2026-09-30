@@ -9,7 +9,7 @@
   import { crumbs, filterFolder, folderPlaySongs, folderSongs, shownFolder } from './folders'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
-  import { openSongMenu } from './song-menu'
+  import { openPlaylistMenu, openSongMenu } from './song-menu'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
   import { queue } from '../stores/queue.svelte'
@@ -100,7 +100,16 @@
       class="pill ghost"
       aria-haspopup="menu"
       disabled={!total}
-      onclick={(e) => openSongMenu(e, playIds())}>Add to playlist</button
+      onclick={(e) => openPlaylistMenu(e, playIds())}>Add to playlist</button
+    >
+    <button
+      class="pill ghost more"
+      aria-haspopup="menu"
+      aria-label="More"
+      title="Play next, add to the queue or a playlist"
+      disabled={!total}
+      onclick={(e) => openSongMenu(e, playIds(), { from: title })}
+      ><Icon name="more" size={18} /></button
     >
   </div>
 </div>
@@ -121,7 +130,7 @@
       class:first={item.index === 0}
       style:transform="translateY({v.offset(item)}px)"
       onclick={() => library.openFolder(f.key)}
-      oncontextmenu={(e) => openSongMenu(e, songIds(i))}
+      oncontextmenu={(e) => openSongMenu(e, songIds(i), { from: f.name })}
     >
       <Thumb src={f.cover} size={40} radius={6} />
       <span class="nm">

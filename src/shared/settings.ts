@@ -4,6 +4,7 @@ import { templateIds, templates } from './templates'
 export type VisualizerStyle = 'ring' | 'spectrum' | 'wave' | 'off'
 export type ThemeChoice = 'system' | 'dark' | 'light'
 export type CoverSource = 'musicbrainz' | 'deezer' | 'itunes'
+export type CloseAction = 'ask' | 'minimize' | 'quit'
 
 export interface Settings {
   template: TemplateId
@@ -16,6 +17,8 @@ export interface Settings {
   // look up covers online for albums with none; off, nothing is sent anywhere
   fetchCovers: boolean
   coverSources: Record<CoverSource, boolean>
+  // what closing the window does; 'ask' until the user picks one
+  closeAction: CloseAction
 }
 
 export interface Size {
@@ -46,6 +49,7 @@ export const visualizerStyles: VisualizerStyle[] = ['ring', 'spectrum', 'wave', 
 export const themeChoices: ThemeChoice[] = ['dark', 'light', 'system']
 // also the order they are tried in, after the MusicBrainz id lookup
 export const coverSources: CoverSource[] = ['musicbrainz', 'deezer', 'itunes']
+export const closeActions: CloseAction[] = ['ask', 'minimize', 'quit']
 
 export function defaultSettings(): Settings {
   return {
@@ -55,7 +59,8 @@ export function defaultSettings(): Settings {
     theme: 'system',
     volume: 70,
     fetchCovers: false,
-    coverSources: { musicbrainz: true, deezer: true, itunes: true }
+    coverSources: { musicbrainz: true, deezer: true, itunes: true },
+    closeAction: 'ask'
   }
 }
 
@@ -165,6 +170,7 @@ export function parseStoredSettings(
     volume: parseVolume(r.volume, base.volume),
     fetchCovers: typeof r.fetchCovers === 'boolean' ? r.fetchCovers : base.fetchCovers,
     coverSources: parseCoverSources(r.coverSources, base.coverSources),
+    closeAction: oneOf(r.closeAction, closeActions, base.closeAction),
     windowSizes,
     windowPlace: r.windowPlace === undefined ? base.windowPlace : parseWindowPlace(r.windowPlace),
     folders: Array.isArray(r.folders) ? parseFolders(r.folders) : [...base.folders]
@@ -224,6 +230,7 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('windowSizes') && !isKnownSizes(raw.windowSizes)) return false
   if (has('windowPlace') && raw.windowPlace !== null && !isKnownPlace(raw.windowPlace)) return false
   if (has('fetchCovers') && typeof raw.fetchCovers !== 'boolean') return false
+  if (has('closeAction') && !closeActions.includes(raw.closeAction as CloseAction)) return false
   if (
     has('coverSources') &&
     (!isObject(raw.coverSources) ||
@@ -248,6 +255,7 @@ export function pageSettings(s: StoredSettings): Settings {
     theme: s.theme,
     volume: s.volume,
     fetchCovers: s.fetchCovers,
-    coverSources: { ...s.coverSources }
+    coverSources: { ...s.coverSources },
+    closeAction: s.closeAction
   }
 }

@@ -2,6 +2,7 @@
   import { defaultPalettes } from '../../shared/palette'
   import TitleBar from './components/TitleBar.svelte'
   import Settings from './components/Settings.svelte'
+  import CloseAsk from './components/CloseAsk.svelte'
   import Node from './layout/Node.svelte'
   import Menu from './ui/Menu.svelte'
   import Notice from './ui/Notice.svelte'
@@ -147,6 +148,7 @@
   {#if layout.settingsOpen}<Settings />{/if}
   <Notice />
   <Menu />
+  <CloseAsk />
 </div>
 
 <style>

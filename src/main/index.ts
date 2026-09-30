@@ -45,6 +45,7 @@ import { PlaylistFile, QueueFile } from './page-files'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
 import { devRetryData, isDevRetry, takeLock } from './single-instance'
+import { parseCloseAnswer } from './close-ask'
 import { hasTrayHost, hidesOnMinimize, makeTray } from './tray'
 import { currentBackground, MainWindow } from './window'
 
@@ -96,6 +97,7 @@ function createWindow(splash?: Splash): void {
   main = new MainWindow(store)
   main.hideOnMinimize = () =>
     tray ? hidesOnMinimize(process.platform, hasTrayHost) : Promise.resolve(false)
+  main.quitting = () => quitting
   splash?.endWith(main)
   // a crashed page sends no pause; a reloaded one sends its state again
   main.win.webContents.on('render-process-gone', () => library.setPlaying(false))
@@ -145,6 +147,11 @@ page.on(WinChannel.toggleMaximize, (e) => {
   else win.maximize()
 })
 page.handle(WinChannel.isMaximized, (e) => senderWindow(e)?.isMaximized() ?? false)
+page.on(WinChannel.closeShown, () => main?.closeShown())
+page.on(WinChannel.closeAnswer, (_, raw) => {
+  const action = parseCloseAnswer(raw)
+  if (action) main?.answerClose(action)
+})
 
 page.handle(SettingsChannel.load, () => pageSettings(store.get()))
 page.on(SettingsChannel.save, (_, raw, toFile) => {

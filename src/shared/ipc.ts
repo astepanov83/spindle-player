@@ -12,7 +12,10 @@ export const WinChannel = {
   toggleMaximize: 'win:toggle-maximize',
   close: 'win:close',
   isMaximized: 'win:is-maximized',
-  maximized: 'win:maximized'
+  maximized: 'win:maximized',
+  askClose: 'win:ask-close',
+  closeShown: 'win:close-shown',
+  closeAnswer: 'win:close-answer'
 } as const
 
 export const SettingsChannel = {
@@ -28,6 +31,12 @@ export interface WinApi {
   isMaximized(): Promise<boolean>
   // Returns a function that stops listening.
   onMaximized(listener: (maximized: boolean) => void): () => void
+  // Before the window closes, while the setting is 'ask' (ticket 049). The
+  // page says at once that it shows the question, or main closes the window
+  // anyway; then it answers, or says nothing on Cancel.
+  onAskClose(listener: () => void): () => void
+  closeShown(): void
+  closeAnswer(action: 'minimize' | 'quit'): void
 }
 
 // What the preload exposes to the page as `window.settingsApi`.
@@ -234,6 +243,8 @@ export interface PageChannels {
   [WinChannel.toggleMaximize]: WinApi['toggleMaximize']
   [WinChannel.close]: WinApi['close']
   [WinChannel.isMaximized]: WinApi['isMaximized']
+  [WinChannel.closeShown]: WinApi['closeShown']
+  [WinChannel.closeAnswer]: WinApi['closeAnswer']
   [SettingsChannel.load]: SettingsApi['load']
   [SettingsChannel.save]: SettingsApi['save']
   [LibraryChannel.load]: LibraryApi['load']

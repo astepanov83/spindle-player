@@ -47,7 +47,14 @@ const win: WinApi = {
     const handler = (_: Electron.IpcRendererEvent, maximized: boolean): void => listener(maximized)
     ipcRenderer.on(WinChannel.maximized, handler)
     return () => ipcRenderer.off(WinChannel.maximized, handler)
-  }
+  },
+  onAskClose: (listener) => {
+    const handler = (): void => listener()
+    ipcRenderer.on(WinChannel.askClose, handler)
+    return () => ipcRenderer.off(WinChannel.askClose, handler)
+  },
+  closeShown: () => send(WinChannel.closeShown),
+  closeAnswer: (action) => send(WinChannel.closeAnswer, action)
 }
 
 // Asked for now, while the page scripts are still loading, so the answer is

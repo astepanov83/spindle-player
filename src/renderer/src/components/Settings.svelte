@@ -6,8 +6,10 @@
   import Seg from '../ui/Seg.svelte'
   import type { QueueMode, TemplateId } from '../../../shared/layout'
   import {
+    closeActions,
     themeChoices,
     visualizerStyles,
+    type CloseAction,
     type ThemeChoice,
     type VisualizerStyle
   } from '../../../shared/settings'
@@ -27,6 +29,12 @@
   const narrowHint =
     'The queue gets its own column when the window is wider. Until then it slides in from the right, from the queue button.'
   const themeNames: Record<ThemeChoice, string> = { dark: 'Dark', light: 'Light', system: 'System' }
+  const closeNames: Record<CloseAction, string> = { ask: 'Ask', minimize: 'Minimize', quit: 'Quit' }
+  const closeHints: Record<CloseAction, string> = {
+    ask: 'Closing the window asks whether to minimize or quit.',
+    minimize: 'Closing the window minimizes it, and the music keeps playing.',
+    quit: 'Closing the window quits Spindle.'
+  }
 
   let el: HTMLDivElement | undefined = $state()
 
@@ -100,6 +108,16 @@
       value={settings.theme}
       onchange={(t: ThemeChoice) => (settings.theme = t)}
     />
+  </div>
+  <div class="set">
+    <span class="section-label">Closing the window</span>
+    <Seg
+      label="Closing the window"
+      options={closeActions.map((c) => ({ value: c, label: closeNames[c] }))}
+      value={settings.closeAction}
+      onchange={(c: CloseAction) => (settings.closeAction = c)}
+    />
+    <p class="hint">{closeHints[settings.closeAction]}</p>
   </div>
   <CoverFetch />
   <MusicFolders />

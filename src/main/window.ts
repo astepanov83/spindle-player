@@ -1,6 +1,6 @@
 // The app window: its size per template and what it remembers. See work/specs/window.md.
 import { join } from 'path'
-import { BrowserWindow, nativeTheme, screen, shell } from 'electron'
+import { app, BrowserWindow, nativeTheme, screen, shell } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import type { TemplateId } from '../shared/layout'
@@ -8,6 +8,7 @@ import { templates } from '../shared/templates'
 import { WinChannel } from '../shared/ipc'
 import { windowBackground } from '../shared/theme'
 import type { SettingsStore } from './settings-store'
+import { closeStep } from './close-ask'
 import { RestartBudget } from './library/restart'
 import { blockNavigation, canOpenExternal } from './web-guard'
 import { AppliedSize, placeCentered, placeSaved, sizeFor } from './window-place'
@@ -18,6 +19,9 @@ export function currentBackground(): string {
 
 // Resize and move events come many per second while dragging. Save once it stops.
 const resizeQuietMs = 400
+// A page that doesn't say it shows the close question by then is stuck, and
+// the window closes anyway.
+const askWaitMs = 1000
 
 export class MainWindow {
   readonly win: BrowserWindow
@@ -37,6 +41,11 @@ export class MainWindow {
   hideOnMinimize: () => Promise<boolean> = () => Promise.resolve(false)
   // hidden by minimize, not still loading
   #inTray = false
+  // true while the app quits (index.ts), so closing asks nothing
+  quitting: () => boolean = () => false
+  // the close was decided, so the next one goes through
+  #closeNow = false
+  #askTimer: ReturnType<typeof setTimeout> | undefined
 
   constructor(readonly store: SettingsStore) {
     const s = store.get()
@@ -116,9 +125,23 @@ export class MainWindow {
         this.#rememberPlace()
       }, resizeQuietMs)
     })
-    win.on('close', () => {
-      this.#rememberSize(this.store.live().template)
-      this.#rememberPlace()
+    // Windows logging off closes windows with no quit first
+    win.on('session-end', () => (this.#closeNow = true))
+    win.on('close', (e) => {
+      const page = win.webContents
+      const step = closeStep(this.store.live().closeAction, {
+        closing: this.#closeNow || this.quitting(),
+        pageUp: !page.isLoading() && !page.isCrashed()
+      })
+      if (step === 'close') {
+        clearTimeout(this.#askTimer)
+        this.#rememberSize(this.store.live().template)
+        this.#rememberPlace()
+        return
+      }
+      e.preventDefault()
+      if (step === 'ask') this.#askClose()
+      else this.answerClose(step)
     })
 
     blockNavigation(win.webContents)
@@ -144,6 +167,36 @@ export class MainWindow {
     win.show()
     if (win.isMinimized()) win.restore()
     win.focus()
+  }
+
+  // The question must be seen, so a minimized window comes back first.
+  #askClose(): void {
+    const win = this.win
+    if (!win.isVisible()) win.show()
+    if (win.isMinimized()) win.restore()
+    win.focus()
+    clearTimeout(this.#askTimer)
+    this.#askTimer = setTimeout(() => this.#close(), askWaitMs)
+    win.webContents.send(WinChannel.askClose)
+  }
+
+  // The page shows the question; now it may take as long as the user does.
+  closeShown(): void {
+    clearTimeout(this.#askTimer)
+  }
+
+  // From the page's question, or the setting. Quit ends the app on macOS too.
+  answerClose(action: 'minimize' | 'quit'): void {
+    clearTimeout(this.#askTimer)
+    if (this.win.isDestroyed()) return
+    if (action === 'minimize') this.win.minimize()
+    else app.quit()
+  }
+
+  #close(): void {
+    if (this.win.isDestroyed()) return
+    this.#closeNow = true
+    this.win.close()
   }
 
   #rememberSize(id: TemplateId): void {

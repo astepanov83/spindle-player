@@ -6,6 +6,18 @@
   let el: HTMLDivElement | undefined = $state()
   let pos = $state({ x: 0, y: 0 })
 
+  // Focus goes back where it was when the menu closes, so the keyboard
+  // carries on from the row or button that opened it.
+  $effect(() => {
+    if (!menu.open) return
+    const was = document.activeElement
+    return () => {
+      const at = document.activeElement
+      if (was instanceof HTMLElement && (!at || at === document.body || el?.contains(at)))
+        was.focus({ preventScroll: true })
+    }
+  })
+
   // keep it inside the window
   $effect(() => {
     const m = menu.open
@@ -116,10 +128,12 @@
     float: right;
     margin-left: 12px;
   }
+  /* the same fill for the mouse and the keyboard, strong enough to spot */
   button:hover,
   button:focus-visible {
-    background: var(--hover);
+    background: color-mix(in srgb, var(--ink) 13%, transparent);
     outline: none;
+    box-shadow: none;
   }
   hr {
     border: 0;

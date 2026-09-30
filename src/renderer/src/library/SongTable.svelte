@@ -8,6 +8,7 @@
   import { fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
+  import { roving } from '../ui/roving'
   import { nextSort, sortRows, type Sort, type SortKey } from './views'
   import { library } from '../stores/library.svelte'
   import { playing } from '../stores/playing.svelte'
@@ -101,7 +102,12 @@
       </span>
     {/each}
   </div>
-  <div class="rows" bind:this={list} style:height="{v.total}px">
+  <div
+    class="rows"
+    bind:this={list}
+    style:height="{v.total}px"
+    use:roving={{ rows, count: rows.length, scrollTo: (i) => v.scrollToIndex(i) }}
+  >
     {#each v.items as item (item.key)}
       {@const t = rows[item.index]}
       {@const cur = queue.isCurrent(t.id)}
@@ -110,6 +116,9 @@
         class:cur-row={cur}
         class:cur
         class:first={item.index === 0}
+        data-row
+        data-index={item.index}
+        aria-current={cur ? 'true' : undefined}
         style:transform="translateY({v.offset(item)}px)"
         onclick={() => play(item.index)}
         oncontextmenu={(e) =>
@@ -187,6 +196,10 @@
     font-size: 14.5px;
     border-radius: 8px;
     box-shadow: 0 -1px 0 var(--edge);
+  }
+  /* Up keeps the focused row clear of the sticky head */
+  .tr {
+    scroll-margin-top: calc(38px + var(--scroll-pad-top, 20px));
   }
   .tr.first {
     box-shadow: none;

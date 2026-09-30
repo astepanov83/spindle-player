@@ -17,6 +17,7 @@
       icon={b.act}
       label={b.label}
       on={b.act === 'queue' && layout.showQueue}
+      act={b.act}
       onclick={() => run(b)}
     />
   {/each}

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { player } from '../stores/player.svelte'
   import { playing } from '../stores/playing.svelte'
+  import { fmtTime } from '../format'
+  import { sliderKey } from '../keys'
 
   let el: HTMLDivElement
   // while dragging, the knob follows the mouse and the song jumps on release
@@ -28,6 +30,15 @@
     playing.seek(at(e))
     drag = null
   }
+
+  // A slider for the keyboard: arrows 5 s, Page Up and Down 30 s, Home and End.
+  function onkeydown(e: KeyboardEvent): void {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || !player.duration) return
+    const to = sliderKey(e.key, player.pos, player.duration, 5, 30)
+    if (to === null) return
+    e.preventDefault()
+    playing.seek(to)
+  }
 </script>
 
 <div
@@ -37,7 +48,14 @@
   {onpointermove}
   {onpointerup}
   onpointercancel={() => (drag = null)}
-  role="presentation"
+  {onkeydown}
+  role="slider"
+  tabindex="0"
+  aria-label="Seek"
+  aria-valuemin={0}
+  aria-valuemax={Math.round(player.duration)}
+  aria-valuenow={Math.round(shown)}
+  aria-valuetext="{fmtTime(shown)} of {fmtTime(player.duration)}"
 >
   <div class="track">
     <div class="fill" style:width={pct}></div>
@@ -78,10 +96,15 @@
     opacity: 0;
     transition: opacity 0.15s;
   }
-  .seek:hover .knob {
+  .seek:hover .knob,
+  .seek:focus-visible .knob {
     opacity: 1;
   }
-  .seek:hover .track {
+  .seek:focus-visible {
+    border-radius: 4px;
+  }
+  .seek:hover .track,
+  .seek:focus-visible .track {
     height: 6px;
   }
 </style>

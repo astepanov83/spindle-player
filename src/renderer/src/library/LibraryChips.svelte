@@ -10,7 +10,7 @@
   import RadioView from './RadioView.svelte'
   import SearchBox from './SearchBox.svelte'
   import SearchResults from './SearchResults.svelte'
-  import { onSideButton } from './side-buttons'
+  import { showPage } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { library, type Chip, type Page } from '../stores/library.svelte'
 
@@ -56,13 +56,13 @@
       : (pages[library.chip] ?? null)
   )
 
+  showPage(() => page)
+
   scrollTopOnChange(
     () => scrollEl,
     () => libraryView(library.chip)
   )
 </script>
-
-<svelte:window onmouseup={(e) => onSideButton(e, page)} />
 
 <div class="lib">
   <div class="top">

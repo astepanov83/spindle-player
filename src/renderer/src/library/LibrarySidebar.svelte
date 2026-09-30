@@ -12,7 +12,7 @@
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
-  import { onSideButton } from './side-buttons'
+  import { showPage } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { songRows } from './views'
   import { library, type Page, type Section } from '../stores/library.svelte'
@@ -69,18 +69,13 @@
     folders: 'folder',
     artists: 'artist'
   }
+  // Back and Forward leave the page under the search results alone
+  showPage(() =>
+    searching && (library.section === 'albums' || library.section === 'artists')
+      ? null
+      : (pages[library.section] ?? null)
+  )
 </script>
-
-<!-- Back and Forward leave the page under the search results alone -->
-<svelte:window
-  onmouseup={(e) =>
-    onSideButton(
-      e,
-      searching && (library.section === 'albums' || library.section === 'artists')
-        ? null
-        : (pages[library.section] ?? null)
-    )}
-/>
 
 {#snippet item(sec: Section, icon: IconName, label: string)}
   <button class="sidebtn" aria-current={library.section === sec} onclick={() => pick(sec)}>

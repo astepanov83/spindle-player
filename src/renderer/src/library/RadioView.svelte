@@ -3,6 +3,7 @@
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
   import Thumb from '../ui/Thumb.svelte'
+  import { roving } from '../ui/roving'
   import { stationArt, type Station } from '../../../shared/stations'
   import { bitrateLine, searchRows, stationLine, stationMatches } from '../radio/logic'
   import { library } from '../stores/library.svelte'
@@ -50,6 +51,14 @@
     entries.push({ label: 'Remove', run: () => void radio.remove(s.id) })
     menu.showFor(e, entries)
   }
+
+  // A list is one Tab stop (ui/roving.ts); Right reaches a row's star, Left goes back.
+  function onrowkey(e: KeyboardEvent & { currentTarget: HTMLElement }, to: 'star' | 'main'): void {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+    if (e.key !== (to === 'star' ? 'ArrowRight' : 'ArrowLeft')) return
+    e.preventDefault()
+    e.currentTarget.closest('[data-line]')?.querySelector<HTMLElement>(`.${to}`)?.focus()
+  }
 </script>
 
 {#snippet row(s: Station, result: boolean)}
@@ -60,9 +69,18 @@
     class="row"
     class:cur-row={on}
     role="listitem"
+    data-line
     oncontextmenu={isSaved && !result ? (e) => openMenu(e, s) : undefined}
   >
-    <button class="main" class:cur={on} title={s.name} onclick={() => play(s)}>
+    <button
+      class="main"
+      class:cur={on}
+      title={s.name}
+      data-row
+      aria-current={on ? 'true' : undefined}
+      onkeydown={(e) => onrowkey(e, 'star')}
+      onclick={() => play(s)}
+    >
       <!-- bars only while sound comes out; a dot while it connects or recovers -->
       <Thumb
         src={logo(s, result)}
@@ -80,6 +98,8 @@
     <button
       class="star"
       class:on={isSaved}
+      tabindex="-1"
+      onkeydown={(e) => onrowkey(e, 'main')}
       aria-pressed={isSaved}
       title={isSaved ? 'Remove from My stations' : 'Add to My stations'}
       onclick={() => star(s)}><Icon name={isSaved ? 'starOn' : 'star'} size={20} /></button
@@ -89,7 +109,7 @@
 
 <div class="radio">
   <h3>My stations</h3>
-  <div class="list" role="list">
+  <div class="list" role="list" use:roving={{ rows: mine }}>
     {#each mine as s (s.id)}
       {@render row(s, false)}
     {/each}
@@ -113,7 +133,12 @@
           : 'No stations found.'}
       </p>
     {:else}
-      <div class="list" role="list" class:stale={radioSearch.status === 'searching'}>
+      <div
+        class="list"
+        role="list"
+        class:stale={radioSearch.status === 'searching'}
+        use:roving={{ rows: found }}
+      >
         {#each found as s (s.id)}
           {@render row(s, true)}
         {/each}

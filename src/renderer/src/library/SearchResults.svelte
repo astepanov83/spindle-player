@@ -10,6 +10,7 @@
   import Icon from '../ui/Icon.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import { fmtTime } from '../format'
+  import { roving } from '../ui/roving'
   import { filterArtists } from './artists'
   import { filterAlbums, searchSongs } from './views'
   import { library, type SearchGroup } from '../stores/library.svelte'
@@ -88,25 +89,29 @@
   {#if songs.length}
     <section class="songs">
       {@render more('songs', songs.length, TOP_SONGS)}
-      {#each songs.slice(0, TOP_SONGS) as t, i (t.id)}
-        {@const cur = queue.isCurrent(t.id)}
-        <button
-          class="srow"
-          class:cur
-          onclick={() => play(i)}
-          oncontextmenu={(e) => openSongMenu(e, [t.id], { from })}
-        >
-          <span class="tt">
-            <Thumb src={library.art(t).cover} size={36} radius={4} />
-            <span class="nm"
-              >{#if cur && playing.songPlaying}<Eq />{/if}<span>{t.title}</span></span
-            >
-          </span>
-          <span class="o">{t.artist}</span>
-          <span class="o al">{t.album}</span>
-          <span class="d">{fmtTime(t.duration)}</span>
-        </button>
-      {/each}
+      <div use:roving={{ rows: songs }}>
+        {#each songs.slice(0, TOP_SONGS) as t, i (t.id)}
+          {@const cur = queue.isCurrent(t.id)}
+          <button
+            class="srow"
+            class:cur
+            data-row
+            aria-current={cur ? 'true' : undefined}
+            onclick={() => play(i)}
+            oncontextmenu={(e) => openSongMenu(e, [t.id], { from })}
+          >
+            <span class="tt">
+              <Thumb src={library.art(t).cover} size={36} radius={4} />
+              <span class="nm"
+                >{#if cur && playing.songPlaying}<Eq />{/if}<span>{t.title}</span></span
+              >
+            </span>
+            <span class="o">{t.artist}</span>
+            <span class="o al">{t.album}</span>
+            <span class="d">{fmtTime(t.duration)}</span>
+          </button>
+        {/each}
+      </div>
     </section>
   {/if}
   {#if albums.length}

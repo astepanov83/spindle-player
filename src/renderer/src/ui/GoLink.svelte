@@ -31,8 +31,12 @@
     text-decoration-thickness: 1px;
     text-underline-offset: 0.15em;
   }
+  /* The outline comes from theme.css. A line cut with an ellipsis clips
+     it, so a 2px underline in the focus color marks the link too. */
   .golink:focus-visible {
-    outline: 2px solid var(--ring);
     outline-offset: 1px;
+    box-shadow: none;
+    text-decoration: underline 2px var(--focus);
+    text-underline-offset: 0.15em;
   }
 </style>

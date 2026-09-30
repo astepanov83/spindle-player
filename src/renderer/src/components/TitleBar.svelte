@@ -14,6 +14,7 @@
 </script>
 
 <!-- Double-click to maximize comes from the drag area itself, no handler needed. -->
+<!-- The window buttons are left out of Tab order: the window manager has keys for them. -->
 <header class="titlebar">
   <span class="title">{title}</span>
   <div class="right">
@@ -31,10 +32,11 @@
       >
     </button>
     <div class="winbtns">
-      <button aria-label="Minimize" onclick={() => window.win.minimize()}>
+      <button tabindex="-1" aria-label="Minimize" onclick={() => window.win.minimize()}>
         <svg viewBox="0 0 10 10"><path d="M1 5h8" /></svg>
       </button>
       <button
+        tabindex="-1"
         aria-label={maximized ? 'Restore' : 'Maximize'}
         onclick={() => window.win.toggleMaximize()}
       >
@@ -46,7 +48,7 @@
           <svg viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" /></svg>
         {/if}
       </button>
-      <button class="close" aria-label="Close" onclick={() => window.win.close()}>
+      <button tabindex="-1" class="close" aria-label="Close" onclick={() => window.win.close()}>
         <svg viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8" /></svg>
       </button>
     </div>

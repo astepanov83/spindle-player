@@ -6,6 +6,7 @@
   import RecentSongs from './RecentSongs.svelte'
   import { fmtLength, fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
+  import { roving } from '../ui/roving'
   import { dropIndex, dropSlot, rowShift } from '../ui/drag-rows'
   import { layout } from '../stores/layout.svelte'
   import { library } from '../stores/library.svelte'
@@ -212,7 +213,16 @@
       {#if !queue.items.length}
         <p class="empty">The queue is empty. Songs you play show up here.</p>
       {/if}
-      <div class="rows" bind:this={list} style:height="{v.total}px">
+      <div
+        class="rows"
+        bind:this={list}
+        style:height="{v.total}px"
+        use:roving={{
+          rows: queue.items,
+          count: queue.items.length,
+          scrollTo: (i) => v.scrollToIndex(i)
+        }}
+      >
         {#each v.items as item (item.key)}
           {@const id = queue.items[item.index]}
           {@const t = library.track(id)}
@@ -223,7 +233,9 @@
             class:cur
             class:past={item.index < queue.index}
             class:lifted={drag?.from === item.index}
+            data-row
             data-index={item.index}
+            aria-current={cur ? 'true' : undefined}
             style:transform="translateY({v.offset(item) + shift(item.index)}px)"
             onclick={() => playRow(item.index)}
             onpointerdown={(e) => onrowdown(e, item.index)}
@@ -405,7 +417,11 @@
   .past {
     opacity: 0.45;
   }
+  /* a played row with focus shows its mark at full strength */
   .past:hover {
     opacity: 0.8;
+  }
+  .past:focus-visible {
+    opacity: 1;
   }
 </style>

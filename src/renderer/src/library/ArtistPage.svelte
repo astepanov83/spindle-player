@@ -275,6 +275,7 @@
     border: 1px solid var(--ring);
     border-radius: 8px;
     outline: none;
+    box-shadow: none;
   }
   .x {
     color: var(--ink-3);

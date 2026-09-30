@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { isTyping, spaceAction } from './keys'
+import {
+  escapeTarget,
+  isTyping,
+  keyAction,
+  listStep,
+  radioStep,
+  seekStep,
+  sliderKey,
+  spaceAction,
+  usesArrows,
+  volumeStep
+} from './keys'
 
 const key = (over: Record<string, unknown> = {}): Parameters<typeof spaceAction>[0] => ({
   code: 'Space',
@@ -54,4 +65,183 @@ describe('spaceAction', () => {
   it('only blocks a repeat from a held key', () => {
     expect(spaceAction(key({ repeat: true }), el('BUTTON'), false)).toBe('block')
   })
+})
+
+const press = (k: string, over: Record<string, unknown> = {}): Parameters<typeof keyAction>[0] => ({
+  key: k,
+  code: k.length === 1 ? `Key${k.toUpperCase()}` : k,
+  ctrlKey: false,
+  altKey: false,
+  metaKey: false,
+  shiftKey: false,
+  repeat: false,
+  ...over
+})
+const free = { typing: false, arrows: false, menuOpen: false }
+
+describe('keyAction', () => {
+  it('seeks with Left and Right, sets the volume with Up and Down', () => {
+    expect(keyAction(press('ArrowLeft'), free)).toBe('seekBack')
+    expect(keyAction(press('ArrowRight'), free)).toBe('seekForward')
+    expect(keyAction(press('ArrowUp'), free)).toBe('volumeUp')
+    expect(keyAction(press('ArrowDown'), free)).toBe('volumeDown')
+  })
+  it('keeps arrows repeating while held', () =>
+    expect(keyAction(press('ArrowRight', { repeat: true }), free)).toBe('seekForward'))
+  it('leaves arrows to a list or slider, unless Shift is held', () => {
+    const inList = { ...free, arrows: true }
+    expect(keyAction(press('ArrowDown'), inList)).toBe('none')
+    expect(keyAction(press('ArrowLeft'), inList)).toBe('none')
+    expect(keyAction(press('ArrowDown', { shiftKey: true }), inList)).toBe('volumeDown')
+    expect(keyAction(press('ArrowLeft', { shiftKey: true }), inList)).toBe('seekBack')
+  })
+  it('steps songs with Ctrl+Left and Ctrl+Right', () => {
+    expect(keyAction(press('ArrowLeft', { ctrlKey: true }), free)).toBe('previous')
+    expect(keyAction(press('ArrowRight', { ctrlKey: true }), free)).toBe('next')
+    // a list has no use for Ctrl+arrows
+    expect(keyAction(press('ArrowRight', { ctrlKey: true }), { ...free, arrows: true })).toBe(
+      'next'
+    )
+  })
+  it('goes back and forward with Alt+Left, Alt+Right and Backspace', () => {
+    expect(keyAction(press('ArrowLeft', { altKey: true }), free)).toBe('back')
+    expect(keyAction(press('ArrowRight', { altKey: true }), free)).toBe('forward')
+    expect(keyAction(press('Backspace'), free)).toBe('back')
+  })
+  it('does not go back twice for a held Backspace', () =>
+    expect(keyAction(press('Backspace', { repeat: true }), free)).toBe('none'))
+  it('focuses search with Ctrl+F or /', () => {
+    expect(keyAction(press('f', { ctrlKey: true }), free)).toBe('search')
+    expect(keyAction(press('/', { code: 'Slash' }), free)).toBe('search')
+  })
+  it('finds Ctrl+F and Ctrl+, by the key place, so other layouts work', () => {
+    expect(keyAction(press('а', { code: 'KeyF', ctrlKey: true }), free)).toBe('search')
+    expect(keyAction(press('б', { code: 'Comma', ctrlKey: true }), free)).toBe('settings')
+  })
+  it('opens Settings with Ctrl+,', () =>
+    expect(keyAction(press(',', { code: 'Comma', ctrlKey: true }), free)).toBe('settings'))
+  it('keeps V, Q and Space', () => {
+    expect(keyAction(press('v'), free)).toBe('visualizer')
+    expect(keyAction(press('q'), free)).toBe('queue')
+    expect(keyAction(press(' ', { code: 'Space' }), free)).toBe('toggle')
+    expect(keyAction(press(' ', { code: 'Space', ctrlKey: true }), free)).toBe('block')
+    expect(keyAction(press('v', { ctrlKey: true }), free)).toBe('none')
+  })
+  it('passes Escape on', () => expect(keyAction(press('Escape'), free)).toBe('escape'))
+  it('leaves a text field its keys, but Ctrl+F and Ctrl+, still work', () => {
+    const typing = { ...free, typing: true }
+    for (const k of ['ArrowLeft', 'ArrowUp', 'Backspace', '/', 'v', 'q', 'Escape']) {
+      expect(keyAction(press(k), typing)).toBe('none')
+    }
+    expect(keyAction(press('ArrowLeft', { ctrlKey: true }), typing)).toBe('none')
+    expect(keyAction(press('ArrowLeft', { altKey: true }), typing)).toBe('none')
+    expect(keyAction(press(' ', { code: 'Space' }), typing)).toBe('none')
+    expect(keyAction(press('f', { ctrlKey: true }), typing)).toBe('search')
+    expect(keyAction(press(',', { code: 'Comma', ctrlKey: true }), typing)).toBe('settings')
+  })
+  it('leaves an open menu every key but Escape', () => {
+    const open = { ...free, menuOpen: true }
+    for (const k of ['ArrowLeft', 'ArrowDown', 'Backspace', 'v']) {
+      expect(keyAction(press(k), open)).toBe('none')
+    }
+    expect(keyAction(press(' ', { code: 'Space' }), open)).toBe('none')
+    expect(keyAction(press('Escape'), open)).toBe('escape')
+  })
+})
+
+describe('usesArrows', () => {
+  const at = (
+    tagName: string,
+    type?: string,
+    inList = false
+  ): Parameters<typeof usesArrows>[0] => ({
+    tagName,
+    type,
+    isContentEditable: false,
+    closest: () => (inList ? ({} as Element) : null)
+  })
+  it('is true on a slider, a radio button, a select and in a list', () => {
+    expect(usesArrows(at('INPUT', 'range'))).toBe(true)
+    expect(usesArrows(at('INPUT', 'radio'))).toBe(true)
+    expect(usesArrows(at('SELECT'))).toBe(true)
+    expect(usesArrows(at('BUTTON', undefined, true))).toBe(true)
+  })
+  it('is false on a plain button or checkbox', () => {
+    expect(usesArrows(at('BUTTON'))).toBe(false)
+    expect(usesArrows(at('INPUT', 'checkbox'))).toBe(false)
+  })
+})
+
+describe('escapeTarget', () => {
+  it('closes the menu, then Settings, then the drawer', () => {
+    expect(escapeTarget({ menu: true, settings: true, drawer: true })).toBe('menu')
+    expect(escapeTarget({ menu: false, settings: true, drawer: true })).toBe('settings')
+    expect(escapeTarget({ menu: false, settings: false, drawer: true })).toBe('drawer')
+    expect(escapeTarget({ menu: false, settings: false, drawer: false })).toBe('none')
+  })
+})
+
+describe('steps', () => {
+  it('moves the volume by 5 within 0 to 100', () => {
+    expect(volumeStep(50, 1)).toBe(55)
+    expect(volumeStep(98, 1)).toBe(100)
+    expect(volumeStep(3, -1)).toBe(0)
+  })
+  it('seeks by 5 seconds within the song', () => {
+    expect(seekStep(10, 200, 1)).toBe(15)
+    expect(seekStep(3, 200, -1)).toBe(0)
+    expect(seekStep(198, 200, 1)).toBe(200)
+  })
+})
+
+describe('sliderKey', () => {
+  it('steps with the arrows, pages with Page Up and Down, ends with Home and End', () => {
+    expect(sliderKey('ArrowRight', 60, 200, 5, 30)).toBe(65)
+    expect(sliderKey('ArrowUp', 60, 200, 5, 30)).toBe(65)
+    expect(sliderKey('ArrowLeft', 60, 200, 5, 30)).toBe(55)
+    expect(sliderKey('ArrowDown', 60, 200, 5, 30)).toBe(55)
+    expect(sliderKey('PageUp', 60, 200, 5, 30)).toBe(90)
+    expect(sliderKey('PageDown', 20, 200, 5, 30)).toBe(0)
+    expect(sliderKey('Home', 60, 200, 5, 30)).toBe(0)
+    expect(sliderKey('End', 60, 200, 5, 30)).toBe(200)
+    expect(sliderKey('ArrowRight', 198, 200, 5, 30)).toBe(200)
+  })
+  it('ignores other keys', () => expect(sliderKey('Enter', 60, 200, 5, 30)).toBe(null))
+})
+
+describe('listStep', () => {
+  it('moves one row with Up and Down, stopping at the ends', () => {
+    expect(listStep('ArrowDown', 3, 10, 5)).toBe(4)
+    expect(listStep('ArrowUp', 3, 10, 5)).toBe(2)
+    expect(listStep('ArrowUp', 0, 10, 5)).toBe(0)
+    expect(listStep('ArrowDown', 9, 10, 5)).toBe(9)
+  })
+  it('jumps a page with Page Up and Down, to the ends with Home and End', () => {
+    expect(listStep('PageDown', 3, 10, 5)).toBe(8)
+    expect(listStep('PageDown', 7, 10, 5)).toBe(9)
+    expect(listStep('PageUp', 3, 10, 5)).toBe(0)
+    expect(listStep('Home', 6, 10, 5)).toBe(0)
+    expect(listStep('End', 2, 10, 5)).toBe(9)
+  })
+  it('starts at the top when no row had focus', () =>
+    expect(listStep('ArrowDown', -1, 10, 5)).toBe(0))
+  it('does nothing in an empty list or for other keys', () => {
+    expect(listStep('ArrowDown', -1, 0, 5)).toBe(null)
+    expect(listStep('ArrowLeft', 2, 10, 5)).toBe(null)
+    expect(listStep('Enter', 2, 10, 5)).toBe(null)
+  })
+})
+
+describe('radioStep', () => {
+  it('moves with every arrow and wraps around', () => {
+    expect(radioStep('ArrowRight', 0, 3)).toBe(1)
+    expect(radioStep('ArrowDown', 2, 3)).toBe(0)
+    expect(radioStep('ArrowLeft', 0, 3)).toBe(2)
+    expect(radioStep('ArrowUp', 1, 3)).toBe(0)
+  })
+  it('goes to the ends with Home and End', () => {
+    expect(radioStep('Home', 2, 3)).toBe(0)
+    expect(radioStep('End', 0, 3)).toBe(2)
+  })
+  it('ignores other keys', () => expect(radioStep('Enter', 1, 3)).toBe(null))
 })

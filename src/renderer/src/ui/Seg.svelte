@@ -1,15 +1,46 @@
-<!-- Segmented buttons: one of a few choices. -->
+<!-- Segmented buttons: one of a few choices, a radio group for the keyboard.
+     One Tab stop; the arrows pick the next choice. -->
 <script lang="ts" generics="T extends string">
+  import { radioStep } from '../keys'
+
   let {
     options,
     value,
+    label,
     onchange
-  }: { options: { value: T; label: string }[]; value: T; onchange: (v: T) => void } = $props()
+  }: {
+    options: { value: T; label: string }[]
+    value: T
+    label: string
+    onchange: (v: T) => void
+  } = $props()
+
+  const picked = $derived(
+    Math.max(
+      0,
+      options.findIndex((o) => o.value === value)
+    )
+  )
+
+  function onkeydown(e: KeyboardEvent & { currentTarget: HTMLElement }, i: number): void {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+    const to = radioStep(e.key, i, options.length)
+    if (to === null) return
+    e.preventDefault()
+    ;(e.currentTarget.parentElement?.children[to] as HTMLElement | undefined)?.focus()
+    onchange(options[to].value)
+  }
 </script>
 
-<div class="seg">
-  {#each options as o (o.value)}
-    <button aria-pressed={o.value === value} onclick={() => onchange(o.value)}>{o.label}</button>
+<div class="seg" role="radiogroup" aria-label={label}>
+  {#each options as o, i (o.value)}
+    <button
+      role="radio"
+      aria-checked={o.value === value}
+      tabindex={i === picked ? 0 : -1}
+      onclick={() => onchange(o.value)}
+      onkeydown={(e) => onkeydown(e, i)}>{o.label}</button
+    >
   {/each}
 </div>
 
@@ -28,7 +59,7 @@
     padding: 7px 8px;
     border-radius: 8px;
   }
-  button[aria-pressed='true'] {
+  button[aria-checked='true'] {
     background: var(--raised);
     color: var(--ink);
   }

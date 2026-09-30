@@ -6,11 +6,21 @@
     icon,
     label,
     on = false,
+    act,
     onclick
-  }: { icon: IconName; label: string; on?: boolean; onclick: () => void } = $props()
+  }: {
+    icon: IconName
+    label: string
+    on?: boolean
+    // names a slot button, so focus can be handed to it
+    act?: string
+    onclick: () => void
+  } = $props()
 </script>
 
-<button class="icobtn" class:on aria-label={label} {onclick}><Icon name={icon} /></button>
+<button class="icobtn" class:on aria-label={label} data-act={act} {onclick}
+  ><Icon name={icon} /></button
+>
 
 <style>
   .icobtn {

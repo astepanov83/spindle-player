@@ -2,6 +2,7 @@
 <script lang="ts">
   import CoverFetch from './CoverFetch.svelte'
   import MusicFolders from './MusicFolders.svelte'
+  import IconButton from '../ui/IconButton.svelte'
   import Seg from '../ui/Seg.svelte'
   import type { QueueMode, TemplateId } from '../../../shared/layout'
   import {
@@ -37,15 +38,36 @@
     if (el?.contains(t) || t.closest('[data-settings-toggle]')) return
     layout.settingsOpen = false
   }
+
+  // Focus goes into the sheet on open, and back to the gear on close unless
+  // a click outside put it somewhere else.
+  $effect(() => {
+    el?.querySelector<HTMLElement>('.close button')?.focus()
+    return () => {
+      const at = document.activeElement
+      if (!at || at === document.body || el?.contains(at))
+        document.querySelector<HTMLElement>('[data-settings-toggle]')?.focus()
+    }
+  })
 </script>
 
 <svelte:window onpointerdowncapture={onpointerdown} />
 
 <div class="settings" role="dialog" aria-label="Settings" bind:this={el}>
-  <h3>Settings</h3>
+  <div class="top">
+    <h3>Settings</h3>
+    <span class="close">
+      <IconButton
+        icon="close"
+        label="Close settings"
+        onclick={() => (layout.settingsOpen = false)}
+      />
+    </span>
+  </div>
   <div class="set">
     <span class="label">Layout</span>
     <Seg
+      label="Layout"
       options={templateIds.map((id) => ({ value: id, label: templates[id].name }))}
       value={settings.template}
       onchange={(id: TemplateId) => layout.chooseTemplate(id)}
@@ -54,6 +76,7 @@
   <div class="set">
     <span class="label">Queue</span>
     <Seg
+      label="Queue"
       options={layout.template.queueOptions.map((q) => ({ value: q, label: queueNames[q] }))}
       value={layout.queueMode}
       onchange={(q: QueueMode) => layout.chooseQueueMode(q)}
@@ -63,6 +86,7 @@
   <div class="set">
     <span class="label">Visualizer</span>
     <Seg
+      label="Visualizer"
       options={visualizerStyles.map((v) => ({ value: v, label: vzNames[v] }))}
       value={settings.visualizer}
       onchange={(v: VisualizerStyle) => layout.chooseVisualizer(v)}
@@ -71,6 +95,7 @@
   <div class="set">
     <span class="label">Theme</span>
     <Seg
+      label="Theme"
       options={themeChoices.map((t) => ({ value: t, label: themeNames[t] }))}
       value={settings.theme}
       onchange={(t: ThemeChoice) => (settings.theme = t)}
@@ -106,6 +131,15 @@
       opacity: 0;
       transform: translateY(8px);
     }
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: -6px -8px -6px 0;
+  }
+  .close {
+    --icobtn: 32px;
   }
   h3 {
     margin: 0;

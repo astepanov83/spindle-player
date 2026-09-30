@@ -5,6 +5,7 @@
   import GoLink from '../ui/GoLink.svelte'
   import Icon from '../ui/Icon.svelte'
   import { fmtTime } from '../format'
+  import { roving } from '../ui/roving'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
   import { playing } from '../stores/playing.svelte'
@@ -63,13 +64,15 @@
     </div>
   </div>
 </div>
-<div>
+<div use:roving={{ rows: tracks }}>
   {#each tracks as t, i (t.id)}
     {@const cur = queue.isCurrent(t.id)}
     <button
       class="srow"
       data-song={t.id}
       class:cur
+      data-row
+      aria-current={cur ? 'true' : undefined}
       onclick={() => queue.playAlbum(al.id, i)}
       oncontextmenu={(e) => openSongMenu(e, [t.id], { from: al.title, link })}
     >

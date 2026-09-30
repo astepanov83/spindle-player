@@ -32,6 +32,7 @@
     type="search"
     {placeholder}
     autocomplete="off"
+    data-search
     value={library.query}
     bind:this={input}
     {oninput}
@@ -63,6 +64,7 @@
     color: var(--ink);
     font: 14px var(--ui);
     outline: none;
+    box-shadow: none;
   }
   /* our own clear button takes its place */
   input::-webkit-search-cancel-button {
@@ -86,6 +88,6 @@
     color: var(--ink-3);
   }
   .search:focus-within {
-    box-shadow: 0 0 0 2px var(--ring);
+    box-shadow: var(--focus-bands);
   }
 </style>

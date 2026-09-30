@@ -6,7 +6,16 @@
   import Menu from './ui/Menu.svelte'
   import Notice from './ui/Notice.svelte'
   import { engine } from './audio/engine'
-  import { isTyping, spaceAction } from './keys'
+  import {
+    escapeTarget,
+    isTyping,
+    keyAction,
+    seekStep,
+    usesArrows,
+    volumeStep,
+    type KeyAction
+  } from './keys'
+  import { goBack, goForward, onSideButton } from './library/side-buttons'
   import { layout } from './stores/layout.svelte'
   import { menu } from './stores/menu.svelte'
   import {
@@ -55,28 +64,55 @@
     window.settingsApi.save(s, settingsState.canSave)
   })
 
-  // Keys from the prototype: Space play, V visualizer, Q queue, Escape closes.
-  // Not while typing, and not with Ctrl, Alt or Meta held.
+  // The keys, decided in keys.ts (list in docs/design.md). A key a list, the
+  // seek bar or the search box already used arrives with defaultPrevented.
   function onkeydown(e: KeyboardEvent): void {
+    if (e.defaultPrevented) return
     const t = e.target as HTMLElement
-    if (e.key === 'Escape' && menu.open) return menu.close()
-    if (isTyping(t)) return
-    if (e.key === 'Escape') {
-      if (layout.settingsOpen) layout.settingsOpen = false
-      else if (layout.showQueue) layout.showQueue = false
-    }
-    // Space never presses a focused button, with or without a modifier.
-    const space = spaceAction(e, t, !!menu.open)
-    if (space !== 'none') e.preventDefault()
-    if (space === 'toggle') playing.togglePlay()
-    if (e.ctrlKey || e.altKey || e.metaKey) return
-    if (e.key === 'v') layout.cycleVisualizer()
-    if (e.key === 'q') layout.toggleQueue()
+    const act = keyAction(e, { typing: isTyping(t), arrows: usesArrows(t), menuOpen: !!menu.open })
+    if (act === 'none') return
+    // Space never presses a focused button, with or without a modifier
+    e.preventDefault()
+    run(act)
+  }
+
+  function run(act: KeyAction): void {
+    if (act === 'toggle') playing.togglePlay()
+    else if (act === 'seekBack' || act === 'seekForward')
+      playing.seek(seekStep(player.pos, player.duration, act === 'seekBack' ? -1 : 1))
+    else if (act === 'volumeUp' || act === 'volumeDown')
+      settings.volume = volumeStep(settings.volume, act === 'volumeDown' ? -1 : 1)
+    else if (act === 'previous') void playing.prev()
+    else if (act === 'next') void playing.next()
+    else if (act === 'back') goBack()
+    else if (act === 'forward') goForward()
+    else if (act === 'search') focusSearch()
+    else if (act === 'settings') layout.settingsOpen = !layout.settingsOpen
+    else if (act === 'escape') escape()
+    else if (act === 'visualizer') layout.cycleVisualizer()
+    else if (act === 'queue') layout.toggleQueue()
+  }
+
+  function escape(): void {
+    const drawer = layout.queueMode === 'drawer' && layout.showQueue
+    const to = escapeTarget({ menu: !!menu.open, settings: layout.settingsOpen, drawer })
+    if (to === 'menu') menu.close()
+    else if (to === 'settings') layout.settingsOpen = false
+    else if (to === 'drawer') layout.showQueue = false
+  }
+
+  // Focus has no search box; there the key does nothing.
+  function focusSearch(): void {
+    const box = document.querySelector<HTMLInputElement>('input[data-search]')
+    if (!box) return
+    layout.settingsOpen = false
+    box.focus()
+    box.select()
   }
 </script>
 
 <!-- the last position goes to main before the window closes -->
-<svelte:window {onkeydown} onpagehide={() => queue.savePos()} />
+<svelte:window {onkeydown} onmouseup={onSideButton} onpagehide={() => queue.savePos()} />
 
 <div
   class="app vz-{settings.visualizer}"

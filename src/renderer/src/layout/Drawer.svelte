@@ -2,9 +2,20 @@
 <script lang="ts">
   import Queue from '../parts/Queue.svelte'
   import { layout } from '../stores/layout.svelte'
+
+  let el: HTMLDivElement | undefined = $state()
+
+  // Closing with focus inside makes it inert and drops the focus, so the
+  // queue button in the slot takes it. .pre: before inert is set.
+  $effect.pre(() => {
+    if (layout.showQueue || !el?.contains(document.activeElement)) return
+    queueMicrotask(() =>
+      document.querySelector<HTMLElement>('[data-slot] [data-act="queue"]')?.focus()
+    )
+  })
 </script>
 
-<div class="drawer" class:open={layout.showQueue} inert={!layout.showQueue}>
+<div class="drawer" bind:this={el} class:open={layout.showQueue} inert={!layout.showQueue}>
   <div class="part part-queue"><Queue header close /></div>
 </div>
 

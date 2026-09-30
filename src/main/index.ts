@@ -151,6 +151,7 @@ page.on(SettingsChannel.save, (_, raw, toFile) => {
 page.handle(LibraryChannel.load, () => library.load())
 page.handle(LibraryChannel.get, () => library.library())
 page.handle(LibraryChannel.addFolder, (e) => library.addFolder(senderWindow(e)))
+page.handle(LibraryChannel.addDropped, (_, paths) => library.addDropped(paths))
 page.on(LibraryChannel.removeFolder, (_, path) => library.removeFolder(path))
 page.on(LibraryChannel.rescan, () => library.scan(true))
 page.on(LibraryChannel.setArtists, (_, changes) => library.setArtists(changes))

@@ -110,7 +110,7 @@
           {#if confirmDelete}
             <button class="pill danger" onclick={() => playlists.remove(id)}>Delete playlist</button
             >
-            <button class="pill ghost" onclick={() => (confirmDelete = false)}>Keep</button>
+            <button class="pill ghost" onclick={() => (confirmDelete = false)}>Cancel</button>
           {:else}
             <button class="pill ghost" onclick={() => (confirmDelete = true)}>Delete</button>
           {/if}

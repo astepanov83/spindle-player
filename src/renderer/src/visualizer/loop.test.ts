@@ -45,16 +45,26 @@ const doc = {
 }
 vi.stubGlobal('document', doc)
 
-// devicePixelRatio and the query that watches it
+// devicePixelRatio and the query that watches it, and the reduced motion setting
 let dprChange: (() => void) | undefined
 const queries: string[] = []
+const calm = { matches: false, change: undefined as (() => void) | undefined }
 vi.stubGlobal('window', { devicePixelRatio: 1 })
-vi.stubGlobal('matchMedia', (q: string) => ({
-  addEventListener: (_: string, fn: () => void) => {
-    queries.push(q)
-    dprChange = fn
-  }
-}))
+vi.stubGlobal('matchMedia', (q: string) =>
+  q === '(prefers-reduced-motion: reduce)'
+    ? {
+        get matches() {
+          return calm.matches
+        },
+        addEventListener: (_: string, fn: () => void) => (calm.change = fn)
+      }
+    : {
+        addEventListener: (_: string, fn: () => void) => {
+          queries.push(q)
+          dprChange = fn
+        }
+      }
+)
 
 const { addStage, setLook } = await import('./loop')
 type StageHandle = ReturnType<typeof addStage>
@@ -298,6 +308,27 @@ describe('the frame loop', () => {
     s.h.moved()
     frame()
     expect(fake.log.filter((l) => l.startsWith('read'))).toEqual(['read a'])
+  })
+
+  it('with reduced motion, draws the resting look once while playing, with no glow', () => {
+    shownStage()
+    setLook({ style: 'ring', colors, playing: true })
+    runOut(20)
+    expect(meter.levels.some((v) => v > 0)).toBe(true)
+    calm.matches = true
+    calm.change!()
+    fake.log = []
+    expect(runOut()).toBe(1)
+    expect(meter.levels.every((v) => v === 0)).toBe(true)
+    expect(fake.log).toEqual(['set a --bass 0.000', 'draw a 200'])
+    // a new song or style still draws once, and nothing moves after
+    setLook({ style: 'spectrum', colors, playing: true })
+    expect(runOut()).toBe(1)
+    expect(meter.levels.every((v) => v === 0)).toBe(true)
+    calm.matches = false
+    calm.change!()
+    for (let i = 0; i < 10; i++) expect(frame()).toBe(true)
+    expect(meter.levels.some((v) => v > 0)).toBe(true)
   })
 
   it('sets --bass only when it changes', () => {

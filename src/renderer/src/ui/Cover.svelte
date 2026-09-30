@@ -4,16 +4,21 @@
 
   // a cover the cache lost shows the plain tile, not a broken image
   let failed = $state('')
+  // A plain tile until the picture is in, so a station's logo from the web
+  // doesn't show as a blank gap first. Taken away after, for logos with holes.
+  let loaded = $state('')
 </script>
 
 {#if src && failed !== src}
   <img
     class="cover"
+    class:wait={loaded !== src}
     {src}
     alt=""
     loading="lazy"
     decoding="async"
     draggable="false"
+    onload={() => (loaded = src)}
     onerror={() => (failed = src)}
   />
 {:else}
@@ -35,6 +40,9 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  .wait {
+    background: var(--field);
   }
   .none {
     display: grid;

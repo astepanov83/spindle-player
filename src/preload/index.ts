@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   LibraryChannel,
   PlaybackChannel,
@@ -23,7 +23,8 @@ import { mergeMoves, type IdMoves } from '../shared/id-moves'
 import { keepEarly } from './early'
 import type { ScanStatus } from '../shared/library'
 
-// The window is sandboxed, so this file may only use contextBridge and ipcRenderer.
+// The window is sandboxed, so this file may only use contextBridge, ipcRenderer
+// and webUtils.
 
 // Typed from PageChannels, like main's handlers, so both sides agree.
 function invoke<K extends InvokeChannel>(
@@ -68,6 +69,19 @@ function latest<T>(
   return keepEarly<T>((onValue) => ipcRenderer.on(channel, (_, value: T) => onValue(value)), merge)
 }
 
+// Paths only for files dragged in from the system: a file the page made
+// itself has none, so the page can't name a path for main to add.
+function droppedPaths(files: unknown): string[] {
+  if (!Array.isArray(files)) return []
+  return files.map((f) => {
+    try {
+      return webUtils.getPathForFile(f)
+    } catch {
+      return ''
+    }
+  })
+}
+
 const onLibraryChanged = latest<Uint8Array>(LibraryChannel.changed)
 const onScanStatus = latest<ScanStatus>(LibraryChannel.status)
 // each map matters, so two that come early are joined
@@ -77,6 +91,7 @@ const libraryApi: LibraryApi = {
   load: () => library,
   get: () => invoke(LibraryChannel.get),
   addFolder: () => invoke(LibraryChannel.addFolder),
+  addDropped: (files) => invoke(LibraryChannel.addDropped, droppedPaths(files)),
   removeFolder: (path) => send(LibraryChannel.removeFolder, path),
   rescan: () => send(LibraryChannel.rescan),
   setArtists: (changes) => send(LibraryChannel.setArtists, changes),

@@ -45,6 +45,8 @@ export const LibraryChannel = {
   // the whole library now, for a page that missed a patch
   get: 'library:get',
   addFolder: 'library:add-folder',
+  // folders dropped on the window, as paths the preload got from the files
+  addDropped: 'library:add-dropped',
   removeFolder: 'library:remove-folder',
   rescan: 'library:rescan',
   setArtists: 'library:set-artists',
@@ -55,6 +57,14 @@ export const LibraryChannel = {
   // main to page: track ids that changed, sent before the library that has them
   idsMoved: 'library:ids-moved'
 } as const
+
+// What came of a drop: the folders added, and how many were music folders
+// already or were not folders at all (files, or paths that are gone).
+export interface DropResult {
+  added: string[]
+  known: number
+  other: number
+}
 
 // What the preload exposes to the page as `window.libraryApi`.
 // Main owns the folder list and the index; the page only asks.
@@ -70,6 +80,8 @@ export interface LibraryApi {
   get(): Promise<Uint8Array>
   // opens the folder picker; resolves once the choice is saved
   addFolder(): Promise<void>
+  // files dropped on the window: the folders among them become music folders
+  addDropped(files: File[]): Promise<DropResult>
   removeFolder(path: string): void
   rescan(): void
   // rename or split artists (ticket 024); the library comes back with them
@@ -222,6 +234,8 @@ export interface PageChannels {
   [LibraryChannel.get]: LibraryApi['get']
   [LibraryChannel.addFolder]: LibraryApi['addFolder']
   [LibraryChannel.removeFolder]: LibraryApi['removeFolder']
+  // the preload turns the page's files into paths (webUtils.getPathForFile)
+  [LibraryChannel.addDropped]: (paths: string[]) => Promise<DropResult>
   [LibraryChannel.rescan]: LibraryApi['rescan']
   [LibraryChannel.setArtists]: LibraryApi['setArtists']
   [PlaylistChannel.load]: PlaylistsApi['load']

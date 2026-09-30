@@ -8,6 +8,7 @@ import {
   seekStep,
   sliderKey,
   spaceAction,
+  tabStep,
   usesArrows,
   volumeStep
 } from './keys'
@@ -244,4 +245,22 @@ describe('radioStep', () => {
     expect(radioStep('End', 0, 3)).toBe(2)
   })
   it('ignores other keys', () => expect(radioStep('Enter', 1, 3)).toBe(null))
+})
+
+describe('tabStep', () => {
+  it('moves with Left and Right and wraps around', () => {
+    expect(tabStep('ArrowRight', 0, 2)).toBe(1)
+    expect(tabStep('ArrowRight', 1, 2)).toBe(0)
+    expect(tabStep('ArrowLeft', 0, 2)).toBe(1)
+  })
+  it('goes to the ends with Home and End', () => {
+    expect(tabStep('Home', 1, 3)).toBe(0)
+    expect(tabStep('End', 0, 3)).toBe(2)
+  })
+  // the tabs lie in a row, so Up and Down still set the volume
+  it('leaves Up, Down and other keys alone', () => {
+    expect(tabStep('ArrowUp', 1, 2)).toBe(null)
+    expect(tabStep('ArrowDown', 0, 2)).toBe(null)
+    expect(tabStep('Enter', 0, 2)).toBe(null)
+  })
 })

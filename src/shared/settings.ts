@@ -37,7 +37,8 @@ export interface StoredSettings extends Settings {
   windowSizes: Partial<Record<TemplateId, Size>>
   // none until the window was first closed or moved; then it opens there again
   windowPlace: WindowPlace | null
-  // music folders, absolute paths. Only main changes them (through the folder picker).
+  // music folders, absolute paths. Only main changes them: through the folder
+  // picker, or a folder dropped on the window (checked in main/library/dropped.ts).
   folders: string[]
 }
 

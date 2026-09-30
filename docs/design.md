@@ -123,6 +123,8 @@ Tab into a list lands on the row last focused, else the playing song, else the f
 
 Settings' segmented choices (Layout, Queue, Visualizer, Theme) are radio groups: one Tab stop each, and the arrows, Home and End pick the next choice.
 
+The Now playing / Queue tabs are a tab row: one Tab stop, and ← / →, Home and End pick the next tab. ↑ / ↓ still set the volume there.
+
 The seek bar is a slider: ← / ↓ and → / ↑ move 5 s, Page Up / Page Down 30 s, Home / End go to the start and end.
 
 Focus:

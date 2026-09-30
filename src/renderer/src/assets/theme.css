@@ -31,6 +31,8 @@
   /* marks drawn on a cover picture (the eq on a thumbnail), the same in both themes */
   --on-cover: #fff;
   --on-cover-shadow: rgba(0, 0, 0, 0.8);
+  /* how strong a played queue row is; light needs more for the same contrast */
+  --past: 0.45;
   /* album color strength: tint areas and the Focus wash */
   --tint: 70%;
   /* main is made no lighter than this before it goes into a tint, so a pale
@@ -85,6 +87,7 @@
     --shadow: rgba(30, 32, 40, 0.25);
     --live: #d42a20;
     --warn: #b86e00;
+    --past: 0.62;
     --tint: 35%;
     --tint-max-l: 1;
     --wash-top: 45%;

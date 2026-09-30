@@ -412,7 +412,7 @@
     color: var(--ink);
   }
   .past {
-    opacity: 0.45;
+    opacity: var(--past);
   }
   /* a played row with focus shows its mark at full strength */
   .past:hover {

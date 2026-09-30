@@ -16,6 +16,9 @@ export const icons = {
   repeat: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z',
   vol: 'M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z',
   viz: 'M3 13h2v7H3zm4-5h2v12H7zm4-4h2v16h-2zm4 7h2v9h-2zm4-3h2v12h-2z',
+  // the same bars, crossed out, with a gap each side of the line
+  vizOff:
+    'M3 13h2v7H3zm4-3.2 2 2V20H7zm4-5.8h2v6.2l-2-2zm0 9.8 2 2V20h-2zm4-2.8h2v3.2l-2-2zm0 6.8 2 2v.2h-2zm4-9.8h2v10.2l-2-2zM3.4 2 22 20.6 20.6 22 2 3.4z',
   queue: 'M3 6h13v2H3zm0 5h13v2H3zm0 5h9v2H3zm14-1V9l5 4z',
   close:
     'M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z',

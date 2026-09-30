@@ -34,7 +34,7 @@
             <button class="sm pill danger" disabled={locked} onclick={() => remove(f)}
               >Remove folder</button
             >
-            <button class="sm pill ghost" onclick={() => (asking = null)}>Keep</button>
+            <button class="sm pill ghost" onclick={() => (asking = null)}>Cancel</button>
           {:else}
             <button
               class="rm"

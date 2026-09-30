@@ -1,9 +1,10 @@
 // Main's side of the library. The library process owns the index and does the
 // heavy work; main passes messages on, runs the folder dialog, and makes covers.
 // The bookkeeping (replies, the scan asked for, the status) is in library-client.ts.
+import { stat } from 'fs/promises'
 import { join } from 'path'
 import { app, dialog, utilityProcess, type BrowserWindow } from 'electron'
-import { LibraryChannel } from '../../shared/ipc'
+import { LibraryChannel, type DropResult } from '../../shared/ipc'
 import type { IdMoves } from '../../shared/id-moves'
 import type { ScanStatus } from '../../shared/library'
 import { parseChanges } from '../../shared/artist-overrides'
@@ -11,6 +12,7 @@ import type { CoverSource } from '../../shared/settings'
 import { ffmpegTool } from '../ffmpeg-path'
 import type { SettingsStore } from '../settings-store'
 import { CoverCache } from './cover-cache'
+import { addDropped } from './dropped'
 import { LibraryClient } from './library-client'
 import { LibraryProcess } from './library-process'
 import { RestartBudget } from './restart'
@@ -198,6 +200,16 @@ export class LibraryService {
     const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     if (r.canceled || !r.filePaths.length) return
     this.#setFolders([...this.store.get().folders, ...r.filePaths])
+  }
+
+  // Folders dropped on the window (ticket 047). Only folders that exist are added.
+  addDropped(paths: unknown): Promise<DropResult> {
+    const isDir = (p: string): Promise<boolean> =>
+      stat(p).then(
+        (s) => s.isDirectory(),
+        () => false
+      )
+    return addDropped(paths, this.store, isDir, (f) => this.#setFolders(f))
   }
 
   removeFolder(path: unknown): void {

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import type { DropResult } from '../../../shared/ipc'
 import type { ScanStatus } from '../../../shared/library'
 import {
   canRescan,
+  dropText,
   fetchBusy,
   fetchLine,
   libraryProblem,
@@ -273,5 +275,30 @@ describe('pathEnds', () => {
     expect(pathEnds('C:\\Users\\me\\Music')).toEqual(['C:\\Users\\me', '\\Music'])
     expect(pathEnds('/')).toEqual(['', '/'])
     expect(pathEnds('music')).toEqual(['', 'music'])
+  })
+})
+
+describe('dropText', () => {
+  const r = (over: Partial<DropResult>): DropResult => ({ added: [], known: 0, other: 0, ...over })
+
+  it('names one folder added, or counts several', () => {
+    expect(dropText(r({ added: ['/music/Jazz'] }))).toBe('Added Jazz to music folders')
+    expect(dropText(r({ added: ['/music/Jazz', '/music/Rock'], other: 2 }))).toBe(
+      'Added 2 music folders'
+    )
+  })
+
+  it('says when the folders were there already', () => {
+    expect(dropText(r({ known: 1 }))).toBe('That folder is a music folder already')
+    expect(dropText(r({ known: 2 }))).toBe('Those folders are music folders already')
+    expect(dropText(r({ known: 1, other: 1 }))).toBe('That folder is a music folder already')
+  })
+
+  it('says only folders are taken when no folder came', () => {
+    expect(dropText(r({ other: 3 }))).toBe('Drop a folder to add it to music folders')
+  })
+
+  it('says nothing when nothing came', () => {
+    expect(dropText(r({}))).toBeUndefined()
   })
 })

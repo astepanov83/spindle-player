@@ -88,6 +88,8 @@
     if (!on) return
     node.focus()
     node.select()
+    // select() shows the end of a long name; its start reads better
+    node.scrollLeft = 0
   }
 
   const tagNote = (t: ArtistTag): string =>
@@ -126,7 +128,9 @@
         <button class="add" onclick={() => (draft = [...draft, ''])}
           ><Icon name="plus" size={14} />Add artist</button
         >
-        <div class="hint">One name renames. Two or more split this artist into several.</div>
+        <div class="hint">
+          Change the name to rename this artist. To split it into several, add a name for each.
+        </div>
       </div>
     {:else}
       <h2 class="page-title" title={a.name}>{a.name}</h2>
@@ -249,6 +253,7 @@
     flex-direction: column;
     gap: 6px;
     align-items: flex-start;
+    margin-bottom: 12px;
   }
   .name-row {
     display: flex;

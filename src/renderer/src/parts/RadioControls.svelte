@@ -60,10 +60,17 @@
   <span class="time" class:off={radio.status === 'off'} title="Time listened">{listened}</span>
 {/snippet}
 
-{#snippet save()}
+<!-- The star alone in the stack, where the row has no room for the word;
+     the same star as on the Radio list. -->
+{#snippet save(word: boolean)}
   {#if radio.station && !radio.saved}
-    <button class="save chip" title="Add to My stations" onclick={() => radio.save()}
-      ><Icon name="star" size={16} />Save</button
+    <button
+      class="save chip"
+      class:icon={!word}
+      title="Add to My stations"
+      aria-label={word ? undefined : 'Add to My stations'}
+      onclick={() => radio.save()}
+      ><Icon name="star" size={16} />{#if word}Save{/if}</button
     >
   {/if}
 {/snippet}
@@ -77,7 +84,7 @@
         <div class="song-title" title={playing.title}><PlayingText line="title" /></div>
         <div class="song-sub" title={playing.sub}><PlayingText line="sub" /></div>
       </div>
-      {@render save()}
+      {@render save(true)}
     </div>
     <div class="bc">
       {@render stopPlay()}
@@ -101,7 +108,7 @@
       {@render live()}
       <span class="gap"></span>
       <StreamPicker />
-      {@render save()}
+      {@render save(false)}
     </div>
     <div class="center">{@render stopPlay()}</div>
     <div class="btnrow">
@@ -185,6 +192,9 @@
     color: var(--ink);
     font-weight: 600;
     flex: none;
+  }
+  .save.icon {
+    padding: 5px;
   }
 
   .stack {

@@ -168,3 +168,10 @@ export function radioStep(key: string, i: number, count: number): number | null 
   if (!(key in by)) return null
   return (i + by[key] + count) % count
 }
+
+// A row of tabs (Now playing / Queue): Left and Right go round. Up and Down
+// are left to the volume, since the tabs lie in a row.
+export function tabStep(key: string, i: number, count: number): number | null {
+  if (key === 'ArrowUp' || key === 'ArrowDown') return null
+  return radioStep(key, i, count)
+}

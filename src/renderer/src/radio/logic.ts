@@ -192,10 +192,13 @@ export function stationMatches(s: Station, q: string): boolean {
   return [s.name, ...s.tags, s.country ?? ''].some((x) => x.toLowerCase().includes(t))
 }
 
-// "64 128 320": the station's known bitrates, lowest first.
+// "64-320 kbps": the lowest to the highest known bitrate; the picker lists them all.
 export function bitrateLine(s: Station): string {
-  const rates = new Set(s.streams.map((x) => x.bitrate).filter((b): b is number => !!b))
-  return [...rates].sort((a, b) => a - b).join(' ')
+  const rates = s.streams.map((x) => x.bitrate).filter((b): b is number => !!b)
+  if (!rates.length) return ''
+  const lo = Math.min(...rates)
+  const hi = Math.max(...rates)
+  return lo === hi ? `${hi} kbps` : `${lo}-${hi} kbps`
 }
 
 // "ambient, drone · us" under the station's name.

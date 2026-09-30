@@ -1,5 +1,7 @@
 // The scan status lines for the settings sheet and the empty library.
+import type { DropResult } from '../../../shared/ipc'
 import type { FetchStatus, ScanStatus } from '../../../shared/library'
+import { rootName } from './folders'
 
 const n = (x: number): string => x.toLocaleString('en-US')
 const plural = (x: number, one: string, many: string): string => `${n(x)} ${x === 1 ? one : many}`
@@ -132,4 +134,14 @@ export function pathEnds(path: string): [string, string] {
 // The last folder of a path, for a line too short for all of it.
 function folderName(path: string): string {
   return pathEnds(path)[1].replace(/^[/\\]|[/\\]$/g, '') || path
+}
+
+// The notice after folders were dropped on the window (ticket 047).
+export function dropText(r: DropResult): string | undefined {
+  if (r.added.length === 1) return `Added ${rootName(r.added[0])} to music folders`
+  if (r.added.length) return `Added ${n(r.added.length)} music folders`
+  if (r.known === 1) return 'That folder is a music folder already'
+  if (r.known) return 'Those folders are music folders already'
+  if (r.other) return 'Drop a folder to add it to music folders'
+  return undefined
 }

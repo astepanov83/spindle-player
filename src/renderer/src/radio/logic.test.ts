@@ -277,8 +277,12 @@ describe('Radio view rows (ticket 029)', () => {
     expect(stationMatches(s, 'metal')).toBe(false)
   })
 
-  it('lists the known bitrates once, lowest first', () => {
-    expect(bitrateLine(s)).toBe('64 128 320')
+  it('gives the lowest to the highest known bitrate, with its unit', () => {
+    expect(bitrateLine(s)).toBe('64-320 kbps')
+    expect(bitrateLine({ ...s, streams: [{ url: 'https://x/1', bitrate: 128 }] })).toBe('128 kbps')
+    expect(bitrateLine({ ...s, streams: s.streams.slice(0, 1).concat(s.streams[3]) })).toBe(
+      '128 kbps'
+    )
     expect(bitrateLine({ ...s, streams: [{ url: 'https://x/3' }] })).toBe('')
   })
 

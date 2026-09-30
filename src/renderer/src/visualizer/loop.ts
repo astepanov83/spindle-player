@@ -3,7 +3,8 @@
 // each stage directly. The stores only tell it what changed.
 //
 // It runs only while something moves: it stops once paused and settled, when
-// the window is hidden or minimized, with the style Off, or with no stage on screen.
+// the window is hidden or minimized, with the style Off, with no stage on
+// screen, or with reduced motion.
 //
 // Stage sizes come from a ResizeObserver (Stage.svelte), not from reading the
 // layout each frame. The cover's place is read only after something moved it,
@@ -167,6 +168,15 @@ function watchDpr(): void {
 }
 watchDpr()
 
+// Reduced motion: the stage keeps its resting look and the cover no glow,
+// drawn once for each change (a song, a style, a size), like when paused.
+const calmQuery = matchMedia('(prefers-reduced-motion: reduce)')
+let calm = calmQuery.matches
+calmQuery.addEventListener('change', () => {
+  calm = calmQuery.matches
+  wake()
+})
+
 document.addEventListener('visibilitychange', () => {
   if (hidden()) sleep()
   else wake()
@@ -204,11 +214,14 @@ function frame(now: number): void {
   raf = 0
   const { style, colors, playing } = look
   const on = style !== 'off'
-  if (on && playing) readAnalyser(style)
+  const moving = playing && !calm
+  if (on && moving) readAnalyser(style)
+  else if (calm) clear(meter)
   else if (on) rest(meter, motions[style])
-  const still = !playing && settle(meter)
+  const still = !moving && settle(meter)
   const bass = on ? Math.round(Math.min(1, bassLevel(meter.levels)) * 1000) : 0
-  const busy = now < busyUntil
+  // the cover doesn't change size slowly with reduced motion (Stage.svelte)
+  const busy = !calm && now < busyUntil
 
   // reads first
   let shown = false

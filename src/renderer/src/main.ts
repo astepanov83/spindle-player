@@ -18,7 +18,7 @@ import { playing } from './stores/playing.svelte'
 import { queue } from './stores/queue.svelte'
 import { radio } from './stores/radio.svelte'
 import { loadSettings } from './stores/settings.svelte'
-import { ScanWatch } from './library/scan-text'
+import { dropText, ScanWatch } from './library/scan-text'
 import { orFallback } from './start'
 import { emptyQueue } from '../../shared/saved-queue'
 import { defaultSettings } from '../../shared/settings'
@@ -32,10 +32,23 @@ import {
   type IdMoves
 } from '../../shared/id-moves'
 
-// A file dropped on the window would replace the app (main blocks that too).
-// Nothing in the page takes drops yet.
-for (const type of ['dragover', 'drop'] as const)
-  window.addEventListener(type, (e) => e.preventDefault())
+// A file dropped on the window would replace the app (main blocks that too),
+// so the page takes every drop itself. Only files from the system count:
+// the folders among them become music folders (main checks each path).
+window.addEventListener('dragover', (e) => {
+  e.preventDefault()
+  if (e.dataTransfer)
+    e.dataTransfer.dropEffect = e.dataTransfer.types.includes('Files') ? 'copy' : 'none'
+})
+window.addEventListener('drop', (e) => {
+  e.preventDefault()
+  const files = [...(e.dataTransfer?.files ?? [])]
+  if (!files.length) return
+  void window.libraryApi.addDropped(files).then((r) => {
+    const text = dropText(r)
+    if (text) notice.show(text)
+  })
+})
 
 // Settings and the library first, so the first paint already shows the saved
 // template and the albums. The window stays hidden until then, so the wait doesn't show.

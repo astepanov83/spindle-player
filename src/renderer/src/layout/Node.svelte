@@ -7,9 +7,21 @@
   import NowPlaying from '../parts/NowPlaying.svelte'
   import Queue from '../parts/Queue.svelte'
   import { layout } from '../stores/layout.svelte'
+  import { tabStep } from '../keys'
   import type { BuiltNode } from './build'
 
   let { node }: { node: BuiltNode } = $props()
+  const uid = $props.id()
+
+  // One Tab stop; Left and Right pick the next tab, as in any tab row.
+  function ontabkey(e: KeyboardEvent & { currentTarget: HTMLElement }, i: number): void {
+    if (node.kind !== 'tabs' || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+    const to = tabStep(e.key, i, node.labels.length)
+    if (to === null) return
+    e.preventDefault()
+    layout.tabSel = to
+    ;(e.currentTarget.parentElement?.children[to] as HTMLElement | undefined)?.focus()
+  }
 </script>
 
 {#snippet drawer()}
@@ -36,15 +48,29 @@
 {:else if node.kind === 'tabs'}
   <div class="tabsbox" class:dhost={node.drawer} style:flex={node.flex}>
     <!-- Focus's notice sits under it (ui/Notice.svelte) -->
-    <div class="tabstrip" data-notice-under>
+    <div class="tabstrip" role="tablist" data-notice-under>
       {#each node.labels as label, i (i)}
-        <button aria-pressed={layout.tabSel === i} onclick={() => (layout.tabSel = i)}
-          >{label}</button
+        <button
+          role="tab"
+          id="{uid}-tab{i}"
+          aria-selected={layout.tabSel === i}
+          aria-controls="{uid}-pane{i}"
+          tabindex={layout.tabSel === i ? 0 : -1}
+          onclick={() => (layout.tabSel = i)}
+          onkeydown={(e) => ontabkey(e, i)}>{label}</button
         >
       {/each}
     </div>
     {#each node.panes as pane, i (i)}
-      <div class="tabpane" hidden={layout.tabSel !== i}><Node node={pane} /></div>
+      <div
+        class="tabpane"
+        role="tabpanel"
+        id="{uid}-pane{i}"
+        aria-labelledby="{uid}-tab{i}"
+        hidden={layout.tabSel !== i}
+      >
+        <Node node={pane} />
+      </div>
     {/each}
     {@render drawer()}
   </div>
@@ -215,7 +241,7 @@
     background: var(--hover);
     color: var(--ink);
   }
-  .tabstrip button[aria-pressed='true'] {
+  .tabstrip button[aria-selected='true'] {
     background: var(--raised);
     color: var(--ink);
   }

@@ -92,18 +92,18 @@
   {/if}
 </div>
 <div class="tbl">
-  <div class="th">
+  <!-- The rows are buttons in a list, not a table, so the heads are sort
+       buttons, not column headers; each says how it sorts. -->
+  <div class="th" role="group" aria-label="Sort songs">
     <span></span>
     {#each cols as [k, label] (k)}
       {@const on = sort?.k === k}
-      <span
-        role="columnheader"
-        class="h-{k}"
-        class:end={k === 'd'}
-        aria-sort={on ? (sort?.dir === 1 ? 'ascending' : 'descending') : undefined}
-      >
-        <button class:on onclick={() => onsort(k)}
-          >{label}{on ? (sort?.dir === 1 ? ' ↑' : ' ↓') : ''}</button
+      <span class="h-{k}" class:end={k === 'd'}>
+        <button
+          class:on
+          aria-pressed={on}
+          aria-label="{label}{on ? (sort?.dir === 1 ? ', ascending' : ', descending') : ''}"
+          onclick={() => onsort(k)}>{label}{on ? (sort?.dir === 1 ? ' ↑' : ' ↓') : ''}</button
         >
       </span>
     {/each}

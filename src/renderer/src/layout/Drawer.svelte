@@ -25,7 +25,9 @@
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(360px, 92%);
+    /* 360px, or the whole host when that would leave a strip under 120px
+       (Focus): a strip only showed a slice of the stage. */
+    width: min(100%, max(360px, min(100%, (480px - 100%) * 1000)));
     z-index: 6;
     background: var(--panel);
     backdrop-filter: blur(20px);

@@ -9,10 +9,9 @@
   import { playing } from '../stores/playing.svelte'
   import { settings } from '../stores/settings.svelte'
   import { addStage } from './loop'
+  import { vzLabel, vzNames } from './names'
 
   let { cover = true }: { cover?: boolean } = $props()
-
-  const names = { ring: 'Ring', spectrum: 'Spectrum', wave: 'Wave', off: 'Visualizer off' }
 
   let stage: HTMLDivElement
   let canvas: HTMLCanvasElement
@@ -45,7 +44,8 @@
   })
 </script>
 
-<div class="vstage" bind:this={stage}>
+<!-- the bar's small stage has no cover to say what it is -->
+<div class="vstage" bind:this={stage} title={cover ? undefined : vzLabel(settings.visualizer)}>
   <canvas bind:this={canvas}></canvas>
   {#if cover}
     <!-- the cover changes size with the style, so draw again when it settles -->
@@ -53,7 +53,9 @@
       <div class="img"><Cover src={playing.art?.coverLarge} /></div>
     </div>
   {/if}
-  <div class="vz-label" class:show={layout.vzLabel}>{names[settings.visualizer]}</div>
+  <div class="vz-label" class:show={layout.vzLabel}>
+    {settings.visualizer === 'off' ? vzLabel('off') : vzNames[settings.visualizer]}
+  </div>
 </div>
 
 <style>

@@ -174,6 +174,12 @@
   .card .qp:active {
     transform: scale(0.96);
   }
+  /* A set line height: with the default one, a Japanese fallback font makes
+     its line taller, so its names sat lower than the others in the row. */
+  .t,
+  .a {
+    line-height: 1.3;
+  }
   .t {
     font-size: var(--text-m);
     font-weight: 600;
@@ -191,5 +197,13 @@
     font-size: var(--text-s);
     color: var(--ink-2);
     margin-top: -5px;
+  }
+  /* no lift or slide with reduced motion; the play button still fades in */
+  @media (prefers-reduced-motion: reduce) {
+    .card:hover .cv,
+    .qp,
+    .card .qp:hover {
+      transform: none;
+    }
   }
 </style>

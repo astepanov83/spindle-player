@@ -14,6 +14,7 @@
   import { templateIds, templates } from '../../../shared/templates'
   import { layout } from '../stores/layout.svelte'
   import { settings } from '../stores/settings.svelte'
+  import { vzNames } from '../visualizer/names'
 
   const queueNames: Record<QueueMode, string> = { tab: 'Tab', drawer: 'Drawer', col: 'Column' }
   const queueHints: Record<QueueMode, string> = {
@@ -25,12 +26,6 @@
   // a Column drawn as a Drawer in a narrow window (layout/narrow.ts)
   const narrowHint =
     'The queue gets its own column when the window is wider. Until then it slides in from the right, from the queue button.'
-  const vzNames: Record<VisualizerStyle, string> = {
-    ring: 'Ring',
-    spectrum: 'Spectrum',
-    wave: 'Wave',
-    off: 'Off'
-  }
   const themeNames: Record<ThemeChoice, string> = { dark: 'Dark', light: 'Light', system: 'System' }
 
   let el: HTMLDivElement | undefined = $state()
@@ -135,6 +130,17 @@
     from {
       opacity: 0;
       transform: translateY(8px);
+    }
+  }
+  /* a fade, not a movement */
+  @media (prefers-reduced-motion: reduce) {
+    .settings {
+      animation-name: fadein;
+    }
+  }
+  @keyframes fadein {
+    from {
+      opacity: 0;
     }
   }
   .top {

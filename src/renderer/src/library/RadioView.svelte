@@ -63,7 +63,14 @@
     oncontextmenu={isSaved && !result ? (e) => openMenu(e, s) : undefined}
   >
     <button class="main" class:cur={on} title={s.name} onclick={() => play(s)}>
-      <Thumb src={logo(s, result)} size={44} radius={6} eq={on} />
+      <!-- bars only while sound comes out; a dot while it connects or recovers -->
+      <Thumb
+        src={logo(s, result)}
+        size={44}
+        radius={6}
+        eq={on && radio.status === 'live'}
+        busy={on && radio.status !== 'live' && radio.status !== 'off'}
+      />
       <span class="txt">
         <span class="nm">{s.name}</span>
         {#if line}<span class="sub">{line}</span>{/if}

@@ -1,5 +1,6 @@
 <!-- Radio's controls: no seek, Next, Previous, Shuffle or Repeat (decision 150).
-     LIVE and the time listened, the stream picker, stop and play, and Save. -->
+     The status (LIVE, CONNECTING, BUFFERING, RECONNECTING) and the time listened,
+     the stream picker, stop and play, and Save. -->
 <script lang="ts">
   import Cover from '../ui/Cover.svelte'
   import Icon from '../ui/Icon.svelte'
@@ -12,7 +13,7 @@
   import { fmtClock } from '../format'
   import { player } from '../stores/player.svelte'
   import { playing } from '../stores/playing.svelte'
-  import { radio } from '../stores/radio.svelte'
+  import { radio, type RadioStatus } from '../stores/radio.svelte'
 
   let { style }: { style: 'stack' | 'bar' } = $props()
 
@@ -23,6 +24,14 @@
     return () => clearInterval(t)
   })
   const listened = $derived(fmtClock(radio.listened(now) / 1000))
+
+  const label: Record<RadioStatus, string> = {
+    off: 'LIVE',
+    connecting: 'CONNECTING',
+    live: 'LIVE',
+    buffering: 'BUFFERING',
+    reconnecting: 'RECONNECTING'
+  }
 </script>
 
 <!-- Stop, since it closes the connection; play opens a new one at the live edge.
@@ -36,7 +45,15 @@
 {/snippet}
 
 {#snippet live()}
-  <span class="live" class:on={radio.sounding}><span class="dot">●</span> LIVE</span>
+  <span class="status {radio.status}" title={radio.statusDetail(now)}>
+    <span class="dot">●</span>
+    <!-- every word in one cell, so the space fits the widest and nothing moves -->
+    <span class="words" aria-live="polite">
+      {#each Object.entries(label) as [s, word] (s)}
+        <span class:shown={s === radio.status}>{word}</span>
+      {/each}
+    </span>
+  </span>
   <span class="time" title="Time listened">{listened}</span>
 {/snippet}
 
@@ -94,19 +111,50 @@
 {/if}
 
 <style>
-  .live {
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.08em;
     color: var(--ink-3);
     white-space: nowrap;
   }
-  .live.on {
+  .words {
+    display: inline-grid;
+  }
+  .words > span {
+    grid-area: 1 / 1;
+    visibility: hidden;
+  }
+  .words > .shown {
+    visibility: visible;
+  }
+  .status:not(.off) {
     color: var(--ink);
   }
   /* red while sound comes out */
-  .live.on .dot {
+  .status.live .dot {
     color: var(--live);
+  }
+  .connecting .dot {
+    color: var(--ink-3);
+  }
+  .buffering .dot,
+  .reconnecting .dot {
+    color: var(--warn);
+  }
+  /* a fade, not a movement, so it stays with reduced motion too */
+  .connecting .dot,
+  .buffering .dot,
+  .reconnecting .dot {
+    animation: pulse 0.9s ease-in-out infinite alternate;
+  }
+  @keyframes pulse {
+    to {
+      opacity: 0.2;
+    }
   }
   .time {
     font-size: 12px;

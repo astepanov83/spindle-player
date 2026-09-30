@@ -20,7 +20,8 @@ import {
   nextStream,
   parseTitle,
   radioUrl,
-  retryDelayMs
+  retryDelayMs,
+  streamChoices
 } from '../radio/logic'
 import { notice } from './notice.svelte'
 import { player } from './player.svelte'
@@ -30,8 +31,13 @@ const stallMs = 8000
 // Before a connection's first sound: longer than main waits for the server
 // (10 s, stream.ts), so main's answer comes first and says what happened.
 const firstSoundMs = 12000
+// A stall shorter than this does not flash BUFFERING.
+const bufferingMs = 1000
 // failed retries of one stream before the next stream
 const retriesPerStream = 3
+
+// What the dot next to the controls' LIVE says.
+export type RadioStatus = 'off' | 'connecting' | 'live' | 'buffering' | 'reconnecting'
 
 class RadioStore {
   // My stations, in the user's order
@@ -56,6 +62,10 @@ class RadioStore {
   })
   // the station is in My stations; else the controls offer Save
   saved = $derived(!!this.station && this.stations.some((s) => s.id === this.station!.id))
+  status: RadioStatus = $state('off')
+  // the status's tooltip, and when the waiting retry starts
+  #detail = $state('')
+  #retryAt: number | undefined = $state()
 
   // Time listened to this station: ms with sound before now, and since when
   // sound comes out. Stop keeps it; another station starts from 0.
@@ -79,6 +89,7 @@ class RadioStore {
   #down = false
   #retryTimer: ReturnType<typeof setTimeout> | undefined
   #stallTimer: ReturnType<typeof setTimeout> | undefined
+  #bufferingTimer: ReturnType<typeof setTimeout> | undefined
   // logos main sent before My stations came, applied when they come
   #early: Map<string, StationLogo | undefined> | undefined = new Map()
   // stations main is saving now
@@ -89,6 +100,7 @@ class RadioStore {
     playing: () => {
       clearTimeout(this.#stallTimer)
       this.#soundStarts()
+      if (this.#wanted) this.#setStatus('live', `Live on ${this.#streamLabel()}`)
       this.#sound = true
       this.#retries = 0
       this.#reconnects = 0
@@ -100,6 +112,14 @@ class RadioStore {
       if (!this.#wanted) return
       clearTimeout(this.#stallTimer)
       const ms = this.#sound ? stallMs : firstSoundMs
+      // before the first sound it stays connecting or reconnecting
+      if (this.#sound && this.status === 'live') {
+        clearTimeout(this.#bufferingTimer)
+        this.#bufferingTimer = setTimeout(
+          () => this.#setStatus('buffering', 'Waiting for data from the station'),
+          bufferingMs
+        )
+      }
       this.#stallTimer = setTimeout(() => this.#lost(`no data for ${ms / 1000} s`), ms)
     },
     // the server closed the stream
@@ -145,6 +165,7 @@ class RadioStore {
   // Asks main for the station's streams, then opens one at the live edge.
   async play(station: Station): Promise<void> {
     const n = this.#start()
+    this.#setStatus('connecting', 'Finding the streams')
     // the song or the last station stops now, not when main answers
     engine.clear()
     const same = station.id === this.station?.id
@@ -162,6 +183,7 @@ class RadioStore {
     // play again after a pause keeps the stream it had
     if (!same || !known.streams[this.stream]) this.stream = firstStream(known)
     if (this.stream < 0) return this.#giveUp()
+    this.#setStatus('connecting', `Connecting to ${this.#streamLabel()}`)
     this.#connect()
   }
 
@@ -179,6 +201,7 @@ class RadioStore {
     clearTimeout(this.#retryTimer)
     clearTimeout(this.#stallTimer)
     player.playing = false
+    this.#setStatus('off', 'Stopped')
     this.#soundStops()
     engine.pause()
     window.radioApi.stop()
@@ -188,9 +211,11 @@ class RadioStore {
     return this.#wanted
   }
 
-  // sound comes out now: LIVE lights up
-  get sounding(): boolean {
-    return this.#soundSince !== undefined
+  // The status's tooltip. `now` comes from the controls' tick, so the wait
+  // before a retry counts down.
+  statusDetail(now = Date.now()): string {
+    if (this.#retryAt === undefined) return this.#detail
+    return `${this.#detail} in ${Math.max(1, Math.ceil((this.#retryAt - now) / 1000))} s`
   }
 
   // ms of sound from this station since it was picked
@@ -257,6 +282,7 @@ class RadioStore {
     clearTimeout(this.#retryTimer)
     clearTimeout(this.#stallTimer)
     engine.clear()
+    this.#setStatus('connecting', `Connecting to ${this.#streamLabel()}`)
     this.#connect()
   }
 
@@ -293,6 +319,20 @@ class RadioStore {
     )
   }
 
+  #setStatus(status: RadioStatus, detail: string, retryAt?: number): void {
+    // any change drops a BUFFERING still waiting to show
+    clearTimeout(this.#bufferingTimer)
+    this.status = status
+    this.#detail = detail
+    this.#retryAt = retryAt
+  }
+
+  // "320 kbps mp3", as the stream picker names it
+  #streamLabel(): string {
+    const streams = this.station?.streams ?? []
+    return streamChoices(streams).find((c) => c.index === this.stream)?.label ?? 'the stream'
+  }
+
   #soundStarts(): void {
     this.#soundSince ??= Date.now()
   }
@@ -319,6 +359,7 @@ class RadioStore {
   #lost(why: string): void {
     if (!this.#wanted || this.#down) return
     this.#down = true
+    this.#setStatus('reconnecting', 'Connection lost')
     this.#soundStops()
     clearTimeout(this.#retryTimer)
     clearTimeout(this.#stallTimer)
@@ -345,7 +386,14 @@ class RadioStore {
   #retry(): void {
     if (this.#retries >= retriesPerStream) return this.#nextStream()
     this.#retries++
-    this.#retryTimer = setTimeout(() => this.#connect(), retryDelayMs(this.#reconnects++))
+    const ms = retryDelayMs(this.#reconnects++)
+    const detail = `Retry ${this.#retries} of ${retriesPerStream} on ${this.#streamLabel()}`
+    this.#setStatus('reconnecting', detail, Date.now() + ms)
+    this.#retryTimer = setTimeout(() => {
+      // the wait is over; it stays reconnecting until sound comes
+      this.#setStatus('reconnecting', detail)
+      this.#connect()
+    }, ms)
   }
 
   #nextStream(): void {
@@ -355,6 +403,7 @@ class RadioStore {
     if (next < 0) return this.#giveUp()
     this.stream = next
     this.#retries = 0
+    this.#setStatus('reconnecting', `Trying another stream: ${this.#streamLabel()}`)
     this.#connect()
   }
 

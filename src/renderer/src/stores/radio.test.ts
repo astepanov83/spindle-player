@@ -377,6 +377,91 @@ describe('reconnecting', () => {
   })
 })
 
+describe('status, next to the dot', () => {
+  it('connecting from the click until sound comes, then live', async () => {
+    const p = radio.play(mine[1])
+    // main is still finding the streams
+    expect(radio.status).toBe('connecting')
+    await p
+    expect(radio.status).toBe('connecting')
+    expect(radio.statusDetail()).toBe('Connecting to 64 kbps')
+    ev.waiting!()
+    expect(radio.status).toBe('connecting')
+    ev.playing!()
+    expect(radio.status).toBe('live')
+    expect(radio.statusDetail()).toBe('Live on 64 kbps')
+  })
+
+  it('buffering when data stops for 1 s after sound came, live again when it comes back', async () => {
+    await start(mine[0])
+    ev.playing!()
+    // a short hiccup does not flash BUFFERING
+    ev.waiting!()
+    await vi.advanceTimersByTimeAsync(500)
+    ev.playing!()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(radio.status).toBe('live')
+    ev.waiting!()
+    await vi.advanceTimersByTimeAsync(999)
+    expect(radio.status).toBe('live')
+    await vi.advanceTimersByTimeAsync(1)
+    expect(radio.status).toBe('buffering')
+    ev.playing!()
+    expect(radio.status).toBe('live')
+  })
+
+  it('reconnecting while it waits to retry, with the try and the time left', async () => {
+    const t0 = Date.now()
+    await start(mine[0])
+    ev.playing!()
+    ev.error!(net)
+    expect(radio.status).toBe('reconnecting')
+    expect(radio.statusDetail(t0)).toBe('Retry 1 of 3 on 128 kbps in 1 s')
+    await vi.advanceTimersByTimeAsync(1000)
+    // the new connection has no sound yet
+    expect(radio.status).toBe('reconnecting')
+    expect(radio.statusDetail()).toBe('Retry 1 of 3 on 128 kbps')
+    ev.playing!()
+    expect(radio.status).toBe('live')
+  })
+
+  it('says so when it moves to the next stream', async () => {
+    await start({ ...mine[1], chosen: 'https://b/1' })
+    for (const ms of [1000, 2000, 4000]) {
+      ev.error!(net)
+      await vi.advanceTimersByTimeAsync(ms)
+    }
+    ev.error!(net)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(radio.status).toBe('reconnecting')
+    expect(radio.statusDetail()).toBe('Trying another stream: 64 kbps')
+  })
+
+  it('off after pause, after giving up, and when main refuses the station', async () => {
+    await start(mine[0])
+    ev.playing!()
+    radio.pause()
+    expect(radio.status).toBe('off')
+    await start(mine[0])
+    for (const ms of [1000, 2000, 4000, 0]) {
+      ev.error!(net)
+      await vi.advanceTimersByTimeAsync(ms)
+    }
+    expect(radio.status).toBe('off')
+    known = () => undefined
+    await radio.play(mine[2])
+    expect(radio.status).toBe('off')
+  })
+
+  it('connecting when the user picks another stream while playing', async () => {
+    await start(mine[1])
+    ev.playing!()
+    radio.choose(2)
+    expect(radio.status).toBe('connecting')
+    expect(radio.statusDetail()).toBe('Connecting to 320 kbps')
+  })
+})
+
 describe('choosing a stream', () => {
   it('opens it at the live edge and saves it as the station’s choice', async () => {
     await start(mine[1])

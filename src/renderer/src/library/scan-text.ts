@@ -91,3 +91,45 @@ export function photoLine(f: FetchStatus | undefined): string | undefined {
   if (a.left) parts.push(`${n(a.left)} left`)
   return parts.join(' · ')
 }
+
+// What the main window says when a scan ends badly (ticket 045): the scan
+// failed, or a music folder was not found. Each new status goes to `next`;
+// a folder is named once each time it goes missing, not on every scan.
+export class ScanWatch {
+  #last: ScanStatus
+  // what the last scan that ended did not find
+  #missing: string[]
+
+  constructor(start: ScanStatus) {
+    this.#last = start
+    this.#missing = start.missing
+  }
+
+  next(s: ScanStatus): string | undefined {
+    const before = this.#last
+    this.#last = s
+    // a scan clears the list while it runs, so only the end counts
+    const ended = s.phase === 'idle' && before.phase !== 'idle'
+    const gone = ended ? s.missing.filter((f) => !this.#missing.includes(f)) : []
+    if (ended) this.#missing = s.missing
+    // the library as a whole has its own message (libraryProblem)
+    if (s.unavailable) return undefined
+    if (s.scanFailed && !before.scanFailed) return 'The scan failed'
+    // its own name: the notice cuts a long path at the end
+    if (gone.length === 1) return `Music folder not found: ${folderName(gone[0])}`
+    if (gone.length) return `${n(gone.length)} music folders not found`
+    return undefined
+  }
+}
+
+// A path as [everything before the last folder, the last folder with its
+// slash], so a long one can be cut in the middle and still show its own name.
+export function pathEnds(path: string): [string, string] {
+  const m = /^(.*?)([/\\]?[^/\\]+[/\\]?|[/\\])$/.exec(path)
+  return m ? [m[1], m[2]] : ['', path]
+}
+
+// The last folder of a path, for a line too short for all of it.
+function folderName(path: string): string {
+  return pathEnds(path)[1].replace(/^[/\\]|[/\\]$/g, '') || path
+}

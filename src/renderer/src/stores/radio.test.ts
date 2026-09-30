@@ -61,6 +61,8 @@ const history = vi.fn(async (): Promise<HistoryEntry[]> => [{ at: 1, title: 'Old
 // main adds a new station to the end of My stations
 const save = vi.fn(async (s: Station) => [...mine, s])
 const remove = vi.fn(async (id: string) => mine.filter((s) => s.id !== id))
+// main puts it back where it was
+const restore = vi.fn(async () => mine)
 // main swaps the station with its neighbour
 const move = vi.fn(async (id: string, by: -1 | 1) => {
   const at = mine.findIndex((s) => s.id === id)
@@ -83,6 +85,7 @@ vi.stubGlobal('window', {
     choose,
     save,
     remove,
+    restore,
     move,
     history,
     lastAnswer,
@@ -822,6 +825,15 @@ describe('My stations from the Radio view (ticket 029)', () => {
     expect(player.playing).toBe(true)
     expect(fake.calls).toEqual([])
     expect(radio.saved).toBe(false)
+  })
+
+  it('says what was removed, with an Undo that puts it back (ticket 045)', async () => {
+    await radio.remove('b')
+    expect(notice.text).toBe('Removed B')
+    expect(notice.action?.label).toBe('Undo')
+    notice.press()
+    await vi.waitFor(() => expect(radio.stations.map((s) => s.id)).toEqual(['a', 'b', 'c']))
+    expect(restore).toHaveBeenCalledWith('b')
   })
 
   it('moves a station up or down', async () => {

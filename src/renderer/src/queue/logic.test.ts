@@ -23,52 +23,29 @@ const q = (index: number, items = ['a/0', 'a/1', 'a/2']): QueueState => ({
   index,
   from: 'A'
 })
-const nextAlbum = (last: string): string[] => (last.startsWith('a/') ? ['b/0', 'b/1'] : [])
 
 describe('advance', () => {
   it('goes to the next song', () => {
-    expect(advance(q(0), { shuffle: false, nextAlbum }).index).toBe(1)
+    expect(advance(q(0), { shuffle: false }).index).toBe(1)
   })
 
-  it('carries on with the next album when the queue runs out', () => {
-    const s = advance(q(2), { shuffle: false, nextAlbum })
-    expect(s.items).toEqual(['a/0', 'a/1', 'a/2', 'b/0', 'b/1'])
-    expect(s.index).toBe(3)
-    expect(s.from).toBe('A')
-  })
-
-  it('stays put when there is nothing after', () => {
-    const s = q(1, ['x/0', 'x/1'])
-    expect(advance(s, { shuffle: false, nextAlbum })).toBe(s)
+  it('stays put at the end of the queue: no other album is added', () => {
+    const s = q(2)
+    expect(advance(s, { shuffle: false })).toBe(s)
   })
 
   it('shuffle picks another song, never the current one', () => {
     for (const r of [0, 0.2, 0.5, 0.99]) {
-      const s = advance(q(1), { shuffle: true, nextAlbum, random: () => r })
+      const s = advance(q(1), { shuffle: true, random: () => r })
       expect(s.index).not.toBe(1)
       expect(s.index).toBeGreaterThanOrEqual(0)
       expect(s.index).toBeLessThan(3)
     }
   })
 
-  it('shuffle with one song acts like next', () => {
-    const s = advance(q(0, ['a/0']), { shuffle: true, nextAlbum: () => ['b/0'] })
-    expect(s.index).toBe(1)
-  })
-})
-
-describe('advance while skipping failed songs', () => {
-  // one album in the library: the next album is always the same one
-  const same = (): string[] => ['a/0', 'a/1', 'a/2']
-
-  it('does not add an album that is already in the queue', () => {
-    const s = q(2)
-    expect(advance(s, { shuffle: false, nextAlbum: same, noRepeats: true })).toBe(s)
-  })
-
-  it('still adds a new album', () => {
-    const s = advance(q(2), { shuffle: false, nextAlbum, noRepeats: true })
-    expect(s.items).toEqual(['a/0', 'a/1', 'a/2', 'b/0', 'b/1'])
+  it('shuffle with one song has nowhere to go', () => {
+    const s = q(0, ['a/0'])
+    expect(advance(s, { shuffle: true })).toBe(s)
   })
 })
 
@@ -111,27 +88,24 @@ describe('prune', () => {
 
 describe('onEnded', () => {
   it('replays the song with repeat on', () => {
-    expect(onEnded(q(1), true, { shuffle: false, nextAlbum })).toEqual({ kind: 'replay' })
+    expect(onEnded(q(1), true, { shuffle: false })).toEqual({ kind: 'replay' })
   })
 
   it('plays the next song', () => {
-    const r = onEnded(q(0), false, { shuffle: false, nextAlbum })
+    const r = onEnded(q(0), false, { shuffle: false })
     expect(r).toEqual({ kind: 'play', state: q(1) })
   })
 
-  it('carries on with the next album at the end of the list', () => {
-    const r = onEnded(q(2), false, { shuffle: false, nextAlbum })
-    expect(r.kind === 'play' && r.state.items[r.state.index]).toBe('b/0')
+  it('stops when the queue runs out', () => {
+    expect(onEnded(q(2), false, { shuffle: false })).toEqual({ kind: 'stop' })
   })
 
-  it('stops when there is nothing to carry on with', () => {
-    expect(onEnded(q(1, ['x/0', 'x/1']), false, { shuffle: false, nextAlbum })).toEqual({
-      kind: 'stop'
-    })
+  it('repeat still replays the last song', () => {
+    expect(onEnded(q(2), true, { shuffle: false })).toEqual({ kind: 'replay' })
   })
 
   it('shuffle picks another song from the list', () => {
-    const r = onEnded(q(0), false, { shuffle: true, nextAlbum, random: () => 0.99 })
+    const r = onEnded(q(0), false, { shuffle: true, random: () => 0.99 })
     expect(r).toEqual({ kind: 'play', state: q(2) })
   })
 })
@@ -368,7 +342,7 @@ describe('clearQueue', () => {
 })
 
 describe('Play next songs with shuffle and repeat', () => {
-  const o = { shuffle: true, nextAlbum, random: () => 0.99 }
+  const o = { shuffle: true, random: () => 0.99 }
 
   it('shuffle plays the Play next songs first, in order', () => {
     const s1 = advance(qn(0, 2), o)
@@ -380,7 +354,7 @@ describe('Play next songs with shuffle and repeat', () => {
   })
 
   it('without shuffle they are simply next, counted down as they play', () => {
-    expect(advance(qn(0, 2), { shuffle: false, nextAlbum }).next).toBe(1)
+    expect(advance(qn(0, 2), { shuffle: false }).next).toBe(1)
   })
 
   it('repeat replays the current song; the Play next songs wait', () => {

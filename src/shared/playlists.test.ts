@@ -4,6 +4,7 @@ import {
   cleanName,
   create,
   isKnownPlaylistsFile,
+  nameForSongs,
   newName,
   parsePlaylists,
   remove,
@@ -55,6 +56,48 @@ describe('names', () => {
   it('numbers new names that are taken', () => {
     expect(newName([])).toBe('New playlist')
     expect(newName([pl('a', 'New playlist'), pl('b', 'New playlist 2')])).toBe('New playlist 3')
+  })
+
+  it('numbers a name made from songs when it is taken', () => {
+    expect(newName([pl('a', 'Blue Hours')], 'Blue Hours')).toBe('Blue Hours 2')
+    expect(newName([pl('a', 'Blue Hours'), pl('b', 'Blue Hours 2')], 'Blue Hours')).toBe(
+      'Blue Hours 3'
+    )
+    expect(newName([pl('a', 'Kai')], 'Blue Hours')).toBe('Blue Hours')
+  })
+})
+
+describe('nameForSongs', () => {
+  const song = (
+    albumId: string,
+    album: string,
+    artist: string
+  ): { albumId: string; album: string; artist: string } => ({ albumId, album, artist })
+
+  it('names songs of one album after the album', () => {
+    expect(nameForSongs([song('b', 'Blue Hours', 'Marina Vale')])).toBe('Blue Hours')
+    // a compilation: many artists, one album
+    expect(nameForSongs([song('s', 'Summer Mix', 'DJ Sol'), song('s', 'Summer Mix', 'Kai')])).toBe(
+      'Summer Mix'
+    )
+  })
+
+  it("names songs of several albums after the first song's artist", () => {
+    expect(
+      nameForSongs([song('b', 'Blue Hours', 'Marina Vale'), song('r', 'Red Desert', 'Ochre')])
+    ).toBe('Marina Vale')
+    // two albums with one title are still two albums
+    expect(nameForSongs([song('x', 'Hits', 'A'), song('y', 'Hits', 'B')])).toBe('A')
+  })
+
+  it('falls back to New playlist when there is no name to use', () => {
+    expect(nameForSongs([])).toBe('New playlist')
+    expect(nameForSongs([song('b', ' ', 'Kai')])).toBe('Kai')
+    expect(nameForSongs([song('b', '', ''), song('c', '', '  ')])).toBe('New playlist')
+  })
+
+  it('keeps a long name within the limit', () => {
+    expect(nameForSongs([song('b', 'x'.repeat(300), 'Kai')])).toHaveLength(200)
   })
 })
 

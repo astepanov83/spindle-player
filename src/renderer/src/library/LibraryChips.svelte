@@ -8,6 +8,7 @@
   import PlaylistList from './PlaylistList.svelte'
   import PlaylistView from './PlaylistView.svelte'
   import RadioView from './RadioView.svelte'
+  import ScanLine from './ScanLine.svelte'
   import SearchBox from './SearchBox.svelte'
   import SearchResults from './SearchResults.svelte'
   import { showPage } from './side-buttons'
@@ -64,19 +65,23 @@
   )
 </script>
 
-<div class="lib">
+<div class="lib" data-notice-host>
   <div class="top">
     <SearchBox
       placeholder={library.chip === 'playlists' && library.openPlaylist
         ? 'Search this playlist'
         : placeholders[library.chip]}
     />
-    <div class="chips">
-      {#each chips as [c, label] (c)}
-        <button class="chip" aria-pressed={library.chip === c} onclick={() => pick(c)}
-          >{label}</button
-        >
-      {/each}
+    <!-- the scan line takes the row's spare room, so the grid never moves -->
+    <div class="chiprow">
+      <div class="chips">
+        {#each chips as [c, label] (c)}
+          <button class="chip" aria-pressed={library.chip === c} onclick={() => pick(c)}
+            >{label}</button
+          >
+        {/each}
+      </div>
+      <ScanLine />
     </div>
   </div>
   <div class="scroll" bind:this={scrollEl}>
@@ -118,9 +123,18 @@
     gap: 12px;
     padding: 16px 22px 12px;
   }
-  .chips {
+  .chiprow {
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+  }
+  .chiprow > :global(.scan) {
+    flex: 1 1 0;
+  }
+  .chips {
+    flex: none;
+    display: flex;
     gap: 6px;
   }
   .chip {

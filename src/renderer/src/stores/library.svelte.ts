@@ -408,12 +408,6 @@ class LibraryStore {
     void this.#version
     return this.#order.get(t.id) ?? 0
   }
-
-  // the album after this song's album, wrapping around
-  nextAlbumTracks(trackId: string): string[] {
-    const i = this.#albumIndex.get(this.track(trackId).albumId) ?? -1
-    return this.albums[(i + 1) % this.albums.length]?.trackIds ?? []
-  }
 }
 
 export const library = new LibraryStore()

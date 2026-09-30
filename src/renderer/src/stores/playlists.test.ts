@@ -1,5 +1,7 @@
 // The playlists store, with main's save faked.
 import { describe, expect, it, vi } from 'vitest'
+import type { Album, Track } from '../../../shared/library'
+import { defaultPalettes } from '../../../shared/palette'
 
 vi.stubGlobal('window', { playlistsApi: { save: vi.fn() } })
 vi.stubGlobal('crypto', {
@@ -52,5 +54,52 @@ describe('removing a playlist while its rows are filtered (ticket 039)', () => {
     library.query = 'blue'
     playlists.remove(b)
     expect(library.query).toBe('blue')
+  })
+})
+
+describe('a new playlist from songs (ticket 045)', () => {
+  const track = (id: string, albumId: string, album: string, artist: string): Track => ({
+    id,
+    title: id,
+    duration: 60,
+    albumId,
+    artist,
+    album,
+    no: 1,
+    disc: 1,
+    codec: '',
+    folder: 0
+  })
+  const album = (id: string, title: string, trackIds: string[]): Album => ({
+    id,
+    title,
+    artist: '',
+    year: 0,
+    trackIds,
+    cover: '',
+    coverLarge: '',
+    palette: defaultPalettes
+  })
+
+  it('is named after the album, with a number when that name is taken', () => {
+    library.load({
+      albums: [album('b', 'Blue Hours', ['b1', 'b2']), album('r', 'Red Desert', ['r1'])],
+      tracks: [
+        track('b1', 'b', 'Blue Hours', 'Marina Vale'),
+        track('b2', 'b', 'Blue Hours', 'Marina Vale'),
+        track('r1', 'r', 'Red Desert', 'Ochre')
+      ],
+      folders: []
+    })
+    const a = playlists.create(['b1', 'b2'])
+    const b = playlists.create(['b1'])
+    expect(playlists.get(a)?.name).toBe('Blue Hours')
+    expect(playlists.get(b)?.name).toBe('Blue Hours 2')
+    // songs of two albums: the first song's artist
+    expect(playlists.get(playlists.create(['r1', 'b1']))?.name).toBe('Ochre')
+  })
+
+  it('is New playlist with no songs, ready to type over', () => {
+    expect(playlists.get(playlists.create())?.name).toMatch(/^New playlist/)
   })
 })

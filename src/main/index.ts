@@ -173,6 +173,11 @@ page.handle(RadioChannel.remove, (_, id) => {
   library.coversKept()
   return list
 })
+page.handle(RadioChannel.restore, (_, id) => {
+  const list = stations.restore(id)
+  library.coversKept()
+  return list
+})
 page.handle(RadioChannel.move, (_, id, by) => stations.move(id, by))
 page.handle(RadioChannel.choose, (_, id, url) => {
   // a station from search keeps it on main's copy

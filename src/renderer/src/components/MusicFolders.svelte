@@ -1,12 +1,20 @@
 <!-- "Music folders" in the settings sheet. Main owns the list; this only asks. -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
-  import { canRescan, statusLines } from '../library/scan-text'
+  import { canRescan, pathEnds, statusLines } from '../library/scan-text'
   import { library } from '../stores/library.svelte'
 
   const s = $derived(library.status)
   // with settings.json unreadable, main would change the list in memory only
   const locked = $derived(!!s.settingsUnreadable)
+  // Removing drops the folder's songs and artist names, so it asks first,
+  // like deleting a playlist. One folder at a time.
+  let asking: string | null = $state(null)
+
+  function remove(f: string): void {
+    asking = null
+    window.libraryApi.removeFolder(f)
+  }
 </script>
 
 <div class="set">
@@ -14,17 +22,28 @@
   {#if s.folders.length}
     <ul>
       {#each s.folders as f (f)}
+        {@const [head, tail] = pathEnds(f)}
         <li>
-          <span class="path" title={f}>{f}</span>
-          {#if s.missing.includes(f)}<span class="miss">not found</span>{/if}
-          <button
-            class="rm"
-            aria-label="Remove {f}"
-            title="Remove"
-            disabled={locked}
-            onclick={() => window.libraryApi.removeFolder(f)}
-            ><Icon name="close" size={16} /></button
+          <!-- cut in the middle: the folder's own name stays -->
+          <span class="path" title={f}
+            ><span class="head">{head}</span><span class="tail">{tail}</span></span
           >
+          <!-- while it asks, the path gets the room -->
+          {#if s.missing.includes(f) && asking !== f}<span class="miss">not found</span>{/if}
+          {#if asking === f}
+            <button class="sm danger" disabled={locked} onclick={() => remove(f)}
+              >Remove folder</button
+            >
+            <button class="sm" onclick={() => (asking = null)}>Keep</button>
+          {:else}
+            <button
+              class="rm"
+              aria-label="Remove {f}"
+              title="Remove"
+              disabled={locked}
+              onclick={() => (asking = f)}><Icon name="close" size={16} /></button
+            >
+          {/if}
         </li>
       {/each}
     </ul>
@@ -80,9 +99,31 @@
   .path {
     flex: 1;
     min-width: 0;
+    display: flex;
     white-space: nowrap;
+  }
+  .head {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .tail {
+    flex: none;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sm {
+    flex: none;
+    font: 600 12.5px var(--ui);
+    padding: 5px 10px;
+    border-radius: 99px;
+    background: var(--field);
+    color: var(--ink);
+  }
+  .sm.danger {
+    background: var(--close-hover);
+    color: var(--on-danger);
   }
   .miss {
     font-size: 12px;

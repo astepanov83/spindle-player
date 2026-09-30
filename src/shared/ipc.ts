@@ -120,6 +120,7 @@ export const RadioChannel = {
   stations: 'radio:stations',
   save: 'radio:save',
   remove: 'radio:remove',
+  restore: 'radio:restore',
   move: 'radio:move',
   choose: 'radio:choose',
   history: 'radio:history',
@@ -178,6 +179,8 @@ export interface RadioApi {
   // a new station goes to the end; a known one is replaced where it is
   save(station: Station): Promise<Station[]>
   remove(id: string): Promise<Station[]>
+  // Undo of remove: back where it was, as it was
+  restore(id: string): Promise<Station[]>
   // one place up (-1) or down (1)
   move(id: string, by: -1 | 1): Promise<Station[]>
   // the stream url the user picked for the station
@@ -226,6 +229,7 @@ export interface PageChannels {
   [RadioChannel.stations]: RadioApi['stations']
   [RadioChannel.save]: RadioApi['save']
   [RadioChannel.remove]: RadioApi['remove']
+  [RadioChannel.restore]: RadioApi['restore']
   [RadioChannel.move]: RadioApi['move']
   [RadioChannel.choose]: RadioApi['choose']
   [RadioChannel.history]: RadioApi['history']

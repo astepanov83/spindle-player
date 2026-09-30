@@ -107,6 +107,7 @@ const radioApi: RadioApi = {
   stations: () => invoke(RadioChannel.stations),
   save: (station) => invoke(RadioChannel.save, station),
   remove: (id) => invoke(RadioChannel.remove, id),
+  restore: (id) => invoke(RadioChannel.restore, id),
   move: (id, by) => invoke(RadioChannel.move, id, by),
   choose: (id, url) => invoke(RadioChannel.choose, id, url),
   history: (id) => invoke(RadioChannel.history, id),

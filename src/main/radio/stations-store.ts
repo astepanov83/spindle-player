@@ -39,6 +39,8 @@ export const metalOnly: Station = {
 export class StationsStore {
   #data: Station[]
   #writer: JsonFileWriter<unknown> | undefined
+  // stations removed this run and their places, for Undo
+  #removed = new Map<string, { station: Station; at: number }>()
 
   constructor(readonly path: string) {
     removeStrayTmp(path)
@@ -77,7 +79,22 @@ export class StationsStore {
   }
 
   remove(id: unknown): Station[] {
-    return typeof id === 'string' ? this.#set(removeStation(this.#data, id)) : this.#data
+    if (typeof id !== 'string') return this.#data
+    const at = this.#data.findIndex((s) => s.id === id)
+    if (at >= 0) this.#removed.set(id, { station: this.#data[at], at })
+    return this.#set(removeStation(this.#data, id))
+  }
+
+  // Undo of a remove: the station as it was (logo and chosen stream too), at
+  // its old place or the end. Nothing when it was saved again meanwhile.
+  restore(id: unknown): Station[] {
+    const r = typeof id === 'string' ? this.#removed.get(id) : undefined
+    if (!r) return this.#data
+    this.#removed.delete(r.station.id)
+    if (this.get(r.station.id)) return this.#data
+    const next = [...this.#data]
+    next.splice(Math.min(r.at, next.length), 0, r.station)
+    return this.#set(next)
   }
 
   move(id: unknown, by: unknown): Station[] {

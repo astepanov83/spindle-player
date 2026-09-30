@@ -201,3 +201,43 @@ describe('RadioHistoryStore', () => {
     expect(readdirSync(dir)).toContain('radio-history.json.broken')
   })
 })
+
+describe('StationsStore.restore', () => {
+  it('puts a removed station back where it was, with its logo (Undo, ticket 045)', () => {
+    const store = new StationsStore(path)
+    store.save(st('a'))
+    store.save(st('b'))
+    const logo = { hash: 'a'.repeat(40), palette: fallbackPalettes('x') }
+    store.setLogo('a', logo)
+    store.remove('a')
+    expect(store.list().map((s) => s.id)).toEqual(['metal-only', 'b'])
+    const list = store.restore('a')
+    expect(list.map((s) => s.id)).toEqual(['metal-only', 'a', 'b'])
+    expect(store.get('a')?.logo).toEqual(logo)
+    store.flushSync()
+    expect(onDisk().map((s) => s.id)).toEqual(['metal-only', 'a', 'b'])
+  })
+
+  it('restores only what was removed, and only once', () => {
+    const store = new StationsStore(path)
+    store.save(st('a'))
+    expect(store.restore('a')).toBe(store.list())
+    expect(store.restore('zzz')).toBe(store.list())
+    expect(store.restore(7)).toBe(store.list())
+    store.remove('a')
+    store.restore('a')
+    // saved again meanwhile: not twice
+    store.remove('metal-only')
+    store.save(metalOnly)
+    expect(store.restore('metal-only').map((s) => s.id)).toEqual(['a', 'metal-only'])
+  })
+
+  it('puts it at the end when the list got shorter', () => {
+    const store = new StationsStore(path)
+    store.save(st('a'))
+    store.save(st('b'))
+    store.remove('b')
+    store.remove('a')
+    expect(store.restore('b').map((s) => s.id)).toEqual(['metal-only', 'b'])
+  })
+})

@@ -7,6 +7,7 @@
   import NoLibrary from './NoLibrary.svelte'
   import PlaylistView from './PlaylistView.svelte'
   import RadioView from './RadioView.svelte'
+  import ScanLine from './ScanLine.svelte'
   import SearchBox from './SearchBox.svelte'
   import SearchResults from './SearchResults.svelte'
   import SongTable from './SongTable.svelte'
@@ -83,7 +84,7 @@
   </button>
 {/snippet}
 
-<div class="lib2">
+<div class="lib2" data-notice-host>
   <aside class="side">
     <div class="search">
       <SearchBox placeholder={placeholders[library.section] ?? 'Search this playlist'} />
@@ -101,6 +102,7 @@
     {#each playlists.list as p (p.id)}
       {@render item(`pl:${p.id}`, 'list', p.name)}
     {/each}
+    <div class="foot"><ScanLine wrap /></div>
   </aside>
   <div class="main" bind:this={scrollEl}>
     {#if library.section === 'radio'}
@@ -147,6 +149,20 @@
   }
   .search {
     margin: 0 4px 10px;
+  }
+  /* Room for two lines is always kept, so the list never moves when a scan
+     starts or ends, even scrolled to the bottom. While it runs, the line
+     stays in view below a long list of playlists. */
+  .foot {
+    flex: none;
+    height: 54px;
+    margin: auto -12px 0;
+    padding: 10px 22px 0;
+  }
+  .foot:has(:global(.scan)) {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-side);
   }
   .sidehead {
     display: flex;

@@ -38,13 +38,11 @@ function countNext(marks: boolean[], index: number): number {
 
 export interface NextOptions {
   shuffle: boolean
-  // the next album's songs, to carry on when the queue runs out
-  nextAlbum: (lastId: string) => string[]
-  // don't add the next album if its songs are already in the queue
-  noRepeats?: boolean
   random?: () => number
 }
 
+// The song after the current one. At the end of the queue the same state
+// comes back: playback stops there, no other album is added.
 export function advance(q: QueueState, o: NextOptions): QueueState {
   const random = o.random ?? Math.random
   const next = q.next ?? 0
@@ -56,14 +54,8 @@ export function advance(q: QueueState, o: NextOptions): QueueState {
     if (i >= q.index) i++
     return { ...q, index: i }
   }
-  let items = q.items
-  if (q.index + 1 >= items.length) {
-    let more = o.nextAlbum(items[items.length - 1])
-    if (o.noRepeats && more.some((id) => items.includes(id))) more = []
-    items = [...items, ...more]
-  }
-  if (q.index + 1 >= items.length) return q
-  return { ...q, items, index: q.index + 1 }
+  if (q.index + 1 >= q.items.length) return q
+  return { ...q, index: q.index + 1 }
 }
 
 // What to do when a song ends by itself: repeat replays it, otherwise the

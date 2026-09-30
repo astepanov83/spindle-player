@@ -7,6 +7,8 @@ import {
   libraryProblem,
   photoLine,
   notLoadedText,
+  pathEnds,
+  ScanWatch,
   scanFailedText,
   scanLine,
   settingsText,
@@ -215,5 +217,61 @@ describe('artist photos in the lookup lines', () => {
     }
     expect(fetchBusy(done)).toBeUndefined()
     expect(photoLine(done)).toBe('Artist photos: found 30 of 40 · 10 not found')
+  })
+})
+
+describe('ScanWatch (ticket 045)', () => {
+  const walk = status({ phase: 'walk', done: 5 })
+
+  it('says nothing for a scan that went fine', () => {
+    const w = new ScanWatch(status({}))
+    expect(w.next(walk)).toBeUndefined()
+    expect(w.next(status({ tracks: 5 }))).toBeUndefined()
+  })
+
+  it('says when a scan failed, once', () => {
+    const w = new ScanWatch(status({}))
+    w.next(walk)
+    expect(w.next(status({ scanFailed: true }))).toBe('The scan failed')
+    expect(w.next(status({ scanFailed: true, tracks: 3 }))).toBeUndefined()
+    // the next scan clears it, and may fail again
+    w.next({ ...walk, scanFailed: false })
+    expect(w.next(status({ scanFailed: true }))).toBe('The scan failed')
+  })
+
+  it('names a music folder a scan did not find, once per time it goes', () => {
+    const w = new ScanWatch(status({ folders: ['/m', '/nas/music'] }))
+    // the scan clears the list while it runs
+    w.next({ ...walk, missing: ['/nas/music'] })
+    // by its own name: a long path would be cut where the name is
+    expect(w.next(status({ missing: ['/nas/music'] }))).toBe('Music folder not found: music')
+    w.next(walk)
+    expect(w.next(status({ missing: ['/nas/music'] }))).toBeUndefined()
+    w.next(walk)
+    expect(w.next(status({ missing: ['/a', '/b', '/nas/music'] }))).toBe(
+      '2 music folders not found'
+    )
+    // found again, then gone again
+    w.next(walk)
+    w.next(status({}))
+    w.next(walk)
+    expect(w.next(status({ missing: ['/a'] }))).toBe('Music folder not found: a')
+  })
+
+  it('leaves a library that stopped working to its own message', () => {
+    const w = new ScanWatch(status({}))
+    w.next(walk)
+    expect(w.next(status({ scanFailed: true, unavailable: 'stopped' }))).toBeUndefined()
+  })
+})
+
+describe('pathEnds', () => {
+  it('splits off the last folder, so the middle can be cut', () => {
+    // the slash goes with the name, so a cut reads "/home/al…/music"
+    expect(pathEnds('/home/alex/music')).toEqual(['/home/alex', '/music'])
+    expect(pathEnds('/home/alex/music/')).toEqual(['/home/alex', '/music/'])
+    expect(pathEnds('C:\\Users\\me\\Music')).toEqual(['C:\\Users\\me', '\\Music'])
+    expect(pathEnds('/')).toEqual(['', '/'])
+    expect(pathEnds('music')).toEqual(['', 'music'])
   })
 })

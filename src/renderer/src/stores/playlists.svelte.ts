@@ -28,10 +28,12 @@ class PlaylistStore {
     return this.list.find((p) => p.id === id)
   }
 
-  // Makes a playlist and returns its id.
+  // Makes a playlist and returns its id. One made from songs is named after
+  // them (ops.nameForSongs); an empty one is "New playlist", typed over next.
   create(trackIds: string[] = []): string {
     const id = crypto.randomUUID()
-    const name = ops.newName(this.list)
+    const known = trackIds.filter((t) => library.has(t)).map((t) => library.track(t))
+    const name = ops.newName(this.list, known.length ? ops.nameForSongs(known) : undefined)
     this.#set(ops.create(this.list, id, name, trackIds))
     if (trackIds.length) notice.show(`Added ${songs(trackIds.length)} to ${name}`)
     return id

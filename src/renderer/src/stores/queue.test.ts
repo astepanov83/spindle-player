@@ -110,12 +110,27 @@ describe('a song ends', () => {
     expect(fake.calls).toEqual(['load media/a1', 'play'])
   })
 
-  it('carries on with the next album at the end of the list', () => {
+  it('stops at the end of the queue, the last song back at 0:00', () => {
     queue.jump(2)
+    fake.reset()
+    player.pos = 100
     fake.on.ended!()
-    expect(queue.items).toEqual(['a0', 'a1', 'a2', 'b0', 'b1'])
-    expect(playing()).toBe('b0')
-    expect(queue.from).toBe('Album a')
+    expect(queue.items).toEqual(['a0', 'a1', 'a2'])
+    expect(playing()).toBe('a2')
+    expect(player.playing).toBe(false)
+    expect(player.pos).toBe(0)
+    expect(fake.calls).toEqual(['pause', 'seek 0'])
+    expect(savePlace).toHaveBeenLastCalledWith({ index: 2, pos: 0 })
+  })
+
+  it('Next on the last song stops the same way', () => {
+    queue.jump(2)
+    fake.reset()
+    player.pos = 40
+    queue.next()
+    expect(playing()).toBe('a2')
+    expect(player.playing).toBe(false)
+    expect(player.pos).toBe(0)
   })
 
   it('replays the song with repeat on', () => {
@@ -178,9 +193,7 @@ describe('a song fails', () => {
     expect(notice.text).toBe('Format can\'t be played: "A 0"')
   })
 
-  it('does not add the same album again and again when every song fails', () => {
-    // one album only: the "next album" wraps round to itself
-    library.load(lib(['a', 3]))
+  it('stops at the end of the queue when every song fails', () => {
     queue.playAlbum('a', 0)
     for (let i = 0; i < 3; i++) fake.on.error!(bad)
     expect(queue.items).toEqual(['a0', 'a1', 'a2'])
@@ -189,12 +202,12 @@ describe('a song fails', () => {
   })
 
   it('stops after 20 failures in a row', () => {
-    library.load(lib(...Array.from({ length: 30 }, (_, i): [string, number] => [`x${i}`, 1])))
-    queue.playAlbum('x0', 0)
+    library.load(lib(['x', 30]))
+    queue.playAlbum('x', 0)
     for (let i = 0; i < 20; i++) fake.on.error!(bad)
     expect(player.playing).toBe(false)
     expect(notice.text).toBe('Could not play 20 songs in a row. Stopped.')
-    expect(playing()).toBe('x190')
+    expect(playing()).toBe('x19')
   })
 
   it('a refused play() is not the song failing', () => {
@@ -334,12 +347,12 @@ describe('tracks of a disc image', () => {
     expect(savePlace).toHaveBeenLastCalledWith({ index: 1, pos: 0 })
   })
 
-  it('load the next album after the last track', () => {
+  it('stop after the last track, back at its start', () => {
     queue.jump(2)
     fake.reset()
     fake.on.ended!()
-    expect(playing()).toBe('d0')
-    expect(fake.calls).toEqual(['load media/d0', 'play'])
+    expect(playing()).toBe('c2')
+    expect(fake.calls).toEqual(['pause', 'seek 0'])
   })
 
   it('load when shuffle picks a track that is not the next one', () => {

@@ -227,14 +227,8 @@ class QueueStore {
     notice.show('Cleared the queue')
   }
 
-  // skipping: while skipping songs that fail, don't add an album that is already
-  // in the queue again (the library wraps around), so the queue can't keep growing
-  #nextOptions(skipping = false): NextOptions {
-    return {
-      shuffle: player.shuffle,
-      nextAlbum: (id) => (library.has(id) ? library.nextAlbumTracks(id) : []),
-      noRepeats: skipping
-    }
+  #nextOptions(): NextOptions {
+    return { shuffle: player.shuffle }
   }
 
   // The Next button.
@@ -255,15 +249,14 @@ class QueueStore {
       this.#set(step.state)
       if (player.playing && follows(before, this.current)) this.#carryOn()
       else this.#start()
-    } else this.#stop()
+    } else this.#stopAtEnd()
   }
 
-  #move(andPlay: boolean, skipping = false): boolean {
+  #move(andPlay: boolean): boolean {
     const before = this.#state()
-    const after = advance(before, this.#nextOptions(skipping))
-    // nowhere to go (nothing in the library after the list): stop at the end
+    const after = advance(before, this.#nextOptions())
     if (after === before) {
-      this.#stop()
+      this.#stopAtEnd()
       return false
     }
     this.#set(after)
@@ -274,6 +267,15 @@ class QueueStore {
   #stop(): void {
     engine.pause()
     player.playing = false
+  }
+
+  // The queue ran out. The last song stays, back at 0:00, so Play plays it
+  // again from the start and the bar doesn't sit at its full length.
+  #stopAtEnd(): void {
+    this.#stop()
+    engine.seek(0)
+    player.pos = 0
+    this.savePos()
   }
 
   prev(): void {
@@ -316,7 +318,7 @@ class QueueStore {
       this.#fails = 0
       return this.#stop()
     }
-    const moved = this.#move(true, true)
+    const moved = this.#move(true)
     notice.show(failNotice(t.title, e.gone, moved ? 'skipped' : 'end'))
   }
 

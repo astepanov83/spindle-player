@@ -10,11 +10,14 @@ import './assets/text.css'
 import App from './App.svelte'
 import { decodeLibrary, library } from './stores/library.svelte'
 import { LibraryFeed } from './stores/library-feed'
+import { layout } from './stores/layout.svelte'
+import { notice } from './stores/notice.svelte'
 import { playlists } from './stores/playlists.svelte'
 import { playing } from './stores/playing.svelte'
 import { queue } from './stores/queue.svelte'
 import { radio } from './stores/radio.svelte'
 import { loadSettings } from './stores/settings.svelte'
+import { ScanWatch } from './library/scan-text'
 import { orFallback } from './start'
 import { emptyQueue } from '../../shared/saved-queue'
 import { defaultSettings } from '../../shared/settings'
@@ -122,7 +125,15 @@ window.libraryApi.onChanged((bytes) => {
   }
   feed.take(m)
 })
-window.libraryApi.onStatus((s) => (library.status = s))
+// A failed scan or a folder not found shows only in the settings sheet, so
+// the main window says so too (ticket 045).
+const scanWatch = new ScanWatch(library.status)
+window.libraryApi.onStatus((s) => {
+  library.status = s
+  const text = scanWatch.next(s)
+  if (text && !layout.settingsOpen)
+    notice.show(text, { label: 'Open Settings', run: () => (layout.settingsOpen = true) })
+})
 
 const app = mount(App, {
   target: document.getElementById('app')!

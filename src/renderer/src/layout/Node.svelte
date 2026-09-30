@@ -35,7 +35,8 @@
   </div>
 {:else if node.kind === 'tabs'}
   <div class="tabsbox" class:dhost={node.drawer} style:flex={node.flex}>
-    <div class="tabstrip">
+    <!-- Focus's notice sits under it (ui/Notice.svelte) -->
+    <div class="tabstrip" data-notice-under>
       {#each node.labels as label, i (i)}
         <button aria-pressed={layout.tabSel === i} onclick={() => (layout.tabSel = i)}
           >{label}</button

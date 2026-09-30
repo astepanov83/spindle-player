@@ -260,6 +260,18 @@ class RadioStore {
     } catch (e) {
       window.playbackApi.log(`Radio ${id}: radio:remove failed: ${String(e)}`)
       notice.show(`Couldn't remove ${s?.name ?? 'the station'}`)
+      return
+    }
+    // one click on a star removes it, so it can come back
+    if (s) notice.show(`Removed ${s.name}`, { label: 'Undo', run: () => void this.#restore(s) })
+  }
+
+  async #restore(s: Station): Promise<void> {
+    try {
+      this.stations = await window.radioApi.restore(s.id)
+    } catch (e) {
+      window.playbackApi.log(`Radio ${s.id}: radio:restore failed: ${String(e)}`)
+      notice.show(`Couldn't bring back ${s.name}`)
     }
   }
 

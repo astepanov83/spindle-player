@@ -8,10 +8,12 @@ import {
   pageSettings,
   parseSize,
   parseFolders,
+  parseWindowPlace,
   parseStoredSettings,
   type Settings,
   type Size,
-  type StoredSettings
+  type StoredSettings,
+  type WindowPlace
 } from '../shared/settings'
 import { JsonFileWriter, openJsonFile, removeStrayTmp } from './json-file'
 
@@ -43,7 +45,7 @@ export class SettingsStore {
   }
 
   // Checks the value like a file read, so a bad message can't store junk; a bad
-  // field keeps its current value. Window sizes and folders stay main's own.
+  // field keeps its current value. Window sizes, place and folders stay main's own.
   // toFile false: the page could not load the settings, so its choices only
   // reach the window (size per template, theme), never the file.
   setFromPage(raw: unknown, toFile = true): { before: Settings; next: Settings } {
@@ -52,6 +54,7 @@ export class SettingsStore {
     this.#live = pageSettings(next)
     if (toFile) {
       next.windowSizes = this.#data.windowSizes
+      next.windowPlace = this.#data.windowPlace
       next.folders = this.#data.folders
       this.#replace(next)
     }
@@ -65,6 +68,12 @@ export class SettingsStore {
     const old = this.#data.windowSizes[id]
     if (old && old.width === size.width && old.height === size.height) return
     this.#replace({ ...this.#data, windowSizes: { ...this.#data.windowSizes, [id]: size } })
+  }
+
+  setWindowPlace(raw: WindowPlace): void {
+    const place = parseWindowPlace(raw)
+    if (!place) return
+    this.#replace({ ...this.#data, windowPlace: place })
   }
 
   setFolders(folders: string[]): void {

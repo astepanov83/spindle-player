@@ -32,6 +32,34 @@ export function placeCentered(old: Rect, size: Size, area: Rect, template: Templ
   return { x, y, width, height }
 }
 
+// The saved place with this size, on the screen it overlaps most and pushed
+// back onto it. None when it is on no screen now (one was unplugged), so the
+// caller centers it on the main screen.
+export function placeSaved(
+  place: { x: number; y: number },
+  size: Size,
+  areas: Rect[],
+  template: Template
+): Rect | undefined {
+  const want = { x: place.x, y: place.y, width: size.width, height: size.height }
+  let best: Rect | undefined
+  let bestOverlap = 0
+  for (const area of areas) {
+    const overlap = overlapArea(want, area)
+    if (overlap > bestOverlap) {
+      best = area
+      bestOverlap = overlap
+    }
+  }
+  return best && placeCentered(want, size, best, template)
+}
+
+function overlapArea(a: Rect, b: Rect): number {
+  const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)
+  const h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)
+  return w > 0 && h > 0 ? w * h : 0
+}
+
 // How long after Spindle sets a size the window manager's answer may come.
 export const settleMs = 1000
 

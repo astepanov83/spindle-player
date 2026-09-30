@@ -23,10 +23,20 @@ export interface Size {
   height: number
 }
 
+// Where the window was when the app closed: its top-left corner (of the
+// normal size when maximized), and whether it was maximized.
+export interface WindowPlace {
+  x: number
+  y: number
+  maximized: boolean
+}
+
 // What the settings file holds. Window sizes are main's business, so the page never sees them.
 export interface StoredSettings extends Settings {
   // the last size the user chose per template; missing means the template's own size
   windowSizes: Partial<Record<TemplateId, Size>>
+  // none until the window was first closed or moved; then it opens there again
+  windowPlace: WindowPlace | null
   // music folders, absolute paths. Only main changes them (through the folder picker).
   folders: string[]
 }
@@ -78,6 +88,18 @@ export function parseSize(v: unknown, template: Template): Size | undefined {
   }
 }
 
+// Past any screen's corner, so a broken number can't place the window far away.
+const maxPos = 100000
+
+export function parseWindowPlace(v: unknown): WindowPlace | null {
+  if (!isObject(v)) return null
+  const { x, y, maximized } = v
+  if (typeof x !== 'number' || typeof y !== 'number' || typeof maximized !== 'boolean') return null
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  const clamp = (n: number): number => Math.min(maxPos, Math.max(-maxPos, Math.round(n)))
+  return { x: clamp(x), y: clamp(y), maximized }
+}
+
 function parseVolume(v: unknown, fallback: number): number {
   if (typeof v !== 'number' || !Number.isFinite(v)) return fallback
   return Math.min(100, Math.max(0, Math.round(v)))
@@ -111,7 +133,7 @@ export function parseFolders(v: unknown): string[] {
 }
 
 export function defaultStoredSettings(): StoredSettings {
-  return { ...defaultSettings(), windowSizes: {}, folders: [] }
+  return { ...defaultSettings(), windowSizes: {}, windowPlace: null, folders: [] }
 }
 
 // The file may be old, hand-edited or half written, and a message from the page
@@ -143,6 +165,7 @@ export function parseStoredSettings(
     fetchCovers: typeof r.fetchCovers === 'boolean' ? r.fetchCovers : base.fetchCovers,
     coverSources: parseCoverSources(r.coverSources, base.coverSources),
     windowSizes,
+    windowPlace: r.windowPlace === undefined ? base.windowPlace : parseWindowPlace(r.windowPlace),
     folders: Array.isArray(r.folders) ? parseFolders(r.folders) : [...base.folders]
   }
 }
@@ -176,6 +199,14 @@ function isKnownSizes(v: unknown): boolean {
   })
 }
 
+// Kept as it is: whole numbers in range and no other fields.
+function isKnownPlace(v: unknown): boolean {
+  const parsed = parseWindowPlace(v)
+  return (
+    !!parsed && isObject(v) && Object.keys(v).length === 3 && parsed.x === v.x && parsed.y === v.y
+  )
+}
+
 // True when every field the file has is one this version reads as it is.
 // Otherwise the next save would drop something, so the file is copied first.
 export function isKnownSettingsFile(raw: unknown): boolean {
@@ -190,6 +221,7 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('volume') && parseVolume(raw.volume, NaN) !== raw.volume) return false
   if (has('queue') && !isKnownQueue(raw.queue)) return false
   if (has('windowSizes') && !isKnownSizes(raw.windowSizes)) return false
+  if (has('windowPlace') && raw.windowPlace !== null && !isKnownPlace(raw.windowPlace)) return false
   if (has('fetchCovers') && typeof raw.fetchCovers !== 'boolean') return false
   if (
     has('coverSources') &&

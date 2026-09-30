@@ -10,18 +10,19 @@ import { windowBackground } from '../shared/theme'
 import type { SettingsStore } from './settings-store'
 import { RestartBudget } from './library/restart'
 import { blockNavigation, canOpenExternal } from './web-guard'
-import { AppliedSize, placeCentered, sizeFor } from './window-place'
+import { AppliedSize, placeCentered, placeSaved, sizeFor } from './window-place'
 
 export function currentBackground(): string {
   return nativeTheme.shouldUseDarkColors ? windowBackground.dark : windowBackground.light
 }
 
-// Resize events come many per second while dragging. Save once it stops.
+// Resize and move events come many per second while dragging. Save once it stops.
 const resizeQuietMs = 400
 
 export class MainWindow {
   readonly win: BrowserWindow
   #resizeTimer: ReturnType<typeof setTimeout> | undefined
+  #moveTimer: ReturnType<typeof setTimeout> | undefined
   // The size we set on a template switch. Not saved as the user's choice,
   // so a size cut down to a small screen doesn't replace the one they picked,
   // and neither is the window manager's rounding of it.
@@ -36,9 +37,14 @@ export class MainWindow {
   constructor(readonly store: SettingsStore) {
     const s = store.get()
     const t = templates[s.template]
+    const size = sizeFor(t, s.windowSizes)
+    const areas = screen.getAllDisplays().map((d) => d.workArea)
     const area = screen.getPrimaryDisplay().workArea
-    // Centered on the screen, at the size this template had last time.
-    const bounds = placeCentered(area, sizeFor(t, s.windowSizes), area, t)
+    // Where it was last time, at the size this template had; the first time,
+    // or when that screen is gone, centered on the main screen.
+    const bounds =
+      (s.windowPlace && placeSaved(s.windowPlace, size, areas, t)) ??
+      placeCentered(area, size, area, t)
     this.#applied.set(bounds, Date.now())
 
     this.win = new BrowserWindow({
@@ -63,6 +69,8 @@ export class MainWindow {
         if (win.isDestroyed()) return
         // the window manager may change the size as the window is first shown
         this.#applied.settle(Date.now())
+        // bounds above are the normal size, so un-maximizing goes back to them
+        if (s.windowPlace?.maximized) win.maximize()
         win.show()
       }, this.showDelay())
     })
@@ -74,17 +82,31 @@ export class MainWindow {
       if (this.#reloads.take(Date.now())) win.webContents.reload()
       else console.error('The app page stopped too often; not loading it again')
     })
-    win.on('maximize', () => win.webContents.send(WinChannel.maximized, true))
-    win.on('unmaximize', () => win.webContents.send(WinChannel.maximized, false))
+    win.on('maximize', () => {
+      win.webContents.send(WinChannel.maximized, true)
+      this.#rememberPlace()
+    })
+    win.on('unmaximize', () => {
+      win.webContents.send(WinChannel.maximized, false)
+      this.#rememberPlace()
+    })
+    win.on('move', () => {
+      clearTimeout(this.#moveTimer)
+      this.#moveTimer = setTimeout(() => this.#rememberPlace(), resizeQuietMs)
+    })
     win.on('resize', () => {
       this.#resizedAt = Date.now()
       clearTimeout(this.#resizeTimer)
-      this.#resizeTimer = setTimeout(
-        () => this.#rememberSize(this.store.live().template),
-        resizeQuietMs
-      )
+      this.#resizeTimer = setTimeout(() => {
+        this.#rememberSize(this.store.live().template)
+        // a resize from the left or top edge moves the corner too
+        this.#rememberPlace()
+      }, resizeQuietMs)
     })
-    win.on('close', () => this.#rememberSize(this.store.live().template))
+    win.on('close', () => {
+      this.#rememberSize(this.store.live().template)
+      this.#rememberPlace()
+    })
 
     blockNavigation(win.webContents)
     win.webContents.setWindowOpenHandler((details) => {
@@ -108,6 +130,17 @@ export class MainWindow {
     const [width, height] = win.getSize()
     const size = this.#applied.userSize({ width, height }, this.#resizedAt)
     if (size) this.store.setWindowSize(id, size)
+  }
+
+  // One place for all templates: the top-left corner, of the normal size
+  // when maximized. A minimized or full screen window keeps the last one.
+  #rememberPlace(): void {
+    clearTimeout(this.#moveTimer)
+    const win = this.win
+    if (win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return
+    const maximized = win.isMaximized()
+    const { x, y } = maximized ? win.getNormalBounds() : win.getBounds()
+    this.store.setWindowPlace({ x, y, maximized })
   }
 
   // Saves the size of the template we leave, then moves to the next one's

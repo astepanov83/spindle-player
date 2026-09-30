@@ -7,7 +7,7 @@ import {
   type StoredSettings
 } from './settings'
 
-const defaults = { ...defaultSettings(), windowSizes: {}, folders: [] }
+const defaults = { ...defaultSettings(), windowSizes: {}, windowPlace: null, folders: [] }
 
 describe('parseStoredSettings', () => {
   it('gives the defaults for no file or a file that is not an object', () => {
@@ -26,6 +26,7 @@ describe('parseStoredSettings', () => {
       fetchCovers: true,
       coverSources: { musicbrainz: false, deezer: true, itunes: true },
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
+      windowPlace: { x: -1200, y: 40, maximized: true },
       folders: ['/home/me/Music', '/mnt/nas/music']
     }
     expect(parseStoredSettings(good)).toEqual(good)
@@ -118,6 +119,7 @@ describe('parseStoredSettings with a base', () => {
     fetchCovers: true,
     coverSources: { musicbrainz: true, deezer: false, itunes: true },
     windowSizes: { focus: { width: 500, height: 700 } },
+    windowPlace: { x: 40, y: 60, maximized: false },
     folders: ['/m']
   }
 
@@ -190,6 +192,39 @@ describe('isKnownSettingsFile', () => {
       { mini: { width: 500, height: 700 } }
     ])
       expect(isKnownSettingsFile({ windowSizes })).toBe(false)
+  })
+})
+
+describe('window place', () => {
+  it('rounds the corner and drops a place that is broken', () => {
+    const place = (windowPlace: unknown): unknown =>
+      parseStoredSettings({ windowPlace }).windowPlace
+    expect(place({ x: 10.6, y: -3.2, maximized: false })).toEqual({
+      x: 11,
+      y: -3,
+      maximized: false
+    })
+    expect(place({ x: 1e9, y: 0, maximized: false })).toEqual({ x: 100000, y: 0, maximized: false })
+    for (const bad of [
+      null,
+      'x',
+      { x: 1, y: 2 },
+      { x: '1', y: 2, maximized: false },
+      { x: NaN, y: 2, maximized: true }
+    ])
+      expect(place(bad)).toBeNull()
+  })
+
+  it('checks the place in the file', () => {
+    expect(isKnownSettingsFile({ windowPlace: null })).toBe(true)
+    expect(isKnownSettingsFile({ windowPlace: { x: -5, y: 30, maximized: true } })).toBe(true)
+    for (const windowPlace of [
+      { x: 1.5, y: 30, maximized: true },
+      { x: 1, y: 30 },
+      { x: 1, y: 30, maximized: true, w: 3 },
+      [1, 30]
+    ])
+      expect(isKnownSettingsFile({ windowPlace })).toBe(false)
   })
 })
 

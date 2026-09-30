@@ -53,6 +53,7 @@
         >{#if cur && playing.songPlaying}<Eq />{:else}{i + 1}{/if}</span
       >
       <span class="nm">{t.title}</span>
+      <span class="ar">{t.artist}</span>
       <span class="d">{fmtTime(t.duration)}</span>
     </button>
   {/each}
@@ -104,7 +105,7 @@
   }
   .srow {
     display: grid;
-    grid-template-columns: 32px 1fr auto;
+    grid-template-columns: 32px minmax(0, 2fr) minmax(0, 1.3fr) auto;
     gap: 16px;
     align-items: center;
     width: 100%;
@@ -132,10 +133,14 @@
     display: flex;
     justify-content: flex-end;
   }
+  .ar {
+    color: var(--ink-2);
+  }
   .srow.cur {
     font-weight: 600;
   }
-  .nm {
+  .nm,
+  .ar {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

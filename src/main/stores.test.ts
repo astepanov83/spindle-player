@@ -108,6 +108,17 @@ describe('SettingsStore window sizes', () => {
     expect(readdirSync(dir)).toEqual(['settings.json'])
   })
 
+  it('stores the window place so the file stays known, and the page cannot change it', () => {
+    const path = join(dir, 'settings.json')
+    const store = new SettingsStore(path)
+    store.setWindowPlace({ x: 12.4, y: -30, maximized: true })
+    store.setFromPage({ theme: 'dark', windowPlace: { x: 0, y: 0, maximized: false } })
+    store.flushSync()
+    const file = JSON.parse(readFileSync(path, 'utf8'))
+    expect(isKnownSettingsFile(file)).toBe(true)
+    expect(file.windowPlace).toEqual({ x: 12, y: -30, maximized: true })
+  })
+
   it('stores a size below the minimum as the minimum', () => {
     const store = new SettingsStore(join(dir, 'settings.json'))
     store.setWindowSize('studio', { width: 300, height: 200 })

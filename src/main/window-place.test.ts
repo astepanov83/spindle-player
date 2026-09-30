@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { templates } from '../shared/templates'
-import { AppliedSize, placeCentered, settleMs, sizeFor } from './window-place'
+import { AppliedSize, placeCentered, placeSaved, settleMs, sizeFor } from './window-place'
 
 const area = { x: 0, y: 0, width: 1920, height: 1080 }
 
@@ -111,5 +111,38 @@ describe('AppliedSize', () => {
     const a = new AppliedSize()
     a.settle(0)
     expect(a.userSize(set, 10)).toEqual(set)
+  })
+})
+
+describe('placeSaved', () => {
+  const size = { width: 1100, height: 680 }
+  const left = { x: -1920, y: 0, width: 1920, height: 1040 }
+
+  it('opens where it was', () => {
+    expect(placeSaved({ x: 300, y: 120 }, size, [area], templates.studio)).toEqual({
+      x: 300,
+      y: 120,
+      ...size
+    })
+  })
+
+  it('keeps it on the second screen it was on', () => {
+    expect(placeSaved({ x: -1500, y: 100 }, size, [area, left], templates.studio)).toEqual({
+      x: -1500,
+      y: 100,
+      ...size
+    })
+  })
+
+  it('pushes a window half off the edge back onto its screen', () => {
+    expect(placeSaved({ x: 1500, y: 900 }, size, [area], templates.studio)).toEqual({
+      x: 820,
+      y: 400,
+      ...size
+    })
+  })
+
+  it('gives none when its screen is gone', () => {
+    expect(placeSaved({ x: -1500, y: 100 }, size, [area], templates.studio)).toBeUndefined()
   })
 })

@@ -8,6 +8,7 @@
   import { queue } from '../stores/queue.svelte'
   import { radio } from '../stores/radio.svelte'
   import { backNote, msToMidnight, recentRows } from '../radio/logic'
+  import { stationArt } from '../../../shared/stations'
 
   // Today's times turn into days at midnight, with no new title to redraw them.
   let now = $state(Date.now())
@@ -27,6 +28,8 @@
   // the cover column shows only once a song has one (ticket 032): with the
   // setting off, rows keep their width for the text
   const thumbs = $derived(rows.some((r) => r.cover))
+  // a song with no cover (a jingle, a miss) shows the station's logo, or the record
+  const logo = $derived(radio.station && stationArt(radio.station).cover)
 </script>
 
 <div class="body">
@@ -39,11 +42,10 @@
     <p class="empty">Songs this station plays show up here.</p>
   {/if}
   {#each rows as r (r.key)}
-    <!-- a song with no cover found (a jingle, a miss) leaves its place empty -->
     <div class="rrow" class:cur-row={r.now} class:thumbs>
       <span class="t">{r.time}</span>
       {#if thumbs}
-        {#if r.cover}<Thumb src={r.cover} size={40} />{:else}<span></span>{/if}
+        <Thumb src={r.cover || logo} size={40} />
       {/if}
       <span class="qt">
         <span class="nm" title={r.song}>{r.song}</span>

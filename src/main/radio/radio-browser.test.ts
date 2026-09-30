@@ -433,7 +433,11 @@ describe('resolveMirrors', () => {
     }
     const names = await resolveMirrors(dns, () => 0)
     expect(dns.lookup).toHaveBeenCalledWith('all.api.radio-browser.info', { all: true })
-    expect([...names].sort()).toEqual(['de1.api.radio-browser.info', 'nl1.api.radio-browser.info'])
+    expect(names.at(-1)).toBe('all.api.radio-browser.info')
+    expect(names.slice(0, -1).sort()).toEqual([
+      'de1.api.radio-browser.info',
+      'nl1.api.radio-browser.info'
+    ])
   })
 
   it('uses all.api.radio-browser.info itself when no address has a name', async () => {
@@ -442,6 +446,32 @@ describe('resolveMirrors', () => {
       reverse: vi.fn(async () => {
         throw new Error('ENOTFOUND')
       })
+    }
+    expect(await resolveMirrors(dns)).toEqual(['all.api.radio-browser.info'])
+  })
+
+  // A local DNS that proxies Radio Browser answers with its own address, and
+  // that address's reverse name ("proxy.lan") does not resolve.
+  it('keeps only Radio Browser names, and tries the round-robin name last', async () => {
+    const dns = {
+      lookup: vi.fn(async () => [
+        { address: '10.0.0.2', family: 4 },
+        { address: '2.2.2.2', family: 4 }
+      ]),
+      reverse: vi.fn(async (ip: string) =>
+        ip === '2.2.2.2' ? ['DE1.api.radio-browser.info'] : ['proxy.lan']
+      )
+    }
+    expect(await resolveMirrors(dns)).toEqual([
+      'de1.api.radio-browser.info',
+      'all.api.radio-browser.info'
+    ])
+  })
+
+  it('uses the round-robin name when the only name is not Radio Browser', async () => {
+    const dns = {
+      lookup: vi.fn(async () => [{ address: '10.0.0.2', family: 4 }]),
+      reverse: vi.fn(async () => ['proxy.lan'])
     }
     expect(await resolveMirrors(dns)).toEqual(['all.api.radio-browser.info'])
   })

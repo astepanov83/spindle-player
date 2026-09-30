@@ -173,22 +173,27 @@ export interface MirrorDns {
   reverse(ip: string): Promise<string[]>
 }
 
+const roundRobin = 'all.api.radio-browser.info'
+
 // Radio Browser's servers: every address of all.api.radio-browser.info, named
 // by a reverse lookup (https needs the name). Shuffled, so users spread over them.
+// Only Radio Browser's own names count: a local DNS that proxies it gives its
+// own address, whose name ("proxy.lan") is no mirror. The round-robin name, which
+// works over https too, is always tried last.
 export async function resolveMirrors(
   dns: MirrorDns,
   random: () => number = Math.random
 ): Promise<string[]> {
-  const addrs = await dns.lookup('all.api.radio-browser.info', { all: true })
+  const addrs = await dns.lookup(roundRobin, { all: true })
   const names = await Promise.all(addrs.map((a) => dns.reverse(a.address).catch(() => [])))
-  const out = [...new Set(names.flat().map((n) => n.toLowerCase()))]
-  // no address has a name: the round-robin name itself still works over https
-  if (!out.length) return ['all.api.radio-browser.info']
+  const out = [...new Set(names.flat().map((n) => n.toLowerCase()))].filter(
+    (n) => n.endsWith('.api.radio-browser.info') && n !== roundRobin
+  )
   for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1))
     ;[out[i], out[j]] = [out[j], out[i]]
   }
-  return out
+  return [...out, roundRobin]
 }
 
 export interface RadioBrowserDeps {

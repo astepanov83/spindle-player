@@ -45,6 +45,7 @@ import { PlaylistFile, QueueFile } from './page-files'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
 import { devRetryData, isDevRetry, takeLock } from './single-instance'
+import { hasTrayHost, hidesOnMinimize, makeTray } from './tray'
 import { currentBackground, MainWindow } from './window'
 
 let store: SettingsStore
@@ -68,6 +69,8 @@ let songCoverFile: ReturnType<typeof openSongCovers> | undefined
 let searches = 0
 const radioStreams = new RadioStreams()
 let main: MainWindow | null = null
+// kept here so it isn't garbage collected, which would remove the icon
+let tray: Electron.Tray | null = null
 
 registerScheme()
 
@@ -91,6 +94,8 @@ app.on('before-quit', () => (quitting = true))
 function createWindow(splash?: Splash): void {
   library.resume()
   main = new MainWindow(store)
+  main.hideOnMinimize = () =>
+    tray ? hidesOnMinimize(process.platform, hasTrayHost) : Promise.resolve(false)
   splash?.endWith(main)
   // a crashed page sends no pause; a reloaded one sends its state again
   main.win.webContents.on('render-process-gone', () => library.setPlaying(false))
@@ -99,6 +104,14 @@ function createWindow(splash?: Splash): void {
     // a hidden cover window would keep the app running with no window
     library.pause()
   })
+}
+
+// From the tray icon or a second copy of the app.
+function showMain(): void {
+  // a window made now would close again with the app
+  if (!started || quitting) return
+  if (main) main.bringBack()
+  else createWindow()
 }
 
 function toPage(channel: string, data: unknown): void {
@@ -227,20 +240,9 @@ page.on(PlaybackChannel.log, (_, text) => {
 
 // Another copy was started: it quits, and this one comes to the front.
 app.on('second-instance', (_e, _argv, _cwd, data) => {
-  // a window made now would close again with the app
-  if (!started || quitting) return
   // a dev copy asking again while it waits for this one to quit
   if (isDevRetry(data)) return
-  if (!main) {
-    createWindow()
-    return
-  }
-  const win = main.win
-  if (win.isMinimized()) win.restore()
-  // still loading: it shows itself when ready
-  else if (!win.isVisible()) return
-  win.show()
-  win.focus()
+  showMain()
 })
 
 void Promise.all([locked, app.whenReady()]).then(([ok]) => {
@@ -386,6 +388,7 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   })
 
   createWindow(splash)
+  tray = makeTray(showMain)
   // After the first paint: read earlier, it shows software drawing before the GPU process is up.
   main!.win.once('ready-to-show', () => console.log('GPU:', app.getGPUFeatureStatus()))
 

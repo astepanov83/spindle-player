@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Placeholder: a record on a spindle, in the prototype's default album colors. -->
-  <rect x="16" y="16" width="480" height="480" rx="108" fill="#3d4178"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="78 78 356 356">
+  <!-- Placeholder: a record on a spindle, in the prototype's default album colors.
+       Cut to the disc, so it fills the tray and task bar box. -->
   <circle cx="256" cy="256" r="178" fill="#111216"/>
   <circle cx="256" cy="256" r="150" fill="none" stroke="#2a2d38" stroke-width="4"/>
   <circle cx="256" cy="256" r="122" fill="none" stroke="#2a2d38" stroke-width="4"/>

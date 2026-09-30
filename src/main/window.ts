@@ -33,6 +33,10 @@ export class MainWindow {
   #reloads = new RestartBudget(3, 60000)
   // ms to wait before showing, so the start banner doesn't flicker (splash.ts)
   showDelay: () => number = () => 0
+  // whether minimize hides the window to the tray (tray.ts)
+  hideOnMinimize: () => Promise<boolean> = () => Promise.resolve(false)
+  // hidden by minimize, not still loading
+  #inTray = false
 
   constructor(readonly store: SettingsStore) {
     const s = store.get()
@@ -90,6 +94,15 @@ export class MainWindow {
       win.webContents.send(WinChannel.maximized, false)
       this.#rememberPlace()
     })
+    win.on('minimize', () => {
+      void this.hideOnMinimize().then((hide) => {
+        // it may have been brought back while we asked
+        if (!hide || win.isDestroyed() || !win.isMinimized()) return
+        this.#inTray = true
+        win.hide()
+      })
+    })
+    win.on('show', () => (this.#inTray = false))
     win.on('move', () => {
       clearTimeout(this.#moveTimer)
       this.#moveTimer = setTimeout(() => this.#rememberPlace(), resizeQuietMs)
@@ -120,6 +133,17 @@ export class MainWindow {
     } else {
       win.loadFile(join(__dirname, '../renderer/index.html'))
     }
+  }
+
+  // From the tray or a second copy: back on screen and in front. A window
+  // still loading is left to show itself.
+  bringBack(): void {
+    const win = this.win
+    if (win.isDestroyed()) return
+    if (!win.isVisible() && !this.#inTray && !win.isMinimized()) return
+    win.show()
+    if (win.isMinimized()) win.restore()
+    win.focus()
   }
 
   #rememberSize(id: TemplateId): void {

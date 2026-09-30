@@ -4,19 +4,44 @@
 
   let { placeholder }: { placeholder: string } = $props()
 
+  let input: HTMLInputElement | undefined = $state()
+
+  // Typing keeps the open page: each view shows what it finds over it, and
+  // clearing the text shows the page again.
   function oninput(e: Event & { currentTarget: HTMLInputElement }): void {
     library.query = e.currentTarget.value
-    library.open = null
-    library.artist = null
-    // a playlist's search results show as songs; Folders searches the open
-    // folder and Artists the artists
-    if (library.section.startsWith('pl:')) library.section = 'songs'
+  }
+
+  // The first Escape clears the text, the next leaves the box.
+  function onkeydown(e: KeyboardEvent & { currentTarget: HTMLInputElement }): void {
+    if (e.key !== 'Escape') return
+    e.preventDefault()
+    if (library.query) library.query = ''
+    else e.currentTarget.blur()
+  }
+
+  function clear(): void {
+    library.query = ''
+    input?.focus()
   }
 </script>
 
 <label class="search">
   <Icon name="search" size={18} />
-  <input type="search" {placeholder} autocomplete="off" value={library.query} {oninput} />
+  <input
+    type="search"
+    {placeholder}
+    autocomplete="off"
+    value={library.query}
+    bind:this={input}
+    {oninput}
+    {onkeydown}
+  />
+  {#if library.query}
+    <button class="clear" aria-label="Clear search" title="Clear search" onclick={clear}
+      ><Icon name="close" size={16} /></button
+    >
+  {/if}
 </label>
 
 <style>
@@ -38,6 +63,24 @@
     color: var(--ink);
     font: 14px var(--ui);
     outline: none;
+  }
+  /* our own clear button takes its place */
+  input::-webkit-search-cancel-button {
+    display: none;
+  }
+  .clear {
+    width: 24px;
+    height: 24px;
+    margin-right: -6px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--ink-3);
+  }
+  .clear:hover {
+    background: var(--hover);
+    color: var(--ink);
   }
   input::placeholder {
     color: var(--ink-3);

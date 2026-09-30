@@ -332,3 +332,44 @@ describe('patches while a scan runs', () => {
     expect(library.revision).toBe(before + 1)
   })
 })
+
+describe('search text (ticket 039)', () => {
+  it('is cleared when another chip is picked, and the pages close', () => {
+    library.query = 'metal'
+    library.open = 'a'
+    library.openPlaylist = 'p'
+    library.pickChip('albums')
+    expect(library.chip).toBe('albums')
+    expect(library.query).toBe('')
+    expect(library.open).toBeNull()
+    expect(library.openPlaylist).toBeNull()
+  })
+
+  it('is cleared when another section is picked', () => {
+    library.pickSection('radio')
+    library.query = 'jazz'
+    library.pickSection('songs')
+    expect(library.section).toBe('songs')
+    expect(library.query).toBe('')
+  })
+
+  it('does not close the open album while typing', () => {
+    library.open = 'a'
+    library.query = 'harbor'
+    expect(library.open).toBe('a')
+    library.query = ''
+    expect(library.open).toBe('a')
+  })
+
+  it('"Show all" goes back to the results when the text is cleared', () => {
+    library.query = 'harbor'
+    library.searchAll = 'songs'
+    library.query = 'harbor l'
+    expect(library.searchAll).toBe('songs')
+    library.query = ' '
+    expect(library.searchAll).toBeNull()
+    library.searchAll = 'albums'
+    library.pickChip('artists')
+    expect(library.searchAll).toBeNull()
+  })
+})

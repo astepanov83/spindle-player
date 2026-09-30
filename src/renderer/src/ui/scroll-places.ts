@@ -20,7 +20,8 @@ const above = (to: string[], from: string[]): boolean =>
 
 // A place is whatever the caller needs to scroll back (a scrollTop, a row).
 export class ScrollPlaces<P> {
-  #places = new Map<string, P>()
+  // with the search text the view had when it was left
+  #places = new Map<string, { place: P; query: string }>()
 
   // Keeps where `from` was left and says where `to` starts: a kept place,
   // 'top', or undefined when the view did not change (a search in it moves
@@ -28,9 +29,12 @@ export class ScrollPlaces<P> {
   move(from: View | undefined, place: P, to: View): P | 'top' | undefined {
     if (!from) return 'top'
     if (same(from.path, to.path)) return undefined
-    this.#places.set(keyOf(from), place)
-    // a search that closed the page shows other rows, so the old place means nothing
-    if (!above(to.path, from.path) || to.query !== from.query) return 'top'
-    return this.#places.get(keyOf(to)) ?? 'top'
+    this.#places.set(keyOf(from), { place, query: from.query })
+    if (!above(to.path, from.path)) return 'top'
+    // other search text shows other rows, so the old place means nothing.
+    // Clearing a search goes up from the results to the view they covered,
+    // which was left with no text.
+    const kept = this.#places.get(keyOf(to))
+    return kept && kept.query === to.query ? kept.place : 'top'
   }
 }

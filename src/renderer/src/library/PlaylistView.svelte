@@ -3,7 +3,7 @@
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
   import { openSongMenu } from './song-menu'
-  import { playlistRows, sortRows } from './views'
+  import { filterSongs, playlistRows, sortRows } from './views'
   import { library } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
   import { queue } from '../stores/queue.svelte'
@@ -24,6 +24,8 @@
         )
       : { rows: [], missing: 0 }
   )
+  // the search box filters the rows; Play takes what is shown
+  const shown = $derived(filterSongs(view.rows, library.query))
   let confirmDelete = $state(false)
 
   // a different playlist starts without the delete question
@@ -32,13 +34,19 @@
     confirmDelete = false
   })
 
-  // as sorted in the table
+  // what the table shows, as sorted there
   const playIds = (): string[] =>
-    sortRows(view.rows, library.playlistSort(id), (t) => library.order(t)).map((t) => t.id)
+    sortRows(shown, library.playlistSort(id), (t) => library.order(t)).map((t) => t.id)
 
   function play(): void {
     if (!p) return
     queue.playList(playIds(), 0, p.name)
+  }
+
+  // the text filtered this playlist's rows; the list would take it as a name
+  function toList(): void {
+    library.query = ''
+    library.openPlaylist = null
   }
 
   function focus(node: HTMLInputElement): void {
@@ -64,14 +72,12 @@
 
 {#if p}
   {#if back}
-    <button class="back" onclick={() => (library.openPlaylist = null)}
-      ><Icon name="back" size={16} />All playlists</button
-    >
+    <button class="back" onclick={toList}><Icon name="back" size={16} />All playlists</button>
   {/if}
   <SongTable
     title={p.name}
     meta="Playlist"
-    items={view.rows}
+    items={shown}
     {scrollEl}
     sort={library.playlistSort(id)}
     onsort={(k) => library.sortPlaylist(id, k)}
@@ -98,7 +104,7 @@
           <h2 class="page-title">{p.name}</h2>
         {/if}
         <div class="acts">
-          <button class="pill" disabled={!view.rows.length} onclick={play}>Play</button>
+          <button class="pill" disabled={!shown.length} onclick={play}>Play</button>
           <button class="pill ghost" onclick={() => (playlists.editing = id)}>Rename</button>
           {#if confirmDelete}
             <button class="pill danger" onclick={() => playlists.remove(id)}>Delete playlist</button
@@ -112,7 +118,7 @@
             aria-haspopup="menu"
             aria-label="More"
             title="Play next, add to the queue or another playlist"
-            disabled={!view.rows.length}
+            disabled={!shown.length}
             onclick={(e) => p && openSongMenu(e, playIds(), { onPlaylist: id, from: p.name })}
             ><Icon name="more" size={18} /></button
           >
@@ -124,6 +130,8 @@
     <p class="hint">
       Empty for now. Right-click a song to add it, or use "Add to playlist" on an album page.
     </p>
+  {:else if view.rows.length && !shown.length}
+    <p class="hint">No song in this playlist has that in its title, artist or album.</p>
   {/if}
 {/if}
 

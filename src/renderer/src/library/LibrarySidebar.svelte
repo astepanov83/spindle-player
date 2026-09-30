@@ -8,6 +8,7 @@
   import PlaylistView from './PlaylistView.svelte'
   import RadioView from './RadioView.svelte'
   import SearchBox from './SearchBox.svelte'
+  import SearchResults from './SearchResults.svelte'
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
@@ -33,10 +34,23 @@
 
   const songs = $derived(songRows(library.albums, (id) => library.track(id), library.query))
 
+  const searching = $derived(!!library.query.trim())
+
   function pick(s: Section): void {
-    library.section = s
-    library.open = null
-    library.artist = null
+    library.pickSection(s)
+  }
+
+  function openArtist(key: string): void {
+    pick('artists')
+    library.openArtist(key)
+  }
+
+  const placeholders: Partial<Record<Section, string>> = {
+    songs: 'Search songs',
+    albums: 'Search library',
+    artists: 'Search artists',
+    folders: 'Search this folder',
+    radio: 'Search stations'
   }
 
   function create(): void {
@@ -57,7 +71,16 @@
   }
 </script>
 
-<svelte:window onmouseup={(e) => onSideButton(e, pages[library.section] ?? null)} />
+<!-- Back and Forward leave the page under the search results alone -->
+<svelte:window
+  onmouseup={(e) =>
+    onSideButton(
+      e,
+      searching && (library.section === 'albums' || library.section === 'artists')
+        ? null
+        : (pages[library.section] ?? null)
+    )}
+/>
 
 {#snippet item(sec: Section, icon: IconName, label: string)}
   <button class="sidebtn" aria-current={library.section === sec} onclick={() => pick(sec)}>
@@ -67,7 +90,9 @@
 
 <div class="lib2">
   <aside class="side">
-    <div class="search"><SearchBox placeholder="Search" /></div>
+    <div class="search">
+      <SearchBox placeholder={placeholders[library.section] ?? 'Search this playlist'} />
+    </div>
     <div class="sidehead">Library</div>
     {#each sections as [sec, icon, label] (sec)}
       {@render item(sec, icon, label)}
@@ -91,7 +116,9 @@
     {:else if library.section === 'songs'}
       <SongTable title="Songs" meta="Library" items={songs} {scrollEl} />
     {:else if library.section === 'albums'}
-      {#if library.open}
+      {#if searching}
+        <SearchResults {scrollEl} onartist={openArtist} />
+      {:else if library.open}
         <AlbumPage albumId={library.open} />
       {:else}
         <AlbumGrid {scrollEl} />

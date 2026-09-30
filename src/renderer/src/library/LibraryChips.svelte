@@ -9,6 +9,7 @@
   import PlaylistView from './PlaylistView.svelte'
   import RadioView from './RadioView.svelte'
   import SearchBox from './SearchBox.svelte'
+  import SearchResults from './SearchResults.svelte'
   import { onSideButton } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { library, type Chip, type Page } from '../stores/library.svelte'
@@ -23,11 +24,23 @@
 
   let scrollEl: HTMLDivElement | undefined = $state()
 
+  const searching = $derived(!!library.query.trim())
+
   function pick(c: Chip): void {
-    library.chip = c
-    library.open = null
-    library.openPlaylist = null
-    library.artist = null
+    library.pickChip(c)
+  }
+
+  function openArtist(key: string): void {
+    pick('artists')
+    library.openArtist(key)
+  }
+
+  const placeholders: Record<Chip, string> = {
+    albums: 'Search your library',
+    artists: 'Search artists',
+    folders: 'Search this folder',
+    playlists: 'Search playlists',
+    radio: 'Search stations'
   }
 
   const pages: Partial<Record<Chip, Page>> = {
@@ -36,7 +49,12 @@
     folders: 'folder',
     artists: 'artist'
   }
-  const page: Page | null = $derived(pages[library.chip] ?? null)
+  // Back and Forward leave the page under the search results alone
+  const page: Page | null = $derived(
+    searching && (library.chip === 'albums' || library.chip === 'artists')
+      ? null
+      : (pages[library.chip] ?? null)
+  )
 
   scrollTopOnChange(
     () => scrollEl,
@@ -49,13 +67,9 @@
 <div class="lib">
   <div class="top">
     <SearchBox
-      placeholder={library.chip === 'folders'
-        ? 'Search this folder'
-        : library.chip === 'artists'
-          ? 'Search artists'
-          : library.chip === 'radio'
-            ? 'Search stations'
-            : 'Search albums and artists'}
+      placeholder={library.chip === 'playlists' && library.openPlaylist
+        ? 'Search this playlist'
+        : placeholders[library.chip]}
     />
     <div class="chips">
       {#each chips as [c, label] (c)}
@@ -81,6 +95,8 @@
       <FolderView {scrollEl} />
     {:else if library.chip === 'artists'}
       <ArtistView {scrollEl} />
+    {:else if searching}
+      <SearchResults {scrollEl} onartist={openArtist} />
     {:else if library.open}
       <AlbumPage albumId={library.open} />
     {:else}

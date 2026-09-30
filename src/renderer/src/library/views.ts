@@ -7,29 +7,100 @@ export interface Sort {
   dir: 1 | -1
 }
 
-const norm = (q: string): string => q.trim().toLowerCase()
+// For search: lower case, and letters without their accents, so "bjork"
+// finds Björk and "cafe" Café. Only the accents of U+0300-U+036F go: the
+// Japanese voicing marks (が) are other marks and stay. Cyrillic й and ё
+// lose theirs too, so и and е find them.
+export function fold(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .normalize('NFC')
+    .toLowerCase()
+}
+
+// The search text of each song, album and artist, folded once: folding 50k
+// songs on every key is slow. Kept by object, which the library replaces
+// when a song, album or artist changes (a scan's patch, an artist edit) and
+// never edits, so an entry can't go stale; a dropped object takes its entry.
+function foldedBy<T extends object>(text: (x: T) => string): (x: T) => string {
+  const kept = new WeakMap<T, string>()
+  return (x) => {
+    let f = kept.get(x)
+    if (f === undefined) kept.set(x, (f = fold(text(x))))
+    return f
+  }
+}
+
+// title and artist; the album apart, since the results don't match songs by it
+const songText = foldedBy((t: Track) => t.title + '\n' + t.artist)
+const songAlbum = foldedBy((t: Track) => t.album)
+const albumText = foldedBy((a: Album) => a.title + ' ' + a.artist)
+// an artist's or a folder's name
+export const foldedName = foldedBy((x: { name: string }) => x.name)
+
+// A song, with its album too: Folders and playlists match that way.
+// `s` is folded (foldQuery).
+export const songOrAlbumHas = (t: Track, s: string): boolean =>
+  songText(t).includes(s) || songAlbum(t).includes(s)
+
+export const foldQuery = (q: string): string => fold(q.trim())
 
 export function albumMatches(album: Album, q: string): boolean {
-  const s = norm(q)
-  return !s || (album.title + ' ' + album.artist).toLowerCase().includes(s)
+  const s = foldQuery(q)
+  return !s || albumText(album).includes(s)
+}
+
+// A song by its own title or artist. Not by its album: the search results
+// have a group for albums.
+export function songMatches(t: Track, q: string): boolean {
+  const s = foldQuery(q)
+  return !s || songText(t).includes(s)
 }
 
 export function filterAlbums(albums: Album[], q: string): Album[] {
-  return norm(q) ? albums.filter((a) => albumMatches(a, q)) : albums
+  const s = foldQuery(q)
+  return s ? albums.filter((a) => albumText(a).includes(s)) : albums
 }
 
-// The Songs table: every song of a matching album, plus songs whose title matches.
+// The Songs table: every song of a matching album, plus songs whose title
+// or artist matches.
 export function songRows(albums: Album[], track: (id: string) => Track, q: string): Track[] {
-  const s = norm(q)
+  const s = foldQuery(q)
   const out: Track[] = []
   for (const al of albums) {
-    const whole = albumMatches(al, q)
+    const whole = !s || albumText(al).includes(s)
     for (const id of al.trackIds) {
       const t = track(id)
-      if (whole || t.title.toLowerCase().includes(s)) out.push(t)
+      if (whole || songText(t).includes(s)) out.push(t)
     }
   }
   return out
+}
+
+// The search results' songs, in library order. None for an empty search.
+export function searchSongs(albums: Album[], track: (id: string) => Track, q: string): Track[] {
+  const s = foldQuery(q)
+  if (!s) return []
+  const out: Track[] = []
+  for (const al of albums)
+    for (const id of al.trackIds) {
+      const t = track(id)
+      if (songText(t).includes(s)) out.push(t)
+    }
+  return out
+}
+
+// A playlist's rows by title, artist or album, as in Folders.
+export function filterSongs(rows: Track[], q: string): Track[] {
+  const s = foldQuery(q)
+  return s ? rows.filter((t) => songOrAlbumHas(t, s)) : rows
+}
+
+export function filterPlaylists<T extends { name: string }>(list: T[], q: string): T[] {
+  const s = foldQuery(q)
+  // a few names: not worth keeping folded
+  return s ? list.filter((p) => fold(p.name).includes(s)) : list
 }
 
 const keyOf: Record<SortKey, (t: Track) => string | number> = {

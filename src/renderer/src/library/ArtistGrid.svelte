@@ -15,14 +15,29 @@
   import { queue } from '../stores/queue.svelte'
   import { sections, songMenu } from './song-menu'
 
-  let { scrollEl }: { scrollEl: HTMLElement | undefined } = $props()
+  let {
+    scrollEl,
+    items,
+    onopen = open
+  }: {
+    scrollEl: HTMLElement | undefined
+    // these artists instead of the library's, with no search (search results)
+    items?: Artist[]
+    onopen?: (key: string) => void
+  } = $props()
+
+  // the grid shows over the open page while searching, so a pick ends the search
+  function open(key: string): void {
+    library.query = ''
+    library.openArtist(key)
+  }
 
   const GAP = 16
   const ROW_GAP = 22
   let list: HTMLDivElement | undefined = $state()
   let width = $state(0)
 
-  const artists = $derived(filterArtists(library.artists, library.query))
+  const artists = $derived(items ?? filterArtists(library.artists, library.query))
   const cols = $derived(gridColumns(width, 140, GAP))
   const rows = $derived(chunk(artists, cols))
   // picture + name + count, measured for real once drawn
@@ -57,7 +72,7 @@
   )
 
   function edit(a: Artist): void {
-    library.openArtist(a.key)
+    onopen(a.key)
     library.editingArtist = a.key
   }
 
@@ -72,10 +87,16 @@
       : plural(a.also.length, 'song', 'songs')
 </script>
 
-{#if !artists.length}
+{#if !items && !artists.length}
   <Empty title="No matches" text="No artist has that in their name." />
 {/if}
-<div class="grid" bind:this={list} bind:clientWidth={width} style:height="{v.total}px">
+<div
+  class="grid"
+  data-grid="artists"
+  bind:this={list}
+  bind:clientWidth={width}
+  style:height="{v.total}px"
+>
   {#each v.items as item (item.key)}
     <div
       class="row"
@@ -97,7 +118,7 @@
             )}
         >
           <div class="picwrap">
-            <button class="pic" aria-label="Open {a.name}" onclick={() => library.openArtist(a.key)}
+            <button class="pic" aria-label="Open {a.name}" onclick={() => onopen(a.key)}
               ><ArtistPic
                 photo={library.photos[a.key]?.cover}
                 covers={artistCovers(a, album, songCover)}

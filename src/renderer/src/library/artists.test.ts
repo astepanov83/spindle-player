@@ -40,6 +40,12 @@ describe('filterArtists', () => {
     ])
     expect(filterArtists(all, '')).toBe(all)
   })
+
+  it('finds them without accents (ticket 039)', () => {
+    const all = [artist('Björk'), artist('Sigur Rós')]
+    expect(filterArtists(all, 'bjork').map((a) => a.name)).toEqual(['Björk'])
+    expect(filterArtists(all, 'RÓS').map((a) => a.name)).toEqual(['Sigur Rós'])
+  })
 })
 
 describe('artistSongs', () => {

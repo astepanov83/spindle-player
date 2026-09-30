@@ -261,6 +261,8 @@ describe('filterFolder', () => {
     expect(ids(filterFolder(t, 1, 'bus').songs)).toEqual(['Night Bus'])
     expect(ids(filterFolder(t, 1, 'quiet').songs)).toEqual(['x'])
     expect(ids(filterFolder(t, 1, 'RAIN').songs)).toEqual(['y'])
+    // without accents (ticket 039)
+    expect(ids(filterFolder(t, 1, 'bús').songs)).toEqual(['Night Bus'])
   })
 
   it('keeps a subfolder when a folder or song below it matches', () => {

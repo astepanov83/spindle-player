@@ -58,7 +58,13 @@
 {#if !items && !albums.length}
   <Empty title="No matches" text="Nothing found for this search. Try an album or artist name." />
 {/if}
-<div class="grid" bind:this={list} bind:clientWidth={width} style:height="{v.total}px">
+<div
+  class="grid"
+  data-grid="albums"
+  bind:this={list}
+  bind:clientWidth={width}
+  style:height="{v.total}px"
+>
   {#each v.items as item (item.key)}
     <div
       class="row"

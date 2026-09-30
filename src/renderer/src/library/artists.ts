@@ -3,11 +3,11 @@
 // and an album. No DOM. Who counts as an artist is in shared/artists.ts.
 import type { Artist } from '../../../shared/artists'
 import type { Track } from '../../../shared/library'
-import { sortRows, type Sort } from './views'
+import { foldedName, foldQuery, sortRows, type Sort } from './views'
 
 export function filterArtists(artists: Artist[], q: string): Artist[] {
-  const s = q.trim().toLowerCase()
-  return s ? artists.filter((a) => a.name.toLowerCase().includes(s)) : artists
+  const s = foldQuery(q)
+  return s ? artists.filter((a) => foldedName(a).includes(s)) : artists
 }
 
 // Their albums in order, then their songs on other albums.

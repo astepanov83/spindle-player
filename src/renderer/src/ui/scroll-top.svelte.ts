@@ -19,7 +19,14 @@ export function libraryView(top: string): View {
     if (library.artist) path.push(`artist:${library.artist}`)
     if (library.open) path.push(`album:${library.open}`)
   }
-  return { path, query: library.query }
+  // The search results (Albums) and the filtered grid (Artists) show over
+  // the open view, so they are a view below it (ticket 039). Other views
+  // filter in place and stay the same view.
+  if (library.query.trim() && (top === 'albums' || top === 'artists')) {
+    path.push('search')
+    if (top === 'albums' && library.searchAll) path.push(`all:${library.searchAll}`)
+  }
+  return { path, query: library.query.trim() }
 }
 
 // Where a view was left: its scrollTop, and the first grid row on screen
@@ -28,19 +35,28 @@ export function libraryView(top: string): View {
 // px per row; the row puts the place back exactly.
 interface Place {
   top: number
-  row?: { index: string; y: number }
+  row?: { grid: string; index: string; y: number }
 }
 
-// grid rows carry data-index (AlbumGrid, ArtistGrid); a view has one grid at most
-const rows = (el: HTMLElement): NodeListOf<HTMLElement> =>
-  el.querySelectorAll<HTMLElement>('[data-index]')
+// Grid rows carry data-index inside a data-grid (AlbumGrid, ArtistGrid). A
+// view has one of each at most: the search results have both, so a row is
+// looked up in its own grid.
+const rows = (el: HTMLElement, grid?: string): NodeListOf<HTMLElement> =>
+  el.querySelectorAll<HTMLElement>(grid ? `[data-grid="${grid}"] > [data-index]` : '[data-index]')
 
 function placeOf(el: HTMLElement): Place {
   const boxTop = el.getBoundingClientRect().top
   for (const r of rows(el)) {
     const b = r.getBoundingClientRect()
     if (b.bottom > boxTop)
-      return { top: el.scrollTop, row: { index: r.dataset.index!, y: b.top - boxTop } }
+      return {
+        top: el.scrollTop,
+        row: {
+          grid: r.closest<HTMLElement>('[data-grid]')?.dataset.grid ?? '',
+          index: r.dataset.index!,
+          y: b.top - boxTop
+        }
+      }
   }
   return { top: el.scrollTop }
 }
@@ -81,7 +97,7 @@ function scrollWhenDrawn(el: HTMLElement, place: Place): () => void {
   // how far off the place is: by the row once it is drawn, else by pixels
   const miss = (): number => {
     const want = place.row
-    const r = want && [...rows(el)].find((r) => r.dataset.index === want.index)
+    const r = want && [...rows(el, want.grid)].find((r) => r.dataset.index === want.index)
     if (!want || !r) return place.top - el.scrollTop
     return r.getBoundingClientRect().top - el.getBoundingClientRect().top - want.y
   }

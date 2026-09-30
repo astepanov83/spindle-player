@@ -34,3 +34,23 @@ describe('removing a closed playlist', () => {
     expect(library.openPlaylist).toBeNull()
   })
 })
+
+describe('removing a playlist while its rows are filtered (ticket 039)', () => {
+  it('clears the search text, which was for its rows', () => {
+    const a = playlists.create()
+    library.section = `pl:${a}`
+    library.query = 'blue'
+    playlists.remove(a)
+    expect(library.section).toBe('songs')
+    expect(library.query).toBe('')
+  })
+
+  it('keeps the text when another playlist is removed', () => {
+    const a = playlists.create()
+    const b = playlists.create()
+    library.section = `pl:${a}`
+    library.query = 'blue'
+    playlists.remove(b)
+    expect(library.query).toBe('blue')
+  })
+})

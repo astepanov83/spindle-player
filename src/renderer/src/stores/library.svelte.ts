@@ -50,6 +50,7 @@ export type Section = 'songs' | 'albums' | 'artists' | 'folders' | 'radio' | `pl
 // Folders they go up a folder and back down, in Artists from an album to
 // its artist to the grid and back
 export type Page = 'open' | 'openPlaylist' | 'folder' | 'artist'
+export type SearchGroup = 'songs' | 'albums' | 'artists'
 
 class LibraryStore {
   // plain arrays, not deep proxies: they can hold 50k+ songs
@@ -92,7 +93,9 @@ class LibraryStore {
   open: string | null = $state(null)
   // Studio's Playlists chip: the open playlist, or null for the list
   openPlaylist: string | null = $state(null)
-  query = $state('')
+  #query = $state('')
+  // the search results' group shown whole after "Show all", null for all groups
+  searchAll: SearchGroup | null = $state(null)
   sort: Sort = $state({ k: 'a', dir: 1 })
   // Playlists show in their own order until a column is clicked. Each keeps
   // its sort while the app runs; it is not saved.
@@ -181,6 +184,34 @@ class LibraryStore {
       this.artist = to
       if (to) this.#follow = null
     }
+  }
+
+  // The search text. Typing never closes the open page: a view shows its
+  // results over it, and clearing the text shows the page again.
+  get query(): string {
+    return this.#query
+  }
+
+  set query(q: string) {
+    this.#query = q
+    if (!q.trim()) this.searchAll = null
+  }
+
+  // A chip or section is picked: its list, not a page, and no search text.
+  // The text is not kept per chip; a query for stations is no query for albums.
+  pickChip(c: Chip): void {
+    this.chip = c
+    this.open = null
+    this.openPlaylist = null
+    this.artist = null
+    this.query = ''
+  }
+
+  pickSection(s: Section): void {
+    this.section = s
+    this.open = null
+    this.artist = null
+    this.query = ''
   }
 
   playlistSort(id: string): Sort | null {

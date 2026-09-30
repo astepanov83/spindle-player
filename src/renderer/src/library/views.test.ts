@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Album, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 import {
@@ -12,7 +12,11 @@ import {
   withPlaylistSort,
   playlistRows,
   songRows,
-  sortRows
+  sortRows,
+  songMatches,
+  searchSongs,
+  filterSongs,
+  filterPlaylists
 } from './views'
 
 function lib(): { albums: Album[]; tracks: Map<string, Track> } {
@@ -73,6 +77,125 @@ describe('search', () => {
     expect(songRows(albums, track, 'quiet').map((t) => t.title)).toEqual(['Route 38', 'Terminus'])
     expect(songRows(albums, track, 'kite').map((t) => t.title)).toEqual(['Kite String'])
     expect(songRows(albums, track, '')).toHaveLength(5)
+  })
+
+  it('songs: also single songs by their own artist', () => {
+    const t = { ...track('b/2'), artist: 'Guest Star' }
+    expect(songRows(albums, (id) => (id === 'b/2' ? t : track(id)), 'guest')).toEqual([t])
+  })
+})
+
+describe('search results (ticket 039)', () => {
+  const { albums, tracks } = lib()
+  const track = (id: string): Track => tracks.get(id)!
+  const song = (title: string, artist: string, album = 'Any'): Track => ({
+    ...track('a/0'),
+    title,
+    artist,
+    album
+  })
+
+  it('a song matches by its title or its own artist, ignoring case and spaces', () => {
+    expect(songMatches(song('Harbor Lights', 'Oda Linde'), 'harbor')).toBe(true)
+    expect(songMatches(song('Harbor Lights', 'Oda Linde'), '  LIGHTS ')).toBe(true)
+    expect(songMatches(song('Harbor Lights', 'Oda Linde'), 'linde')).toBe(true)
+    expect(songMatches(song('Harbor Lights', 'Oda Linde'), 'night bus')).toBe(false)
+  })
+
+  it('not by its album: albums have their own group', () => {
+    expect(songMatches(song('Route 38', 'X', 'Night Bus'), 'night bus')).toBe(false)
+  })
+
+  it('matches Cyrillic and Japanese in any case', () => {
+    expect(songMatches(song('Группа крови', 'КИНО'), 'кино')).toBe(true)
+    expect(songMatches(song('ГРУППА КРОВИ', 'Кино'), 'группа')).toBe(true)
+    expect(songMatches(song('夜に駆ける', 'YOASOBI'), '駆ける')).toBe(true)
+    expect(songMatches(song('Straße', 'Ärzte'), 'ärzte')).toBe(true)
+  })
+
+  it('matches a composed letter typed as two code points', () => {
+    // "é" as e + combining accent, as some file systems store it
+    expect(songMatches(song('Café', 'X'), 'cafe\u0301')).toBe(true)
+    expect(songMatches(song('Cafe\u0301', 'X'), 'café')).toBe(true)
+  })
+
+  it('matches without accents: "bjork" finds Björk, "cafe" finds Café', () => {
+    expect(songMatches(song('Jóga', 'Björk'), 'bjork')).toBe(true)
+    expect(songMatches(song('Café', 'X'), 'cafe')).toBe(true)
+    expect(songMatches(song('Cafe', 'X'), 'café')).toBe(true)
+    expect(songMatches(song('Jóga', 'Björk'), 'JOGA')).toBe(true)
+    expect(
+      filterAlbums(
+        albums.map((a) => ({ ...a, artist: 'Sigur Rós' })),
+        'ros'
+      )
+    ).toHaveLength(2)
+    expect(filterPlaylists([{ name: 'Été' }], 'ete')).toHaveLength(1)
+  })
+
+  it('keeps Cyrillic and Japanese letters whole when it drops accents', () => {
+    // й and ё lose their marks too, so и and е find them
+    expect(songMatches(song('Ёлка', 'Мой'), 'елка')).toBe(true)
+    expect(songMatches(song('Ёлка', 'Мой'), 'мои')).toBe(true)
+    expect(songMatches(song('Ёлка', 'Мой'), 'ёлка')).toBe(true)
+    // kana with voicing marks stay as they are: が is not か
+    expect(songMatches(song('ながれ', 'X'), 'ながれ')).toBe(true)
+    expect(songMatches(song('ながれ', 'X'), 'なかれ')).toBe(false)
+  })
+
+  it('folds each song once, then only the search text on each key', () => {
+    const many = Array.from({ length: 50 }, (_, i) => song(`Song ${i}`, 'Björk'))
+    const al = { ...albums[0], trackIds: many.map((t) => t.id) }
+    const byId = new Map(many.map((t, i) => [t.id + i, t]))
+    const ids = [...byId.keys()]
+    const lib2 = [{ ...al, trackIds: ids }]
+    searchSongs(lib2, (id) => byId.get(id)!, 'bjork')
+    const spy = vi.spyOn(String.prototype, 'normalize')
+    expect(searchSongs(lib2, (id) => byId.get(id)!, 'bjo')).toHaveLength(50)
+    // NFD and NFC of the text typed, nothing per song
+    expect(spy.mock.calls.length).toBeLessThanOrEqual(4)
+    spy.mockRestore()
+  })
+
+  it('a changed song is a new object and matches by its new text', () => {
+    const old = song('Old Name', 'Björk')
+    expect(songMatches(old, 'old')).toBe(true)
+    const changed = { ...old, title: 'New Name', artist: 'Sigur Rós' }
+    expect(songMatches(changed, 'old')).toBe(false)
+    expect(songMatches(changed, 'new name')).toBe(true)
+    expect(songMatches(changed, 'bjork')).toBe(false)
+    expect(songMatches(changed, 'ros')).toBe(true)
+    expect(filterSongs([changed], 'old')).toEqual([])
+    expect(songMatches(old, 'bjork')).toBe(true)
+  })
+
+  it('lists matching songs in library order', () => {
+    // Terminus by its artist, The Quiet Hours; the rest by Oda Linde
+    expect(searchSongs(albums, track, 'n').map((t) => t.title)).toEqual([
+      'Terminus',
+      'Origami',
+      'Paper Suns',
+      'Kite String'
+    ])
+    expect(searchSongs(albums, track, '  ')).toEqual([])
+  })
+
+  it('filters a playlist by title, artist or album', () => {
+    const rows = [song('One', 'Ann', 'First'), song('Two', 'Bob', 'Second')]
+    expect(filterSongs(rows, 'two')).toEqual([rows[1]])
+    expect(filterSongs(rows, 'ann')).toEqual([rows[0]])
+    expect(filterSongs(rows, 'second')).toEqual([rows[1]])
+    expect(filterSongs(rows, '')).toBe(rows)
+  })
+
+  it('filters playlists by name', () => {
+    const list = [
+      { id: '1', name: 'Road Trip', trackIds: [] },
+      { id: '2', name: 'Дорога', trackIds: [] }
+    ]
+    expect(filterPlaylists(list, 'road')).toEqual([list[0]])
+    expect(filterPlaylists(list, 'ДОРОГА')).toEqual([list[1]])
+    expect(filterPlaylists(list, ' ')).toBe(list)
   })
 })
 

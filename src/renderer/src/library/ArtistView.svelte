@@ -11,7 +11,11 @@
   const artist = $derived(library.artist ? library.getArtist(library.artist) : undefined)
 </script>
 
-{#if library.open}
+<!-- while searching, the grid shows over the open page, which comes back
+     when the text is cleared -->
+{#if library.query.trim()}
+  <ArtistGrid {scrollEl} />
+{:else if library.open}
   <AlbumPage albumId={library.open} back={artist?.name ?? 'All artists'} />
 {:else if artist}
   <ArtistPage {artist} {scrollEl} />

@@ -60,10 +60,37 @@ describe('ScrollPlaces', () => {
     expect(p.move(at('albums', 'album:y'), 0, at('albums'))).toBe(400)
   })
 
-  it('starts at the top when a search closed the page', () => {
+  it('starts at the top when going up with other search text', () => {
     const p = new ScrollPlaces<number>()
     p.move(at('albums'), 900, at('albums', 'album:x'))
+    // the grid was left with no text; with some it shows other rows
     expect(p.move(at('albums', 'album:x'), 0, { path: ['albums'], query: 'b' })).toBe('top')
+  })
+
+  // ticket 039: the results page is a view below the one it covers
+  it('clearing a search shows the view under the results where it was', () => {
+    const p = new ScrollPlaces<number>()
+    const results = { path: ['albums', 'search'], query: 'harbor' }
+    expect(p.move(at('albums'), 900, results)).toBe('top')
+    expect(p.move(results, 300, at('albums'))).toBe(900)
+  })
+
+  it('"All results" goes back to the results for the same text only', () => {
+    const p = new ScrollPlaces<number>()
+    const results = (query: string): View => ({ path: ['albums', 'search'], query })
+    const all = (query: string): View => ({ path: ['albums', 'search', 'all:songs'], query })
+    p.move(results('e'), 400, all('e'))
+    expect(p.move(all('e'), 0, results('e'))).toBe(400)
+    p.move(results('e'), 400, all('e'))
+    p.move(all('e'), 0, all('ex'))
+    expect(p.move(all('ex'), 0, results('ex'))).toBe('top')
+  })
+
+  it('a place left with other search text starts at the top', () => {
+    const p = new ScrollPlaces<number>()
+    // a filtered list of playlists, then a playlist opened from it with the text cleared
+    p.move({ path: ['playlists'], query: 'road' }, 500, at('playlists', 'pl:1'))
+    expect(p.move(at('playlists', 'pl:1'), 0, at('playlists'))).toBe('top')
   })
 
   it('does not move when the view is the same', () => {

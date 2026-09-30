@@ -65,7 +65,7 @@
     </span>
   </div>
   <div class="set">
-    <span class="label">Layout</span>
+    <span class="section-label">Layout</span>
     <Seg
       label="Layout"
       options={templateIds.map((id) => ({ value: id, label: templates[id].name }))}
@@ -74,7 +74,7 @@
     />
   </div>
   <div class="set">
-    <span class="label">Queue</span>
+    <span class="section-label">Queue</span>
     <Seg
       label="Queue"
       options={layout.template.queueOptions.map((q) => ({ value: q, label: queueNames[q] }))}
@@ -84,7 +84,7 @@
     <p class="hint">{queueHints[layout.queueMode]}</p>
   </div>
   <div class="set">
-    <span class="label">Visualizer</span>
+    <span class="section-label">Visualizer</span>
     <Seg
       label="Visualizer"
       options={visualizerStyles.map((v) => ({ value: v, label: vzNames[v] }))}
@@ -93,7 +93,7 @@
     />
   </div>
   <div class="set">
-    <span class="label">Theme</span>
+    <span class="section-label">Theme</span>
     <Seg
       label="Theme"
       options={themeChoices.map((t) => ({ value: t, label: themeNames[t] }))}
@@ -143,23 +143,16 @@
   }
   h3 {
     margin: 0;
-    font: 600 15px var(--ui);
+    font: 600 var(--text-l) var(--ui);
   }
   .set {
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
-  .label {
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    font-weight: 600;
-  }
   .hint {
     margin: 0;
-    font-size: 12.5px;
+    font-size: var(--text-s);
     line-height: 1.45;
     color: var(--ink-2);
   }

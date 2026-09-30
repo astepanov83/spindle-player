@@ -9,6 +9,7 @@
   import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
   import { library } from '../stores/library.svelte'
+  import { player } from '../stores/player.svelte'
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
@@ -67,7 +68,7 @@
 >
   {#each v.items as item (item.key)}
     <div
-      class="row"
+      class="gridrow"
       data-index={item.index}
       use:measure
       style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
@@ -96,8 +97,8 @@
             </button>
           </div>
           <div class="t">
-            {#if playing.kind === 'queue' && al.id === queue.currentAlbum?.id}<Eq />{/if}<span
-              >{al.title}</span
+            {#if al.id === playing.song?.albumId}<Eq paused={!player.playing} />{/if}<span
+              title={al.title}>{al.title}</span
             >
           </div>
           <div class="a">{al.artist}</div>
@@ -111,7 +112,7 @@
   .grid {
     position: relative;
   }
-  .row {
+  .gridrow {
     position: absolute;
     top: 0;
     left: 0;
@@ -164,8 +165,14 @@
     opacity: 1;
     transform: none;
   }
+  .card .qp:hover {
+    transform: scale(1.06);
+  }
+  .card .qp:active {
+    transform: scale(0.96);
+  }
   .t {
-    font-size: 14px;
+    font-size: var(--text-m);
     font-weight: 600;
     display: flex;
     gap: 6px;
@@ -178,8 +185,8 @@
     text-overflow: ellipsis;
   }
   .a {
-    font-size: 13px;
-    color: var(--ink-3);
+    font-size: var(--text-s);
+    color: var(--ink-2);
     margin-top: -5px;
   }
 </style>

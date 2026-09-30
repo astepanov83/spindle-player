@@ -6,6 +6,7 @@ import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/600.css'
 import './assets/theme.css'
 import './assets/text.css'
+import './assets/controls.css'
 
 import App from './App.svelte'
 import { decodeLibrary, library } from './stores/library.svelte'

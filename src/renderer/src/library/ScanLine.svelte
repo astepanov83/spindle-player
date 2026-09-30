@@ -23,7 +23,7 @@
     align-items: center;
     gap: 8px;
     margin: 0;
-    font-size: 12.5px;
+    font-size: var(--text-s);
     color: var(--ink-3);
     min-width: 0;
   }

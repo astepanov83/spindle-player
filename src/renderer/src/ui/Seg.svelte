@@ -54,13 +54,21 @@
   }
   button {
     flex: 1;
-    font: 500 13px var(--ui);
+    font: 500 var(--text-s) var(--ui);
     color: var(--ink-2);
     padding: 7px 8px;
     border-radius: 8px;
+    transition:
+      background 0.15s,
+      color 0.15s;
   }
-  button[aria-checked='true'] {
-    background: var(--raised);
+  button:hover {
+    background: var(--hover);
     color: var(--ink);
+  }
+  /* filled, so the pick is plain in both themes (a raised grey was not, in dark) */
+  button[aria-checked='true'] {
+    background: var(--ink);
+    color: var(--bg);
   }
 </style>

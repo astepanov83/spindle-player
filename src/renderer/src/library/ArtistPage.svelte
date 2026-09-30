@@ -130,7 +130,7 @@
         <div class="hint">One name renames. Two or more split this artist into several.</div>
       </div>
     {:else}
-      <h2 class="page-title">{a.name}</h2>
+      <h2 class="page-title" title={a.name}>{a.name}</h2>
     {/if}
     {#if showTags}
       <div class="tags">
@@ -181,7 +181,7 @@
 </div>
 
 {#if albums.length}
-  <h3 class="part">Albums</h3>
+  <h3 class="part section-label">Albums</h3>
   <AlbumGrid {scrollEl} items={albums} onopen={(id) => library.openArtistAlbum(id)} />
 {/if}
 
@@ -196,14 +196,14 @@
     link={{ kind: 'artist', id: a.key }}
   >
     {#snippet head()}
-      <h3 class="part">Also on</h3>
+      <h3 class="part section-label">Also on</h3>
     {/snippet}
   </SongTable>
 {/if}
 
 <style>
   .back {
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-3);
     display: inline-flex;
     gap: 4px;
@@ -241,17 +241,6 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 16px;
-  }
-  .pill {
-    padding: 9px 18px;
-    border-radius: 99px;
-    font-size: 14px;
-    font-weight: 600;
-    background: var(--ink);
-    color: var(--bg);
-  }
-  .pill:disabled {
-    opacity: 0.4;
   }
   .names {
     display: flex;
@@ -291,7 +280,7 @@
     background: var(--field);
   }
   .add {
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-2);
     display: inline-flex;
     gap: 4px;
@@ -301,36 +290,27 @@
     color: var(--ink);
   }
   .hint {
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--ink-3);
   }
   .tags {
     display: flex;
     flex-wrap: wrap;
     column-gap: 5px;
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-3);
     margin: 2px 0 4px;
   }
   .use {
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-2);
     text-decoration: underline;
   }
   .use:hover {
     color: var(--ink);
   }
-  .pill.ghost {
-    background: var(--field);
-    color: var(--ink);
-  }
   .part {
     margin: 0 0 14px;
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    font-weight: 600;
   }
   /* the table's own head sits on the same line as the song count */
   :global(.tblhead) .part {

@@ -21,8 +21,8 @@
       <div class="minicv"><Cover src={playing.art?.cover} /></div>
       <div class="meta">
         {#if playing.title}
-          <div class="song-title"><PlayingText line="title" /></div>
-          <div class="song-sub"><PlayingText line="sub" /></div>
+          <div class="song-title" title={playing.title}><PlayingText line="title" /></div>
+          <div class="song-sub" title={playing.sub}><PlayingText line="sub" /></div>
         {:else}
           <div class="song-title">Nothing playing</div>
         {/if}
@@ -72,7 +72,7 @@
   .times {
     display: flex;
     justify-content: space-between;
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--ink-2);
     font-variant-numeric: tabular-nums;
     margin-top: 2px;
@@ -123,7 +123,7 @@
     min-width: 0;
   }
   .song-title {
-    font-size: 16px;
+    font-size: var(--title-s);
   }
   .bc {
     display: flex;
@@ -140,7 +140,7 @@
     align-items: center;
     gap: 10px;
     width: 100%;
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--ink-2);
     font-variant-numeric: tabular-nums;
   }

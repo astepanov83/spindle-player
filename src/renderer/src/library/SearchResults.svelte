@@ -59,7 +59,7 @@
 
 {#snippet more(group: SearchGroup, n: number, top: number)}
   <div class="grouphead">
-    <h3 class="part">{titles[group]}</h3>
+    <h3 class="part section-label">{titles[group]}</h3>
     {#if n > top}
       <button class="more" onclick={() => (library.searchAll = group)}>Show all {n}</button>
     {/if}
@@ -89,12 +89,12 @@
   {#if songs.length}
     <section class="songs">
       {@render more('songs', songs.length, TOP_SONGS)}
-      <div use:roving={{ rows: songs }}>
+      <div class="lines" use:roving={{ rows: songs }}>
         {#each songs.slice(0, TOP_SONGS) as t, i (t.id)}
-          {@const cur = queue.isCurrent(t.id)}
+          {@const cur = playing.isSong(t.id)}
           <button
-            class="srow"
-            class:cur
+            class="srow row"
+            class:cur-row={cur}
             data-row
             aria-current={cur ? 'true' : undefined}
             onclick={() => play(i)}
@@ -103,11 +103,12 @@
             <span class="tt">
               <Thumb src={library.art(t).cover} size={36} radius={4} />
               <span class="nm"
-                >{#if cur && playing.songPlaying}<Eq />{/if}<span>{t.title}</span></span
+                >{#if cur && playing.songPlaying}<Eq />{/if}<span title={t.title}>{t.title}</span
+                ></span
               >
             </span>
-            <span class="o">{t.artist}</span>
-            <span class="o al">{t.album}</span>
+            <span class="o" title={t.artist}>{t.artist}</span>
+            <span class="o al" title={t.album}>{t.album}</span>
             <span class="d">{fmtTime(t.duration)}</span>
           </button>
         {/each}
@@ -141,14 +142,9 @@
   }
   .part {
     margin: 0;
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    font-weight: 600;
   }
   .more {
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-2);
     padding: 4px 8px;
     margin-right: -8px;
@@ -159,7 +155,7 @@
     background: var(--hover);
   }
   .back {
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-3);
     display: inline-flex;
     gap: 4px;
@@ -181,19 +177,7 @@
     width: 100%;
     height: 54px;
     padding: 0 12px;
-    text-align: left;
-    font-size: 14.5px;
-    border-radius: 8px;
-  }
-  .srow + .srow {
-    box-shadow: 0 -1px 0 var(--edge);
-  }
-  .srow:hover {
-    background: var(--hover);
-  }
-  .srow.cur {
-    background: color-mix(in srgb, var(--c2) 26%, var(--hover));
-    box-shadow: inset 3px 0 0 var(--c2);
+    font-size: var(--text-l);
   }
   /* a narrow list drops the album; the album group is below */
   .songs {
@@ -229,7 +213,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .cur .nm {
+  .cur-row .nm {
     font-weight: 600;
   }
   .o {
@@ -238,7 +222,7 @@
   .d {
     color: var(--ink-3);
     font-variant-numeric: tabular-nums;
-    font-size: 14px;
+    font-size: var(--text-m);
     text-align: right;
   }
 </style>

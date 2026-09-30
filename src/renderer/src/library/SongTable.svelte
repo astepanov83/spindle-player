@@ -103,19 +103,17 @@
     {/each}
   </div>
   <div
-    class="rows"
+    class="rows lines"
     bind:this={list}
     style:height="{v.total}px"
     use:roving={{ rows, count: rows.length, scrollTo: (i) => v.scrollToIndex(i) }}
   >
     {#each v.items as item (item.key)}
       {@const t = rows[item.index]}
-      {@const cur = queue.isCurrent(t.id)}
+      {@const cur = playing.isSong(t.id)}
       <button
-        class="tr"
+        class="tr row"
         class:cur-row={cur}
-        class:cur
-        class:first={item.index === 0}
         data-row
         data-index={item.index}
         aria-current={cur ? 'true' : undefined}
@@ -129,10 +127,10 @@
         >
         <span class="tt">
           <Thumb src={library.art(t).cover} size={36} radius={4} />
-          <span class="nm">{t.title}</span>
+          <span class="nm" title={t.title}>{t.title}</span>
         </span>
-        <span class="o">{t.artist}</span>
-        <span class="o">{t.album}</span>
+        <span class="o" title={t.artist}>{t.artist}</span>
+        <span class="o" title={t.album}>{t.album}</span>
         <span class="d">{fmtTime(t.duration)}</span>
       </button>
     {/each}
@@ -169,7 +167,7 @@
     border-bottom: 1px solid var(--edge);
   }
   .th button {
-    font-size: 12px;
+    font-size: var(--text-xs);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--ink-3);
@@ -192,24 +190,11 @@
     left: 0;
     right: 0;
     height: 54px;
-    text-align: left;
-    font-size: 14.5px;
-    border-radius: 8px;
-    box-shadow: 0 -1px 0 var(--edge);
+    font-size: var(--text-l);
   }
   /* Up keeps the focused row clear of the sticky head */
   .tr {
     scroll-margin-top: calc(38px + var(--scroll-pad-top, 20px));
-  }
-  .tr.first {
-    box-shadow: none;
-  }
-  .tr:hover {
-    background: var(--hover);
-  }
-  .tr.cur-row {
-    background: color-mix(in srgb, var(--c2) 26%, var(--hover));
-    box-shadow: inset 3px 0 0 var(--c2);
   }
   .tr > span {
     white-space: nowrap;
@@ -220,7 +205,7 @@
   .d {
     color: var(--ink-3);
     font-variant-numeric: tabular-nums;
-    font-size: 14px;
+    font-size: var(--text-m);
     text-align: right;
   }
   .n {
@@ -241,7 +226,7 @@
   .o {
     color: var(--ink-2);
   }
-  .cur .tt {
+  .cur-row .tt {
     font-weight: 600;
   }
 </style>

@@ -51,7 +51,7 @@
     align-items: center;
     gap: 8px;
     background: var(--field);
-    border-radius: 9px;
+    border-radius: 8px;
     padding: 0 12px;
     color: var(--ink-3);
   }
@@ -62,7 +62,7 @@
     background: none;
     border: 0;
     color: var(--ink);
-    font: 14px var(--ui);
+    font: var(--text-m) var(--ui);
     outline: none;
     box-shadow: none;
   }

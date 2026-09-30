@@ -25,7 +25,7 @@
 
 {#if choices.length > 1}
   <button
-    class="picker"
+    class="picker chip"
     aria-haspopup="menu"
     aria-label="Stream: {current?.label ?? 'none'}"
     title={current?.label}
@@ -42,16 +42,10 @@
     align-items: center;
     gap: 6px;
     padding: 4px 10px;
-    border-radius: 99px;
-    background: var(--field);
-    color: var(--ink-2);
-    font-size: 12px;
+    font-size: var(--text-xs);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     flex: none;
-  }
-  button.picker:hover {
-    color: var(--ink);
   }
   .one {
     background: none;

@@ -71,7 +71,7 @@
 >
   <span class="text">{notice.text}</span>
   {#if notice.action}
-    <button class="act" onclick={press}>{notice.action.label}</button>
+    <button class="act chip" onclick={press}>{notice.action.label}</button>
   {/if}
 </div>
 
@@ -88,7 +88,7 @@
     background: var(--panel);
     border: 1px solid var(--edge);
     box-shadow: 0 10px 30px var(--shadow);
-    font-size: 13.5px;
+    font-size: var(--text-m);
     opacity: 0;
     pointer-events: none;
     transition:
@@ -116,12 +116,7 @@
     flex: none;
     margin: -4px -8px -4px 0;
     padding: 4px 10px;
-    border-radius: 6px;
-    font: 600 13.5px var(--ui);
+    font-weight: 600;
     color: var(--ink);
-    background: var(--field);
-  }
-  .act:hover {
-    background: var(--active);
   }
 </style>

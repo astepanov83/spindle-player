@@ -91,7 +91,7 @@
       />
       <span class="txt">
         <span class="nm">{s.name}</span>
-        {#if line}<span class="sub">{line}</span>{/if}
+        {#if line}<span class="sub" title={line}>{line}</span>{/if}
       </span>
       <span class="br">{bitrateLine(s)}</span>
     </button>
@@ -108,8 +108,8 @@
 {/snippet}
 
 <div class="radio">
-  <h3>My stations</h3>
-  <div class="list" role="list" use:roving={{ rows: mine }}>
+  <h3 class="section-label">My stations</h3>
+  <div class="list lines" role="list" use:roving={{ rows: mine }}>
     {#each mine as s (s.id)}
       {@render row(s, false)}
     {/each}
@@ -121,7 +121,7 @@
   {/if}
 
   {#if radioSearch.status !== 'idle'}
-    <h3>From Radio Browser</h3>
+    <h3 class="section-label">From Radio Browser</h3>
     {#if radioSearch.status === 'unreachable'}
       <p class="hint">Radio Browser can't be reached. My stations still play.</p>
     {:else if radioSearch.status === 'searching' && !found.length}
@@ -134,7 +134,7 @@
       </p>
     {:else}
       <div
-        class="list"
+        class="list lines"
         role="list"
         class:stale={radioSearch.status === 'searching'}
         use:roving={{ rows: found }}
@@ -155,11 +155,6 @@
   }
   h3 {
     margin: 14px 12px 6px;
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    font-weight: 600;
   }
   h3:first-child {
     margin-top: 4px;
@@ -174,18 +169,6 @@
   .row {
     display: flex;
     align-items: center;
-    border-radius: 10px;
-  }
-  .row + .row {
-    box-shadow: 0 -1px 0 var(--edge);
-  }
-  .row:hover {
-    background: var(--hover);
-    box-shadow: none;
-  }
-  .row.cur-row {
-    background: color-mix(in srgb, var(--c2) 26%, var(--hover));
-    box-shadow: inset 3px 0 0 var(--c2);
   }
   .main {
     flex: 1;
@@ -211,17 +194,17 @@
     text-overflow: ellipsis;
   }
   .nm {
-    font-size: 15px;
+    font-size: var(--text-l);
   }
   .cur .nm {
     font-weight: 600;
   }
   .sub {
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-3);
   }
   .br {
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-3);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -245,7 +228,7 @@
   }
   .hint {
     color: var(--ink-3);
-    font-size: 14px;
+    font-size: var(--text-m);
     line-height: 1.6;
     padding: 6px 12px;
     margin: 0;

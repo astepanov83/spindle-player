@@ -8,8 +8,8 @@
 
 {#if layout.queueMode === 'tab' && layout.tabSel === 1 && playing.title}
   <div class="tabline">
-    <div class="song-title"><PlayingText line="title" /></div>
-    <div class="song-sub"><PlayingText line="sub" /></div>
+    <div class="song-title" title={playing.title}><PlayingText line="title" /></div>
+    <div class="song-sub" title={playing.sub}><PlayingText line="sub" /></div>
   </div>
 {/if}
 
@@ -18,10 +18,10 @@
     min-width: 0;
   }
   .song-title {
-    font-size: 15px;
+    font-size: var(--text-l);
   }
   .song-sub {
-    font-size: 12.5px;
+    font-size: var(--text-s);
     margin-top: 1px;
   }
 </style>

@@ -137,17 +137,6 @@
     display: flex;
     gap: 6px;
   }
-  .chip {
-    font-size: 13px;
-    padding: 6px 12px;
-    border-radius: 99px;
-    background: var(--field);
-    color: var(--ink-2);
-  }
-  .chip[aria-pressed='true'] {
-    background: var(--ink);
-    color: var(--bg);
-  }
   .fill {
     min-height: 100%;
     display: flex;

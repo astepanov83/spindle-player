@@ -143,7 +143,7 @@
 
 <style>
   .back {
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-3);
     display: inline-flex;
     gap: 4px;
@@ -174,29 +174,9 @@
     gap: 8px;
     margin-top: 12px;
   }
-  .pill {
-    padding: 8px 16px;
-    border-radius: 99px;
-    font-size: 14px;
-    font-weight: 600;
-    background: var(--ink);
-    color: var(--bg);
-  }
-  .pill:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-  .pill.ghost {
-    background: var(--field);
-    color: var(--ink);
-  }
-  .pill.danger {
-    background: var(--close-hover);
-    color: var(--on-danger);
-  }
   .hint {
     color: var(--ink-3);
-    font-size: 14px;
+    font-size: var(--text-m);
     line-height: 1.6;
     padding: 20px 12px;
     max-width: 50ch;

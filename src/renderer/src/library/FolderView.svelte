@@ -13,6 +13,7 @@
   import { openPlaylistMenu, openSongMenu } from './song-menu'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
+  import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
 
   let { scrollEl }: { scrollEl: HTMLElement | undefined } = $props()
@@ -30,10 +31,10 @@
   const subfolders = $derived(node ? node.children.length : tree.roots.length)
   // only when there is a folder above to go to
   const showPath = $derived(shown !== null && (path.length > 1 || tree.roots.length > 1))
-  // the folders the playing song is in, marked in the list
+  // the folders the playing song is in, marked in the list (not while radio plays)
   const playingIn = $derived(
     new Set(
-      queue.current && tree.nodes[queue.current.folder] ? crumbs(tree, queue.current.folder) : []
+      playing.song && tree.nodes[playing.song.folder] ? crumbs(tree, playing.song.folder) : []
     )
   )
 
@@ -81,7 +82,7 @@
       <button
         class="crumb"
         disabled={i === shown}
-        title={tree.nodes[i].parent < 0 ? tree.nodes[i].key : undefined}
+        title={tree.nodes[i].parent < 0 ? tree.nodes[i].key : tree.nodes[i].name}
         onclick={() => library.openFolder(tree.nodes[i].key)}>{tree.nodes[i].name}</button
       >
     {/each}
@@ -91,7 +92,7 @@
   <div class="page-meta">
     {node ? (node.parent < 0 ? 'Music folder' : 'Folder') : 'Music folders'}
   </div>
-  <h2 class="page-title">{title}</h2>
+  <h2 class="page-title" {title}>{title}</h2>
   <div class="page-meta">
     {[subfolders ? plural(subfolders, 'folder', 'folders') : '', plural(total, 'song', 'songs')]
       .filter(Boolean)
@@ -125,13 +126,12 @@
   />
 {/if}
 
-<div class="folders" bind:this={list} style:height="{v.total}px">
+<div class="folders lines" bind:this={list} style:height="{v.total}px">
   {#each v.items as item (item.key)}
     {@const i = view.folders[item.index]}
     {@const f = tree.nodes[i]}
     <button
       class="row"
-      class:first={item.index === 0}
       style:transform="translateY({v.offset(item)}px)"
       onclick={() => library.openFolder(f.key)}
       oncontextmenu={(e) =>
@@ -140,9 +140,11 @@
       <Thumb src={f.cover} size={40} radius={6} />
       <span class="nm">
         <span class="t"
-          >{#if playingIn.has(i)}<Eq />{/if}<span>{f.name}</span></span
+          >{#if playingIn.has(i)}<Eq paused={!player.playing} />{/if}<span title={f.name}
+            >{f.name}</span
+          ></span
         >
-        {#if f.parent < 0}<span class="where">{f.key}</span>{/if}
+        {#if f.parent < 0}<span class="where" title={f.key}>{f.key}</span>{/if}
       </span>
       <span class="n">{plural(f.count, 'song', 'songs')}</span>
       <span class="go"><Icon name="back" size={16} /></span>
@@ -162,7 +164,7 @@
     {link}
   >
     {#snippet head()}
-      <h3 class="songs">Songs in this folder</h3>
+      <h3 class="songs section-label">Songs in this folder</h3>
     {/snippet}
   </SongTable>
 {/if}
@@ -173,7 +175,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 2px 4px;
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-3);
     margin-top: 4px;
     min-height: 20px;
@@ -216,22 +218,6 @@
     gap: 8px;
     margin-top: 14px;
   }
-  .pill {
-    padding: 8px 16px;
-    border-radius: 99px;
-    font-size: 14px;
-    font-weight: 600;
-    background: var(--ink);
-    color: var(--bg);
-  }
-  .pill.ghost {
-    background: var(--field);
-    color: var(--ink);
-  }
-  .pill:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
   .folders {
     position: relative;
   }
@@ -245,17 +231,8 @@
     grid-template-columns: 40px minmax(0, 1fr) auto 16px;
     gap: 14px;
     align-items: center;
-    text-align: left;
     padding: 0 12px;
-    border-radius: 10px;
-    font-size: 15px;
-    box-shadow: 0 -1px 0 var(--edge);
-  }
-  .row.first {
-    box-shadow: none;
-  }
-  .row:hover {
-    background: var(--hover);
+    font-size: var(--text-l);
   }
   .nm {
     display: flex;
@@ -275,12 +252,12 @@
     text-overflow: ellipsis;
   }
   .where {
-    font-size: 12.5px;
+    font-size: var(--text-s);
     color: var(--ink-3);
   }
   .n {
     color: var(--ink-3);
-    font-size: 13px;
+    font-size: var(--text-s);
     font-variant-numeric: tabular-nums;
   }
   /* the back arrow turned around */
@@ -294,10 +271,5 @@
   }
   .songs {
     margin: 0;
-    font-size: 12px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    font-weight: 600;
   }
 </style>

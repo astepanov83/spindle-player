@@ -18,7 +18,7 @@
 </script>
 
 <div class="set">
-  <span class="label">Music folders</span>
+  <span class="section-label">Music folders</span>
   {#if s.folders.length}
     <ul>
       {#each s.folders as f (f)}
@@ -31,10 +31,10 @@
           <!-- while it asks, the path gets the room -->
           {#if s.missing.includes(f) && asking !== f}<span class="miss">not found</span>{/if}
           {#if asking === f}
-            <button class="sm danger" disabled={locked} onclick={() => remove(f)}
+            <button class="sm pill danger" disabled={locked} onclick={() => remove(f)}
               >Remove folder</button
             >
-            <button class="sm" onclick={() => (asking = null)}>Keep</button>
+            <button class="sm pill ghost" onclick={() => (asking = null)}>Keep</button>
           {:else}
             <button
               class="rm"
@@ -71,13 +71,6 @@
     flex-direction: column;
     gap: 8px;
   }
-  .label {
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    font-weight: 600;
-  }
   ul {
     list-style: none;
     margin: 0;
@@ -90,7 +83,7 @@
     align-items: center;
     gap: 8px;
     padding: 4px 4px 4px 10px;
-    font-size: 13px;
+    font-size: var(--text-s);
     min-height: 32px;
   }
   li + li {
@@ -113,20 +106,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* small pills, to fit the row */
   .sm {
     flex: none;
-    font: 600 12.5px var(--ui);
     padding: 5px 10px;
-    border-radius: 99px;
-    background: var(--field);
-    color: var(--ink);
-  }
-  .sm.danger {
-    background: var(--close-hover);
-    color: var(--on-danger);
+    font-size: var(--text-s);
   }
   .miss {
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--ink-3);
     flex: none;
   }
@@ -148,7 +135,7 @@
     gap: 6px;
   }
   .btn {
-    font: 500 13px var(--ui);
+    font: 500 var(--text-s) var(--ui);
     padding: 7px 12px;
     border-radius: 8px;
     background: var(--field);
@@ -167,7 +154,7 @@
   }
   .hint {
     margin: 0;
-    font-size: 12.5px;
+    font-size: var(--text-s);
     line-height: 1.45;
     color: var(--ink-2);
   }

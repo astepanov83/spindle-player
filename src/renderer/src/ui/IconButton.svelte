@@ -18,7 +18,8 @@
   } = $props()
 </script>
 
-<button class="icobtn" class:on aria-label={label} data-act={act} {onclick}
+<!-- the title shows the name on hover; the icon alone doesn't say it -->
+<button class="icobtn" class:on aria-label={label} title={label} data-act={act} {onclick}
   ><Icon name={icon} /></button
 >
 
@@ -33,15 +34,22 @@
     opacity: 0.8;
     transition:
       opacity 0.15s,
-      background 0.15s;
+      background 0.15s,
+      transform 0.1s;
   }
   .icobtn:hover {
     opacity: 1;
     background: var(--active);
   }
+  .icobtn:active {
+    transform: scale(0.92);
+  }
+  /* On (Shuffle, Repeat, an open queue) in the album accent, fitted to 3:1 on
+     every area it sits on (specs/themes.md), plus the dot for those who can't
+     tell the color. */
   .icobtn.on {
     opacity: 1;
-    color: var(--ink);
+    color: var(--c2);
   }
   .icobtn.on::after {
     content: '';

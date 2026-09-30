@@ -18,7 +18,7 @@
 
 {#if node.kind === 'box'}
   <div
-    class="box {node.dir}"
+    class="box dir-{node.dir}"
     class:look-tint={node.look === 'tint'}
     class:look-ambient={node.look === 'ambient'}
     class:dhost={node.drawer}
@@ -76,17 +76,17 @@
     min-height: 0;
     position: relative;
   }
-  .row {
+  .dir-row {
     flex-direction: row;
   }
-  .col {
+  .dir-col {
     flex-direction: column;
   }
   /* lines between parts */
-  .row > :global(* + *) {
+  .dir-row > :global(* + *) {
     border-left: 1px solid var(--edge);
   }
-  .col > :global(* + *) {
+  .dir-col > :global(* + *) {
     border-top: 1px solid var(--edge);
   }
   .look-tint > :global(*),
@@ -100,7 +100,7 @@
     display: flex;
     flex-direction: column;
   }
-  .row > :global(.part-queue) {
+  .dir-row > :global(.part-queue) {
     background: var(--bg-side);
   }
   .dhost {
@@ -201,12 +201,19 @@
   }
   .tabstrip button {
     flex: 1;
-    font-size: 13px;
+    font-size: var(--text-s);
     font-weight: 500;
     padding: 7px 0;
     border-radius: 8px;
     color: var(--ink-2);
     text-align: center;
+    transition:
+      background 0.15s,
+      color 0.15s;
+  }
+  .tabstrip button:hover {
+    background: var(--hover);
+    color: var(--ink);
   }
   .tabstrip button[aria-pressed='true'] {
     background: var(--raised);

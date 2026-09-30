@@ -64,13 +64,13 @@
     </div>
   </div>
 </div>
-<div use:roving={{ rows: tracks }}>
+<div class="lines" use:roving={{ rows: tracks }}>
   {#each tracks as t, i (t.id)}
-    {@const cur = queue.isCurrent(t.id)}
+    {@const cur = playing.isSong(t.id)}
     <button
-      class="srow"
+      class="srow row"
       data-song={t.id}
-      class:cur
+      class:cur-row={cur}
       data-row
       aria-current={cur ? 'true' : undefined}
       onclick={() => queue.playAlbum(al.id, i)}
@@ -79,8 +79,8 @@
       <span class="n"
         >{#if cur && playing.songPlaying}<Eq />{:else}{i + 1}{/if}</span
       >
-      <span class="nm">{t.title}</span>
-      <span class="ar">{t.artist}</span>
+      <span class="nm" title={t.title}>{t.title}</span>
+      <span class="ar" title={t.artist}>{t.artist}</span>
       <span class="d">{fmtTime(t.duration)}</span>
     </button>
   {/each}
@@ -88,7 +88,7 @@
 
 <style>
   .back {
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-3);
     display: inline-flex;
     gap: 4px;
@@ -118,42 +118,21 @@
     gap: 8px;
     margin-top: 16px;
   }
-  .pill {
-    padding: 9px 18px;
-    border-radius: 99px;
-    font-size: 14px;
-    font-weight: 600;
-    background: var(--ink);
-    color: var(--bg);
-  }
-  .pill.ghost {
-    background: var(--field);
-    color: var(--ink);
-  }
   .srow {
     display: grid;
     grid-template-columns: 32px minmax(0, 2fr) minmax(0, 1.3fr) auto;
     gap: 16px;
     align-items: center;
     width: 100%;
-    text-align: left;
     padding: 14px;
-    border-radius: 10px;
-    font-size: 15px;
+    font-size: var(--text-l);
     min-height: 54px;
-  }
-  .srow + .srow {
-    box-shadow: 0 -1px 0 var(--edge);
-  }
-  .srow:hover {
-    background: var(--hover);
-    box-shadow: none;
   }
   .n,
   .d {
     color: var(--ink-3);
     font-variant-numeric: tabular-nums;
-    font-size: 14px;
+    font-size: var(--text-m);
     text-align: right;
   }
   .n {
@@ -163,7 +142,7 @@
   .ar {
     color: var(--ink-2);
   }
-  .srow.cur {
+  .cur-row .nm {
     font-weight: 600;
   }
   .nm,

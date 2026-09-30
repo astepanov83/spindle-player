@@ -12,6 +12,8 @@
   import { keepPlace } from '../ui/keep-place.svelte'
   import { library } from '../stores/library.svelte'
   import { menu } from '../stores/menu.svelte'
+  import { player } from '../stores/player.svelte'
+  import { playing as nowPlaying } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
   import { sections, songMenu } from './song-menu'
 
@@ -62,14 +64,12 @@
     v.measure(node)
   }
 
-  // the artists of the song playing: its album's and its own
-  const playing = $derived(
-    new Set(
-      queue.current && queue.currentAlbum
-        ? [...namesOf(queue.currentAlbum), ...namesOf(queue.current)].map(artistKey)
-        : []
-    )
-  )
+  // the artists of the song playing (not while radio plays): its album's and its own
+  const playing = $derived.by(() => {
+    const t = nowPlaying.song
+    if (!t) return new Set<string>()
+    return new Set([...namesOf(library.album(t.albumId)), ...namesOf(t)].map(artistKey))
+  })
 
   function edit(a: Artist): void {
     onopen(a.key)
@@ -99,7 +99,7 @@
 >
   {#each v.items as item (item.key)}
     <div
-      class="row"
+      class="gridrow"
       data-index={item.index}
       use:measure
       style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
@@ -138,7 +138,9 @@
             </button>
           </div>
           <div class="t">
-            {#if playing.has(a.key)}<Eq />{/if}<span>{a.name}</span>
+            {#if playing.has(a.key)}<Eq paused={!player.playing} />{/if}<span title={a.name}
+              >{a.name}</span
+            >
           </div>
           <div class="a">{count(a)}</div>
         </div>
@@ -151,7 +153,7 @@
   .grid {
     position: relative;
   }
-  .row {
+  .gridrow {
     position: absolute;
     top: 0;
     left: 0;
@@ -204,8 +206,14 @@
     opacity: 1;
     transform: none;
   }
+  .card .qp:hover {
+    transform: scale(1.06);
+  }
+  .card .qp:active {
+    transform: scale(0.96);
+  }
   .t {
-    font-size: 14px;
+    font-size: var(--text-m);
     font-weight: 600;
     display: flex;
     gap: 6px;
@@ -220,7 +228,7 @@
     text-overflow: ellipsis;
   }
   .a {
-    font-size: 13px;
+    font-size: var(--text-s);
     color: var(--ink-3);
     margin-top: -5px;
   }

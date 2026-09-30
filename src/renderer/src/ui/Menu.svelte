@@ -70,7 +70,7 @@
       {#if entry === 'line'}
         <hr />
       {:else if 'heading' in entry}
-        <div class="head">{entry.heading}</div>
+        <div class="head section-label">{entry.heading}</div>
       {:else}
         <button
           role={entry.checked === undefined ? 'menuitem' : 'menuitemradio'}
@@ -97,15 +97,10 @@
     background: var(--panel);
     border: 1px solid var(--edge);
     box-shadow: 0 14px 40px var(--shadow);
-    font-size: 14px;
+    font-size: var(--text-m);
   }
   .head {
     padding: 6px 10px 4px;
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    font-weight: 600;
   }
   button {
     display: block;

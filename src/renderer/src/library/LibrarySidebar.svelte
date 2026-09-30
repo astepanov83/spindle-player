@@ -80,7 +80,10 @@
 
 {#snippet item(sec: Section, icon: IconName, label: string)}
   <button class="sidebtn" aria-current={library.section === sec} onclick={() => pick(sec)}>
-    <Icon name={icon} size={18} /><span class="lbl">{label}</span>
+    <Icon name={icon} size={18} /><span
+      class="lbl"
+      title={sec.startsWith('pl:') ? label : undefined}>{label}</span
+    >
   </button>
 {/snippet}
 
@@ -89,11 +92,11 @@
     <div class="search">
       <SearchBox placeholder={placeholders[library.section] ?? 'Search this playlist'} />
     </div>
-    <div class="sidehead">Library</div>
+    <div class="sidehead section-label">Library</div>
     {#each sections as [sec, icon, label] (sec)}
       {@render item(sec, icon, label)}
     {/each}
-    <div class="sidehead">
+    <div class="sidehead section-label">
       Playlists
       <button class="add" aria-label="New playlist" title="New playlist" onclick={create}
         ><Icon name="plus" size={16} /></button
@@ -168,11 +171,6 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    font-weight: 600;
     padding: 14px 10px 6px;
   }
   .add {
@@ -196,7 +194,7 @@
     text-align: left;
     padding: 9px 10px;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: var(--text-m);
     color: var(--ink-2);
     flex: none;
   }
@@ -211,6 +209,10 @@
   }
   .sidebtn:hover {
     background: var(--hover);
+    color: var(--ink);
+  }
+  .sidebtn:active {
+    background: var(--active);
   }
   .sidebtn[aria-current='true'] {
     background: var(--active);

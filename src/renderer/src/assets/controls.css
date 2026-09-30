@@ -1,0 +1,142 @@
+/*
+  Buttons and list rows that more than one part uses, with their hover,
+  press and selected looks. A component keeps only its own layout (grid
+  columns, height, margins) and sizes it wants on purpose.
+  The focus ring (theme.css) is a separate outline, so none of these hide it.
+*/
+
+/* A round button with text. Solid for the main action, .ghost for the others. */
+.pill {
+  padding: 8px 16px;
+  border-radius: 99px;
+  font-size: var(--text-m);
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--ink);
+  color: var(--bg);
+  transition:
+    background 0.15s,
+    transform 0.1s;
+}
+.pill:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 82%, var(--bg));
+}
+.pill.ghost {
+  background: var(--field);
+  color: var(--ink);
+}
+.pill.ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 12%, var(--field));
+}
+.pill.danger {
+  background: var(--close-hover);
+  color: var(--on-danger);
+}
+.pill.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--close-hover) 85%, var(--on-danger));
+}
+.pill:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.pill:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The ⋯ button next to the header pills (Play, Shuffle...): an icon, as
+   tall as the pills. */
+button.pill.more {
+  display: grid;
+  place-items: center;
+  padding: 0 10px;
+}
+
+/* A small round button: the library chips, Clear, Save, the stream picker.
+   aria-pressed marks the picked chip. */
+.chip {
+  padding: 6px 12px;
+  border-radius: 99px;
+  font-size: var(--text-s);
+  white-space: nowrap;
+  background: var(--field);
+  color: var(--ink-2);
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.1s;
+}
+.chip:hover {
+  background: color-mix(in srgb, var(--ink) 12%, var(--field));
+  color: var(--ink);
+}
+.chip:active {
+  transform: scale(0.96);
+}
+.chip[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* A list row: a rounded fill on hover, darker while pressed. */
+.row {
+  border-radius: 8px;
+  text-align: left;
+}
+.row:hover {
+  background: var(--hover);
+}
+button.row:active:not(.cur-row) {
+  background: var(--active);
+}
+
+/* Lines between the rows of a .lines list. The line is its own 1px box, so
+   the row's round corners don't bend it. It hides next to a filled row and
+   a focused one, so it never crosses the focus ring's band. */
+.lines > .row + .row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--edge);
+  pointer-events: none;
+}
+.lines > .row:is(:hover, .cur-row, :focus-visible, :has(:focus-visible))::before,
+.lines > .row:is(:hover, .cur-row, :focus-visible, :has(:focus-visible)) + .row::before {
+  opacity: 0;
+}
+/* the line needs a box to sit in. :where keeps it weakest, so a virtual
+   list's absolute rows stay absolute. */
+:where(.lines > .row) {
+  position: relative;
+}
+
+/* The playing song or station, in the album accent (specs/themes.md). */
+.cur-row,
+.cur-row:hover {
+  background: color-mix(in srgb, var(--c2) 26%, var(--hover));
+  box-shadow: inset 3px 0 0 var(--c2);
+}
+
+/* Thin scrollbars with no arrows, in both themes. The thumb is see-through
+   ink, so it shows on any ground (a tint, a panel). */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-button {
+  display: none;
+}
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--ink) 24%, transparent) padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--ink) 40%, transparent) padding-box;
+}

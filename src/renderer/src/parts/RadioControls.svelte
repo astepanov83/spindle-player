@@ -61,7 +61,7 @@
 
 {#snippet save()}
   {#if radio.station && !radio.saved}
-    <button class="save" title="Add to My stations" onclick={() => radio.save()}
+    <button class="save chip" title="Add to My stations" onclick={() => radio.save()}
       ><Icon name="star" size={16} />Save</button
     >
   {/if}
@@ -118,7 +118,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.3em;
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.08em;
     color: var(--ink-3);
@@ -160,7 +160,7 @@
     }
   }
   .time {
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--ink-2);
     font-variant-numeric: tabular-nums;
   }
@@ -178,16 +178,9 @@
     align-items: center;
     gap: 5px;
     padding: 5px 12px 5px 9px;
-    border-radius: 99px;
-    background: var(--field);
     color: var(--ink);
-    font-size: 13px;
     font-weight: 600;
-    white-space: nowrap;
     flex: none;
-  }
-  .save:hover {
-    background: var(--active);
   }
 
   .stack {
@@ -248,7 +241,7 @@
     flex: 0 1 auto;
   }
   .song-title {
-    font-size: 16px;
+    font-size: var(--title-s);
   }
   .bc {
     display: flex;

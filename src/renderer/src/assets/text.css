@@ -1,12 +1,12 @@
 /*
-  Text styles that more than one part uses. Sizes that differ per place stay
-  in the component.
+  Text styles that more than one part uses. Sizes come from the type scale
+  in theme.css; one that differs per place stays in the component.
 */
 
 /* the big name at the top of an album, playlist or song list */
 .page-title {
   font-family: var(--display);
-  font-size: 32px;
+  font-size: var(--title-page);
   font-weight: 700;
   margin: 4px 0 8px;
   letter-spacing: -0.02em;
@@ -17,7 +17,7 @@
 /* the small line above or below it ("Album · 2020", "12 songs") */
 .page-meta {
   color: var(--ink-3);
-  font-size: 13px;
+  font-size: var(--text-s);
 }
 
 /* the playing song's title and artist line, in Now playing and the player bar */
@@ -30,7 +30,7 @@
   text-overflow: ellipsis;
 }
 .song-sub {
-  font-size: 13.5px;
+  font-size: var(--text-m);
   color: var(--ink-2);
   margin-top: 2px;
   white-space: nowrap;
@@ -38,10 +38,11 @@
   text-overflow: ellipsis;
 }
 
-/* The ⋯ button next to the header pills (Play, Shuffle...): an icon, as tall
-   as the pills. button.pill.more outranks each page's own .pill padding. */
-button.pill.more {
-  display: grid;
-  place-items: center;
-  padding: 0 10px;
+/* the small caps heading over a group: "My stations", "Library", "Theme" */
+.section-label {
+  font-size: var(--text-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
 }

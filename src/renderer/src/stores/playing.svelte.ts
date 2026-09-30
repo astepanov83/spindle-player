@@ -1,7 +1,7 @@
 // What plays: the queue or a radio station (decision 142). This store owns the
 // engine's events and passes them to the side that plays. NowPlaying, the
 // controls, the media session and the app colors read title, sub and art here.
-import type { Art } from '../../../shared/library'
+import type { Art, Track } from '../../../shared/library'
 import type { SavedPlaying, SavedQueue } from '../../../shared/saved-queue'
 import type { Station } from '../../../shared/stations'
 import { engine, type EngineEvents } from '../audio/engine'
@@ -48,6 +48,9 @@ class PlayingStore {
   // A song sounds: the queue's playing marks (the bouncing bars) follow this,
   // not player.playing, which is the radio's while radio plays.
   songPlaying: boolean = $derived(this.kind === 'queue' && player.playing)
+  // The queue's song, only while the queue plays: the library's playing marks
+  // (the row tint, the bars on a tile) follow this, so none show for radio.
+  song: Track | undefined = $derived(this.kind === 'queue' ? queue.current : undefined)
   // Radio: the title is the song, the artist the station.
   media: MediaText | undefined = $derived.by(() => {
     if (this.kind === 'radio') {
@@ -59,6 +62,10 @@ class PlayingStore {
   })
 
   #saved = ''
+
+  isSong(id: string): boolean {
+    return this.song?.id === id
+  }
 
   constructor() {
     const side = (): Partial<EngineEvents> => (this.kind === 'radio' ? radio.events : queue.events)

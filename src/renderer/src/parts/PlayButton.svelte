@@ -28,4 +28,7 @@
   .playbtn:hover {
     transform: scale(1.06);
   }
+  .playbtn:active {
+    transform: scale(0.96);
+  }
 </style>

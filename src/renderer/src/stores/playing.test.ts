@@ -164,6 +164,19 @@ describe('queue to radio', () => {
   })
 })
 
+describe('playing marks', () => {
+  it('mark the queue’s song only while the queue plays', async () => {
+    expect(playing.song?.id).toBe('s1')
+    expect(playing.isSong('s1')).toBe(true)
+    expect(playing.isSong('s0')).toBe(false)
+    await playing.playStation(mine[0])
+    // the queue keeps its place, but radio sounds
+    expect(queue.current?.id).toBe('s1')
+    expect(playing.song).toBeUndefined()
+    expect(playing.isSong('s1')).toBe(false)
+  })
+})
+
 describe('back to the queue', () => {
   it('"Back to queue" loads the song paused at its place', async () => {
     await playing.playStation(mine[0])

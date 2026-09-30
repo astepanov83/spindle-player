@@ -125,7 +125,7 @@
     left: 50%;
     top: 8px;
     transform: translateX(-50%);
-    font-size: 12px;
+    font-size: var(--text-xs);
     font-weight: 600;
     padding: 5px 11px;
     border-radius: 99px;

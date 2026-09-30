@@ -10,8 +10,9 @@
   <Stage />
   <div class="meta">
     {#if playing.title}
-      <div class="song-title"><PlayingText line="title" /></div>
-      <div class="song-sub"><PlayingText line="sub" /></div>
+      <!-- a long line is cut: the tooltip has it whole -->
+      <div class="song-title" title={playing.title}><PlayingText line="title" /></div>
+      <div class="song-sub" title={playing.sub}><PlayingText line="sub" /></div>
     {:else}
       <div class="song-title">Nothing playing</div>
       <div class="song-sub">Pick an album or a song to start</div>
@@ -37,12 +38,12 @@
     flex: none;
   }
   .song-title {
-    font-size: 21px;
+    font-size: var(--title-m);
   }
   .full .meta {
     text-align: center;
   }
   .full .song-title {
-    font-size: 24px;
+    font-size: var(--title-l);
   }
 </style>

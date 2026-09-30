@@ -49,23 +49,15 @@
   }
   b {
     font-family: var(--display);
-    font-size: 22px;
+    font-size: var(--title-m);
     letter-spacing: -0.01em;
   }
   p {
     margin: 0 0 14px;
     max-width: 44ch;
     color: var(--ink-3);
-    font-size: 14px;
+    font-size: var(--text-m);
     line-height: 1.6;
     overflow-wrap: anywhere;
-  }
-  .pill {
-    padding: 9px 18px;
-    border-radius: 99px;
-    font-size: 14px;
-    font-weight: 600;
-    background: var(--ink);
-    color: var(--bg);
   }
 </style>

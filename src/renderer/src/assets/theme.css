@@ -47,6 +47,18 @@
   /* how strong the cover's bass glow is; light needs more to show on a pale tint */
   --glow: 22%;
 
+  /* The type scale. Text is one of four sizes. Titles: the player bar's song
+     and an empty view's heading (s), Now playing's song and the empty
+     library's heading (m), Focus's song (l), and a page's name. */
+  --text-xs: 12px;
+  --text-s: 13px;
+  --text-m: 14px;
+  --text-l: 15px;
+  --title-s: 16px;
+  --title-m: 22px;
+  --title-l: 24px;
+  --title-page: 32px;
+
   --display: 'Bricolage Grotesque Variable', 'Segoe UI', system-ui, sans-serif;
   --ui: 'Onest Variable', 'Segoe UI', system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;

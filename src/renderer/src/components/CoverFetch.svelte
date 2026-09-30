@@ -17,7 +17,7 @@
 </script>
 
 <div class="set">
-  <span class="label">Covers</span>
+  <span class="section-label">Covers</span>
   <label class="check">
     <input type="checkbox" bind:checked={settings.fetchCovers} />
     Find missing covers online
@@ -56,16 +56,9 @@
     flex-direction: column;
     gap: 8px;
   }
-  .label {
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    font-weight: 600;
-  }
   .hint {
     margin: 0;
-    font-size: 12.5px;
+    font-size: var(--text-s);
     line-height: 1.45;
     color: var(--ink-2);
   }
@@ -83,7 +76,7 @@
     display: flex;
     gap: 8px;
     align-items: center;
-    font-size: 13.5px;
+    font-size: var(--text-s);
     cursor: pointer;
   }
   .check input {

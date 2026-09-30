@@ -181,7 +181,9 @@
     <div class="head">
       <div class="title">
         {#if onRadio}
-          <b>{radio.station?.name ?? 'Radio'} · recent songs</b>
+          <b title="{radio.station?.name ?? 'Radio'} · recent songs"
+            >{radio.station?.name ?? 'Radio'} · recent songs</b
+          >
         {:else}
           <b>Queue</b>{#if queue.from}<small>From <GoLink go={openFrom}>{queue.from}</GoLink></small
             >{/if}
@@ -200,7 +202,7 @@
           >{dot}{/if}{sum}</span
       >
       <button
-        class="clear"
+        class="clear chip"
         title={queue.items.length > 1 ? 'Keep only the song playing' : 'Empty the queue'}
         onclick={() => queue.clear()}>Clear</button
       >
@@ -228,9 +230,8 @@
           {@const t = library.track(id)}
           {@const cur = item.index === queue.index}
           <button
-            class="qrow"
+            class="qrow row"
             class:cur-row={cur}
-            class:cur
             class:past={item.index < queue.index}
             class:lifted={drag?.from === item.index}
             data-row
@@ -244,7 +245,9 @@
           >
             <Thumb src={library.art(t).cover} eq={cur && playing.songPlaying} />
             <span class="qt"
-              ><span class="nm">{t.title}</span><span class="ar">{t.artist}</span></span
+              ><span class="nm" title={t.title}>{t.title}</span><span class="ar" title={t.artist}
+                >{t.artist}</span
+              ></span
             >
             <span class="d">{fmtTime(t.duration)}</span>
           </button>
@@ -288,13 +291,13 @@
   }
   b {
     display: block;
-    font-size: 15px;
+    font-size: var(--text-l);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   small {
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--ink-3);
   }
   .body {
@@ -309,7 +312,7 @@
   }
   .empty {
     margin: 12px;
-    font-size: 13.5px;
+    font-size: var(--text-s);
     line-height: 1.5;
     color: var(--ink-3);
   }
@@ -323,12 +326,7 @@
     grid-template-columns: 44px 1fr auto;
     gap: 14px;
     align-items: center;
-    text-align: left;
     padding: 8px 12px;
-    border-radius: 10px;
-  }
-  .qrow:hover {
-    background: var(--hover);
   }
   .dragging .qrow {
     transition: transform 0.12s;
@@ -348,13 +346,20 @@
     box-shadow: 0 10px 28px var(--shadow);
     pointer-events: none;
   }
+  /* the playing song lifted: its tint on a solid ground, so rows don't show through */
+  .qrow.ghost.cur-row {
+    background: color-mix(in srgb, var(--c2) 26%, var(--panel));
+    box-shadow:
+      inset 3px 0 0 var(--c2),
+      0 10px 28px var(--shadow);
+  }
   .sum {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     padding: 0 16px 4px 20px;
-    font-size: 12px;
+    font-size: var(--text-xs);
     color: var(--ink-3);
     flex: none;
   }
@@ -368,23 +373,12 @@
     text-overflow: ellipsis;
     font-variant-numeric: tabular-nums;
   }
+  /* a small chip, to fit the line */
   .clear {
     flex: none;
     padding: 4px 10px;
-    border-radius: 99px;
-    font-size: 12px;
+    font-size: var(--text-xs);
     font-weight: 600;
-    color: var(--ink-2);
-    background: var(--field);
-  }
-  .clear:hover {
-    color: var(--ink);
-    background: var(--hover);
-  }
-  /* the current song, tinted with the album accent */
-  .qrow.cur-row {
-    background: color-mix(in srgb, var(--c2) 26%, var(--hover));
-    box-shadow: inset 3px 0 0 var(--c2);
   }
   .qt {
     display: flex;
@@ -393,14 +387,14 @@
     min-width: 0;
   }
   .nm {
-    font-size: 15px;
+    font-size: var(--text-l);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .ar {
-    font-size: 13px;
-    color: var(--ink-3);
+    font-size: var(--text-s);
+    color: var(--ink-2);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -408,9 +402,9 @@
   .d {
     color: var(--ink-3);
     font-variant-numeric: tabular-nums;
-    font-size: 13px;
+    font-size: var(--text-s);
   }
-  .cur .nm {
+  .cur-row .nm {
     font-weight: 600;
     color: var(--ink);
   }

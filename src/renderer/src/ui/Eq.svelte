@@ -1,5 +1,10 @@
-<!-- Little bars that bounce while a song plays (the app root has .song-playing; not for radio). -->
-<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+<!-- Little bars that bounce while a song plays (the app root has .song-playing; not for radio).
+     paused: a pause sign instead, since still bars read as "..." next to a title. -->
+<script lang="ts">
+  let { paused = false }: { paused?: boolean } = $props()
+</script>
+
+<span class="eq" class:paused aria-hidden="true"><i></i><i></i><i></i></span>
 
 <style>
   .eq {
@@ -25,6 +30,18 @@
   i:nth-child(3) {
     animation-delay: -0.6s !important;
     height: 60%;
+  }
+  .paused {
+    gap: 3px;
+    align-items: center;
+  }
+  /* after the rules above, so it wins over their heights */
+  .paused i {
+    height: 80%;
+    animation: none;
+  }
+  .paused i:nth-child(2) {
+    display: none;
   }
   @keyframes eq {
     from {

@@ -48,7 +48,43 @@ async function sample(full: ImageBitmap): Promise<Uint8ClampedArray> {
   return ctx.getImageData(0, 0, sampleSide, sampleSide).data
 }
 
+// 4 pictures in a 2x2 square, left to right then down, like the 4 covers the
+// page drew before. Each is cropped to its middle square, as object-fit: cover did.
+async function mosaic(pictures: Uint8Array[], side: number): Promise<CoverResult['jpg']> {
+  const half = Math.round(side / 2)
+  const canvas = new OffscreenCanvas(half * 2, half * 2)
+  const ctx = canvas.getContext('2d')!
+  for (const [i, data] of pictures.entries()) {
+    const full = await createImageBitmap(new Blob([data as Uint8Array<ArrayBuffer>]))
+    try {
+      const s = Math.min(full.width, full.height)
+      const tile = await createImageBitmap(
+        full,
+        Math.floor((full.width - s) / 2),
+        Math.floor((full.height - s) / 2),
+        s,
+        s,
+        { resizeWidth: half, resizeHeight: half, resizeQuality: 'high' }
+      )
+      ctx.drawImage(tile, (i % 2) * half, Math.floor(i / 2) * half)
+      tile.close()
+    } finally {
+      full.close()
+    }
+  }
+  const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 })
+  return new Uint8Array(await blob.arrayBuffer())
+}
+
 async function run(job: CoverJob): Promise<CoverResult> {
+  if (job.more) {
+    try {
+      return { id: job.id, jpg: await mosaic([job.data, ...job.more], job.side ?? 320) }
+    } catch {
+      // one of the small covers can't be read
+      return { id: job.id, bad: true }
+    }
+  }
   let full: ImageBitmap
   try {
     // decoded off this window's main thread

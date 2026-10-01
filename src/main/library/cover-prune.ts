@@ -2,7 +2,7 @@
 // process after a scan; the next scan waits for it, so the two never overlap.
 import { readdir, rm, stat } from 'fs/promises'
 import { join } from 'path'
-import { hashOfName } from './cover-names'
+import { hashOfName, mosaicHashes } from './cover-names'
 
 // A temp file younger than this may still be written by main (a large cover the
 // stage asked for). Older ones were left by a crash.
@@ -48,8 +48,11 @@ export async function pruneCoverFiles(o: PruneOptions): Promise<void> {
   for (const name of names) {
     const h = hashOfName(name)
     if (!h) continue
+    // a mosaic goes as soon as one of its covers does
+    const mosaic = mosaicHashes(name)
+    const kept = (): boolean => (mosaic ? mosaic.every(keep) : keep(h))
     if (o.stale()) return
-    if (keep(h)) continue
+    if (kept()) continue
     const path = join(o.dir, name)
     if (name.endsWith('.tmp')) {
       try {
@@ -59,9 +62,10 @@ export async function pruneCoverFiles(o: PruneOptions): Promise<void> {
       }
       // things may have changed during the wait
       if (o.stale()) return
-      if (keep(h)) continue
+      if (kept()) continue
     }
-    o.forget?.(h)
+    // a mosaic is not its first cover's own file
+    if (!mosaic) o.forget?.(h)
     try {
       await fs.rm(path)
     } catch {

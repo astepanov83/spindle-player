@@ -250,4 +250,42 @@ describe('CoverCache', () => {
       covers.close()
     })
   })
+
+  describe('artist mosaics', () => {
+    const four = ['1', '2', '3', '4'].map((c) => c.repeat(40))
+    const name = `${four.join('-')}.mosaic.jpg`
+
+    it('makes the mosaic from the 4 small covers once, and serves the file after', async () => {
+      four.forEach((h, i) => writeFileSync(join(dir, `${h}.jpg`), new Uint8Array([i])))
+      const covers = new CoverCache(dir, 'preload.js')
+      const p = covers.mosaic(four)
+      // a second tile asking at once gets the same job
+      const again = covers.mosaic(four)
+      for (let i = 0; i < 3; i++) await tick()
+      const sent = fake.windows[0].sent as unknown as CoverJob[]
+      expect(sent).toHaveLength(1)
+      expect([sent[0].side, [...sent[0].data], sent[0].more?.map((m) => [...m])]).toEqual([
+        320,
+        [0],
+        [[1], [2], [3]]
+      ])
+      fake.onDone!(
+        { sender: fake.windows[0].webContents },
+        { id: sent[0].id, jpg: new Uint8Array([9]) }
+      )
+      expect(await p).toBe(join(dir, name))
+      expect(await again).toBe(join(dir, name))
+      expect(await covers.mosaic(four)).toBe(join(dir, name))
+      expect(fake.windows[0].sent).toHaveLength(1)
+      covers.close()
+    })
+
+    it('gives nothing when a small cover is missing, and sends no job', async () => {
+      writeFileSync(join(dir, `${four[0]}.jpg`), new Uint8Array([0]))
+      const covers = new CoverCache(dir, 'preload.js')
+      expect(await covers.mosaic(four)).toBeUndefined()
+      expect(fake.windows).toHaveLength(0)
+      covers.close()
+    })
+  })
 })

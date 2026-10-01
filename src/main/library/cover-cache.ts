@@ -1,6 +1,7 @@
 // Resized covers on disk, named by the hash of the source picture.
 // "<hash>.jpg" is the small one made at scan time, "<hash>-large.jpg" is made
-// the first time the stage asks for it, and "<hash>.bad" marks a picture that
+// the first time the stage asks for it, a mosaic of 4 small ones the first time
+// an artist's tile asks for it, and "<hash>.bad" marks a picture that
 // could not be decoded, so it is not tried again on every scan. The album
 // colors are picked in the same window while the picture is decoded.
 //
@@ -17,7 +18,7 @@ import type { ThemePalettes } from '../../shared/palette'
 import { smallLogoSide } from '../../shared/stations'
 import { writeFileAtomic } from '../json-file'
 import { blockNavigation } from '../web-guard'
-import { badName, largeName, smallName } from './cover-names'
+import { badName, largeName, mosaicName, smallName } from './cover-names'
 import {
   isCrash,
   judge,
@@ -61,6 +62,7 @@ export class CoverCache {
   #nextId = 0
   #idle: ReturnType<typeof setTimeout> | undefined
   #large = new Map<string, Promise<string | undefined>>()
+  #mosaics = new Map<string, Promise<string | undefined>>()
   // Set when the app window closed: no new hidden window may open, or it would
   // keep the app running with no window to show.
   #shutDown = false
@@ -285,6 +287,41 @@ export class CoverCache {
       return path
     } catch (e) {
       console.error('Could not make a large cover', e)
+      return undefined
+    }
+  }
+
+  // The path of the 2x2 mosaic of these 4 small covers, made the first time.
+  // Undefined when one of them is not in the cache.
+  mosaic(hashes: string[]): Promise<string | undefined> {
+    const name = mosaicName(hashes)
+    let p = this.#mosaics.get(name)
+    if (!p) {
+      p = this.#makeMosaic(name, hashes)
+      this.#mosaics.set(name, p)
+      p.finally(() => this.#mosaics.delete(name))
+    }
+    return p
+  }
+
+  async #makeMosaic(name: string, hashes: string[]): Promise<string | undefined> {
+    const path = join(this.dir, name)
+    try {
+      await stat(path)
+      return path
+    } catch {
+      // not made yet
+    }
+    try {
+      const [first, ...more] = await Promise.all(
+        hashes.map(async (h) => new Uint8Array(await readFile(this.smallPath(h))))
+      )
+      const o = await this.#run(first, { side: smallSide, more })
+      if (o.kind !== 'ok' || !o.jpg) return undefined
+      await writeFileAtomic(path, o.jpg)
+      return path
+    } catch {
+      // a small cover is gone (pruned, or not made yet); the page draws the 4 covers
       return undefined
     }
   }

@@ -2,7 +2,7 @@
 // artist's picture, and mouse Back and Forward between the grid, an artist
 // and an album. No DOM. Who counts as an artist is in shared/artists.ts.
 import { artistKey, namesOf, type Artist } from '../../../shared/artists'
-import type { ArtistCredit, Track } from '../../../shared/library'
+import type { Art, ArtistCredit, Track } from '../../../shared/library'
 import { foldedName, foldQuery, sortRows, type Sort } from './views'
 
 export function filterArtists(artists: Artist[], q: string): Artist[] {
@@ -42,19 +42,22 @@ export function artistPageSongs(
 }
 
 // Up to 4 different covers for the picture made from covers: their albums
-// first, then the pictures of their songs on other albums.
+// first, then the pictures of their songs on other albums. With their colors,
+// shown while the picture loads.
+export type CoverArt = Pick<Art, 'cover' | 'palette'>
+
 export function artistCovers(
   a: Artist,
-  album: (id: string) => { cover: string },
-  songCover: (trackId: string) => string
-): string[] {
-  const out: string[] = []
-  const add = (c: string): boolean => {
-    if (c && !out.includes(c)) out.push(c)
+  album: (id: string) => CoverArt,
+  songArt: (trackId: string) => CoverArt
+): CoverArt[] {
+  const out: CoverArt[] = []
+  const add = (art: CoverArt): boolean => {
+    if (art.cover && !out.some((o) => o.cover === art.cover)) out.push(art)
     return out.length >= 4
   }
-  for (const id of a.albums) if (add(album(id).cover)) return out
-  for (const id of a.also) if (add(songCover(id))) return out
+  for (const id of a.albums) if (add(album(id))) return out
+  for (const id of a.also) if (add(songArt(id))) return out
   return out
 }
 

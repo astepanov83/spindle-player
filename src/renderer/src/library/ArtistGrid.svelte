@@ -7,6 +7,7 @@
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
   import { artistKey, namesOf, type Artist } from '../../../shared/artists'
+  import type { Album, Art } from '../../../shared/library'
   import { artistCovers, artistSongs, filterArtists } from './artists'
   import { chunk, gridColumns } from './views'
   import { virtualList } from '../ui/virtual-list.svelte'
@@ -29,9 +30,8 @@
     onopen?: (key: string) => void
   } = $props()
 
-  // the grid shows over the open page while searching, so a pick ends the search
+  // the grid shows over the open page while searching; a pick is a step, which ends the search
   function open(key: string): void {
-    library.query = ''
     library.openArtist(key)
   }
 
@@ -46,9 +46,10 @@
   // picture + name + count, measured for real once drawn
   const estimate = $derived((width - GAP * (cols - 1)) / cols + 50 + ROW_GAP)
 
+  // rows ahead, so a fast scroll finds them drawn
   const v = virtualList(
     () => ({ count: rows.length, scrollEl, list, size: estimate, remeasure: true }),
-    3
+    6
   )
 
   keepPlace(() => ({
@@ -77,8 +78,8 @@
     library.editingArtist = a.key
   }
 
-  const album = (id: string): { cover: string; trackIds: string[] } => library.album(id)
-  const songCover = (id: string): string => library.art(library.track(id)).cover
+  const album = (id: string): Album => library.album(id)
+  const songArt = (id: string): Art => library.art(library.track(id))
   // albums, or songs for an artist with only songs on other albums
   const count = (a: Artist): string =>
     a.albums.length
@@ -124,7 +125,7 @@
             <button class="pic" aria-label="Open {a.name}" onclick={() => onopen(a.key)}
               ><ArtistPic
                 photo={library.photos[a.key]?.cover}
-                covers={artistCovers(a, album, songCover)}
+                covers={artistCovers(a, album, songArt)}
               /></button
             >
             <button

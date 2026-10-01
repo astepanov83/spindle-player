@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Artist } from '../../../shared/artists'
 import type { Track } from '../../../shared/library'
+import { fallbackPalettes, type ThemePalettes } from '../../../shared/palette'
 import {
   artistBack,
   artistLinks,
@@ -22,15 +23,21 @@ const artist = (name: string, albums: string[] = [], also: string[] = []): Artis
   also
 })
 
-const albums: Record<string, { cover: string; trackIds: string[] }> = {
-  a: { cover: 'ca', trackIds: ['a1', 'a2'] },
-  b: { cover: '', trackIds: ['b1'] },
-  c: { cover: 'cc', trackIds: ['c1'] },
-  d: { cover: 'cd', trackIds: [] },
-  e: { cover: 'ca', trackIds: [] }
+const palette = fallbackPalettes('x')
+type TestAlbum = { cover: string; palette: ThemePalettes; trackIds: string[] }
+const albums: Record<string, TestAlbum> = {
+  a: { cover: 'ca', palette, trackIds: ['a1', 'a2'] },
+  b: { cover: '', palette, trackIds: ['b1'] },
+  c: { cover: 'cc', palette, trackIds: ['c1'] },
+  d: { cover: 'cd', palette, trackIds: [] },
+  e: { cover: 'ca', palette, trackIds: [] }
 }
-const album = (id: string): { cover: string; trackIds: string[] } => albums[id]
-const songArt = (id: string): string => (id === 'x1' ? 'cx' : id === 'y1' ? 'ca' : '')
+const album = (id: string): TestAlbum => albums[id]
+const songArt = (id: string): { cover: string; palette: ThemePalettes } => ({
+  cover: id === 'x1' ? 'cx' : id === 'y1' ? 'ca' : '',
+  palette
+})
+const coversOf = (a: Artist): string[] => artistCovers(a, album, songArt).map((c) => c.cover)
 
 describe('filterArtists', () => {
   it('finds artists by any part of the name, in any case', () => {
@@ -78,17 +85,9 @@ describe('artistPageSongs', () => {
 
 describe('artistCovers', () => {
   it('takes different album covers first, then covers of their other songs, up to 4', () => {
-    expect(artistCovers(artist('A', ['a', 'b', 'e'], ['x1', 'y1']), album, songArt)).toEqual([
-      'ca',
-      'cx'
-    ])
-    expect(artistCovers(artist('A', ['a', 'c', 'd'], ['x1', 'y1']), album, songArt)).toEqual([
-      'ca',
-      'cc',
-      'cd',
-      'cx'
-    ])
-    expect(artistCovers(artist('A', ['b']), album, songArt)).toEqual([])
+    expect(coversOf(artist('A', ['a', 'b', 'e'], ['x1', 'y1']))).toEqual(['ca', 'cx'])
+    expect(coversOf(artist('A', ['a', 'c', 'd'], ['x1', 'y1']))).toEqual(['ca', 'cc', 'cd', 'cx'])
+    expect(coversOf(artist('A', ['b']))).toEqual([])
   })
 })
 

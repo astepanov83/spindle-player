@@ -1,6 +1,21 @@
 <!-- An album cover that fills its box, or a grey record when there is none. -->
 <script lang="ts">
-  let { src }: { src: string | undefined } = $props()
+  let {
+    src,
+    tint,
+    lazy = true,
+    onfail
+  }: {
+    src: string | undefined
+    // shown while the picture loads (a CSS background): the album's color
+    // turns into its cover, which a fast scroll shows much less than grey does
+    tint?: string
+    // off in the virtual grids: their rows are only drawn near the view anyway,
+    // and lazy loading only waits longer to ask
+    lazy?: boolean
+    // the picture could not be loaded; the plain tile shows meanwhile
+    onfail?: () => void
+  } = $props()
 
   // a cover the cache lost shows the plain tile, not a broken image
   let failed = $state('')
@@ -13,13 +28,17 @@
   <img
     class="cover"
     class:wait={loaded !== src}
+    style:background={loaded !== src ? tint : undefined}
     {src}
     alt=""
-    loading="lazy"
+    loading={lazy ? 'lazy' : 'eager'}
     decoding="async"
     draggable="false"
     onload={() => (loaded = src)}
-    onerror={() => (failed = src)}
+    onerror={() => {
+      failed = src
+      onfail?.()
+    }}
   />
 {:else}
   <span class="cover none">

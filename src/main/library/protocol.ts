@@ -1,5 +1,6 @@
 // spindle:// serves covers and audio to the sandboxed page:
 //   spindle://cover/small/<hash>, spindle://cover/large/<hash>, spindle://media/<file id>
+//   spindle://cover/mosaic/<hash>-<hash>-<hash>-<hash>: 4 small covers in one picture
 //   spindle://radio/<station id>?stream=<n> (see radio/stream.ts)
 //   spindle://radio-logo/<station id>: a search result's logo (radio/result-logos.ts)
 // Only files the index knows are served. The page can't name a path.
@@ -51,10 +52,20 @@ function cantDecode(): Response {
 }
 
 async function cover(lib: LibraryService, size: string, hash: string): Promise<Response> {
+  if (size === 'mosaic') {
+    const hashes = hash.split('-')
+    if (hashes.length !== 4 || !hashes.every(isCoverHash)) return notFound()
+    return served(await lib.covers.mosaic(hashes))
+  }
   if (!isCoverHash(hash)) return notFound()
   let path: string | undefined
   if (size === 'small') path = lib.covers.smallPath(hash)
   else if (size === 'large') path = await lib.covers.large(hash, () => lib.coverSource(hash))
+  return served(path)
+}
+
+// A cached JPEG, or 404 when there is none.
+async function served(path: string | undefined): Promise<Response> {
   if (!path) return notFound()
   try {
     return new Response(new Uint8Array(await readFile(path)), {

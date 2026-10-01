@@ -155,6 +155,27 @@ describe('pruneCoverFiles', () => {
   })
 })
 
+describe('pruning mosaics', () => {
+  it('keeps a mosaic while all 4 covers are used, and never forgets a cover for it', async () => {
+    const h4 = '4'.repeat(40)
+    const all = `${h1}-${h2}-${h3}-${h4}.mosaic.jpg`
+    const gone = `${h1}-${h2}-${h3}-${'5'.repeat(40)}.mosaic.jpg`
+    const fs = fakeFs({ [all]: 0, [gone]: 0, [`${h1}.jpg`]: 0 })
+    const forgot: string[] = []
+    await pruneCoverFiles({
+      dir: '/c',
+      used: () => new Set([h1, h2, h4]),
+      busy: (h) => h === h3,
+      stale: () => false,
+      forget: (h) => forgot.push(h),
+      now: () => now,
+      fs
+    })
+    expect(fs.left()).toEqual([all, `${h1}.jpg`].sort())
+    expect(forgot).toEqual([])
+  })
+})
+
 describe('removeOldTemp', () => {
   it('removes old temp files and leaves ones main may still be writing', async () => {
     const fs = fakeFs({

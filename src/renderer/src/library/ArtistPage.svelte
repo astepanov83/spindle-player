@@ -5,6 +5,7 @@
   import { fmtCount } from '../format'
   import { untrack } from 'svelte'
   import { artistKey, type Artist, type ArtistTag } from '../../../shared/artists'
+  import type { Album } from '../../../shared/library'
   import { cleanNames, editArtist, maxNameLength } from '../../../shared/artist-overrides'
   import AlbumGrid from './AlbumGrid.svelte'
   import ArtistPic from './ArtistPic.svelte'
@@ -18,11 +19,11 @@
 
   let { artist: a, scrollEl }: { artist: Artist; scrollEl: HTMLElement | undefined } = $props()
 
-  const album = (id: string): { cover: string; trackIds: string[] } => library.album(id)
+  const album = (id: string): Album => library.album(id)
   const albums = $derived(a.albums.map((id) => library.album(id)))
   const also = $derived(a.also.map((id) => library.track(id)))
   const songs = $derived(artistSongs(a, album))
-  const covers = $derived(artistCovers(a, album, (id) => library.art(library.track(id)).cover))
+  const covers = $derived(artistCovers(a, album, (id) => library.art(library.track(id))))
 
   // their albums in order, then the "Also on" songs as sorted
   const playIds = (): string[] =>

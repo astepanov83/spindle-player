@@ -62,6 +62,16 @@ export function coverUrls(hash: string): { cover: string; coverLarge: string } {
   return { cover: `spindle://cover/small/${hash}`, coverLarge: `spindle://cover/large/${hash}` }
 }
 
+// One picture of 4 small covers in a 2x2 square, for an artist's tile: one
+// image to load instead of 4, so the Artists grid scrolls like the Albums one.
+// Main makes it on first use. Undefined unless all 4 are small cached covers.
+export function mosaicUrl(covers: string[]): string | undefined {
+  if (covers.length !== 4) return undefined
+  const hashes = covers.map((c) => /^spindle:\/\/cover\/small\/([0-9a-f]{40})$/.exec(c)?.[1])
+  if (hashes.some((h) => !h)) return undefined
+  return `spindle://cover/mosaic/${hashes.join('-')}`
+}
+
 // Where a track lies in its file, in seconds. `file` is the id the page loads
 // (spindle://media/<file>), the same for every track of one image.
 export interface TrackPart {

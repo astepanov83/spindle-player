@@ -16,6 +16,9 @@ export interface CoverJob {
   palette?: boolean
   // a station logo: its see-through parts are filled (see logoBackdrop)
   backdrop?: boolean
+  // 3 more pictures: the JPEG is a 2x2 mosaic of data and these, side px a
+  // side, each cropped to a square (an artist's tile)
+  more?: Uint8Array[]
 }
 
 export interface CoverResult {

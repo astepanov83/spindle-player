@@ -12,6 +12,7 @@
   import { player } from '../stores/player.svelte'
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { theme } from '../stores/theme.svelte'
   import { openSongMenu } from './song-menu'
 
   let {
@@ -39,9 +40,10 @@
   // cover + title + artist, measured for real once drawn
   const estimate = $derived((width - GAP * (cols - 1)) / cols + 44 + ROW_GAP)
 
+  // rows ahead, so a fast scroll finds them drawn
   const v = virtualList(
     () => ({ count: rows.length, scrollEl, list, size: estimate, remeasure: true }),
-    3
+    6
   )
 
   keepPlace(() => ({
@@ -89,7 +91,11 @@
         >
           <div class="cvwrap">
             <button class="cv" aria-label="Open {al.title}" onclick={() => onopen(al.id)}
-              ><Cover src={al.cover} /></button
+              ><Cover
+                src={al.cover}
+                tint={al.palette[theme.light ? 'light' : 'dark'][0]}
+                lazy={false}
+              /></button
             >
             <button
               class="qp"

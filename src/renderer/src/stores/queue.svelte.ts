@@ -4,6 +4,7 @@
 // one's plugin says what it is and how to play it (plugins/index.ts). The
 // live queue and which of the two plays are in queues.svelte.ts.
 import { moveKeys, type IdMoves } from '../../../shared/id-moves'
+import type { PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink, QueuePlace, SavedQueue } from '../../../shared/saved-queue'
 import { engine, type EngineError, type EngineEvents } from '../audio/engine'
@@ -480,12 +481,12 @@ class TrackQueue {
 
   // Songs whose ids changed (see id-moves.ts). They are the same songs, so
   // nothing restarts. Called just before the library with the new ids loads.
-  moveIds(moves: IdMoves): void {
-    const items = moveKeys(this.items, moves)
+  moveIds(plugin: PluginId, moves: IdMoves): void {
+    const items = moveKeys(this.items, plugin, moves)
     if (items === this.items) return
     // the loaded song keeps its new key, so the bar still reads its playable
     const l = this.#loaded
-    if (l) this.#loaded = { ...l, key: moveKeys([l.key], moves)[0] }
+    if (l) this.#loaded = { ...l, key: moveKeys([l.key], plugin, moves)[0] }
     this.#set({ ...this.#state(), items })
   }
 

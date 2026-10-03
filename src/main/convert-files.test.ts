@@ -1,15 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { emptyQueues } from '../shared/saved-queue'
-import {
-  convertPlaylists,
-  convertQueue,
-  isOldPlaylistsFile,
-  isOldQueueFile,
-  type MfpIds
-} from './convert-files'
+import { convertPlaylists, convertQueue, isOldPlaylistsFile, isOldQueueFile } from './convert-files'
+import { oldIdsFrom } from './plugins/old-ids'
 
-const mfp: MfpIds = { tracks: new Set(['m1', 'm2']), albums: new Set(['ep']) }
-const none: MfpIds = { tracks: new Set(), albums: new Set() }
+const mfp = oldIdsFrom({ tracks: new Set(['m1', 'm2']), albums: new Set(['ep']) })
+const none = oldIdsFrom({ tracks: new Set(), albums: new Set() })
 
 describe('convertQueue', () => {
   it("gives MFP's ids to mfp and the rest to files, in order", () => {

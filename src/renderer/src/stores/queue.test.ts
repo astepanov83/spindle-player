@@ -360,7 +360,7 @@ describe('ids that changed', () => {
     queue.jump(1)
     fake.reset()
     saveQueue.mockClear()
-    queue.moveIds({ a0: 'n0', a1: 'n1' })
+    queue.moveIds('files', { a0: 'n0', a1: 'n1' })
     setSongs(['a', 3], ['b', 2], ['n', 2])
     drop('files:a0')
     drop('files:a1')
@@ -375,7 +375,7 @@ describe('ids that changed', () => {
   })
 
   it('does nothing when no queued song moved', () => {
-    queue.moveIds({ zz: 'yy' })
+    queue.moveIds('files', { zz: 'yy' })
     expect(saveQueue).not.toHaveBeenCalled()
   })
 })
@@ -551,7 +551,7 @@ describe('queue actions (ticket 037)', () => {
     setSongs(['a', 3], ['e', 2, 'mfp'])
     queue.restore({ items: ['files:a0', 'mfp:e0', 'files:a2'], index: 0, from: 'X', pos: 0 })
     // the same ids from a files rescan: only the files key moves
-    queue.moveIds({ a0: 'n0', e0: 'n1' })
+    queue.moveIds('files', { a0: 'n0', e0: 'n1' })
     expect(queue.items).toEqual(['files:n0', 'mfp:e0', 'files:a2'])
   })
 

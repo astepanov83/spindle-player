@@ -8,7 +8,7 @@ const moves = { a: 'A', b: 'B' }
 
 describe('moveKeys', () => {
   it('renames moved files keys in place and keeps the rest', () => {
-    expect(moveKeys(['files:x', 'files:a', 'files:y', 'files:b'], moves)).toEqual([
+    expect(moveKeys(['files:x', 'files:a', 'files:y', 'files:b'], 'files', moves)).toEqual([
       'files:x',
       'files:A',
       'files:y',
@@ -18,18 +18,20 @@ describe('moveKeys', () => {
 
   it("leaves other plugins' keys alone, also with the same id", () => {
     const keys = ['mfp:a', 'radio:b'] as const
-    expect(moveKeys([...keys], moves)).toEqual(keys)
-    expect(moveKeys(['mfp:a', 'files:a'], moves)).toEqual(['mfp:a', 'files:A'])
+    expect(moveKeys([...keys], 'files', moves)).toEqual(keys)
+    expect(moveKeys(['mfp:a', 'files:a'], 'files', moves)).toEqual(['mfp:a', 'files:A'])
+    // the plugin that sent them is the one whose keys move
+    expect(moveKeys(['mfp:a', 'files:a'], 'mfp', moves)).toEqual(['mfp:A', 'files:a'])
   })
 
   it('gives the same list when nothing moved', () => {
     const keys: ItemKey[] = ['files:x', 'mfp:a']
-    expect(moveKeys(keys, moves)).toBe(keys)
+    expect(moveKeys(keys, 'files', moves)).toBe(keys)
   })
 
   it('ignores names an object has on its own prototype', () => {
     const keys: ItemKey[] = ['files:constructor', 'files:toString']
-    expect(moveKeys(keys, moves)).toEqual(keys)
+    expect(moveKeys(keys, 'files', moves)).toEqual(keys)
   })
 })
 
@@ -41,7 +43,7 @@ describe('movePlaylists', () => {
       // both the old and the new id: the song stays once
       { id: 'p3', name: 'Three', items: ['files:A', 'files:a'] }
     ]
-    const out = movePlaylists(list, moves)
+    const out = movePlaylists(list, 'files', moves)
     expect(out[0].items).toEqual(['files:A', 'files:x', 'mfp:b'])
     expect(out[1]).toBe(list[1])
     expect(out[2].items).toEqual(['files:A'])
@@ -50,7 +52,7 @@ describe('movePlaylists', () => {
 
   it('gives the same list when nothing moved', () => {
     const list: Playlist[] = [{ id: 'p', name: 'P', items: ['files:x'] }]
-    expect(movePlaylists(list, moves)).toBe(list)
+    expect(movePlaylists(list, 'files', moves)).toBe(list)
   })
 })
 
@@ -61,7 +63,7 @@ describe('moveQueue', () => {
   })
 
   it('renames the track queue and keeps its place', () => {
-    const out = moveQueue(queues(['files:x', 'files:a', 'mfp:b']), moves)
+    const out = moveQueue(queues(['files:x', 'files:a', 'mfp:b']), 'files', moves)
     expect(out.track).toEqual({
       items: ['files:x', 'files:A', 'mfp:b'],
       index: 1,
@@ -73,7 +75,7 @@ describe('moveQueue', () => {
 
   it('gives the same queue when nothing moved', () => {
     const q = queues(['files:x', 'mfp:a'])
-    expect(moveQueue(q, moves)).toBe(q)
+    expect(moveQueue(q, 'files', moves)).toBe(q)
   })
 })
 

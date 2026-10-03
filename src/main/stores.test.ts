@@ -18,6 +18,7 @@ vi.mock('electron', () => ({ app: { getPath: () => '/nowhere' } }))
 const { SettingsStore } = await import('./settings-store')
 const { isKnownSettingsFile } = await import('../shared/settings')
 const { PlaylistFile, QueueFile } = await import('./page-files')
+const { oldIds } = await import('./plugins/old-ids')
 const { shortHash } = await import('./ids')
 
 let dir: string
@@ -132,7 +133,7 @@ describe('PlaylistFile', () => {
     const path = join(dir, 'playlists.json')
     const v3 = JSON.stringify({ version: 3, playlists: [{ id: 'a', name: 'Mix', items: [] }] })
     writeFileSync(path, v3)
-    const file = new PlaylistFile(path)
+    const file = new PlaylistFile(oldIds, path)
     file.setFromPage([])
     file.flushSync()
     expect(readFileSync(`${path}.unknown`, 'utf8')).toBe(v3)
@@ -142,7 +143,7 @@ describe('PlaylistFile', () => {
   it('never writes a playlists file it could not read', () => {
     const path = join(dir, 'playlists.json')
     mkdirSync(path)
-    const file = new PlaylistFile(path)
+    const file = new PlaylistFile(oldIds, path)
     file.setFromPage([{ id: 'a', name: 'Mix', items: [] }])
     expect(file.get()).toHaveLength(1)
     file.flushSync()
@@ -151,13 +152,13 @@ describe('PlaylistFile', () => {
 
   it('renames songs whose ids changed and saves the file', () => {
     const path = join(dir, 'playlists.json')
-    const file = new PlaylistFile(path)
+    const file = new PlaylistFile(oldIds, path)
     file.setFromPage([
       { id: 'p', name: 'Mix', items: ['files:old', 'files:x', 'mfp:old'] },
       { id: 'q', name: 'Other', items: ['files:y'] }
     ])
     file.flushSync()
-    file.moveIds({ old: 'new' })
+    file.moveIds('files', { old: 'new' })
     expect(JSON.parse(readFileSync(path, 'utf8')).playlists).toEqual([
       { id: 'p', name: 'Mix', items: ['files:new', 'files:x', 'mfp:old'] },
       { id: 'q', name: 'Other', items: ['files:y'] }
@@ -170,30 +171,30 @@ describe('moveIds when the new ids can not be written', () => {
   it('says so for a file it could not read (no writer this session)', () => {
     const path = join(dir, 'playlists.json')
     mkdirSync(path)
-    const file = new PlaylistFile(path)
+    const file = new PlaylistFile(oldIds, path)
     file.setFromPage([{ id: 'p', name: 'Mix', items: ['files:old'] }])
-    expect(file.moveIds({ old: 'new' })).toBe(false)
+    expect(file.moveIds('files', { old: 'new' })).toBe(false)
     // nothing to rename is no failure
-    expect(file.moveIds({ zz: 'yy' })).toBe(true)
+    expect(file.moveIds('files', { zz: 'yy' })).toBe(true)
   })
 
   it.skipIf(process.getuid?.() === 0)('says so when the write fails', () => {
     const sub = join(dir, 'ro')
     mkdirSync(sub)
-    const file = new QueueFile(join(sub, 'queue.json'))
+    const file = new QueueFile(oldIds, join(sub, 'queue.json'))
     file.setFromPage({ items: ['files:old'], index: 0, from: '', pos: 0 })
     chmodSync(sub, 0o500)
     try {
-      expect(file.moveIds({ old: 'new' })).toBe(false)
+      expect(file.moveIds('files', { old: 'new' })).toBe(false)
     } finally {
       chmodSync(sub, 0o700)
     }
   })
 
   it('says it worked when both are on disk', () => {
-    const file = new QueueFile(join(dir, 'queue.json'))
+    const file = new QueueFile(oldIds, join(dir, 'queue.json'))
     file.setFromPage({ items: ['files:old'], index: 0, from: '', pos: 0 })
-    expect(file.moveIds({ old: 'new' })).toBe(true)
+    expect(file.moveIds('files', { old: 'new' })).toBe(true)
   })
 })
 
@@ -208,7 +209,7 @@ const queues = (track: object, more: object = {}): object => ({
 describe('QueueFile', () => {
   it('moves the place without the list, and ignores a bad place', () => {
     const path = join(dir, 'queue.json')
-    const file = new QueueFile(path)
+    const file = new QueueFile(oldIds, path)
     file.setFromPage({ items: ['files:a', 'files:b'], index: 0, from: 'X', pos: 0 })
     file.setPlace({ index: 1, pos: 4 })
     file.setPlace({ index: 5, pos: 1 })
@@ -220,9 +221,9 @@ describe('QueueFile', () => {
 
   it('renames songs whose ids changed and keeps the place', () => {
     const path = join(dir, 'queue.json')
-    const file = new QueueFile(path)
+    const file = new QueueFile(oldIds, path)
     file.setFromPage({ items: ['files:a', 'files:old', 'mfp:old'], index: 1, from: 'X', pos: 7 })
-    file.moveIds({ old: 'new' })
+    file.moveIds('files', { old: 'new' })
     // on disk at once, before the library process is told
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(
       queues({ items: ['files:a', 'files:new', 'mfp:old'], index: 1, from: 'X', pos: 7 })
@@ -231,7 +232,7 @@ describe('QueueFile', () => {
 
   it('keeps the live item apart from the list: a new list or place leaves it', () => {
     const path = join(dir, 'queue.json')
-    const file = new QueueFile(path)
+    const file = new QueueFile(oldIds, path)
     file.setFromPage({ items: ['files:a', 'files:b'], index: 0, from: 'X', pos: 0 })
     file.setPlaying({ active: 'live', current: 'radio:metal-only' })
     file.setFromPage({ items: ['files:c'], index: 0, from: 'Y', pos: 0 })
@@ -289,7 +290,7 @@ describe('files from before item keys (ticket 055)', () => {
       station: 'metal-only'
     })
     writeFileSync(path, old)
-    const file = new QueueFile(path)
+    const file = new QueueFile(oldIds, path)
     const want = queues(
       {
         items: ['files:t1', `mfp:${mfp.song}`],
@@ -307,7 +308,7 @@ describe('files from before item keys (ticket 055)', () => {
     expect(warn).toHaveBeenCalledWith('Converting old queue.json to version 2')
     // the next start reads it as it is
     warn.mockClear()
-    expect(new QueueFile(path).get()).toEqual(want)
+    expect(new QueueFile(oldIds, path).get()).toEqual(want)
     expect(warn).not.toHaveBeenCalled()
   })
 
@@ -320,7 +321,7 @@ describe('files from before item keys (ticket 055)', () => {
     })
     writeFileSync(path, old)
     const want = [{ id: 'p', name: 'Mix', items: ['files:t1', `mfp:${mfp.song}`] }]
-    expect(new PlaylistFile(path).get()).toEqual(want)
+    expect(new PlaylistFile(oldIds, path).get()).toEqual(want)
     expect(readFileSync(`${path}.unknown`, 'utf8')).toBe(old)
     expect(readFileSync(join(dir, 'playlists.v1.json'), 'utf8')).toBe(old)
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ version: 2, playlists: want })
@@ -333,11 +334,11 @@ describe('files from before item keys (ticket 055)', () => {
       playlists: [{ id: 'p', name: 'Mix', trackIds: ['t1'] }]
     })
     writeFileSync(path, first)
-    new PlaylistFile(path)
+    new PlaylistFile(oldIds, path)
     // an older build read version 2 as unknown, started empty and saved
     const emptied = JSON.stringify({ version: 1, playlists: [] })
     writeFileSync(path, emptied)
-    expect(new PlaylistFile(path).get()).toEqual([])
+    expect(new PlaylistFile(oldIds, path).get()).toEqual([])
     expect(readFileSync(`${path}.unknown`, 'utf8')).toBe(emptied)
     expect(readFileSync(join(dir, 'playlists.v1.json'), 'utf8')).toBe(first)
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ version: 2, playlists: [] })
@@ -351,14 +352,14 @@ describe('files from before item keys (ticket 055)', () => {
       rmSync(join(dir, 'mfp.json'), { force: true })
       if (mfp !== undefined) writeFileSync(join(dir, 'mfp.json'), mfp)
       writeFileSync(path, JSON.stringify(old))
-      expect(new PlaylistFile(path).get()[0].items).toEqual([`files:${song}`])
+      expect(new PlaylistFile(oldIds, path).get()[0].items).toEqual([`files:${song}`])
     }
   })
 
   it('starts empty from a broken old file and keeps it as .broken', () => {
     const path = join(dir, 'queue.json')
     writeFileSync(path, '{"items":["t1"')
-    const file = new QueueFile(path)
+    const file = new QueueFile(oldIds, path)
     expect(file.get()).toEqual(queues({ items: [], index: 0, from: '', pos: 0 }))
     expect(readFileSync(`${path}.broken`, 'utf8')).toBe('{"items":["t1"')
   })
@@ -369,7 +370,7 @@ describe('files from before item keys (ticket 055)', () => {
     writeFileSync(path, old)
     // a folder where the copy would go
     mkdirSync(`${path}.unknown`)
-    const file = new QueueFile(path)
+    const file = new QueueFile(oldIds, path)
     expect(file.get().track.items).toEqual(['files:t1'])
     file.setPlace({ index: 0, pos: 5 })
     file.flushSync()
@@ -384,7 +385,7 @@ describe('files from before item keys (ticket 055)', () => {
     })
     writeFileSync(path, old)
     mkdirSync(`${path}.unknown`)
-    const file = new PlaylistFile(path)
+    const file = new PlaylistFile(oldIds, path)
     expect(file.get()[0].items).toEqual(['files:t1'])
     file.setFromPage([])
     file.flushSync()

@@ -3,6 +3,7 @@
 import { coverUrls, type Art } from '../../library'
 import { defaultPalettes, parseThemePalettes, type ThemePalettes } from '../../palette'
 import { cleanName } from '../../playlists'
+import { stationIdPattern } from './ids'
 
 export interface Stream {
   url: string
@@ -139,8 +140,7 @@ function parseStreams(raw: unknown): Stream[] {
   return out
 }
 
-// Ids go into spindle://radio/<id>, so they stay plain.
-const idPattern = /^[A-Za-z0-9_-]{1,200}$/
+const idPattern = stationIdPattern
 
 export function isStationId(v: unknown): v is string {
   return typeof v === 'string' && idPattern.test(v)

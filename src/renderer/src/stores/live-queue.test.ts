@@ -536,7 +536,7 @@ describe('the player bar while a song changes (fix round 1)', () => {
 
   it('a song whose id moved (a rescan) keeps its playable on the bar', () => {
     queue.playList(['files:a'], 0, '')
-    queue.moveIds({ a: 'a2' })
+    queue.moveIds('files', { a: 'a2' })
     expect(queue.current).toBe('files:a2')
     expect(queues.bar.buttons.map((x) => x.id)).toEqual(['like'])
   })

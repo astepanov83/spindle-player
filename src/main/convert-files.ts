@@ -1,8 +1,7 @@
 // queue.json and playlists.json from before item keys (ticket 055) held bare
-// library track ids. They are turned into keys once at start: an id of a
-// Music For Programming song becomes "mfp:<id>", any other "files:<id>".
+// library track ids. They are turned into keys once at start.
 import { parsePlaylists, type Playlist } from '../shared/playlists'
-import { itemKey } from '../shared/plugins/items'
+import type { ItemKey } from '../shared/plugins/items'
 import {
   parseSavedQueues,
   queueLink,
@@ -10,26 +9,15 @@ import {
   type QueueLink,
   type SavedQueues
 } from '../shared/saved-queue'
-import { isStationId } from '../shared/plugins/radio/stations'
-import { readJsonFile } from './json-file'
-import { pageEpisode } from './plugins/mfp/episodes'
-import { parseMfp } from './plugins/mfp/store'
 
-// The ids Music For Programming gives its songs and episodes.
-export interface MfpIds {
-  tracks: ReadonlySet<string>
-  albums: ReadonlySet<string>
-}
-
-// From mfp.json, with no network. The MFP plugin makes the ids from it, so
-// they come out the same. A missing or broken file knows no ids: all are files'.
-export function readMfpIds(path: string): MfpIds {
-  const read = readJsonFile(path)
-  const episodes = (read.kind === 'ok' ? parseMfp(read.value).episodes : []).map(pageEpisode)
-  return {
-    tracks: new Set(episodes.flatMap((e) => e.songs.map((s) => s.id))),
-    albums: new Set(episodes.map((e) => e.id))
-  }
+// Which plugin an old id belongs to; only the plugins know (main/plugins/old-ids.ts).
+export interface OldIds {
+  // the key of an old track id
+  track(id: string): ItemKey
+  // the "From" link of an old album, which may be another plugin's page
+  album(id: string): QueueLink
+  // the live item an old queue file was playing, if any
+  live(raw: Record<string, unknown>): ItemKey | undefined
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -37,19 +25,18 @@ function isObject(v: unknown): v is Record<string, unknown> {
 }
 
 // Anything that is not a track id is left as it is, for the parser to drop.
-function toKey(id: unknown, mfp: MfpIds): unknown {
+function toKey(id: unknown, ids: OldIds): unknown {
   if (typeof id !== 'string' || !id) return id
-  return itemKey(mfp.tracks.has(id) ? 'mfp' : 'files', id)
+  return ids.track(id)
 }
 
 const oldLinkKinds: readonly string[] = ['album', 'artist', 'folder', 'playlist']
 
-// { kind, id } before; an album that is an episode opens MFP's page.
-function convertLink(raw: unknown, mfp: MfpIds): QueueLink | undefined {
+// { kind, id } before; an album may be another plugin's page.
+function convertLink(raw: unknown, ids: OldIds): QueueLink | undefined {
   if (!isObject(raw) || typeof raw.kind !== 'string' || !oldLinkKinds.includes(raw.kind)) return
   if (typeof raw.id !== 'string' || !raw.id) return
-  const episode = raw.kind === 'album' && mfp.albums.has(raw.id)
-  return queueLink(episode ? 'episode' : (raw.kind as LinkKind), raw.id)
+  return raw.kind === 'album' ? ids.album(raw.id) : queueLink(raw.kind as LinkKind, raw.id)
 }
 
 // The old file had no version.
@@ -57,22 +44,22 @@ export function isOldQueueFile(raw: unknown): raw is Record<string, unknown> {
   return isObject(raw) && !('version' in raw)
 }
 
-// Radio playing (`kind: 'radio'`) becomes the live item. The result goes
-// through the version 2 checks, so a bad place is pulled into range as before.
-export function convertQueue(raw: Record<string, unknown>, mfp: MfpIds): SavedQueues {
-  const station = raw.kind === 'radio' && isStationId(raw.station) ? raw.station : undefined
+// A station playing becomes the live item. The result goes through the
+// version 2 checks, so a bad place is pulled into range as before.
+export function convertQueue(raw: Record<string, unknown>, ids: OldIds): SavedQueues {
+  const live = ids.live(raw)
   return parseSavedQueues({
     version: 2,
     track: {
-      items: Array.isArray(raw.items) ? raw.items.map((id) => toKey(id, mfp)) : [],
+      items: Array.isArray(raw.items) ? raw.items.map((id) => toKey(id, ids)) : [],
       index: raw.index,
       pos: raw.pos,
       from: raw.from,
       next: raw.next,
-      link: convertLink(raw.link, mfp)
+      link: convertLink(raw.link, ids)
     },
-    live: { current: station ? itemKey('radio', station) : null },
-    active: station ? 'live' : 'track'
+    live: { current: live ?? null },
+    active: live ? 'live' : 'track'
   })
 }
 
@@ -81,12 +68,12 @@ export function isOldPlaylistsFile(raw: unknown): raw is Record<string, unknown>
   return isObject(raw) && (raw.version === 1 || !('version' in raw))
 }
 
-export function convertPlaylists(raw: Record<string, unknown>, mfp: MfpIds): Playlist[] {
+export function convertPlaylists(raw: Record<string, unknown>, ids: OldIds): Playlist[] {
   const list = Array.isArray(raw.playlists) ? raw.playlists : []
   const playlists = list.map((p) => {
     if (!isObject(p)) return p
     const { trackIds, ...rest } = p
-    return { ...rest, items: Array.isArray(trackIds) ? trackIds.map((id) => toKey(id, mfp)) : [] }
+    return { ...rest, items: Array.isArray(trackIds) ? trackIds.map((id) => toKey(id, ids)) : [] }
   })
   return parsePlaylists({ version: 2, playlists })
 }

@@ -2,6 +2,7 @@
 import * as ops from '../../../shared/playlists'
 import type { Playlist } from '../../../shared/playlists'
 import { movePlaylists, type IdMoves } from '../../../shared/id-moves'
+import type { PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
 import { infoOf } from '../plugins'
 import type { ItemInfo } from '../plugins/types'
@@ -67,8 +68,8 @@ class PlaylistStore {
   }
 
   // Songs whose ids changed (see id-moves.ts); main renames its copy too.
-  moveIds(moves: IdMoves): void {
-    const list = movePlaylists(this.list, moves)
+  moveIds(plugin: PluginId, moves: IdMoves): void {
+    const list = movePlaylists(this.list, plugin, moves)
     if (list !== this.list) this.#set(list)
   }
 

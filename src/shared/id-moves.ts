@@ -2,7 +2,8 @@
 // (decision 87 picks one path for a folder reached two ways). The library
 // process finds them once, and main and the page rename them in playlists and
 // the queue, so those songs don't turn into hidden entries. Only keys of the
-// files plugin move: another plugin's ids are its own.
+// plugin that sent the moves change: another plugin's ids are its own.
+import type { PluginId } from './plugins'
 import { itemKey, splitKey, type ItemKey } from './plugins/items'
 import type { Playlist } from './playlists'
 import type { SavedQueues } from './saved-queue'
@@ -12,26 +13,26 @@ export type IdMoves = Record<string, string>
 
 const moved = (id: string, moves: IdMoves): string => (Object.hasOwn(moves, id) ? moves[id] : id)
 
-// The files track id a key moves from, if it moves.
-function movedId(key: ItemKey, moves: IdMoves): string | undefined {
+// The plugin's id a key moves to, if it moves.
+function movedId(key: ItemKey, plugin: PluginId, moves: IdMoves): string | undefined {
   const k = splitKey(key)
-  return k?.plugin === 'files' && Object.hasOwn(moves, k.id) ? moves[k.id] : undefined
+  return k?.plugin === plugin && Object.hasOwn(moves, k.id) ? moves[k.id] : undefined
 }
 
 // The same list when nothing in it moved.
-export function moveKeys(keys: ItemKey[], moves: IdMoves): ItemKey[] {
-  if (!keys.some((key) => movedId(key, moves) !== undefined)) return keys
+export function moveKeys(keys: ItemKey[], plugin: PluginId, moves: IdMoves): ItemKey[] {
+  if (!keys.some((key) => movedId(key, plugin, moves) !== undefined)) return keys
   return keys.map((key) => {
-    const to = movedId(key, moves)
-    return to === undefined ? key : itemKey('files', to)
+    const to = movedId(key, plugin, moves)
+    return to === undefined ? key : itemKey(plugin, to)
   })
 }
 
 // A song is in a playlist once, also when both its old and new id were there.
-export function movePlaylists(list: Playlist[], moves: IdMoves): Playlist[] {
+export function movePlaylists(list: Playlist[], plugin: PluginId, moves: IdMoves): Playlist[] {
   let changed = false
   const out = list.map((p) => {
-    const items = moveKeys(p.items, moves)
+    const items = moveKeys(p.items, plugin, moves)
     if (items === p.items) return p
     changed = true
     return { ...p, items: [...new Set(items)] }
@@ -39,8 +40,8 @@ export function movePlaylists(list: Playlist[], moves: IdMoves): Playlist[] {
   return changed ? out : list
 }
 
-export function moveQueue(q: SavedQueues, moves: IdMoves): SavedQueues {
-  const items = moveKeys(q.track.items, moves)
+export function moveQueue(q: SavedQueues, plugin: PluginId, moves: IdMoves): SavedQueues {
+  const items = moveKeys(q.track.items, plugin, moves)
   return items === q.track.items ? q : { ...q, track: { ...q.track, items } }
 }
 

@@ -155,7 +155,7 @@ describe('item keys (ticket 055)', () => {
   it("renames only the files plugin's keys when ids move", () => {
     const id = playlists.create()
     playlists.load([{ id, name: 'Mix', items: ['files:a', 'mfp:a'] }])
-    playlists.moveIds({ a: 'b' })
+    playlists.moveIds('files', { a: 'b' })
     expect(playlists.get(id)?.items).toEqual(['files:b', 'mfp:a'])
   })
 })

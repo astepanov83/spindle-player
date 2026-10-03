@@ -12,6 +12,7 @@ import { CoverCache } from './covers/cover-cache'
 import { pageIpc } from './page-ipc'
 import { Covers } from './covers/covers'
 import { createPlugins } from './plugins/list'
+import { oldIds } from './plugins/old-ids'
 import type { MainPlugin, Route } from './plugins/types'
 import type { IdMoves } from '../shared/id-moves'
 import { PlaylistFile, QueueFile } from './page-files'
@@ -158,8 +159,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   nativeTheme.themeSource = store.get().theme
   // Only at start: a window made again later (the dock, a second copy) is quick.
   const splash = new Splash()
-  playlists = new PlaylistFile()
-  savedQueue = new QueueFile()
+  playlists = new PlaylistFile(oldIds)
+  savedQueue = new QueueFile(oldIds)
   const userData = app.getPath('userData')
   const log = (text: string): void => console.warn(text)
   coverCache = new CoverCache(join(userData, 'covers'), join(__dirname, '../preload/covers.js'))
@@ -182,15 +183,18 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     fetch: ((url, init) => net.fetch(url as string, init)) as typeof fetch,
     request: (o: Electron.ClientRequestConstructorOptions) => net.request(o),
     dns,
-    covers,
-    idsMoved: (moves: IdMoves) => {
-      // both, even when the first fails
-      const lists = playlists.moveIds(moves)
-      const queue = savedQueue.moveIds(moves)
-      return lists && queue
-    }
+    covers
   }
-  for (const p of plugins) p.start(ctx)
+  for (const p of plugins)
+    p.start({
+      ...ctx,
+      idsMoved: (moves: IdMoves) => {
+        // both, even when the first fails
+        const lists = playlists.moveIds(p.id, moves)
+        const queue = savedQueue.moveIds(p.id, moves)
+        return lists && queue
+      }
+    })
   // the saved value, as the plugins have only seen the setting at start
   for (const p of plugins) p.setOn(store.get().plugins[p.id])
   handleProtocol(routes)

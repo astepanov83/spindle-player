@@ -100,8 +100,8 @@ let startLists = lists.value
 let startQueue = lastQueue.value
 if (moves) {
   const { now, later } = splitMoves(moves, (id) => files.has(id))
-  startLists = movePlaylists(startLists, now)
-  startQueue = moveQueue(startQueue, now)
+  startLists = movePlaylists(startLists, 'files', now)
+  startQueue = moveQueue(startQueue, 'files', now)
   moves = Object.keys(later).length ? later : undefined
 }
 playlists.load(startLists, lists.ok)
@@ -134,8 +134,8 @@ function loadLibrary(bytes: Uint8Array): boolean {
 // the queue drops songs that are gone (queue.refresh, from App.svelte).
 function applyLibrary(m: LibraryMessage): void {
   if (moves) {
-    queue.moveIds(moves)
-    playlists.moveIds(moves)
+    queue.moveIds('files', moves)
+    playlists.moveIds('files', moves)
     moves = undefined
   }
   if ('patch' in m) files.patch(m)

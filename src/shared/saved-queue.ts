@@ -1,9 +1,8 @@
 // The queues and what plays, saved in queue.json so a restart carries on where
 // you left off. Version 2 holds item keys (ticket 055); main converts an older
 // file once at start (main/convert-files.ts).
-import type { PluginId } from './plugins'
+import { plugins, type PluginId } from './plugins'
 import { isKeyOfKind, splitKey, type ItemKey } from './plugins/items'
-import { isStationId } from './plugins/radio/stations'
 
 // What "From <from>" opens (ticket 040): a page of a plugin, or of the core
 // for a playlist. None for a list with no page of its own (a search, Classic's Songs).
@@ -16,16 +15,14 @@ export interface QueueLink {
 
 export type LinkKind = 'album' | 'artist' | 'folder' | 'episode' | 'playlist'
 
-const linkOwners: Record<LinkKind, QueueLink['plugin']> = {
-  album: 'files',
-  artist: 'files',
-  folder: 'files',
-  episode: 'mfp',
-  playlist: 'core'
-}
+// Each kind's plugin, from the plugin list (`linkKinds`); a playlist is the core's.
+const linkOwners = new Map<string, QueueLink['plugin']>([
+  ...plugins.flatMap((p) => p.linkKinds.map((k) => [k, p.id] as const)),
+  ['playlist', 'core']
+])
 
 export function queueLink(kind: LinkKind, id: string): QueueLink {
-  return { plugin: linkOwners[kind], page: `${kind}/${id}` }
+  return { plugin: linkOwners.get(kind)!, page: `${kind}/${id}` }
 }
 
 // The page a link opens, split at the first "/". Undefined for one this
@@ -34,8 +31,7 @@ export function linkTarget(link: QueueLink): { kind: LinkKind; id: string } | un
   const at = link.page.indexOf('/')
   const kind = link.page.slice(0, at)
   const id = link.page.slice(at + 1)
-  if (at < 0 || !id || !Object.hasOwn(linkOwners, kind)) return undefined
-  if (linkOwners[kind as LinkKind] !== link.plugin) return undefined
+  if (at < 0 || !id || linkOwners.get(kind) !== link.plugin) return undefined
   return { kind: kind as LinkKind, id }
 }
 
@@ -106,11 +102,12 @@ export function parseSavedQueue(raw: unknown): SavedQueue {
   }
 }
 
-// A station id is checked as before item keys (it ends up in a URL).
+// A live item's id is checked as the plugin says (`liveIds`): a station id
+// ends up in a URL.
 function isLiveKey(v: unknown): v is ItemKey {
   if (!isKeyOfKind(v, 'live')) return false
   const k = splitKey(v)!
-  return k.plugin !== 'radio' || isStationId(k.id)
+  return plugins.find((p) => p.id === k.plugin)?.liveIds?.test(k.id) ?? true
 }
 
 // The whole file. A bad live item leaves the track queue playing.

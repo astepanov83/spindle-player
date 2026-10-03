@@ -18,13 +18,13 @@ import {
   type SavedQueues
 } from '../shared/saved-queue'
 import { moveQueue, movePlaylists, type IdMoves } from '../shared/id-moves'
+import type { PluginId } from '../shared/plugins'
 import {
   convertPlaylists,
   convertQueue,
   isOldPlaylistsFile,
   isOldQueueFile,
-  readMfpIds,
-  type MfpIds
+  type OldIds
 } from './convert-files'
 import { JsonFileWriter, openJsonFile, removeStrayTmp } from './json-file'
 
@@ -72,19 +72,20 @@ function writeConverted<T>(writer: JsonFileWriter<T> | undefined, data: T): void
   writer.flushSync()
 }
 
-// MFP's ids for a conversion, from mfp.json next to the file.
-const mfpIdsBeside = (path: string): MfpIds => readMfpIds(join(dirname(path), 'mfp.json'))
-
 export class PlaylistFile {
   #data: Playlist[]
   #writer: JsonFileWriter<unknown> | undefined
 
-  constructor(readonly path = join(app.getPath('userData'), 'playlists.json')) {
+  // `oldIds`: which plugin an id of an old file belongs to, from the folder it is in
+  constructor(
+    oldIds: (dir: string) => OldIds,
+    readonly path = join(app.getPath('userData'), 'playlists.json')
+  ) {
     const f = open<unknown>(path, 'Playlists file', isKnownPlaylistsFile, 500)
     this.#writer = f.writer
     if (isOldPlaylistsFile(f.value)) {
       this.#writer = keepOld(path, f.writer)
-      this.#data = convertPlaylists(f.value, mfpIdsBeside(path))
+      this.#data = convertPlaylists(f.value, oldIds(dirname(path)))
       writeConverted(this.#writer, playlistsFile(this.#data))
     } else this.#data = parsePlaylists(f.value)
   }
@@ -104,8 +105,8 @@ export class PlaylistFile {
   // Songs whose ids changed (see id-moves.ts), checked like a file read and
   // written at once: the library process drops the map once it hears back.
   // False when the new ids are not on disk: no writer this session, or the write failed.
-  moveIds(moves: IdMoves): boolean {
-    const moved = movePlaylists(this.#data, moves)
+  moveIds(plugin: PluginId, moves: IdMoves): boolean {
+    const moved = movePlaylists(this.#data, plugin, moves)
     if (moved === this.#data) return true
     this.#data = parsePlaylists(playlistsFile(moved))
     if (!this.#writer) return false
@@ -122,13 +123,16 @@ export class QueueFile {
   #data: SavedQueues
   #writer: JsonFileWriter<SavedQueues> | undefined
 
-  constructor(readonly path = join(app.getPath('userData'), 'queue.json')) {
+  constructor(
+    oldIds: (dir: string) => OldIds,
+    readonly path = join(app.getPath('userData'), 'queue.json')
+  ) {
     // one line: a queue made from a big song table holds thousands of ids
     const f = open<SavedQueues>(path, 'Queue file', isKnownQueueFile, 1000, 0)
     this.#writer = f.writer
     if (isOldQueueFile(f.value)) {
       this.#writer = keepOld(path, f.writer)
-      this.#data = convertQueue(f.value, mfpIdsBeside(path))
+      this.#data = convertQueue(f.value, oldIds(dirname(path)))
       writeConverted(this.#writer, this.#data)
     } else this.#data = parseSavedQueues(f.value)
   }
@@ -153,8 +157,8 @@ export class QueueFile {
   }
 
   // False when the new ids are not on disk (see PlaylistFile.moveIds).
-  moveIds(moves: IdMoves): boolean {
-    const moved = moveQueue(this.#data, moves)
+  moveIds(plugin: PluginId, moves: IdMoves): boolean {
+    const moved = moveQueue(this.#data, plugin, moves)
     if (moved === this.#data) return true
     this.#data = parseSavedQueues(moved)
     if (!this.#writer) return false

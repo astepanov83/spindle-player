@@ -129,15 +129,19 @@ function parseCoverSources(
   return out
 }
 
-// `legacyMfp` is the old top-level `mfp` field, read only when `plugins` is missing.
+// A plugin's old top-level switch (`oldSwitch` in the plugin list, as MFP's
+// `mfp`) is read only when `plugins` is missing.
 function parsePlugins(
   v: unknown,
-  legacyMfp: unknown,
+  raw: Record<string, unknown>,
   base: Record<PluginId, boolean>
 ): Record<PluginId, boolean> {
   const out = { ...base }
   if (!isObject(v)) {
-    if (typeof legacyMfp === 'boolean') out.mfp = legacyMfp
+    for (const p of plugins) {
+      const old = p.oldSwitch && raw[p.oldSwitch]
+      if (typeof old === 'boolean') out[p.id] = old
+    }
     return out
   }
   for (const p of plugins) if (typeof v[p.id] === 'boolean') out[p.id] = v[p.id] as boolean
@@ -194,15 +198,16 @@ export function parseStoredSettings(
     fetchCovers: typeof r.fetchCovers === 'boolean' ? r.fetchCovers : base.fetchCovers,
     coverSources: parseCoverSources(r.coverSources, base.coverSources),
     closeAction: oneOf(r.closeAction, closeActions, base.closeAction),
-    plugins: parsePlugins(r.plugins, r.mfp, base.plugins),
+    plugins: parsePlugins(r.plugins, r, base.plugins),
     windowSizes,
     windowPlace: r.windowPlace === undefined ? base.windowPlace : parseWindowPlace(r.windowPlace),
     folders: Array.isArray(r.folders) ? parseFolders(r.folders) : [...base.folders]
   }
 }
 
-// `mfp` is the old field: still read, and dropped by the next save
-const storedKeys = [...Object.keys(defaultStoredSettings()), 'mfp']
+// The plugins' old switches: still read, and dropped by the next save
+const oldSwitches = plugins.flatMap((p) => p.oldSwitch ?? [])
+const storedKeys = [...Object.keys(defaultStoredSettings()), ...oldSwitches]
 
 // Every template named is one this version has, with a mode it offers. A
 // template left out is fine: the save only adds it.
@@ -255,7 +260,7 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('windowSizes') && !isKnownSizes(raw.windowSizes)) return false
   if (has('windowPlace') && raw.windowPlace !== null && !isKnownPlace(raw.windowPlace)) return false
   if (has('fetchCovers') && typeof raw.fetchCovers !== 'boolean') return false
-  if (has('mfp') && typeof raw.mfp !== 'boolean') return false
+  if (oldSwitches.some((k) => has(k) && typeof raw[k] !== 'boolean')) return false
   if (
     has('plugins') &&
     (!isObject(raw.plugins) ||

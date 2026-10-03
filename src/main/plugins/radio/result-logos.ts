@@ -4,7 +4,7 @@
 // at a time (with 030's fetchLogo, which refuses what is not a picture or is
 // too big) into a short-lived cache in memory. Nothing goes to the cover cache:
 // a logo becomes a cover only when its station is saved or played (030).
-import type { Station } from '../../shared/stations'
+import type { Station } from '../../../shared/stations'
 import { pictureType } from './logo-fetch'
 
 export interface ResultLogosDeps {

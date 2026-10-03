@@ -3,8 +3,8 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, expect, it, vi, type Mock } from 'vitest'
-import { fallbackPalettes, paletteVersion } from '../../shared/palette'
-import type { RadioCover } from '../../shared/ipc'
+import { fallbackPalettes, paletteVersion } from '../../../shared/palette'
+import type { RadioCover } from '../../../shared/ipc'
 import {
   notFoundMs,
   openSongCovers,

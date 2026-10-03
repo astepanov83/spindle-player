@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { fallbackPalettes } from '../../shared/palette'
 import type { Station } from '../../shared/stations'
-import { keptLogos } from '../radio/logos'
+import { keptLogos } from '../plugins/radio/logos'
 import { coversInUse, emptyIndex } from './merge'
 import { pruneCoverFiles, removeOldTemp, tmpAgeMs, type PruneFs } from './cover-prune'
 

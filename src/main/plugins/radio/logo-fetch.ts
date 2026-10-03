@@ -2,7 +2,7 @@
 // A plain function of a URL: search result rows (029) and homepage icons (033)
 // use it too. Same size limit as the online cover lookup, and a timeout.
 import { BlockList, isIP } from 'net'
-import { maxImage, readCapped } from '../library/cover-http'
+import { maxImage, readCapped } from '../../library/cover-http'
 
 export interface LogoFetchOptions {
   // checkedFetch in the app (each redirect checked); a fake in tests

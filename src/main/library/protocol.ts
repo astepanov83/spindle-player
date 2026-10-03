@@ -1,8 +1,9 @@
 // spindle:// serves covers and audio to the sandboxed page:
 //   spindle://cover/small/<hash>, spindle://cover/large/<hash>, spindle://media/<file id>
 //   spindle://cover/mosaic/<hash>-<hash>-<hash>-<hash>: 4 small covers in one picture
-//   spindle://radio/<station id>?stream=<n> (see radio/stream.ts)
-//   spindle://radio-logo/<station id>: a search result's logo (radio/result-logos.ts)
+// Each plugin adds the hosts it serves (see plugins/types.ts, Route):
+//   spindle://radio/<station id>?stream=<n> (see plugins/radio/stream.ts)
+//   spindle://radio-logo/<station id>: a search result's logo (plugins/radio/result-logos.ts)
 // A media id can be an online mp3 (ticket 052): main fetches it (online-media.ts).
 // Only files the index knows are served. The page can't name a path.
 // spindle://media/<file id>?decode asks for the file as WAV decoded by ffmpeg
@@ -18,6 +19,7 @@ import { openMedia } from './media-file'
 import { onlineMedia } from './online-media'
 import { probeLength, probeTags } from './probe'
 import { audioType, parseRange, type RangeResult } from './range'
+import type { Route } from '../plugins/types'
 import type { LibraryService } from './service'
 import type { MediaInfo } from './types'
 
@@ -40,11 +42,11 @@ export function registerScheme(): void {
   ])
 }
 
-const common = { 'Access-Control-Allow-Origin': '*' }
+export const common = { 'Access-Control-Allow-Origin': '*' }
 
 // The file is gone, can't be read, or isn't in the index. The page tells
 // this apart from a format it can't play (decision 105).
-function notFound(): Response {
+export function notFound(): Response {
   return new Response('Not found', { status: 404, headers: common })
 }
 
@@ -195,26 +197,22 @@ async function media(
   }
 }
 
-export function handleProtocol(
-  lib: LibraryService,
-  radio: (id: string, stream: string | null) => Promise<Response>,
-  radioLogo: (id: string) => Promise<{ data: Uint8Array; type: string } | undefined>
-): void {
+// The hosts the library serves.
+export function libraryRoutes(lib: LibraryService): Record<string, Route> {
+  return {
+    cover: (_req, _url, parts) =>
+      parts.length === 2 ? cover(lib, parts[0], parts[1]) : notFound(),
+    media: (req, url, parts) =>
+      parts.length === 1 ? media(lib, parts[0], req, url.searchParams.has('decode')) : notFound()
+  }
+}
+
+// One handler for the scheme; `routes` is read at each request, so plugins can add to it later.
+export function handleProtocol(routes: Map<string, Route>): void {
   protocol.handle(scheme, async (req) => {
     const url = new URL(req.url)
     const parts = url.pathname.split('/').filter(Boolean)
-    if (url.hostname === 'cover' && parts.length === 2) return cover(lib, parts[0], parts[1])
-    if (url.hostname === 'media' && parts.length === 1)
-      return media(lib, parts[0], req, url.searchParams.has('decode'))
-    if (url.hostname === 'radio' && parts.length === 1)
-      return radio(parts[0], url.searchParams.get('stream'))
-    if (url.hostname === 'radio-logo' && parts.length === 1) {
-      const logo = await radioLogo(parts[0])
-      if (!logo) return notFound()
-      return new Response(new Uint8Array(logo.data), {
-        headers: { ...common, 'Content-Type': logo.type, 'X-Content-Type-Options': 'nosniff' }
-      })
-    }
-    return notFound()
+    const route = routes.get(url.hostname)
+    return route ? route(req, url, parts) : notFound()
   })
 }

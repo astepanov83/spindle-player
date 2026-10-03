@@ -2,8 +2,8 @@
 // Search is by name and by tag at once; the records, one per stream, are
 // grouped into stations (decision 144). Mirrors come from DNS and one is kept
 // for the run. A play of a station from here counts a click, as their docs ask.
-import type { RadioSearch } from '../../shared/ipc'
-import { webAddress, type Station, type Stream } from '../../shared/stations'
+import type { RadioSearch } from '../../../shared/ipc'
+import { webAddress, type Station, type Stream } from '../../../shared/stations'
 
 // The fields read from a station record.
 export interface RbRecord {

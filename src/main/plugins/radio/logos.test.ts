@@ -1,7 +1,7 @@
 import { hash } from 'crypto'
 import { describe, expect, it, vi, type Mock } from 'vitest'
-import { fallbackPalettes, paletteVersion } from '../../shared/palette'
-import type { Station, StationLogo } from '../../shared/stations'
+import { fallbackPalettes, paletteVersion } from '../../../shared/palette'
+import type { Station, StationLogo } from '../../../shared/stations'
 import {
   keptLogos,
   logoSource,

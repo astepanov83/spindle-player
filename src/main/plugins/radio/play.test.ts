@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fallbackPalettes } from '../../shared/palette'
-import { mergeStreams, type Station, type Stream } from '../../shared/stations'
+import { fallbackPalettes } from '../../../shared/palette'
+import { mergeStreams, type Station, type Stream } from '../../../shared/stations'
 import { PlayedStations, type SavedStationsLike } from './play'
 
 const s128: Stream = { url: 'https://a.example/128', bitrate: 128, codec: 'mp3' }

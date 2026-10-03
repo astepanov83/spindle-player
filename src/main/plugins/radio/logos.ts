@@ -3,8 +3,8 @@
 // cover window, so the app colors, the stage and the media controls work as
 // for an album. Main owns the station's `logo`; the page only shows it.
 import { hash } from 'crypto'
-import { sameLogo, smallLogoSide, type Station, type StationLogo } from '../../shared/stations'
-import { paletteVersion, type ThemePalettes } from '../../shared/palette'
+import { sameLogo, smallLogoSide, type Station, type StationLogo } from '../../../shared/stations'
+import { paletteVersion, type ThemePalettes } from '../../../shared/palette'
 import { localAddress } from './logo-fetch'
 
 // Metal Only's logo comes with the app (resources/metal-only.png), so the

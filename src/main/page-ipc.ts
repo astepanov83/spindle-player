@@ -57,3 +57,5 @@ export function pageIpc(page: () => WebContents | undefined): {
     }
   }
 }
+
+export type PageIpc = ReturnType<typeof pageIpc>

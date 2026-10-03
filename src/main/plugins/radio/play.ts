@@ -9,7 +9,7 @@ import {
   type Station,
   type StationLogo,
   type Stream
-} from '../../shared/stations'
+} from '../../../shared/stations'
 
 // What this needs of StationsStore.
 export interface SavedStationsLike {

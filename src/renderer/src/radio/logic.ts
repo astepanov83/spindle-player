@@ -116,7 +116,7 @@ export function cantPlayFormat(heardSound: boolean, a: LastAnswer | undefined): 
   return !heardSound && !!a?.ok && a.bytes >= formatBytes
 }
 
-// Main fetches the stream and passes it on (src/main/radio/stream.ts). `c`
+// Main fetches the stream and passes it on (src/main/plugins/radio/stream.ts). `c`
 // makes each connection's address new: Chromium keeps a stream's bytes by
 // address and, loaded again at the same one, plays those old seconds instead
 // of asking main (seen in the app: a "reconnect" replayed the last 6 s).

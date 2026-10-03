@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { describe, expect, it, vi } from 'vitest'
-import { parseStation } from '../../shared/stations'
+import { parseStation } from '../../../shared/stations'
 import {
   groupStations,
   mergeResults,

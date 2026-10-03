@@ -1,9 +1,9 @@
 // On play, asks a station's server which streams it has: reads the PLS files,
 // probes each stream, and lists the Icecast mounts. Ported from webmusicmo lib/app.js.
-import { mergeStreams, type Station, type Stream } from '../../shared/stations'
+import { mergeStreams, type Station, type Stream } from '../../../shared/stations'
 import { RefusedAddress } from './checked-fetch'
 import { refusedAddress } from './logo-fetch'
-import { readCapped } from '../library/cover-http'
+import { readCapped } from '../../library/cover-http'
 import { parsePls } from './pls'
 
 export interface FindOptions {

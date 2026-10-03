@@ -3,7 +3,7 @@ import { join } from 'path'
 import { EventEmitter } from 'events'
 import type { ClientRequest, ClientRequestConstructorOptions } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
-import { mergeStreams } from '../../shared/stations'
+import { mergeStreams } from '../../../shared/stations'
 import { checkedFetch } from './checked-fetch'
 import { codecOf, findStreams } from './find-streams'
 

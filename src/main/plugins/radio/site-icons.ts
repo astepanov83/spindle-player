@@ -2,7 +2,7 @@
 // 033). The page is only read as text and scanned for <link> and <meta> tags;
 // nothing in it runs. Each icon goes through fetchLogo, so the same type, size
 // and pixel checks hold as for a logo address.
-import { smallLogoSide, webAddress } from '../../shared/stations'
+import { smallLogoSide, webAddress } from '../../../shared/stations'
 import { fetchLogo, pictureSize, refusedAddress } from './logo-fetch'
 
 export interface SiteLogoOptions {

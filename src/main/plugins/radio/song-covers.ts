@@ -7,14 +7,14 @@
 // Follows "Find missing covers online": off, nothing is looked up. Results are
 // kept by artist and song in radio-covers.json, misses too, so a song or a
 // jingle played again is not looked up again.
-import { parseThemePalettes } from '../../shared/palette'
-import type { RadioCover } from '../../shared/ipc'
-import { songQuery, type SongQuery } from '../../shared/radio-title'
-import type { SongCover } from '../../shared/stations'
-import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../json-file'
-import { cleanArtist } from '../library/cover-match'
-import { isCoverHash } from '../library/cover-names'
-import { cleanSong, type SongSource } from '../library/song-cover'
+import { parseThemePalettes } from '../../../shared/palette'
+import type { RadioCover } from '../../../shared/ipc'
+import { songQuery, type SongQuery } from '../../../shared/radio-title'
+import type { SongCover } from '../../../shared/stations'
+import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../../json-file'
+import { cleanArtist } from '../../library/cover-match'
+import { isCoverHash } from '../../library/cover-names'
+import { cleanSong, type SongSource } from '../../library/song-cover'
 import { makeCover, withNewColors, type LogoCache } from './logos'
 
 const sources = ['deezer', 'itunes'] as const

@@ -241,7 +241,7 @@ describe('the core and the plugins', () => {
       { file: 'src/main/plugins/list.ts', text: logo.replace('../../', '../../../') }
     ]
     expect(problems(files)).toEqual([
-      "src/main/x.ts: imports ../../resources/metal-only.png?asset, not a core resource"
+      'src/main/x.ts: imports ../../resources/metal-only.png?asset, not a core resource'
     ])
   })
 

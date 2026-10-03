@@ -4,7 +4,8 @@
 // - a plugin's id in a string of a core file ('radio', or a key 'files:...');
 //   comments don't count,
 // - a plugin's file that imports from another plugin's folder,
-// - a .svelte file in a plugin's page half: plugins give data, the core draws.
+// - a .svelte file in a plugin's page half: plugins give data, the core draws,
+// - a core file that imports a file of resources/ that is not the core's.
 // A plugin's folders are src/main/plugins/<id>, src/renderer/src/plugins/<id>
 // and src/shared/plugins/<id>. Everything else is the core, but for the plugin
 // list files below.
@@ -67,6 +68,10 @@ const coreTests = [
   'src/shared/saved-queue.test.ts',
   'src/shared/settings.test.ts'
 ]
+
+// The files of resources/ the core may import; the others are plugins' (Radio's
+// bundled logo) and go through the plugin list.
+const coreResources = ['resources/icon.png']
 
 interface Source {
   // from the repo's folder, with "/"
@@ -148,6 +153,8 @@ function problems(sources: Source[]): string[] {
     for (const spec of imports) {
       if (!spec.startsWith('.') || free) continue
       const target = posix.join(posix.dirname(file), spec.split('?')[0])
+      if (!own && target.startsWith('resources/') && !coreResources.includes(target))
+        out.push(`${file}: imports ${spec}, not a core resource`)
       const to = pluginOf(`${target}/`)
       if (to && to !== own)
         out.push(`${file}: imports ${spec}, of ${to}` + (own ? `, from ${own}` : ' (core)'))
@@ -223,6 +230,18 @@ describe('the core and the plugins', () => {
       "src/renderer/src/X.svelte: names a plugin: 'mfp'",
       "src/renderer/src/Y.svelte: names a plugin: 'radio'",
       "src/renderer/src/Y.svelte: names a plugin: 'files:a'"
+    ])
+  })
+
+  it("finds a plugin's resource imported by the core, not by the plugin list", () => {
+    const logo = "import logo from '../../resources/metal-only.png?asset'"
+    const files = [
+      { file: 'src/main/x.ts', text: logo },
+      { file: 'src/main/y.ts', text: "import icon from '../../resources/icon.png?asset'" },
+      { file: 'src/main/plugins/list.ts', text: logo.replace('../../', '../../../') }
+    ]
+    expect(problems(files)).toEqual([
+      "src/main/x.ts: imports ../../resources/metal-only.png?asset, not a core resource"
     ])
   })
 

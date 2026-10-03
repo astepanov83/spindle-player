@@ -5,7 +5,6 @@ import { join } from 'path'
 import { app, BrowserWindow, nativeTheme, net, session } from 'electron'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { PlaybackChannel, PlaylistChannel, SettingsChannel, WinChannel } from '../shared/ipc'
-import metalOnlyLogoPath from '../../resources/metal-only.png?asset'
 import { pageSettings } from '../shared/settings'
 import { coverRoute, handleProtocol, registerScheme } from './protocol'
 import { CoverCache } from './covers/cover-cache'
@@ -167,11 +166,7 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   const covers = new Covers(coverCache)
   const routes = new Map<string, Route>([['cover', coverRoute(covers)]])
   // made first: a plugin may open files now that another's start asks about (the cover prune)
-  plugins = createPlugins({
-    userData,
-    log,
-    metalOnlyLogoPath
-  })
+  plugins = createPlugins({ userData, log })
   const ctx = {
     settings: store,
     userData,

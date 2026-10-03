@@ -1,6 +1,6 @@
-import type { FilesChannels } from './plugins/files/ipc'
-import type { MfpChannels } from './plugins/mfp/ipc'
-import type { RadioChannels } from './plugins/radio/ipc'
+import type { FilesChannels, LibraryApi } from './plugins/files/ipc'
+import type { MfpApi, MfpChannels } from './plugins/mfp/ipc'
+import type { RadioApi, RadioChannels } from './plugins/radio/ipc'
 import { stationIdPattern } from './plugins/radio/ids'
 import type { LinkKind } from './saved-queue'
 
@@ -70,3 +70,11 @@ export function isPluginId(v: unknown): v is PluginId {
 
 // Each plugin's page-to-main channels (see PageChannels in ipc.ts).
 export type PluginChannels = FilesChannels & RadioChannels & MfpChannels
+
+// Each plugin's API on window, as the preload puts it there (preload/plugins.ts)
+// and its page half reads it.
+export interface PluginApis {
+  libraryApi: LibraryApi
+  radioApi: RadioApi
+  mfpApi: MfpApi
+}

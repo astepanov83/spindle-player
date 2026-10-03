@@ -1,8 +1,9 @@
 import type { PlaybackApi, PlaylistsApi, SettingsApi, WinApi } from '../shared/ipc'
+import type { PluginApis } from '../shared/plugins'
 
-// The core's APIs. Each plugin declares its own next to its page half (window.d.ts).
+// The core's APIs, and the plugins' from the plugin list.
 declare global {
-  interface Window {
+  interface Window extends PluginApis {
     win: WinApi
     settingsApi: SettingsApi
     playlistsApi: PlaylistsApi

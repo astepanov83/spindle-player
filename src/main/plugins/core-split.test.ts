@@ -30,13 +30,43 @@ const listFiles = [
 
 // Strings in the core that are a plugin's id by chance, not the plugin.
 const notPlugins = [
-  { file: 'src/renderer/src/keys.ts', text: 'radio', why: 'an <input type="radio">' }
+  { file: 'src/renderer/src/keys.ts', text: 'radio', why: 'an <input type="radio">' },
+  { file: 'src/renderer/src/keys.test.ts', text: 'radio', why: 'an <input type="radio">' },
+  { file: 'src/renderer/src/ui/Seg.svelte', text: 'radio', why: 'ARIA role' }
 ]
 
-// A core test may name plugins and import their folders: it wires their data
-// and stores as fakes. A test in a plugin's folder is still checked for
-// imports of another plugin.
-const isTest = (file: string): boolean => file.endsWith('.test.ts')
+// Core tests that may name plugins and import their folders: they wire the
+// plugins' data and stores as fakes. Any other core test is checked as core
+// code; a test in a plugin's folder is checked for imports of another plugin.
+const coreTests = [
+  'src/main/convert-files.test.ts',
+  'src/main/plugins/core-split.test.ts',
+  'src/main/plugins/list.test.ts',
+  'src/main/stores.test.ts',
+  'src/renderer/src/blocks/play.test.ts',
+  'src/renderer/src/library/song-menu.test.ts',
+  'src/renderer/src/library/views.test.ts',
+  'src/renderer/src/plugins/index.test.ts',
+  'src/renderer/src/plugins/start.test.ts',
+  'src/renderer/src/plugins/tabs.test.ts',
+  'src/renderer/src/plugins/types.test.ts',
+  'src/renderer/src/queue/logic.test.ts',
+  'src/renderer/src/stores/layout.test.ts',
+  'src/renderer/src/stores/library.test.ts',
+  'src/renderer/src/stores/library-version.svelte.test.ts',
+  'src/renderer/src/stores/live-queue.test.ts',
+  'src/renderer/src/stores/playlists.test.ts',
+  'src/renderer/src/stores/queues.test.ts',
+  'src/renderer/src/stores/queue.test.ts',
+  'src/renderer/src/ui/scroll-landing.svelte.test.ts',
+  'src/renderer/src/ui/scroll-top.svelte.test.ts',
+  'src/shared/id-moves.test.ts',
+  'src/shared/playlists.test.ts',
+  'src/shared/plugins.test.ts',
+  'src/shared/plugins/items.test.ts',
+  'src/shared/saved-queue.test.ts',
+  'src/shared/settings.test.ts'
+]
 
 interface Source {
   // from the repo's folder, with "/"
@@ -67,6 +97,10 @@ function read(src: Source): { imports: string[]; strings: string[] } {
       } else if (node.type === 'Literal' && typeof node.value === 'string') strings.push(node.value)
       else if (node.type === 'TemplateElement')
         strings.push((node.value as { cooked: string }).cooked)
+      // a static attribute's text: plugin="mfp", href="files:a"
+      else if (node.type === 'Attribute' && Array.isArray(node.value))
+        for (const part of node.value as { type: string; data?: string }[])
+          if (part.type === 'Text' && part.data !== undefined) strings.push(part.data)
       for (const [k, v] of Object.entries(node)) if (k !== 'parent') walk(v)
     }
     walk(parse(src.text, { modern: true }))
@@ -109,7 +143,7 @@ function problems(sources: Source[]): string[] {
     if (file.startsWith('src/renderer/src/plugins/') && file.endsWith('.svelte'))
       out.push(`${file}: a .svelte file in a plugin's page half`)
     const own = pluginOf(file)
-    const free = listFiles.includes(file) || (!own && isTest(file))
+    const free = listFiles.includes(file) || (!own && coreTests.includes(file))
     const { imports, strings } = read(src)
     for (const spec of imports) {
       if (!spec.startsWith('.') || free) continue
@@ -144,7 +178,8 @@ describe('the core and the plugins', () => {
     expect(problems(sources)).toEqual([])
     // a listed file that was moved or removed is noticed
     const files = sources.map((s) => s.file)
-    for (const f of [...listFiles, ...notPlugins.map((n) => n.file)]) expect(files).toContain(f)
+    for (const f of [...listFiles, ...coreTests, ...notPlugins.map((n) => n.file)])
+      expect(files).toContain(f)
   })
 
   it('names in a list file and in comments are fine', () => {
@@ -179,12 +214,15 @@ describe('the core and the plugins', () => {
     const files = [
       { file: 'src/main/x.ts', text: "if (k.plugin === 'radio') go()" },
       { file: 'src/shared/x.ts', text: 'const key = `files:${id}`' },
-      { file: 'src/renderer/src/X.svelte', text: "{#if p === 'mfp'}<p>x</p>{/if}" }
+      { file: 'src/renderer/src/X.svelte', text: "{#if p === 'mfp'}<p>x</p>{/if}" },
+      { file: 'src/renderer/src/Y.svelte', text: '<X plugin="radio" /><a href="files:a">a</a>' }
     ]
     expect(problems(files)).toEqual([
       "src/main/x.ts: names a plugin: 'radio'",
       "src/shared/x.ts: names a plugin: 'files:'",
-      "src/renderer/src/X.svelte: names a plugin: 'mfp'"
+      "src/renderer/src/X.svelte: names a plugin: 'mfp'",
+      "src/renderer/src/Y.svelte: names a plugin: 'radio'",
+      "src/renderer/src/Y.svelte: names a plugin: 'files:a'"
     ])
   })
 
@@ -205,15 +243,16 @@ describe('the core and the plugins', () => {
     expect(problems(files)).toHaveLength(3)
   })
 
-  it('lets a core test wire plugins, and finds a .svelte file in a page half', () => {
+  it('lets a listed core test wire plugins, not another, and finds a .svelte file in a page half', () => {
+    const wires = "import '../plugins/files/store.svelte'\nqueue.add('files:a')"
     const files = [
-      {
-        file: 'src/renderer/src/stores/x.test.ts',
-        text: "import '../plugins/files/store.svelte'\nqueue.add('files:a')"
-      },
+      { file: 'src/renderer/src/stores/queue.test.ts', text: wires },
+      { file: 'src/renderer/src/stores/x.test.ts', text: wires },
       { file: 'src/renderer/src/plugins/radio/Row.svelte', text: '<p>x</p>' }
     ]
     expect(problems(files)).toEqual([
+      'src/renderer/src/stores/x.test.ts: imports ../plugins/files/store.svelte, of files (core)',
+      "src/renderer/src/stores/x.test.ts: names a plugin: 'files:a'",
       "src/renderer/src/plugins/radio/Row.svelte: a .svelte file in a plugin's page half"
     ])
   })

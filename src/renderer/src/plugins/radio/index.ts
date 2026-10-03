@@ -57,5 +57,11 @@ export const radioHalf: PageHalf = {
   canOpen: (to) => to.page === '',
   open: () => library.showRadio(),
   version: () => (radio.loaded ? 1 : 0),
-  live
+  live,
+  // the bar's actions are the playing station's (store.svelte.ts, #actions)
+  act: (id, actionId, value) => {
+    if (id !== radio.station?.id) return
+    if (actionId === 'save') void radio.save()
+    else if (actionId === 'stream' && value !== undefined) radio.choose(Number(value))
+  }
 }

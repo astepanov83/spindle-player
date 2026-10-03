@@ -16,7 +16,7 @@ import {
 } from '../../../../shared/stations'
 import type { EngineEvents } from '../../audio/engine'
 import { notice } from '../../stores/notice.svelte'
-import type { ItemInfo, LiveHandle, PageAddress, Playable } from '../types'
+import type { Action, ItemInfo, LiveHandle, PageAddress, Playable } from '../types'
 import {
   cantPlayFormat,
   firstStream,
@@ -44,17 +44,41 @@ export type RadioStatus = 'off' | 'connecting' | 'live' | 'buffering' | 'reconne
 // The Radio view: what a station's name links to.
 export const radioPage: PageAddress = { plugin: 'radio', page: '' }
 
-const liveCan = { seek: false, pause: true, next: true, previous: true }
+// No Next or Previous on the bar (decision 150); the media keys still step
+// through My stations (LivePlugin.next).
+const liveCan = { seek: false, pause: true, next: false, previous: false }
 
 class RadioStore {
-  // My stations, in the user's order
-  stations: Station[] = $state.raw([])
+  // My stations, in the user's order. These three set the bar's actions (the
+  // stream picked, Save), so the core hears each change.
+  get stations(): Station[] {
+    return this.#stations
+  }
+  set stations(list: Station[]) {
+    this.#stations = list
+    this.#tellActions()
+  }
+  #stations: Station[] = $state.raw([])
+  // the station playing, or picked and paused
+  get station(): Station | undefined {
+    return this.#station
+  }
+  set station(s: Station | undefined) {
+    this.#station = s
+    this.#tellActions()
+  }
+  #station: Station | undefined = $state.raw()
+  // index into station.streams
+  get stream(): number {
+    return this.#stream
+  }
+  set stream(i: number) {
+    this.#stream = i
+    this.#tellActions()
+  }
+  #stream = $state(-1)
   // My stations came from main: a station not in them is gone
   loaded = $state(false)
-  // the station playing, or picked and paused
-  station: Station | undefined = $state.raw()
-  // index into station.streams
-  stream = $state(-1)
   // the stream's title as it came, and its parts
   title = $state('')
   now = $derived(parseTitle(this.title))
@@ -71,15 +95,8 @@ class RadioStore {
   })
   // the station is in My stations; else the controls offer Save
   saved = $derived(!!this.station && this.stations.some((s) => s.id === this.station!.id))
+  // the Radio view's row shows it; the core's bar hears it through the handle
   status: RadioStatus = $state('off')
-  // the status's tooltip, and when the waiting retry starts
-  #detail = $state('')
-  #retryAt: number | undefined = $state()
-
-  // Time listened to this station: ms with sound before now, and since when
-  // sound comes out. Stop keeps it; another station starts from 0.
-  #heardMs = $state(0)
-  #soundSince: number | undefined = $state()
 
   // the user wants sound: reconnect while this holds
   #wanted = false
@@ -112,7 +129,6 @@ class RadioStore {
   readonly events: Partial<EngineEvents> = {
     playing: () => {
       clearTimeout(this.#stallTimer)
-      this.#soundStarts()
       if (this.#wanted) this.#setStatus('live', `Live on ${this.#streamLabel()}`)
       this.#sound = true
       this.#retries = 0
@@ -121,7 +137,6 @@ class RadioStore {
       this.#formatFailed.clear()
     },
     waiting: () => {
-      this.#soundStops()
       if (!this.#wanted) return
       clearTimeout(this.#stallTimer)
       const ms = this.#sound ? stallMs : firstSoundMs
@@ -262,28 +277,12 @@ class RadioStore {
     clearTimeout(this.#retryTimer)
     clearTimeout(this.#stallTimer)
     this.#setStatus('off', 'Stopped')
-    this.#soundStops()
     this.#h?.stopped()
     window.radioApi.stop()
   }
 
   get wanted(): boolean {
     return this.#wanted
-  }
-
-  // The status's tooltip. `now` comes from the controls' tick, so the wait
-  // before a retry counts down.
-  statusDetail(now = Date.now()): string {
-    if (this.#retryAt === undefined) return this.#detail
-    return `${this.#detail} in ${Math.max(1, Math.ceil((this.#retryAt - now) / 1000))} s`
-  }
-
-  // ms of sound from this station since it was picked
-  listened(now = Date.now()): number {
-    // the controls' tick can hold a now from just before the sound started
-    return (
-      this.#heardMs + (this.#soundSince === undefined ? 0 : Math.max(0, now - this.#soundSince))
-    )
   }
 
   // Save: a station tried from search goes into My stations. The playing
@@ -293,6 +292,7 @@ class RadioStore {
     // a second click while main saves
     if (!s || this.stations.some((x) => x.id === s.id) || this.#saving.has(s.id)) return
     this.#saving.add(s.id)
+    this.#tellActions()
     try {
       this.stations = await window.radioApi.save($state.snapshot(s) as Station)
     } catch (e) {
@@ -300,6 +300,7 @@ class RadioStore {
       notice.show(`Couldn't save ${s.name}`)
     } finally {
       this.#saving.delete(s.id)
+      this.#tellActions()
     }
   }
 
@@ -375,8 +376,6 @@ class RadioStore {
   #show(station: Station): void {
     if (station.id === this.station?.id) return
     this.station = station
-    this.#heardMs = 0
-    this.#soundSince = undefined
     this.title = ''
     this.history = []
     const id = station.id
@@ -412,13 +411,46 @@ class RadioStore {
     this.#h.history(historyEntries(this.history, this.title))
   }
 
-  #setStatus(status: RadioStatus, detail: string, retryAt?: number): void {
+  // The bar's actions: the stream picker, and Save while the station is not
+  // in My stations (none once it is, as before).
+  #actions(s: Station): Action[] {
+    const list: Action[] = []
+    const choices = streamChoices(s.streams)
+    const picked = choices.find((c) => c.index === this.stream)
+    if (choices.length) {
+      list.push({
+        id: 'stream',
+        kind: 'choice',
+        label: 'Stream',
+        short: picked?.short ?? '',
+        options: choices.map((c) => ({ id: String(c.index), label: c.label })),
+        picked: picked ? String(picked.index) : ''
+      })
+    }
+    if (!this.saved) {
+      list.push({
+        id: 'save',
+        kind: 'button',
+        label: 'Save',
+        icon: 'star',
+        hint: 'Add to My stations',
+        busy: this.#saving.has(s.id)
+      })
+    }
+    return list
+  }
+
+  #tellActions(): void {
+    const s = this.station
+    if (this.#h && s) this.#h.actions(this.#actions(s))
+  }
+
+  // `until`: when the waiting retry starts, so the bar's tooltip counts down
+  #setStatus(status: RadioStatus, text: string, until?: number): void {
     // any change drops a BUFFERING still waiting to show
     clearTimeout(this.#bufferingTimer)
     this.status = status
-    this.#detail = detail
-    this.#retryAt = retryAt
-    this.#h?.status(status === 'off' ? undefined : detail)
+    this.#h?.status(status === 'off' ? undefined : { state: status, text, until })
   }
 
   // "320 kbps mp3", as the stream picker names it
@@ -427,18 +459,8 @@ class RadioStore {
     return streamChoices(streams).find((c) => c.index === this.stream)?.label ?? 'the stream'
   }
 
-  #soundStarts(): void {
-    this.#soundSince ??= Date.now()
-  }
-
-  #soundStops(): void {
-    this.#heardMs = this.listened()
-    this.#soundSince = undefined
-  }
-
   // A new connection to the stream picked, at a new address.
   #connection(): Playable {
-    this.#soundStops()
     this.#connects++
     this.#sound = false
     this.#down = false
@@ -456,7 +478,6 @@ class RadioStore {
     if (!this.#wanted || this.#down) return
     this.#down = true
     this.#setStatus('reconnecting', 'Connection lost')
-    this.#soundStops()
     clearTimeout(this.#retryTimer)
     clearTimeout(this.#stallTimer)
     // closes a stalled connection too

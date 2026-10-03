@@ -1,10 +1,17 @@
 // The two queues with a fake live plugin and a fake engine (ticket 057): a
 // live item takes the player, the track queue keeps its place, Back to queue,
 // media keys, and the handle the plugin drives its item with.
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EngineEvents } from '../audio/engine'
 import type { ItemKey } from '../../../shared/plugins/items'
-import type { ItemAnswer, ItemInfo, LiveHandle, LivePlugin, Playable } from '../plugins/types'
+import type {
+  Action,
+  ItemAnswer,
+  ItemInfo,
+  LiveHandle,
+  LivePlugin,
+  Playable
+} from '../plugins/types'
 
 const fake = vi.hoisted(() => ({
   on: {} as Partial<EngineEvents>,
@@ -68,7 +75,9 @@ const playable = (id: string, n = 1): Playable => ({
 vi.mock('../plugins', () => {
   const songs: Record<string, ItemInfo> = {
     'files:s0': { title: 'Song 0', length: 100 },
-    'files:s1': { title: 'Song 1', length: 100 }
+    'files:s1': { title: 'Song 1', length: 100 },
+    // a song with an action, and no Next
+    'files:a': { title: 'Song A', length: 100 }
   }
   const plugin: LivePlugin = {
     show: (id, h) => {
@@ -111,13 +120,18 @@ vi.mock('../plugins', () => {
         ? {
             url: `media/${key.slice(6)}`,
             length: 100,
-            can: { seek: true, pause: true, next: true, previous: true }
+            can: { seek: true, pause: true, next: key !== 'files:a', previous: true },
+            ...(key === 'files:a'
+              ? { actions: [{ id: 'like', kind: 'button' as const, label: 'Like' }] }
+              : {})
           }
         : undefined
       // a song's playable that comes later
       return live.songsLater ? new Promise((done) => live.waiting.push(() => done(p))) : p
     },
     isLive: (key: string) => key.startsWith('radio:'),
+    actOn: (key: string, actionId: string, value?: string) =>
+      void live.calls.push(`act ${key} ${actionId}${value === undefined ? '' : ` ${value}`}`),
     liveOf: (key: string) => (key.startsWith('radio:') ? { plugin, id: key.slice(6) } : undefined)
   }
 })
@@ -198,12 +212,12 @@ describe('a live item takes the player', () => {
     expect(queues.title).toBe('Item one')
     live.handle!.info({ title: 'A song', subtitle: 'Item one' })
     live.handle!.history([{ title: 'A song', at: 1, now: true }])
-    live.handle!.status('Connecting')
+    live.handle!.status({ state: 'connecting', text: 'Connecting' })
     expect(queues.title).toBe('A song')
     expect(queues.sub).toBe('Item one')
     expect(queues.media).toEqual({ title: 'A song', artist: 'Item one', album: '' })
     expect(queues.live.history).toEqual([{ title: 'A song', at: 1, now: true }])
-    expect(queues.live.status).toBe('Connecting')
+    expect(queues.live.status).toEqual({ state: 'connecting', text: 'Connecting' })
     // no song marks while a live item plays
     expect(queues.item).toBeUndefined()
     expect(queues.songPlaying).toBe(false)
@@ -395,5 +409,134 @@ describe('after a restart', () => {
     expect(queues.active).toBe('track')
     expect(fake.calls).toEqual(['load media/s0 at 9'])
     expect(savePlaying).toHaveBeenLastCalledWith({ active: 'track' })
+  })
+})
+
+describe('the player bar', () => {
+  const stream: Action = {
+    id: 'stream',
+    kind: 'choice',
+    label: 'Stream',
+    short: '320',
+    options: [
+      { id: '0', label: '320 kbps' },
+      { id: '1', label: '128 kbps' }
+    ],
+    picked: '0'
+  }
+  const save: Action = { id: 'save', kind: 'button', label: 'Save', icon: 'star' }
+
+  it('a live item: LIVE in place of the seek bar, no Next, Previous, Shuffle or Repeat', async () => {
+    // another item first, so nothing of an earlier play of this one is left
+    await playLive('radio:two')
+    const p = queues.playLive(one)
+    // before the first connection too
+    expect(queues.bar).toMatchObject({ live: true, seek: false, next: false, order: false })
+    await answer(() => ({ ...playable('one'), can: { ...playable('one').can, next: false } }))
+    await p
+    expect(queues.bar).toMatchObject({
+      live: true,
+      seek: false,
+      next: false,
+      previous: true,
+      order: false
+    })
+  })
+
+  it('draws the actions the plugin gives, and follows their changes', async () => {
+    await playLive(one)
+    expect(queues.bar.buttons).toEqual([])
+    live.handle!.actions([stream, save])
+    expect(queues.bar.choices).toEqual([stream])
+    expect(queues.bar.buttons).toEqual([save])
+    // saved: the plugin gives Save no more
+    live.handle!.actions([{ ...stream, picked: '1' }])
+    expect(queues.bar.choices[0].kind === 'choice' && queues.bar.choices[0].picked).toBe('1')
+    expect(queues.bar.buttons).toEqual([])
+  })
+
+  it('act tells the item’s plugin the action and the option picked', async () => {
+    await playLive(one)
+    live.handle!.actions([stream, save])
+    live.calls = []
+    queues.act('stream', '1')
+    queues.act('save')
+    expect(live.calls).toEqual(['act radio:one stream 1', 'act radio:one save'])
+  })
+
+  it('act passes on only an action the bar offers, and not one at work', async () => {
+    await playLive(one)
+    live.handle!.actions([{ ...save, busy: true }])
+    live.calls = []
+    queues.act('save')
+    queues.act('delete')
+    expect(live.calls).toEqual([])
+  })
+
+  it('another item starts with no actions, and an old item’s are dropped', async () => {
+    await playLive(one)
+    const old = live.handle!
+    old.actions([save])
+    await playLive('radio:two')
+    expect(queues.bar.buttons).toEqual([])
+    old.actions([save])
+    expect(queues.bar.buttons).toEqual([])
+  })
+
+  it('a song: seek bar, Shuffle and Repeat, Next and Previous, also while it is on its way', async () => {
+    live.songsLater = true
+    queue.playList(['files:s0'], 0, '')
+    expect(queues.bar).toMatchObject({ live: false, seek: true, next: true, order: true })
+    await answer(() => undefined)
+    expect(queues.bar).toMatchObject({ live: false, seek: true, next: true, previous: true })
+  })
+
+  it('a song’s Next is hidden when it can’t; its actions are drawn and heard', () => {
+    queue.playList(['files:a'], 0, '')
+    expect(queues.bar).toMatchObject({ seek: true, next: false, previous: true, order: true })
+    expect(queues.bar.buttons.map((a) => a.id)).toEqual(['like'])
+    live.calls = []
+    queues.act('like')
+    expect(live.calls).toEqual(['act files:a like'])
+  })
+})
+
+describe('the time listened to a live item', () => {
+  const at = (): number => Math.round(queues.live.listened() / 1000)
+
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('counts while sound comes out: not while it connects, buffers or reconnects', async () => {
+    await playLive('radio:three')
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(at()).toBe(0)
+    fake.on.playing!()
+    await vi.advanceTimersByTimeAsync(5000)
+    fake.on.waiting!()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(at()).toBe(5)
+    fake.on.playing!()
+    await vi.advanceTimersByTimeAsync(1000)
+    // a new connection
+    live.handle!.load(playable('three', 2))
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(at()).toBe(6)
+  })
+
+  it('Stop keeps it and Play goes on; another item starts from 0', async () => {
+    await playLive('radio:two')
+    fake.on.playing!()
+    await vi.advanceTimersByTimeAsync(4000)
+    queues.togglePlay()
+    await vi.advanceTimersByTimeAsync(9000)
+    expect(at()).toBe(4)
+    queues.togglePlay()
+    await answer(() => playable('two', 2))
+    fake.on.playing!()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(at()).toBe(5)
+    await playLive(one)
+    expect(at()).toBe(0)
   })
 })

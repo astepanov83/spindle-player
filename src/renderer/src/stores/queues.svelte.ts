@@ -6,8 +6,17 @@ import type { Art } from '../../../shared/library'
 import { itemKey, splitKey, type ItemKey } from '../../../shared/plugins/items'
 import type { SavedPlaying, SavedQueues } from '../../../shared/saved-queue'
 import { engine, type EngineEvents } from '../audio/engine'
-import { infoOf, isLive, itemInfo, liveOf } from '../plugins'
-import type { HistoryEntry, ItemInfo, LiveHandle, Playable } from '../plugins/types'
+import { barOf, type Bar } from '../queue/bar'
+import { actOn, infoOf, isLive, itemInfo, liveOf } from '../plugins'
+import type {
+  Action,
+  Can,
+  HistoryEntry,
+  ItemInfo,
+  LiveHandle,
+  LiveStatus,
+  Playable
+} from '../plugins/types'
 import { player, togglePlay as toggleSong } from './player.svelte'
 import { queue } from './queue.svelte'
 
@@ -38,7 +47,8 @@ const eventNames: (keyof EngineEvents)[] = [
 ]
 
 // A live item (a radio station): it never ends and its plugin drives it. The
-// plugin tells what is on air, its recent songs and its status (LiveHandle).
+// plugin tells what is on air, its recent songs, its status and its actions
+// (LiveHandle).
 class LiveQueue {
   readonly kind = 'live'
   // the live item, playing or picked and paused
@@ -46,8 +56,46 @@ class LiveQueue {
   // what is on air; until the plugin says, what the item is
   info: ItemInfo | undefined = $state.raw()
   history: HistoryEntry[] = $state.raw([])
-  status: string | undefined = $state()
+  status: LiveStatus | undefined = $state.raw()
+  // the last connection's; none before the first
+  playable: { length: number | 'live'; can: Can } | undefined = $state.raw()
+  actions: Action[] = $state.raw([])
+
+  // Time listened to this item: ms with sound before, and since when sound
+  // comes out. Only while sound comes out, so a reconnect or a buffer doesn't
+  // count; Stop keeps it, another item starts from 0 (decision 157).
+  #heardMs = $state(0)
+  #since: number | undefined = $state()
+
+  listened(now = Date.now()): number {
+    // the bar's tick can hold a now from just before the sound started
+    return this.#heardMs + (this.#since === undefined ? 0 : Math.max(0, now - this.#since))
+  }
+
+  soundStarts(): void {
+    this.#since ??= Date.now()
+  }
+
+  soundStops(): void {
+    this.#heardMs = this.listened()
+    this.#since = undefined
+  }
+
+  // another item: nothing of the last one stays
+  pick(key: ItemKey): void {
+    this.current = key
+    this.info = undefined
+    this.history = []
+    this.status = undefined
+    this.playable = undefined
+    this.actions = []
+    this.#heardMs = 0
+    this.#since = undefined
+  }
 }
+
+// The engine's events that end the sound of a live item (a buffer, a drop).
+const silences = new Set<keyof EngineEvents>(['waiting', 'ended', 'error'])
 
 class Queues {
   readonly track = queue
@@ -63,6 +111,12 @@ class Queues {
   title: string | undefined = $derived(this.info?.title)
   sub: string | undefined = $derived(this.info && subLine(this.info.subtitle, this.info.group))
   art: Art | undefined = $derived(this.info?.art)
+  // what the player bar draws for it
+  bar: Bar = $derived(
+    this.active === 'live'
+      ? barOf('live', this.live.playable, this.live.actions)
+      : barOf('track', queue.playable, queue.playable?.actions ?? [])
+  )
   // Nothing picked: Play, Previous and Next have nothing to act on.
   nothing: boolean = $derived(this.active === 'live' ? !this.live.current : !queue.current)
   // Sound is wanted: the play buttons show Pause (Stop for a live item). Also
@@ -102,6 +156,8 @@ class Queues {
         // only while it holds: our own pauses leave no source (a reconnect,
         // a new item) or are followed by a new play before this comes.
         if (name === 'paused' && (!engine.loaded || !engine.el.paused)) return
+        if (name === 'playing') this.live.soundStarts()
+        else if (silences.has(name)) this.live.soundStops()
         call(this.#liveEvents(), name, args)
       }) as never
     }
@@ -172,44 +228,58 @@ class Queues {
     return {
       load: (p) => {
         if (!plays()) return
+        this.live.soundStops()
+        this.live.playable = p
         engine.load(p.url, 0, p.part, { live: p.length === 'live' })
         engine.play()
       },
       clear: () => {
-        if (plays()) engine.clear()
+        if (!plays()) return
+        this.live.soundStops()
+        engine.clear()
       },
       // the element keeps its source, paused: with none Chromium drops the
       // system's media controls
       stopped: () => {
         if (!plays()) return
+        this.live.soundStops()
         player.playing = false
         engine.pause()
       },
       history: (list) => {
         if (mine()) this.live.history = list
       },
-      status: (text) => {
-        if (mine()) this.live.status = text
+      status: (st) => {
+        if (mine()) this.live.status = st
       },
       info: (info) => {
         if (mine()) this.live.info = info
+      },
+      actions: (list) => {
+        if (mine()) this.live.actions = list
       }
     }
   }
 
   #setCurrent(key: ItemKey): void {
-    if (key === this.live.current) return
-    this.live.current = key
-    this.live.info = undefined
-    this.live.history = []
-    this.live.status = undefined
+    if (key !== this.live.current) this.live.pick(key)
   }
 
   #pauseLive(): void {
     this.#opens++
+    this.live.soundStops()
     const l = this.live.current && liveOf(this.live.current)
     l?.plugin.pause(l.id)
     player.playing = false
+  }
+
+  // One of the bar's actions was used: the item that plays hears it. Only
+  // one the bar offers, and not while it is at work.
+  act(actionId: string, value?: string): void {
+    const key = this.active === 'live' ? this.live.current : queue.current
+    const a = [...this.bar.buttons, ...this.bar.choices].find((x) => x.id === actionId)
+    if (!key || !a || (a.kind === 'button' && a.busy)) return
+    actOn(key, actionId, value)
   }
 
   // "Back to queue": the queue's song, loaded paused at its place.

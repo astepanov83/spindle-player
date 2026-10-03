@@ -1,5 +1,5 @@
 <!-- The volume slider. With `pop`, a narrow player bar (the bar-end container in
-     SongControls and RadioControls) shows a button instead, which opens the
+     Controls) shows a button instead, which opens the
      slider above it. Up / Down set the volume from anywhere either way. -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'

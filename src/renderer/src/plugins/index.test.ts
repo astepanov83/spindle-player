@@ -144,6 +144,28 @@ describe('itemInfo', () => {
   })
 })
 
+describe('actOn (ticket 058)', () => {
+  it('passes a bar action to the item’s plugin, not while it is off', async () => {
+    const { radio } = await import('./radio/store.svelte')
+    const drone: Station = { id: 'x', name: 'Drone', tags: [], streams: [] }
+    radio.load([])
+    radio.station = drone
+    const choose = vi.spyOn(radio, 'choose').mockImplementation(() => {})
+    const save = vi.spyOn(radio, 'save').mockResolvedValue()
+    p.actOn('radio:x', 'stream', '1')
+    p.actOn('radio:x', 'save')
+    expect(choose).toHaveBeenCalledWith(1)
+    expect(save).toHaveBeenCalledOnce()
+    // only the playing station's actions
+    p.actOn('radio:y', 'save')
+    settings.plugins.radio = false
+    p.actOn('radio:x', 'save')
+    expect(save).toHaveBeenCalledOnce()
+    // a plugin with no actions
+    expect(() => p.actOn('files:s1', 'like')).not.toThrow()
+  })
+})
+
 describe('playItem', () => {
   it('gives the file and the part of a disc image, for the carry-on', () => {
     library.load(lib())

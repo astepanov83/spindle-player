@@ -3,6 +3,7 @@
 import type { Art } from '../../../shared/library'
 import type { PluginId } from '../../../shared/plugins'
 import type { EngineEvents } from '../audio/engine'
+import type { IconName } from '../ui/icons'
 
 export type { ItemKind } from '../../../shared/plugins'
 
@@ -53,11 +54,51 @@ export interface PlayablePart {
   end?: number
 }
 
+// What the player bar may offer for an item. Next and Previous are hidden,
+// not disabled, when false (decision 150).
+export interface Can {
+  seek: boolean
+  pause: boolean
+  next: boolean
+  previous: boolean
+}
+
+// Something the bar offers besides play: the core draws it in its own style
+// and tells the item's plugin when it is used (PageHalf.act).
+export type Action =
+  | {
+      id: string
+      kind: 'button'
+      label: string
+      // one of the core's icons; the stack shows it alone, with `hint` to read
+      icon?: IconName
+      // the tooltip: "Add to My stations"
+      hint?: string
+      // a button that stays pressed, as Shuffle does
+      on?: boolean
+      // at work: a click does nothing
+      busy?: boolean
+    }
+  | {
+      id: string
+      kind: 'choice'
+      // the menu's heading: "Stream"
+      label: string
+      // what the bar shows: "320"
+      short: string
+      options: { id: string; label: string }[]
+      // an option's id, or none
+      picked: string
+    }
+
 export interface Playable {
   url: string
   part?: PlayablePart
   length: number | 'live'
-  can: { seek: boolean; pause: boolean; next: boolean; previous: boolean }
+  can: Can
+  // a track item's; a live item's come through LiveHandle.actions, since they
+  // change while it plays
+  actions?: Action[]
   // the format, for the log when it won't play
   codec?: string
 }
@@ -75,6 +116,8 @@ export interface PageHalf {
   version(): number
   // a plugin whose items are live (radio): it drives its own item
   live?: LivePlugin
+  // one of the item's actions was used: a button (no value), or an option picked
+  act?(id: string, actionId: string, value?: string): void
 }
 
 // A song heard on a live item, for the Queue part's list (newest last).
@@ -98,10 +141,21 @@ export interface LiveHandle {
   // the plugin stopped by itself (it gave up, or the system paused it)
   stopped(): void
   history(list: HistoryEntry[]): void
-  // "Connecting to 320 kbps", "Retry 1 of 3"; undefined when there is nothing to say
-  status(text: string | undefined): void
+  // undefined: stopped
+  status(s: LiveStatus | undefined): void
   // what is on air: a new song title, a new cover
   info(info: ItemInfo): void
+  // the item's actions now (a stream picked, the item saved)
+  actions(list: Action[]): void
+}
+
+// The word next to the bar's dot, and its tooltip.
+export interface LiveStatus {
+  state: 'connecting' | 'live' | 'buffering' | 'reconnecting'
+  // "Connecting to 320 kbps", "Retry 1 of 3"
+  text: string
+  // a wait that ends then (ms): the tooltip counts down to it
+  until?: number
 }
 
 // A plugin whose items never end and can't be sought. Its reconnects and

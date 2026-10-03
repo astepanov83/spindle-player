@@ -111,6 +111,11 @@ const { radio } = await import('./store.svelte')
 const { queues } = await import('../../stores/queues.svelte')
 const { player } = await import('../../stores/player.svelte')
 const { notice } = await import('../../stores/notice.svelte')
+const { statusTip } = await import('../../queue/bar')
+type ChoiceAction = import('../../queue/bar').ChoiceAction
+
+// the bar's tooltip, from what radio told the core
+const detail = (now = Date.now()): string => statusTip(queues.live.status, now)
 
 // as the Radio view plays a station: that copy, through the live queue
 function playStation(s: Station): Promise<void> {
@@ -400,12 +405,12 @@ describe('status, next to the dot', () => {
     expect(radio.status).toBe('connecting')
     await p
     expect(radio.status).toBe('connecting')
-    expect(radio.statusDetail()).toBe('Connecting to 320 kbps')
+    expect(detail()).toBe('Connecting to 320 kbps')
     ev.waiting!()
     expect(radio.status).toBe('connecting')
     ev.playing!()
     expect(radio.status).toBe('live')
-    expect(radio.statusDetail()).toBe('Live on 320 kbps')
+    expect(detail()).toBe('Live on 320 kbps')
   })
 
   it('buffering when data stops for 1 s after sound came, live again when it comes back', async () => {
@@ -432,11 +437,11 @@ describe('status, next to the dot', () => {
     ev.playing!()
     ev.error!(net)
     expect(radio.status).toBe('reconnecting')
-    expect(radio.statusDetail(t0)).toBe('Retry 1 of 3 on 128 kbps in 1 s')
+    expect(detail(t0)).toBe('Retry 1 of 3 on 128 kbps in 1 s')
     await vi.advanceTimersByTimeAsync(1000)
     // the new connection has no sound yet
     expect(radio.status).toBe('reconnecting')
-    expect(radio.statusDetail()).toBe('Retry 1 of 3 on 128 kbps')
+    expect(detail()).toBe('Retry 1 of 3 on 128 kbps')
     ev.playing!()
     expect(radio.status).toBe('live')
   })
@@ -450,7 +455,7 @@ describe('status, next to the dot', () => {
     ev.error!(net)
     await vi.advanceTimersByTimeAsync(0)
     expect(radio.status).toBe('reconnecting')
-    expect(radio.statusDetail()).toBe('Trying another stream: 64 kbps')
+    expect(detail()).toBe('Trying another stream: 64 kbps')
   })
 
   it('off after pause, after giving up, and when main refuses the station', async () => {
@@ -474,7 +479,7 @@ describe('status, next to the dot', () => {
     ev.playing!()
     radio.choose(2)
     expect(radio.status).toBe('connecting')
-    expect(radio.statusDetail()).toBe('Connecting to 320 kbps')
+    expect(detail()).toBe('Connecting to 320 kbps')
   })
 })
 
@@ -720,7 +725,7 @@ describe('the song’s cover (ticket 032)', () => {
 })
 
 describe('the time listened', () => {
-  const at = (): number => Math.round(radio.listened() / 1000)
+  const at = (): number => Math.round(queues.live.listened() / 1000)
 
   it('counts only while sound comes out', async () => {
     await start(mine[0])
@@ -760,15 +765,15 @@ describe('the time listened', () => {
     const stale = Date.now()
     await vi.advanceTimersByTimeAsync(400)
     ev.playing!()
-    expect(radio.listened(stale)).toBe(0)
+    expect(queues.live.listened(stale)).toBe(0)
     await vi.advanceTimersByTimeAsync(5000)
     pause()
-    const heard = radio.listened()
+    const heard = queues.live.listened()
     const stale2 = Date.now()
     await resume()
     await vi.advanceTimersByTimeAsync(300)
     ev.playing!()
-    expect(radio.listened(stale2)).toBe(heard)
+    expect(queues.live.listened(stale2)).toBe(heard)
   })
 
   it('starts from 0 on another station', async () => {
@@ -808,6 +813,94 @@ describe('saving the station', () => {
   it('a station of My stations is saved already', async () => {
     await start(mine[1])
     expect(radio.saved).toBe(true)
+  })
+})
+
+describe('the bar, from what radio gives (ticket 058)', () => {
+  const choice = (): ChoiceAction | undefined => queues.bar.choices[0]
+
+  it('LIVE with no seek bar, Next, Previous, Shuffle or Repeat (decision 150)', async () => {
+    await start(mine[1])
+    expect(queues.bar).toMatchObject({
+      live: true,
+      seek: false,
+      next: false,
+      previous: false,
+      order: false
+    })
+  })
+
+  it('the stream picker: best sounding first, the playing stream picked, short for the bar', async () => {
+    await start(mine[1])
+    expect(choice()).toEqual({
+      id: 'stream',
+      kind: 'choice',
+      label: 'Stream',
+      short: '320',
+      options: [
+        { id: '2', label: '320 kbps' },
+        { id: '1', label: '128 kbps' },
+        { id: '0', label: '64 kbps' }
+      ],
+      picked: '2'
+    })
+    // a station of My stations offers no Save
+    expect(queues.bar.buttons).toEqual([])
+  })
+
+  it('picking a stream through the bar connects to it and is picked', async () => {
+    await start(mine[1])
+    ev.playing!()
+    queues.act('stream', '0')
+    expect(radio.stream).toBe(0)
+    expect(choose).toHaveBeenCalledWith('b', 'https://b/0')
+    expect(loads()).toEqual(['load spindle://radio/b?stream=0 live'])
+    expect(choice()?.picked).toBe('0')
+    expect(choice()?.short).toBe('64')
+  })
+
+  it('Save for a station from search: busy while main saves, gone once saved', async () => {
+    const found = st('rb-5', [128])
+    await start(found)
+    expect(queues.bar.buttons).toEqual([
+      {
+        id: 'save',
+        kind: 'button',
+        label: 'Save',
+        icon: 'star',
+        hint: 'Add to My stations',
+        busy: false
+      }
+    ])
+    save.mockClear()
+    const done = vi.fn()
+    save.mockImplementationOnce(
+      (s: Station) => new Promise((ok) => done.mockImplementation(() => ok([...mine, s])))
+    )
+    queues.act('save')
+    expect(save).toHaveBeenCalledWith(found)
+    expect(queues.bar.buttons[0]).toMatchObject({ id: 'save', busy: true })
+    // a second click while main saves is not passed on
+    queues.act('save')
+    expect(save).toHaveBeenCalledOnce()
+    done()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(radio.saved).toBe(true)
+    expect(queues.bar.buttons).toEqual([])
+  })
+
+  it('one stream: its label, nothing to pick', async () => {
+    await start(mine[0])
+    expect(choice()?.options).toEqual([{ id: '0', label: '128 kbps' }])
+  })
+
+  it('the status reaches the bar; stopped is none', async () => {
+    await start(mine[0])
+    expect(queues.live.status).toMatchObject({ state: 'connecting' })
+    ev.playing!()
+    expect(queues.live.status).toEqual({ state: 'live', text: 'Live on 128 kbps' })
+    pause()
+    expect(queues.live.status).toBeUndefined()
   })
 })
 

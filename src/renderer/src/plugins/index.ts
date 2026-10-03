@@ -63,6 +63,12 @@ export function isLive(key: ItemKey): boolean {
   return entryOf(key)?.kind === 'live'
 }
 
+// One of the player bar's actions was used on the item. Not while its plugin is off.
+export function actOn(key: ItemKey, actionId: string, value?: string): void {
+  const e = entryOf(key)
+  if (e && pluginOn(e.id)) e.half.act?.(key.slice(e.prefix.length), actionId, value)
+}
+
 export function canOpen(to: PageAddress): boolean {
   return pluginOn(to.plugin) && halves[to.plugin].canOpen(to)
 }

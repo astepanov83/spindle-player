@@ -1,4 +1,4 @@
-<!-- The filled circle: play and pause for songs, play and stop for radio. -->
+<!-- The filled circle: play and pause for songs, play and stop for a live item. -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'

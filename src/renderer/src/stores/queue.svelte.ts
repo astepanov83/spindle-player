@@ -74,7 +74,8 @@ class TrackQueue {
   #fails = 0
   #savedPos = 0
   // what the engine has: the song and how it plays, for the gapless carry-on
-  #loaded: { key: ItemKey; p: Playable } | undefined
+  // and the player bar
+  #loaded: { key: ItemKey; p: Playable } | undefined = $state.raw()
   // The current song could not load: its plugin has no data for it yet, or
   // it is off with no other song to go on to. It loads once it can.
   get #waiting(): { andPlay: boolean; at: number } | undefined {
@@ -98,6 +99,11 @@ class TrackQueue {
   // The song waits (above) and is to play once it loads: the play button
   // shows Pause then, so pressing it says "not now".
   wantsPlay = $state(false)
+
+  // what the loaded song can do, for the player bar
+  get playable(): Playable | undefined {
+    return this.#loaded?.p
+  }
 
   #wish(): void {
     this.wantsPlay = !!(this.#waitingNow ?? this.#pendingNow)?.andPlay

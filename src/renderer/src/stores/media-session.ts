@@ -5,7 +5,6 @@
 import type { Art } from '../../../shared/library'
 import { CoverBlob, fetchBlob } from './cover-blob'
 import { paletteTile, tileKey } from './cover-tile'
-import { player } from './player.svelte'
 import { queues, type Active, type MediaText } from './queues.svelte'
 
 export function setupMediaSession(): void {
@@ -61,10 +60,12 @@ export function showInMediaSession(text: MediaText | undefined, art: Art | undef
   })
 }
 
+// The wish, as the play button shows it: playing also while a clicked song
+// is on its way.
 export function showStateInMediaSession(): void {
   if (!navigator.mediaSession) return
   navigator.mediaSession.playbackState = queues.media
-    ? player.playing
+    ? queues.wantsSound
       ? 'playing'
       : 'paused'
     : 'none'

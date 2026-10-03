@@ -414,6 +414,7 @@ function foldersPage(page: string, query: string): Block[] {
   if (shown !== null && (path.length > 1 || tree.roots.length > 1))
     blocks.push({
       kind: 'tree',
+      label: 'Folder path',
       path: [
         ...(tree.roots.length > 1 ? [{ title: 'Folders', to: files('') }] : []),
         ...path.map((i) => {

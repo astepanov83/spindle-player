@@ -1,39 +1,34 @@
 <!-- Studio's library: search and chips on top, cover grid below. -->
 <script lang="ts">
-  import AlbumGrid from './AlbumGrid.svelte'
-  import AlbumPage from './AlbumPage.svelte'
-  import ArtistView from './ArtistView.svelte'
-  import FolderView from './FolderView.svelte'
-  import MfpView from './MfpView.svelte'
+  import BlockPage from '../blocks/BlockPage.svelte'
+  import Nothing from '../blocks/Nothing.svelte'
   import HistoryButtons from './HistoryButtons.svelte'
-  import NoLibrary from './NoLibrary.svelte'
   import PlaylistList from './PlaylistList.svelte'
   import PlaylistView from './PlaylistView.svelte'
-  import RadioView from './RadioView.svelte'
   import ScanLine from './ScanLine.svelte'
   import SearchBox from './SearchBox.svelte'
-  import SearchResults from './SearchResults.svelte'
-  import ViewHead from './ViewHead.svelte'
   import NoPlugins from './NoPlugins.svelte'
   import { untrack } from 'svelte'
-  import { fmtCount } from '../format'
   import { libraryOnScreen } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { library } from '../stores/library.svelte'
-  import { pluginTabs } from '../plugins'
+  import { playlists } from '../stores/playlists.svelte'
+  import { pageBlocks, playlistsEmpty, pluginTabs } from '../plugins'
   import { tabsIn } from '../plugins/tabs'
-  import { shownAlbum } from '../plugins/files/nav'
 
   // the tabs of the plugins that are on (ticket 059)
   const tabs = $derived(tabsIn(pluginTabs(), 'chips'))
   const shown = $derived(tabs.find((t) => t.id === library.tab))
-  const open = $derived(shownAlbum())
+  // its page, from its plugin; Playlists is the core's own
+  const blocks = $derived(shown ? pageBlocks(shown) : [])
+  // no songs yet: the Playlists chip says what it is for
+  const none = $derived(
+    shown?.plugin === 'core' ? playlistsEmpty(!playlists.list.length) : undefined
+  )
   // untracked: a write while this block is drawn
   untrack(() => library.showIn('chips'))
 
   let scrollEl: HTMLDivElement | undefined = $state()
-
-  const searching = $derived(!!library.query.trim())
 
   libraryOnScreen()
 
@@ -66,33 +61,17 @@
   <div class="scroll" bind:this={scrollEl}>
     {#if !tabs.length}
       <div class="fill"><NoPlugins /></div>
-    {:else if shown?.plugin === 'radio'}
-      <RadioView nav="chips" />
-    {:else if shown?.plugin === 'mfp'}
-      <MfpView />
-    {:else if !library.albums.length}
-      <!-- radio and MFP need no songs, so the chips stay -->
-      <div class="fill">
-        <NoLibrary view={shown?.id === 'playlists' ? 'playlists' : undefined} />
-      </div>
-    {:else if shown?.id === 'playlists'}
+    {:else if none}
+      <div class="fill"><Nothing block={none.block} plugin={none.plugin} /></div>
+    {:else if shown && shown.plugin !== 'core'}
+      {#key shown.id}
+        <BlockPage {blocks} tab={shown.id} plugin={shown.plugin} {scrollEl} nav="chips" />
+      {/key}
+    {:else if shown?.plugin === 'core'}
       {#if library.openPlaylist}
         <PlaylistView id={library.openPlaylist} {scrollEl} back />
       {:else}
         <PlaylistList />
-      {/if}
-    {:else if shown?.id === 'folders'}
-      <FolderView {scrollEl} />
-    {:else if shown?.id === 'artists'}
-      <ArtistView {scrollEl} />
-    {:else if shown?.id === 'albums'}
-      {#if searching}
-        <SearchResults {scrollEl} />
-      {:else if open}
-        <AlbumPage albumId={open} />
-      {:else}
-        <ViewHead title="Albums" count={fmtCount(library.albums.length, 'album', 'albums')} />
-        <AlbumGrid {scrollEl} />
       {/if}
     {/if}
   </div>

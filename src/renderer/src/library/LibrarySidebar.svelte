@@ -1,33 +1,21 @@
 <!-- Classic's library: a sidebar with sections and playlists, a table or grid beside it. -->
 <script lang="ts">
-  import AlbumGrid from './AlbumGrid.svelte'
-  import AlbumPage from './AlbumPage.svelte'
-  import ArtistView from './ArtistView.svelte'
-  import FolderView from './FolderView.svelte'
-  import MfpView from './MfpView.svelte'
+  import BlockPage from '../blocks/BlockPage.svelte'
+  import Nothing from '../blocks/Nothing.svelte'
   import HistoryButtons from './HistoryButtons.svelte'
-  import NoLibrary from './NoLibrary.svelte'
   import PlaylistView from './PlaylistView.svelte'
-  import RadioView from './RadioView.svelte'
   import ScanLine from './ScanLine.svelte'
   import SearchBox from './SearchBox.svelte'
-  import SearchResults from './SearchResults.svelte'
-  import SongTable from './SongTable.svelte'
-  import ViewHead from './ViewHead.svelte'
   import NoPlugins from './NoPlugins.svelte'
   import { untrack } from 'svelte'
-  import { fmtCount } from '../format'
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
   import { libraryOnScreen } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
-  import { songRows } from './views'
   import { library, playlistPage, playlistsTab } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
-  import { pluginTabs } from '../plugins'
+  import { pageBlocks, playlistsEmpty, pluginTabs } from '../plugins'
   import { tabsIn } from '../plugins/tabs'
-  import { trackKey } from '../plugins/files/tracks'
-  import { shownAlbum } from '../plugins/files/nav'
 
   // the tabs of the plugins that are on (ticket 059); playlists are listed
   // under their own heading
@@ -35,7 +23,8 @@
   const sections = $derived(tabs.filter((t) => t.id !== playlistsTab))
   const hasPlaylists = $derived(tabs.some((t) => t.id === playlistsTab))
   const shown = $derived(tabs.find((t) => t.id === library.tab))
-  const open = $derived(shownAlbum())
+  // its page, from its plugin; a playlist is the core's own
+  const blocks = $derived(shown ? pageBlocks(shown) : [])
   // untracked: a write while this block is drawn
   untrack(() => library.showIn('sidebar'))
 
@@ -46,12 +35,8 @@
       ? playlists.get(library.openPlaylist)
       : undefined
   )
-
-  const songs = $derived(
-    songRows(library.albums, (id) => library.track(id), library.query).map(trackKey)
-  )
-
-  const searching = $derived(!!library.query.trim())
+  // no songs yet: a playlist shows that instead
+  const none = $derived(shown?.plugin === 'core' ? playlistsEmpty(false) : undefined)
 
   const pickPlaylist = (id: string): void => library.pickTab(playlistsTab, playlistPage(id))
 
@@ -100,30 +85,14 @@
   <div class="main" bind:this={scrollEl}>
     {#if !tabs.length}
       <div class="fill"><NoPlugins /></div>
-    {:else if shown?.plugin === 'radio'}
-      <RadioView nav="sidebar" />
-    {:else if shown?.plugin === 'mfp'}
-      <MfpView />
-    {:else if !library.albums.length}
-      <!-- radio and MFP need no songs, so the sidebar stays -->
-      <div class="fill"><NoLibrary /></div>
-    {:else if shown?.id === 'songs'}
-      <SongTable title="Songs" meta="Library" items={songs} {scrollEl} />
-    {:else if shown?.id === 'albums'}
-      {#if searching}
-        <SearchResults {scrollEl} />
-      {:else if open}
-        <AlbumPage albumId={open} />
-      {:else}
-        <ViewHead title="Albums" count={fmtCount(library.albums.length, 'album', 'albums')} />
-        <AlbumGrid {scrollEl} />
-      {/if}
+    {:else if none}
+      <div class="fill"><Nothing block={none.block} plugin={none.plugin} /></div>
     {:else if playlist}
       <PlaylistView id={playlist.id} {scrollEl} />
-    {:else if shown?.id === 'folders'}
-      <FolderView {scrollEl} />
-    {:else if shown?.id === 'artists'}
-      <ArtistView {scrollEl} />
+    {:else if shown && shown.plugin !== 'core'}
+      {#key shown.id}
+        <BlockPage {blocks} tab={shown.id} plugin={shown.plugin} {scrollEl} nav="sidebar" />
+      {/key}
     {/if}
   </div>
 </div>

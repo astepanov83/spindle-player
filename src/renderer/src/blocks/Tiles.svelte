@@ -1,34 +1,34 @@
-<!-- Cover grid, drawn a row at a time so a big library stays fast. -->
+<!-- A tiles block: covers (albums) or round pictures (artists), drawn a row
+     at a time so a big library stays fast. A tile is made only when its row
+     is drawn. -->
 <script lang="ts">
-  import { albumLink } from './album'
-  import type { Album } from '../../../shared/library'
-  import Empty from './Empty.svelte'
+  import type { PluginId } from '../../../shared/plugins'
+  import ArtistPic from '../library/ArtistPic.svelte'
+  import { sections, songMenu } from '../library/song-menu'
+  import { chunk, gridColumns } from '../library/views'
   import Cover from '../ui/Cover.svelte'
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
-  import { chunk, filterAlbums, gridColumns } from './views'
-  import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
-  import { library } from '../stores/library.svelte'
+  import { virtualList } from '../ui/virtual-list.svelte'
+  import { actOnPage, itemsVersion, openFrom } from '../plugins'
+  import type { Tile, TilesBlock } from '../plugins/types'
+  import { menu } from '../stores/menu.svelte'
   import { player } from '../stores/player.svelte'
+  import { queues } from '../stores/queues.svelte'
+  import { queue } from '../stores/queue.svelte'
   import { theme } from '../stores/theme.svelte'
-  import { openSongMenu } from './song-menu'
-  import { playAlbum, playingTrack } from '../plugins/files/views'
-  import { trackKeys } from '../plugins/files/tracks'
-  import { openAlbum } from '../plugins/files/nav'
 
   let {
-    scrollEl,
-    items,
-    sub = 'artist',
-    onopen = openAlbum
+    block: b,
+    tab,
+    plugin,
+    scrollEl
   }: {
+    block: TilesBlock
+    tab: string
+    plugin: PluginId
     scrollEl: HTMLElement | undefined
-    // these albums instead of the library's, with no search (an artist's)
-    items?: Album[]
-    // the line under the title: an artist's page names the year, not them again
-    sub?: 'artist' | 'year'
-    onopen?: (albumId: string) => void
   } = $props()
 
   const GAP = 16
@@ -36,13 +36,11 @@
   let list: HTMLDivElement | undefined = $state()
   let width = $state(0)
 
-  const albums = $derived(items ?? filterAlbums(library.albums, library.query))
+  const items = $derived(b.items as unknown[])
   const cols = $derived(gridColumns(width, 140, GAP))
-  const rows = $derived(chunk(albums, cols))
-  // the album of the song the queue plays (not while radio plays)
-  const playingAlbum = $derived(playingTrack()?.albumId)
-  // cover + title + artist, measured for real once drawn
-  const estimate = $derived((width - GAP * (cols - 1)) / cols + 44 + ROW_GAP)
+  const rows = $derived(chunk(items, cols))
+  // picture + title + line under, measured for real once drawn
+  const estimate = $derived((width - GAP * (cols - 1)) / cols + (b.round ? 50 : 44) + ROW_GAP)
 
   // rows ahead, so a fast scroll finds them drawn
   const v = virtualList(
@@ -53,24 +51,38 @@
   keepPlace(() => ({
     scrollEl,
     list,
-    items: albums,
+    items,
     per: cols,
     rowSize: rows.length ? v.total / rows.length : 0,
-    key: (a: Album) => a.id,
-    source: library.revision
+    key: (x: unknown) => b.key(x),
+    source: itemsVersion()
   }))
 
   function measure(node: HTMLDivElement): void {
     v.measure(node)
   }
+
+  // not while radio plays
+  const playing = (t: Tile): boolean => !!queues.item && !!t.playing?.(queues.item)
+
+  function openMenu(e: MouseEvent, x: unknown, t: Tile): void {
+    const key = b.key(x)
+    menu.showFor(
+      e,
+      sections(
+        songMenu(t.songs(), { from: t.from, link: t.link }),
+        (t.actions ?? []).map((a) => ({
+          label: a.label,
+          run: () => actOnPage(plugin, key, a.id)
+        }))
+      )
+    )
+  }
 </script>
 
-{#if !items && !albums.length}
-  <Empty title="No matches" text="Nothing found for this search. Try an album or artist name." />
-{/if}
 <div
   class="grid"
-  data-grid="albums"
+  data-grid={b.round ? 'round' : 'square'}
   bind:this={list}
   bind:clientWidth={width}
   style:height="{v.total}px"
@@ -83,34 +95,36 @@
       style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
       style:transform="translateY({v.offset(item)}px)"
     >
-      {#each rows[item.index] as al (al.id)}
+      {#each rows[item.index] as x (b.key(x))}
+        {@const t = b.tile(x)}
         <div
           class="card"
+          class:round={b.round}
           role="group"
-          oncontextmenu={(e) =>
-            openSongMenu(e, trackKeys(al.trackIds), {
-              from: al.title,
-              link: albumLink(al)
-            })}
+          oncontextmenu={(e) => openMenu(e, x, t)}
         >
-          <div class="cvwrap">
-            <button class="cv" aria-label="Open {al.title}" onclick={() => onopen(al.id)}
-              ><Cover
-                src={al.cover}
-                tint={al.palette[theme.light ? 'light' : 'dark'][0]}
-                lazy={false}
-              /></button
+          <div class="wrap">
+            <button class="pic" aria-label="Open {t.title}" onclick={() => openFrom(tab, t.to)}
+              >{#if b.round}<ArtistPic photo={t.photo} covers={t.covers ?? []} />{:else}<Cover
+                  src={t.art?.cover}
+                  tint={t.art?.palette[theme.light ? 'light' : 'dark'][0]}
+                  lazy={false}
+                />{/if}</button
             >
-            <button class="qp" aria-label="Play {al.title}" onclick={() => playAlbum(al.id, 0)}>
+            <button
+              class="qp"
+              aria-label="Play {t.title}"
+              onclick={() => queue.playList(t.songs(), 0, t.from, t.link)}
+            >
               <Icon name="play" />
             </button>
           </div>
           <div class="t">
-            {#if al.id === playingAlbum}<Eq paused={!player.playing} />{/if}<span title={al.title}
-              >{al.title}</span
+            {#if playing(t)}<Eq paused={!player.playing} />{/if}<span title={t.title}
+              >{t.title}</span
             >
           </div>
-          <div class="a">{sub === 'year' ? al.year || '' : al.artist}</div>
+          <div class="a">{t.subtitle ?? ''}</div>
         </div>
       {/each}
     </div>
@@ -137,10 +151,17 @@
     text-align: left;
     min-width: 0;
   }
-  .cvwrap {
+  .round {
+    align-items: center;
+    text-align: center;
+  }
+  .wrap {
     position: relative;
   }
-  .cv {
+  .round .wrap {
+    width: 100%;
+  }
+  .pic {
     display: block;
     width: 100%;
     position: relative;
@@ -150,7 +171,12 @@
     box-shadow: 0 8px 20px -10px var(--shadow);
     transition: transform 0.2s;
   }
-  .card:hover .cv {
+  .round .pic {
+    position: static;
+    border-radius: 50%;
+    overflow: visible;
+  }
+  .card:hover .pic {
     transform: translateY(-3px);
   }
   .qp {
@@ -168,6 +194,10 @@
     transform: translateY(6px);
     transition: 0.2s;
     box-shadow: 0 6px 14px var(--shadow);
+  }
+  .round .qp {
+    right: 4%;
+    bottom: 4%;
   }
   .card:hover .qp,
   .card:focus-within .qp {
@@ -194,6 +224,10 @@
     align-items: center;
     min-width: 0;
   }
+  .round .t {
+    justify-content: center;
+    max-width: 100%;
+  }
   .t span {
     white-space: nowrap;
     overflow: hidden;
@@ -204,9 +238,12 @@
     color: var(--ink-2);
     margin-top: -5px;
   }
+  .round .a {
+    color: var(--ink-3);
+  }
   /* no lift or slide with reduced motion; the play button still fades in */
   @media (prefers-reduced-motion: reduce) {
-    .card:hover .cv,
+    .card:hover .pic,
     .qp,
     .card .qp:hover {
       transform: none;

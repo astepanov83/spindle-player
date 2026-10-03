@@ -3,8 +3,7 @@
      group cut short with "Show all". Shown in the Albums view
      while the search box has text, over the grid or the open album. -->
 <script lang="ts">
-  import AlbumGrid from './AlbumGrid.svelte'
-  import ArtistGrid from './ArtistGrid.svelte'
+  import Tiles from '../blocks/Tiles.svelte'
   import Empty from './Empty.svelte'
   import SongTable from './SongTable.svelte'
   import Eq from '../ui/Eq.svelte'
@@ -21,7 +20,7 @@
   import type { Track } from '../../../shared/library'
   import { isPlaying } from '../plugins/files/views'
   import { trackKey } from '../plugins/files/tracks'
-  import { openAlbum, showArtist } from '../plugins/files/nav'
+  import { albumTiles, artistTiles } from '../plugins/files/page'
 
   let { scrollEl }: { scrollEl: HTMLElement | undefined } = $props()
 
@@ -104,9 +103,9 @@
       <h2 class="page-title">{titles[library.searchAll]}</h2>
     </div>
     {#if library.searchAll === 'albums'}
-      <AlbumGrid {scrollEl} items={albums} onopen={openAlbum} />
+      <Tiles block={albumTiles(albums)} tab={library.tab} plugin="files" {scrollEl} />
     {:else}
-      <ArtistGrid {scrollEl} items={artists} onopen={showArtist} />
+      <Tiles block={artistTiles(artists)} tab={library.tab} plugin="files" {scrollEl} />
     {/if}
   {/if}
 {:else if !songs.length && !albums.length && !artists.length && !mixes.length}
@@ -118,13 +117,23 @@
   {#if albums.length}
     <section>
       {@render more('albums', albums.length, TOP_TILES)}
-      <AlbumGrid {scrollEl} items={albums.slice(0, TOP_TILES)} onopen={openAlbum} />
+      <Tiles
+        block={albumTiles(albums.slice(0, TOP_TILES))}
+        tab={library.tab}
+        plugin="files"
+        {scrollEl}
+      />
     </section>
   {/if}
   {#if artists.length}
     <section>
       {@render more('artists', artists.length, TOP_TILES)}
-      <ArtistGrid {scrollEl} items={artists.slice(0, TOP_TILES)} onopen={showArtist} />
+      <Tiles
+        block={artistTiles(artists.slice(0, TOP_TILES))}
+        tab={library.tab}
+        plugin="files"
+        {scrollEl}
+      />
     </section>
   {/if}
   {#if mixes.length}

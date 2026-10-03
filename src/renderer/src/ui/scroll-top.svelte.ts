@@ -23,7 +23,8 @@ interface Place {
   song?: string
 }
 
-// Grid rows carry data-index inside a data-grid (AlbumGrid, ArtistGrid). A
+// Grid rows carry data-index inside a data-grid, "square" or "round"
+// (blocks/Tiles.svelte). A
 // view has one of each at most: the search results have both, so a row is
 // looked up in its own grid.
 const rows = (el: HTMLElement, grid?: string): NodeListOf<HTMLElement> =>

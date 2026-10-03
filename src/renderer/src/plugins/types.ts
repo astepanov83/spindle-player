@@ -208,11 +208,13 @@ export interface RowsBlock<T = unknown> {
 // The path bar of a tree (Folders). A step along it keeps the search text.
 export interface TreeBlock {
   kind: 'tree'
+  // for screen readers: "Folder path"
+  label: string
   path: { title: string; hint?: string; to: PageAddress; here?: boolean }[]
 }
 
-// Nothing to show. Alone on a page it fills it ("No music yet"); among other
-// blocks it is a short note ("No matches").
+// Nothing to show. Alone on a page it fills it ("No music yet"), with its
+// button; among other blocks it is a short note ("No matches").
 export interface EmptyBlock {
   kind: 'empty'
   // act's target for the button

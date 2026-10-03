@@ -1,5 +1,5 @@
-// The files plugin's tabs and their open pages. The library's own views
-// read and change their page here until blocks draw them (ticket 059).
+// The files plugin's tabs and their open pages, with small helpers to read
+// and open them (its actions use some; the store's tests most).
 import { crumbs, folderSearchText, shownFolder } from '../../library/folders'
 import { library } from '../../stores/library.svelte'
 import type { PageAddress, Tab } from '../types'

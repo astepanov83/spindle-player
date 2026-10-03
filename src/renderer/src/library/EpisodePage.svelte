@@ -1,42 +1,36 @@
+<!-- One Music For Programming episode (ticket 052): its songs, each a stretch
+     of the episode's mp3 at a guessed time. Like the album page, without the
+     folder and the artist links. -->
 <script lang="ts">
   import type { QueueLink } from '../../../shared/saved-queue'
   import Cover from '../ui/Cover.svelte'
   import Eq from '../ui/Eq.svelte'
-  import GoLink from '../ui/GoLink.svelte'
   import Icon from '../ui/Icon.svelte'
-  import { fmtTime } from '../format'
+  import { fmtClock, fmtCount, fmtLength } from '../format'
   import { roving } from '../ui/roving'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
-  import { albumButton, albumLabel, albumLines } from './album'
-  import { artistLinks } from './artists'
-  import { commonFolder, folderParts, folderPath } from './folders'
+  import { albumButton } from './album'
+  import { songMatches } from './views'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
 
-  // back: the label of the link back (an artist's name when opened from them)
-  let {
-    albumId,
-    back = 'All albums',
-    onback = () => library.openAlbum(null)
-  }: { albumId: string; back?: string; onback?: () => void } = $props()
+  let { albumId }: { albumId: string } = $props()
 
   const al = $derived(library.album(albumId))
   const tracks = $derived(al.trackIds.map((id) => library.track(id)))
-  // one link per artist of a split credit
-  const artists = $derived(artistLinks(al, (key) => !!library.getArtist(key)))
+  // the search box filters the songs in place
+  const shown = $derived(tracks.filter((t) => songMatches(t, library.query)))
   const link = $derived<QueueLink>({ kind: 'album', id: albumId })
-  const minutes = $derived(Math.round(tracks.reduce((s, t) => s + t.duration, 0) / 60))
-  const lines = $derived(albumLines(tracks))
-  // where the album is on disk; null while the folder table is not in yet
-  const folder = $derived(
-    commonFolder(
-      library.folders,
-      tracks.map((t) => t.folder)
-    )
+  const length = $derived(tracks.reduce((s, t) => s + t.duration, 0))
+  const meta = $derived(
+    [al.artist, al.year || '', fmtCount(tracks.length, 'song', 'songs'), fmtLength(length)]
+      .filter(Boolean)
+      .join(' · ')
   )
-  const parts = $derived(folder === null ? undefined : folderParts(library.folders, folder))
+  // in the markup it would lose its spaces next to a block
+  const dot = ' · '
   const btn = $derived(
     albumButton(albumId, {
       link: queue.link,
@@ -57,29 +51,26 @@
     queue.playAlbum(al.id, Math.floor(Math.random() * tracks.length))
   }
 
-  // in the markup these would lose their spaces next to a block
-  const comma = ', '
+  // the whole episode is the queue, from this song on
+  function play(id: string): void {
+    queue.playAlbum(al.id, al.trackIds.indexOf(id))
+  }
 </script>
 
-<button class="back" onclick={onback}><Icon name="back" size={16} />{back}</button>
+<button class="back" onclick={() => library.openEpisode(null)}
+  ><Icon name="back" size={16} />All episodes</button
+>
 <div class="albhead">
   <div class="cv"><Cover src={al.coverLarge} /></div>
   <div class="words">
-    <div class="page-meta">{albumLabel(al)}</div>
+    <div class="page-meta">Music For Programming</div>
     <h2 class="page-title clamp" title={al.title}>{al.title}</h2>
     <div class="page-meta">
-      {#each artists as a, i (i)}{#if i}{comma}{/if}<GoLink
-          go={a.key ? () => library.showArtist(a.key!) : undefined}>{a.name}</GoLink
-        >{/each} · {tracks.length} songs · {minutes} min
+      {meta}{#if al.link}{dot}<a href={al.link} target="_blank" rel="noreferrer"
+          >{al.link.replace(/^https:\/\//, '')}</a
+        >{/if}
     </div>
-    {#if parts}
-      {@const path = folderPath(parts)}
-      <div class="page-meta path" title={path}>
-        <GoLink go={() => library.showFolder(library.folders.nodes[folder!].key)}
-          ><bdi dir="ltr">{path}</bdi></GoLink
-        >
-      </div>
-    {/if}
+    <div class="page-meta">Song times are guessed: the site gives none.</div>
     <div class="acts">
       <button class="pill play" onclick={playOrPause}>{btn === 'pause' ? 'Pause' : 'Play'}</button>
       <button class="pill ghost" onclick={shufflePlay}>Shuffle</button>
@@ -92,38 +83,32 @@
         class="pill ghost more"
         aria-haspopup="menu"
         aria-label="More"
-        title="Play next, add to the queue or a playlist, show in file manager"
-        onclick={(e) => openSongMenu(e, al.trackIds, { from: al.title, link, folder: parts })}
+        title="Play next, add to the queue or a playlist"
+        onclick={(e) => openSongMenu(e, al.trackIds, { from: al.title, link })}
         ><Icon name="more" size={18} /></button
       >
     </div>
   </div>
 </div>
-<!-- a "Disc 2" row is a label: not a [data-row], so Tab and the arrows skip it -->
-<div class="lines" use:roving={{ rows: tracks }}>
-  {#each lines as line ('disc' in line ? `disc ${line.disc}` : line.track.id)}
-    {#if 'disc' in line}
-      <div class="disc section-label">Disc {line.disc}</div>
-    {:else}
-      {@const t = line.track}
-      {@const cur = playing.isSong(t.id)}
-      <button
-        class="srow row"
-        data-song={t.id}
-        class:cur-row={cur}
-        data-row
-        aria-current={cur ? 'true' : undefined}
-        onclick={() => queue.playAlbum(al.id, line.at)}
-        oncontextmenu={(e) => openSongMenu(e, [t.id], { from: al.title, link })}
+<div class="lines" use:roving={{ rows: shown }}>
+  {#each shown as t (t.id)}
+    {@const cur = playing.isSong(t.id)}
+    <button
+      class="srow row"
+      data-song={t.id}
+      class:cur-row={cur}
+      data-row
+      aria-current={cur ? 'true' : undefined}
+      onclick={() => play(t.id)}
+      oncontextmenu={(e) => openSongMenu(e, [t.id], { from: al.title, link })}
+    >
+      <span class="n"
+        >{#if cur && playing.songPlaying}<Eq />{:else}{t.no}{/if}</span
       >
-        <span class="n"
-          >{#if cur && playing.songPlaying}<Eq />{:else if line.no}{line.no}{/if}</span
-        >
-        <span class="nm" title={t.title}>{t.title}</span>
-        <span class="ar" title={t.artist}>{t.artist}</span>
-        <span class="d">{fmtTime(t.duration)}</span>
-      </button>
-    {/if}
+      <span class="nm" title={t.title}>{t.title}</span>
+      <span class="ar" title={t.artist}>{t.artist}</span>
+      <span class="d" title="Guessed start">{fmtClock(t.part?.start ?? 0)}</span>
+    </button>
   {/each}
 </div>
 
@@ -139,8 +124,6 @@
   .back:hover {
     color: var(--ink);
   }
-  /* The cover stays beside the title at any width, so the songs stay in view;
-     it and the title get smaller in a narrow library. */
   .albhead {
     container-type: inline-size;
     display: flex;
@@ -160,15 +143,11 @@
     flex: 1;
     min-width: 0;
   }
-  /* the end of a long path is the part that tells albums apart; bdi keeps
-     the path itself left to right */
-  .path {
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    direction: rtl;
-    text-align: left;
+  .page-meta a {
+    color: inherit;
+  }
+  .page-meta a:hover {
+    color: var(--ink);
   }
   .acts {
     display: flex;
@@ -187,8 +166,6 @@
       margin-top: 12px;
     }
   }
-  /* smaller pills, so they stay on one line beside the cover in Studio's
-     narrowest library */
   @container (max-width: 480px) {
     .acts {
       gap: 6px;
@@ -206,15 +183,8 @@
       width: 88px;
     }
   }
-  /* as wide for Pause as for Play, so the pills beside it stay put */
   .play {
     min-width: 5.6em;
-  }
-  .disc {
-    padding: 18px 14px 8px;
-  }
-  .disc:first-child {
-    padding-top: 0;
   }
   .srow {
     display: grid;

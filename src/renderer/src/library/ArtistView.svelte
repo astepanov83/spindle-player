@@ -29,8 +29,12 @@
 
 {#if library.query.trim()}
   {@render grid()}
-{:else if library.open}
-  <AlbumPage albumId={library.open} back={artist?.name ?? 'All artists'} />
+{:else if library.artistAlbum}
+  <AlbumPage
+    albumId={library.artistAlbum}
+    back={artist?.name ?? 'All artists'}
+    onback={() => library.openArtistAlbum(null)}
+  />
 {:else if artist}
   <ArtistPage {artist} {scrollEl} />
 {:else}

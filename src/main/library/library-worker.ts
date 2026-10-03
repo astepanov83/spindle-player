@@ -61,6 +61,8 @@ import {
   type Fetched
 } from './fetched-store'
 import { listSources, pruneSources, readSource, saveSource } from './fetched-files'
+import { MfpSource } from './mfp-source'
+import type { OnlineFile } from './mfp-library'
 import {
   cueReaderVersion,
   readerVersion,
@@ -128,6 +130,7 @@ let ix: LibraryIndex = emptyIndex()
 let built: BuiltLibrary = {
   data: { albums: [], tracks: [], folders: [] },
   paths: new Map(),
+  urls: new Map(),
   queries: [],
   artists: []
 }
@@ -317,13 +320,81 @@ function setOverrides(c: ArtistChanges): void {
   publisher.now()
 }
 
+// --- Music For Programming (ticket 052) ---
+
+const mfpSite = 'https://musicforprogramming.net'
+// the site's picture is about 200 KB
+const maxPictureBytes = 5 * 1024 * 1024
+let mfp: MfpSource | undefined
+// none when the file could not be read; it is only a copy of the site, so a
+// broken one is simply written again
+let mfpWriter: JsonFileWriter<unknown> | undefined
+
+async function fetchSite(url: string): Promise<Response> {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': start.userAgent },
+    signal: AbortSignal.timeout(15000)
+  })
+  if (!res.ok) throw new Error(`${url} answered ${res.status}`)
+  return res
+}
+
+function startMfp(s: WorkerStart): void {
+  const r = readJsonFile(s.mfp.path)
+  if (r.kind === 'broken' || r.kind === 'unreadable')
+    log(`Music For Programming file is ${r.kind}: ${s.mfp.path}`)
+  if (r.kind !== 'unreadable')
+    mfpWriter = new JsonFileWriter<unknown>(
+      s.mfp.path,
+      1000,
+      (e) => log(`Could not save ${s.mfp.path}: ${e}`),
+      0
+    )
+  mfp = new MfpSource({
+    site: mfpSite,
+    read: () => (r.kind === 'ok' ? r.value : undefined),
+    save: (d) => mfpWriter?.schedule(d),
+    fetchText: async (url) => (await fetchSite(url)).text(),
+    fetchBytes: async (url) => {
+      const data = new Uint8Array(await (await fetchSite(url)).arrayBuffer())
+      if (data.length > maxPictureBytes) throw new Error(`${url} is too big for a picture`)
+      return data
+    },
+    addCover: addFetchedCover,
+    hasCover: (h) => cached.has(h) && sources.has(h),
+    now: () => Date.now(),
+    changed: () => {
+      dirty = true
+      publisher.soon()
+    },
+    status: (m) => setStatus({ mfp: m }),
+    log
+  })
+  mfp.load()
+}
+
+// What main needs to serve a file by its id: a file on disk or an online mp3.
+function findTrack(id: string): { media?: MediaInfo; online?: OnlineFile } {
+  const online = built.urls.get(id)
+  if (online) return { online }
+  return { media: mediaInfo(id) }
+}
+
 // Groups albums, for the page and the lookups.
 function build(): void {
   dirty = false
-  built = buildLibrary(ix, (h) => cached.has(h), fetched, status.folders, photos, overrides)
+  built = buildLibrary(ix, (h) => cached.has(h), fetched, status.folders, photos, overrides, {
+    episodes: mfp?.episodes ?? [],
+    cover: mfp?.cover
+  })
   let failed = 0
   for (const e of ix.files.values()) if (e.error) failed++
-  setStatus({ tracks: built.data.tracks.length, albums: built.data.albums.length, failed })
+  // the music folders' songs; episodes have their own line (ticket 052)
+  let tracks = 0
+  for (const t of built.data.tracks) if (!t.online) tracks++
+  let albums = 0
+  for (const a of built.data.albums) if (!a.online) albums++
+  setStatus({ tracks, albums, failed })
   fetcher?.setQueries(built.queries, built.artists)
 }
 
@@ -526,9 +597,13 @@ let keptEdits = 0
 // The covers the index, the online lookup and main use, made again only after one changed.
 let usedCache: { edits: string; used: Set<string> } | undefined
 function liveUsed(): Set<string> {
-  const edits = `${ixEdits}.${fetchedEdits}.${keptEdits}`
+  const mfpCover = mfp?.cover
+  const edits = `${ixEdits}.${fetchedEdits}.${keptEdits}.${mfpCover}`
   if (usedCache?.edits !== edits)
-    usedCache = { edits, used: coversInUse(ix, [fetched, photos], keptCovers) }
+    usedCache = {
+      edits,
+      used: coversInUse(ix, [fetched, photos], mfpCover ? [...keptCovers, mfpCover] : keptCovers)
+    }
   return usedCache.used
 }
 
@@ -794,6 +869,11 @@ port.on('message', (e: Electron.MessageEvent) => {
         if (dropNotFound(photos) || albums) saveFetched()
       }
       void chain.request((gen) => scan(m.folders, m.retryFailed, gen, m.id))
+      // a manual Rescan reads the site too; only new episodes are fetched
+      if (m.retryFailed) void ready.then(() => mfp?.refresh(true))
+      break
+    case 'mfp':
+      void ready.then(() => mfp?.setOn(m.on))
       break
     case 'fetch-covers':
       setFetch(m.on, m.sources)
@@ -853,7 +933,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       break
     case 'find-track':
       ready.then(
-        () => post({ type: 'reply', req: m.req, media: mediaInfo(m.id) }),
+        () => post({ type: 'reply', req: m.req, ...findTrack(m.id) }),
         () => post({ type: 'reply', req: m.req })
       )
       break
@@ -871,6 +951,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       stopSongLookups()
       fetchedWriter?.flushSync()
       overridesWriter?.flushSync()
+      mfpWriter?.flushSync()
       closing = true
       chain.close()
       post({ type: 'flushed' })
@@ -900,7 +981,7 @@ port.on('message', (e: Electron.MessageEvent) => {
 // covers and may be at it now (a restart), so only old ones go there.
 async function removeStrayTemp(): Promise<void> {
   const dir = dirname(start.indexPath)
-  const names = [basename(start.indexPath), basename(start.overridesPath)]
+  const names = [basename(start.indexPath), basename(start.overridesPath), basename(start.mfp.path)]
   try {
     for (const n of await readdir(dir))
       if (names.some((f) => n.startsWith(f + '.')) && n.endsWith('.tmp'))
@@ -931,7 +1012,10 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   aliases = mergeMoves(s.aliases ?? {}, ix.pendingMoves)
   // a quit or crash came before main saved them: send them again
   if (Object.keys(ix.pendingMoves).length) post({ type: 'ids-moved', moves: ix.pendingMoves })
+  startMfp(s)
   build()
+  // after the first build, so the page's first library doesn't wait for the site
+  void mfp?.setOn(s.mfp.on)
 })
 
 // Scans and prunes, one after the other; see scan-chain.ts.

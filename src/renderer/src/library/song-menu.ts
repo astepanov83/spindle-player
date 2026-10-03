@@ -1,10 +1,12 @@
-// The menu for songs: the queue first, then Go to, then the playlists. Each
+// The menu for songs: the queue first, then Go to, the folder, then the playlists. Each
 // part is a function; a new part is one more argument to `sections`.
 import type { QueueLink } from '../../../shared/saved-queue'
 import { artistLinks } from './artists'
+import { folderPath } from './folders'
 import { layout } from '../stores/layout.svelte'
 import { library } from '../stores/library.svelte'
 import { menu, type MenuEntry, type MenuItem } from '../stores/menu.svelte'
+import { notice } from '../stores/notice.svelte'
 import { playlists } from '../stores/playlists.svelte'
 import { queue } from '../stores/queue.svelte'
 
@@ -19,6 +21,8 @@ export interface SongMenuOptions {
   from?: string
   // what "From" opens then
   link?: QueueLink
+  // the folder the songs are in, as folderParts gives it: "Show in file manager"
+  folder?: string[]
 }
 
 // The parts in order, with a line between, leaving out empty ones.
@@ -57,13 +61,24 @@ function goToPart(ids: string[]): MenuEntry[] {
   const entries: MenuItem[] = [
     { label: 'Go to album', run: go(() => library.showAlbum(t.albumId, t.id)) }
   ]
-  const artists = artistLinks(t, (key) => !!library.getArtist(key))
+  // an MFP song's artists are not in Artists (ticket 052)
+  const artists = t.online ? [] : artistLinks(t, (key) => !!library.getArtist(key))
   for (const { name, key } of artists) {
     if (!key) continue
     const label = artists.length > 1 ? `Go to ${name}` : 'Go to artist'
     entries.push({ label, run: go(() => library.showArtist(key)) })
   }
   return entries
+}
+
+function folderPart(o: SongMenuOptions): MenuEntry[] {
+  const parts = o.folder
+  if (!parts) return []
+  const run = async (): Promise<void> => {
+    if (!(await window.libraryApi.showFolder(parts)))
+      notice.show(`Couldn't open ${folderPath(parts)}`)
+  }
+  return [{ label: 'Show in file manager', run: () => void run() }]
 }
 
 function playlistPart(ids: string[], o: SongMenuOptions): MenuEntry[] {
@@ -84,7 +99,12 @@ function playlistPart(ids: string[], o: SongMenuOptions): MenuEntry[] {
 }
 
 export function songMenu(trackIds: string[], o: SongMenuOptions = {}): MenuEntry[] {
-  return sections(queuePart(trackIds, o), goToPart(trackIds), playlistPart(trackIds, o))
+  return sections(
+    queuePart(trackIds, o),
+    goToPart(trackIds),
+    folderPart(o),
+    playlistPart(trackIds, o)
+  )
 }
 
 // Only the playlists, for the "Add to playlist" buttons on page headers.

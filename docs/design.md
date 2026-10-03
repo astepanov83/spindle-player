@@ -97,7 +97,7 @@ Every key is decided in `src/renderer/src/keys.ts` (plain functions with tests);
 | ↑ / ↓ | volume 5% |
 | Ctrl+← / Ctrl+→ | previous / next song |
 | Ctrl+F, / | focus the search box and select its text |
-| Alt+← / Alt+→, Backspace | Back / Forward, the same as the mouse side buttons |
+| Alt+← / Alt+→, Backspace | Back / Forward through the library's history, the same as the mouse side buttons and the ‹ › buttons |
 | Ctrl+, | open or close Settings |
 | Esc | close the menu, then Settings, then the queue drawer; in the search box: clear, then leave |
 | V | next visualizer style |

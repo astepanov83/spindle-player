@@ -46,12 +46,7 @@ class PlaylistStore {
   remove(id: string): void {
     const p = this.get(id)
     this.#set(ops.remove(this.list, id))
-    // the view leaves the playlist, so the text that filtered its rows goes too
-    if (library.section === `pl:${id}` || library.openPlaylist === id) library.query = ''
-    if (library.section === `pl:${id}`) library.section = 'songs'
-    if (library.openPlaylist === id) library.openPlaylist = null
-    library.forgetPlaylistSort(id)
-    library.forgetClosed(id)
+    library.forgetPlaylist(id)
     if (p) notice.show(`Deleted ${p.name}`)
   }
 

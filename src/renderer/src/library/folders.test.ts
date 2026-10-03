@@ -1,19 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { Folder, Track } from '../../../shared/library'
 import {
+  commonFolder,
   crumbs,
   filterFolder,
-  folderBack,
-  folderForward,
+  folderParts,
+  folderPath,
   folderPlaySongs,
   folderSearchText,
   folderSongs,
   folderTree,
-  folderUp,
-  openFolder,
   rootName,
   shownFolder,
-  type FolderNav,
   type FolderTree
 } from './folders'
 
@@ -159,83 +157,9 @@ describe('shownFolder', () => {
   })
 })
 
-describe('crumbs and folderUp', () => {
+describe('crumbs', () => {
   it('lists the folders from the music folder down', () => {
     expect(crumbs(tree(), 2)).toEqual([0, 1, 2])
-  })
-
-  it('goes up to the parent, and from the only music folder nowhere', () => {
-    const t = tree()
-    expect(folderUp(t, 2)).toBe(key(t, 1))
-    expect(folderUp(t, 0)).toBeUndefined()
-    expect(folderUp(t, null)).toBeUndefined()
-  })
-
-  it('goes up from one of several music folders to the list of them', () => {
-    const t = folderTree(
-      [
-        { name: '/a', parent: -1 },
-        { name: '/b', parent: -1 }
-      ],
-      [track('x', 0), track('y', 1)],
-      () => ''
-    )
-    expect(folderUp(t, 1)).toBeNull()
-  })
-})
-
-describe('mouse Back and Forward in folders', () => {
-  const start: FolderNav = { folder: null, below: [] }
-
-  it('Back goes up one folder and Forward goes back down', () => {
-    const t = tree()
-    let nav = openFolder(start, key(t, 2))
-    nav = folderBack(t, nav)
-    expect(nav.folder).toBe(key(t, 1))
-    nav = folderBack(t, nav)
-    expect(nav.folder).toBe(key(t, 0))
-    nav = folderForward(t, nav)
-    expect(nav.folder).toBe(key(t, 1))
-    nav = folderForward(t, nav)
-    expect(nav.folder).toBe(key(t, 2))
-    expect(folderForward(t, nav)).toBe(nav)
-  })
-
-  it('Back at the top does nothing', () => {
-    const t = tree()
-    expect(folderBack(t, start)).toBe(start)
-  })
-
-  it('opening another folder drops what Forward had', () => {
-    const t = tree()
-    let nav = folderBack(t, openFolder(start, key(t, 2)))
-    nav = openFolder(nav, key(t, 3))
-    nav = folderBack(t, nav)
-    nav = folderForward(t, nav)
-    expect(nav.folder).toBe(key(t, 3))
-    expect(nav.below).toEqual([])
-  })
-
-  it('opening the folder Back left keeps the rest for Forward', () => {
-    const t = tree()
-    let nav = folderBack(t, folderBack(t, openFolder(start, key(t, 2))))
-    nav = openFolder(nav, key(t, 1))
-    nav = folderForward(t, nav)
-    expect(nav.folder).toBe(key(t, 2))
-  })
-
-  it('Forward does nothing when the folder is not below this one', () => {
-    const t = tree()
-    let nav = folderBack(t, openFolder(start, key(t, 2)))
-    nav = { ...nav, folder: key(t, 0) }
-    expect(folderForward(t, nav).folder).toBe(key(t, 0))
-  })
-
-  it('Forward skips a folder a rescan removed', () => {
-    const t = tree()
-    const nav = folderBack(t, openFolder(start, key(t, 2)))
-    const smaller = folderTree(folders.slice(0, 2), [track('x', 1)], () => '')
-    expect(folderForward(smaller, nav).folder).toBe(key(t, 1))
   })
 })
 
@@ -363,5 +287,43 @@ describe('folderSearchText', () => {
         null
       )
     ).toBe('Search folders')
+  })
+})
+
+describe('commonFolder', () => {
+  it('gives the one folder all songs are in', () => {
+    expect(commonFolder(tree(), [2, 2])).toBe(2)
+  })
+
+  it('gives the folder above "CD1" and "CD2"', () => {
+    expect(commonFolder(tree(), [2, 3])).toBe(1)
+    expect(commonFolder(tree(), [3, 0])).toBe(0)
+  })
+
+  it('gives null for songs in no known folder, or in two music folders', () => {
+    expect(commonFolder(tree(), [])).toBeNull()
+    expect(commonFolder(tree(), [9])).toBeNull()
+    const two = folderTree(
+      [
+        { name: '/a', parent: -1 },
+        { name: '/b', parent: -1 }
+      ],
+      [],
+      () => ''
+    )
+    expect(commonFolder(two, [0, 1])).toBeNull()
+  })
+})
+
+describe('folderParts and folderPath', () => {
+  it("starts from the music folder's full path", () => {
+    expect(folderParts(tree(), 2)).toEqual(['/home/me/m', 'Rock', 'A'])
+    expect(folderPath(['/home/me/m', 'Rock', 'A'])).toBe('/home/me/m/Rock/A')
+  })
+
+  it("joins with the music folder's own separator", () => {
+    expect(folderPath(['C:\\Music', 'Rock'])).toBe('C:\\Music\\Rock')
+    expect(folderPath(['C:\\Music\\', 'Rock'])).toBe('C:\\Music\\Rock')
+    expect(folderPath(['/', 'Rock'])).toBe('/Rock')
   })
 })

@@ -1,5 +1,5 @@
-// A new view in a library area starts at the top; going back up returns to
-// where the view was left (see scroll-places.ts).
+// A new view in a library area starts at the top; going back up, Back,
+// Forward and another chip return to where the view was left (see scroll-places.ts).
 import { tick, untrack } from 'svelte'
 import { ScrollPlaces, type View } from './scroll-places'
 import { crumbs, shownFolder } from '../library/folders'
@@ -10,6 +10,7 @@ export function libraryView(top: string): View {
   const path = [top]
   if (top === 'albums' && library.open) path.push(`album:${library.open}`)
   if (top === 'playlists' && library.openPlaylist) path.push(`pl:${library.openPlaylist}`)
+  if (top === 'mfp' && library.episode) path.push(`episode:${library.episode}`)
   if (top === 'folders') {
     const tree = library.folders
     const i = shownFolder(tree, library.folder)
@@ -17,7 +18,7 @@ export function libraryView(top: string): View {
   }
   if (top === 'artists') {
     if (library.artist) path.push(`artist:${library.artist}`)
-    if (library.open) path.push(`album:${library.open}`)
+    if (library.artistAlbum) path.push(`album:${library.artistAlbum}`)
   }
   // The search results (Albums) and the filtered grid (Artists) show over
   // the open view, so they are a view below it (ticket 039). Other views
@@ -77,7 +78,7 @@ export function scrollTopOnChange(box: () => HTMLElement | undefined, view: () =
     // read here so a landing waits for the box to be drawn
     const el = box()
     untrack(() => {
-      const moved = places.move(last, el ? placeOf(el) : { top: 0 }, to)
+      const moved = places.move(last, el ? placeOf(el) : { top: 0 }, to, library.takeReturn())
       last = to
       if (!el) return
       let place: Place

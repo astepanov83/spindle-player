@@ -1,5 +1,6 @@
 <!-- What a search finds in the library (ticket 039): songs, albums and
-     artists, each group cut short with "Show all". Shown in the Albums view
+     artists, then songs in Music For Programming mixes (ticket 052), each
+     group cut short with "Show all". Shown in the Albums view
      while the search box has text, over the grid or the open album. -->
 <script lang="ts">
   import AlbumGrid from './AlbumGrid.svelte'
@@ -17,6 +18,7 @@
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
+  import type { Track } from '../../../shared/library'
 
   let {
     scrollEl,
@@ -35,25 +37,27 @@
   const songs = $derived(searchSongs(library.albums, (id) => library.track(id), q))
   const albums = $derived(filterAlbums(library.albums, q))
   const artists = $derived(filterArtists(library.artists, q))
+  // none while the setting is off: there are no episodes then
+  const mixes = $derived(searchSongs(library.mfpAlbums, (id) => library.track(id), q))
   const from = $derived(`search "${q}"`)
   const titles: Record<SearchGroup, string> = {
     songs: 'Songs',
     albums: 'Albums',
-    artists: 'Artists'
+    artists: 'Artists',
+    mfp: 'In MFP mixes'
   }
 
-  // the clicked song, with every song found after it as the queue
-  function play(i: number): void {
+  // the clicked song, with every song of its group found after it as the queue
+  function play(rows: Track[], i: number): void {
     queue.playList(
-      songs.map((t) => t.id),
+      rows.map((t) => t.id),
       i,
       from
     )
   }
 
   function openAlbum(id: string): void {
-    library.query = ''
-    library.open = id
+    library.openAlbum(id)
   }
 </script>
 
@@ -61,17 +65,49 @@
   <div class="grouphead">
     <h3 class="part section-label">{titles[group]}</h3>
     {#if n > top}
-      <button class="more" onclick={() => (library.searchAll = group)}>Show all {n}</button>
+      <button class="more" onclick={() => library.showAll(group)}>Show all {n}</button>
     {/if}
   </div>
 {/snippet}
 
+{#snippet songList(group: SearchGroup, rows: Track[])}
+  <section class="songs">
+    {@render more(group, rows.length, TOP_SONGS)}
+    <div class="lines" use:roving={{ rows }}>
+      {#each rows.slice(0, TOP_SONGS) as t, i (t.id)}
+        {@const cur = playing.isSong(t.id)}
+        <button
+          class="srow row"
+          class:cur-row={cur}
+          data-row
+          aria-current={cur ? 'true' : undefined}
+          onclick={() => play(rows, i)}
+          oncontextmenu={(e) => openSongMenu(e, [t.id], { from })}
+        >
+          <span class="tt">
+            <Thumb src={library.art(t).cover} size={36} radius={4} />
+            <span class="nm"
+              >{#if cur && playing.songPlaying}<Eq />{/if}<span title={t.title}>{t.title}</span
+              ></span
+            >
+          </span>
+          <span class="o" title={t.artist}>{t.artist}</span>
+          <span class="o al" title={t.album}>{t.album}</span>
+          <span class="d">{fmtTime(t.duration)}</span>
+        </button>
+      {/each}
+    </div>
+  </section>
+{/snippet}
+
 {#if library.searchAll}
-  <button class="back" onclick={() => (library.searchAll = null)}
+  <button class="back" onclick={() => library.showAll(null)}
     ><Icon name="back" size={16} />All results</button
   >
   {#if library.searchAll === 'songs'}
     <SongTable title="Songs" meta={`Search "${q}"`} items={songs} {scrollEl} />
+  {:else if library.searchAll === 'mfp'}
+    <SongTable title={titles.mfp} meta={`Search "${q}"`} items={mixes} {scrollEl} />
   {:else}
     <div class="allhead">
       <div class="page-meta">Search "{q}"</div>
@@ -83,37 +119,11 @@
       <ArtistGrid {scrollEl} items={artists} onopen={onartist} />
     {/if}
   {/if}
-{:else if !songs.length && !albums.length && !artists.length}
+{:else if !songs.length && !albums.length && !artists.length && !mixes.length}
   <Empty title="No matches" text="No song, album or artist has that in its name." />
 {:else}
   {#if songs.length}
-    <section class="songs">
-      {@render more('songs', songs.length, TOP_SONGS)}
-      <div class="lines" use:roving={{ rows: songs }}>
-        {#each songs.slice(0, TOP_SONGS) as t, i (t.id)}
-          {@const cur = playing.isSong(t.id)}
-          <button
-            class="srow row"
-            class:cur-row={cur}
-            data-row
-            aria-current={cur ? 'true' : undefined}
-            onclick={() => play(i)}
-            oncontextmenu={(e) => openSongMenu(e, [t.id], { from })}
-          >
-            <span class="tt">
-              <Thumb src={library.art(t).cover} size={36} radius={4} />
-              <span class="nm"
-                >{#if cur && playing.songPlaying}<Eq />{/if}<span title={t.title}>{t.title}</span
-                ></span
-              >
-            </span>
-            <span class="o" title={t.artist}>{t.artist}</span>
-            <span class="o al" title={t.album}>{t.album}</span>
-            <span class="d">{fmtTime(t.duration)}</span>
-          </button>
-        {/each}
-      </div>
-    </section>
+    {@render songList('songs', songs)}
   {/if}
   {#if albums.length}
     <section>
@@ -126,6 +136,9 @@
       {@render more('artists', artists.length, TOP_TILES)}
       <ArtistGrid {scrollEl} items={artists.slice(0, TOP_TILES)} onopen={onartist} />
     </section>
+  {/if}
+  {#if mixes.length}
+    {@render songList('mfp', mixes)}
   {/if}
 {/if}
 

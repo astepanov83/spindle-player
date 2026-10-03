@@ -1,4 +1,4 @@
-// The library store's mouse Back and Forward between a list and a page.
+// The library store: where it is, its history (ticket 051), and the library it holds.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LibraryData, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
@@ -19,93 +19,151 @@ function lib(...ids: string[]): LibraryData {
   return { albums, tracks: [], folders: [] }
 }
 
-// a fresh store each time, so nothing Back closed carries over
+// a fresh store each time, so no history carries over
 beforeEach(async () => {
   vi.resetModules()
   library = (await import('./library.svelte')).library
   library.load(lib('a', 'b'))
 })
 
-describe('mouse Back and Forward', () => {
+const track = (id: string, folder: number): LibraryData['tracks'][number] => ({
+  id,
+  title: id,
+  duration: 1,
+  albumId: 'a',
+  artist: '',
+  album: '',
+  no: 1,
+  disc: 1,
+  codec: '',
+  folder
+})
+
+describe('Back and Forward (ticket 051)', () => {
   it('Back closes the open album and Forward opens it again', () => {
-    library.open = 'a'
-    library.back('open')
+    library.openAlbum('a')
+    library.back()
     expect(library.open).toBeNull()
-    library.forward('open')
+    library.forward()
     expect(library.open).toBe('a')
   })
 
-  it('Back on the grid does nothing', () => {
-    library.back('open')
-    expect(library.open).toBeNull()
-    library.forward('open')
-    expect(library.open).toBeNull()
+  it('does nothing with no history, and says so for the buttons', () => {
+    expect([library.canBack, library.canForward]).toEqual([false, false])
+    library.back()
+    library.forward()
+    expect([library.chip, library.open]).toEqual(['albums', null])
   })
 
-  it('Forward does nothing while a page is open', () => {
-    library.open = 'a'
-    library.back('open')
-    library.open = 'b'
-    library.forward('open')
+  it('a new step drops what was ahead', () => {
+    library.openAlbum('a')
+    library.back()
+    library.openAlbum('b')
+    expect(library.canForward).toBe(false)
+    library.back()
+    library.forward()
     expect(library.open).toBe('b')
   })
 
-  it('Forward reopens the album Back closed last', () => {
-    library.open = 'a'
-    library.back('open')
-    library.open = 'b'
-    library.back('open')
-    library.forward('open')
-    expect(library.open).toBe('b')
-  })
-
-  it('Forward does not open an album closed on the playlist side', () => {
-    library.openPlaylist = 'p'
-    library.back('openPlaylist')
-    library.forward('open')
-    expect(library.open).toBeNull()
-    library.forward('openPlaylist')
-    expect(library.openPlaylist).toBe('p')
-  })
-
-  it('Back goes up a folder and Forward goes back down', () => {
-    const track = (id: string, folder: number): LibraryData['tracks'][number] => ({
-      id,
-      title: id,
-      duration: 1,
-      albumId: 'a',
-      artist: '',
-      album: '',
-      no: 1,
-      disc: 1,
-      codec: '',
-      folder
-    })
+  it('goes back across chips: from a folder to the album it was opened from', () => {
     library.load({
       ...lib('a'),
-      tracks: [track('x', 2)],
+      tracks: [track('x', 1)],
       folders: [
         { name: '/m', parent: -1 },
-        { name: 'A', parent: 0 },
-        { name: 'B', parent: 1 }
+        { name: 'A', parent: 0 }
       ]
     })
-    const deep = library.folders.nodes[2].key
-    library.openFolder(deep)
-    library.back('folder')
-    expect(library.folder).toBe(library.folders.nodes[1].key)
-    // the album side is not touched
-    library.forward('open')
-    library.forward('folder')
-    expect(library.folder).toBe(deep)
+    const folder = library.folders.nodes[1].key
+    library.openAlbum('a')
+    library.showFolder(folder)
+    expect([library.chip, library.section, library.folder]).toEqual(['folders', 'folders', folder])
+    library.back()
+    expect([library.chip, library.section, library.open]).toEqual(['albums', 'songs', 'a'])
+    library.forward()
+    expect([library.chip, library.folder]).toEqual(['folders', folder])
   })
 
-  it('Forward skips an album a rescan removed', () => {
-    library.open = 'b'
-    library.back('open')
-    library.load(lib('a'))
-    library.forward('open')
+  it('each chip keeps its page while another one shows', () => {
+    library.openAlbum('a')
+    library.pickChip('folders')
+    library.openFolder('k')
+    library.pickChip('albums')
+    expect(library.open).toBe('a')
+    library.pickChip('folders')
+    expect(library.folder).toBe('k')
+  })
+
+  it('the chip shown goes to its top, as a step', () => {
+    library.openAlbum('a')
+    library.pickChip('albums')
     expect(library.open).toBeNull()
+    library.back()
+    expect(library.open).toBe('a')
+    library.pickChip('artists')
+    library.openArtist('x')
+    library.openArtistAlbum('a')
+    library.pickChip('artists')
+    expect([library.artist, library.artistAlbum]).toEqual([null, null])
+    library.pickSection('folders')
+    library.openFolder('k')
+    library.pickSection('folders')
+    expect(library.folder).toBeNull()
+  })
+
+  it('Back goes up a folder, one step at a time', () => {
+    library.openFolder('a')
+    library.openFolder('b')
+    library.back()
+    expect(library.folder).toBe('a')
+  })
+
+  it('a step is not taken for the place already shown', () => {
+    library.openAlbum('a')
+    library.openAlbum('a')
+    library.back()
+    expect(library.open).toBeNull()
+    expect(library.canBack).toBe(false)
+  })
+
+  it('skips an album a rescan removed', () => {
+    library.pickChip('radio')
+    library.pickChip('albums')
+    library.openAlbum('b')
+    library.pickChip('radio')
+    library.load(lib('a'))
+    library.back()
+    // "b" is gone, so that step is the Albums grid
+    expect([library.chip, library.open]).toEqual(['albums', null])
+    library.back()
+    // the grid again would change nothing, so it goes on to Radio
+    expect(library.chip).toBe('radio')
+  })
+
+  it('brings back the search text a step had', () => {
+    library.query = 'blue'
+    library.showAll('albums')
+    library.openAlbum('a')
+    expect([library.query, library.searchAll]).toEqual(['', null])
+    library.back()
+    expect([library.query, library.searchAll, library.open]).toEqual(['blue', 'albums', null])
+    // typing is not a step
+    library.query = 'blue h'
+    library.back()
+    expect([library.query, library.searchAll]).toEqual(['blue', null])
+  })
+
+  it('says once that a place seen before is shown, for the scroll place', () => {
+    library.openAlbum('a')
+    expect(library.takeReturn()).toBe(false)
+    library.back()
+    expect(library.takeReturn()).toBe(true)
+    expect(library.takeReturn()).toBe(false)
+    library.pickChip('folders')
+    expect(library.takeReturn()).toBe(true)
+    library.pickChip('albums')
+    library.openAlbum('b')
+    expect(library.takeReturn()).toBe(false)
   })
 })
 
@@ -130,25 +188,24 @@ describe('Artists', () => {
   it('Back goes from an album to its artist to the grid, and Forward back down', () => {
     library.openArtist('x')
     library.openArtistAlbum('a')
-    library.back('artist')
-    expect([library.artist, library.open]).toEqual(['x', null])
-    library.back('artist')
-    expect([library.artist, library.open]).toEqual([null, null])
-    // the Albums side is not touched
-    library.forward('open')
+    library.back()
+    expect([library.artist, library.artistAlbum]).toEqual(['x', null])
+    library.back()
+    expect([library.artist, library.artistAlbum]).toEqual([null, null])
+    // an album opened from an artist is not the Albums chip's
     expect(library.open).toBeNull()
-    library.forward('artist')
-    library.forward('artist')
-    expect([library.artist, library.open]).toEqual(['x', 'a'])
+    library.forward()
+    library.forward()
+    expect([library.artist, library.artistAlbum]).toEqual(['x', 'a'])
   })
 
   it('closes an artist a rescan removed, and Forward skips it', () => {
     library.openArtist('x')
-    library.back('artist')
+    library.back()
     const gone = lib('a')
     gone.albums[0].artist = 'Y'
     library.load(gone)
-    library.forward('artist')
+    library.forward()
     expect(library.artist).toBeNull()
     library.openArtist('y')
     library.load(lib('a'))
@@ -207,7 +264,7 @@ describe('patches while a scan runs', () => {
 
   it('adds songs and keeps the album list, the open album and the songs shown', () => {
     start()
-    library.open = 'b'
+    library.openAlbum('b')
     const albums = library.albums
     const a1 = library.track('a1')
     const gone = library.patch({
@@ -247,7 +304,7 @@ describe('patches while a scan runs', () => {
 
   it('reports songs that left, and closes an album that is gone', () => {
     start()
-    library.open = 'b'
+    library.openAlbum('b')
     const gone = library.patch({
       patch: true,
       epoch: 'e',
@@ -334,15 +391,16 @@ describe('patches while a scan runs', () => {
 })
 
 describe('search text (ticket 039)', () => {
-  it('is cleared when another chip is picked, and the pages close', () => {
+  it('is cleared when a chip is picked', () => {
+    library.openAlbum('a')
     library.query = 'metal'
-    library.open = 'a'
-    library.openPlaylist = 'p'
-    library.pickChip('albums')
-    expect(library.chip).toBe('albums')
+    library.pickChip('artists')
     expect(library.query).toBe('')
-    expect(library.open).toBeNull()
-    expect(library.openPlaylist).toBeNull()
+    library.query = 'metal'
+    library.pickChip('albums')
+    expect(library.query).toBe('')
+    // another chip keeps its page (ticket 051)
+    expect(library.open).toBe('a')
   })
 
   it('is cleared when another section is picked', () => {
@@ -354,7 +412,7 @@ describe('search text (ticket 039)', () => {
   })
 
   it('does not close the open album while typing', () => {
-    library.open = 'a'
+    library.openAlbum('a')
     library.query = 'harbor'
     expect(library.open).toBe('a')
     library.query = ''
@@ -363,12 +421,13 @@ describe('search text (ticket 039)', () => {
 
   it('"Show all" goes back to the results when the text is cleared', () => {
     library.query = 'harbor'
-    library.searchAll = 'songs'
+    library.showAll('songs')
     library.query = 'harbor l'
     expect(library.searchAll).toBe('songs')
     library.query = ' '
     expect(library.searchAll).toBeNull()
-    library.searchAll = 'albums'
+    library.query = 'harbor'
+    library.showAll('albums')
     library.pickChip('artists')
     expect(library.searchAll).toBeNull()
   })
@@ -376,23 +435,19 @@ describe('search text (ticket 039)', () => {
 
 describe('links from what plays (ticket 040)', () => {
   it('opens an album in Albums, from any chip or section, with no search', () => {
-    library.chip = 'radio'
-    library.section = 'pl:p1'
+    library.go({ chip: 'radio', section: 'pl:p1' })
     library.openArtist('x')
     library.query = 'blue'
     library.showAlbum('a', 'a/1')
-    expect([library.chip, library.section, library.open, library.artist]).toEqual([
-      'albums',
-      'albums',
-      'a',
-      null
-    ])
+    expect([library.chip, library.section, library.open]).toEqual(['albums', 'albums', 'a'])
+    // the Artists chip keeps its page (ticket 051)
+    expect(library.artist).toBe('x')
     expect(library.query).toBe('')
     expect(library.landing).toEqual({ song: 'a/1' })
   })
 
   it('does nothing for an album a rescan removed', () => {
-    library.chip = 'radio'
+    library.go({ chip: 'radio' })
     library.showAlbum('gone')
     expect([library.chip, library.open]).toEqual(['radio', null])
   })
@@ -400,19 +455,20 @@ describe('links from what plays (ticket 040)', () => {
   it('opens an artist in Artists, as a new step for Forward', () => {
     library.openArtist('x')
     library.openArtistAlbum('a')
-    library.back('artist')
-    library.chip = 'albums'
-    library.open = 'b'
+    library.back()
+    library.pickChip('albums')
+    library.openAlbum('b')
     library.showArtist('x')
-    expect([library.chip, library.section, library.artist, library.open]).toEqual([
+    expect([library.chip, library.section, library.artist, library.artistAlbum]).toEqual([
       'artists',
       'artists',
       'x',
       null
     ])
     // a new step: Forward has nothing to reopen
-    library.forward('artist')
-    expect(library.open).toBeNull()
+    expect(library.canForward).toBe(false)
+    library.back()
+    expect([library.chip, library.open]).toEqual(['albums', 'b'])
     library.landing = null
     library.showArtist('nobody')
     expect(library.artist).toBe('x')
@@ -428,7 +484,8 @@ describe('links from what plays (ticket 040)', () => {
       'pl:p1'
     ])
     library.showRadio()
-    expect([library.chip, library.section, library.openPlaylist]).toEqual(['radio', 'radio', null])
+    // the Playlists chip keeps its page (ticket 051)
+    expect([library.chip, library.section, library.openPlaylist]).toEqual(['radio', 'radio', 'p1'])
   })
 
   it('opens what "From" names', () => {
@@ -450,5 +507,97 @@ describe('links from what plays (ticket 040)', () => {
     expect(library.canShow({ kind: 'artist', id: 'x' })).toBe(true)
     expect(library.canShow({ kind: 'artist', id: 'y' })).toBe(false)
     expect(library.canShow({ kind: 'folder', id: 'nowhere' })).toBe(false)
+  })
+})
+
+describe('Music For Programming (ticket 052)', () => {
+  // local album 'a' with song a1, and episode 'e' with songs e1 and e2
+  function withMfp(): LibraryData {
+    const base = lib('a')
+    const album = (
+      id: string,
+      trackIds: string[],
+      online?: 'mfp'
+    ): LibraryData['albums'][number] => ({
+      ...base.albums[0],
+      id,
+      title: `Album ${id}`,
+      artist: online ? 'Mixer' : 'X',
+      trackIds,
+      ...(online ? { online } : {})
+    })
+    const song = (id: string, albumId: string, online?: 'mfp'): Track => ({
+      ...track(id, online ? -1 : 0),
+      albumId,
+      artist: online ? 'Guest' : 'X',
+      ...(online ? { online } : {})
+    })
+    return {
+      albums: [album('a', ['a1']), album('e', ['e1', 'e2'], 'mfp')],
+      tracks: [song('a1', 'a'), song('e1', 'e', 'mfp'), song('e2', 'e', 'mfp')],
+      folders: [{ name: '/m', parent: -1 }]
+    }
+  }
+
+  beforeEach(() => library.load(withMfp()))
+
+  it('keeps episodes out of the albums list and the artists, but finds them by id', () => {
+    expect(library.albums.map((a) => a.id)).toEqual(['a'])
+    expect(library.mfpAlbums.map((a) => a.id)).toEqual(['e'])
+    expect(library.artists.map((a) => a.name)).toEqual(['X'])
+    expect(library.album('e').title).toBe('Album e')
+    expect(library.track('e2').albumId).toBe('e')
+  })
+
+  it('opens an episode in the MFP chip, and Back goes to the list', () => {
+    library.pickChip('mfp')
+    library.openEpisode('e')
+    expect([library.chip, library.episode]).toEqual(['mfp', 'e'])
+    library.back()
+    expect(library.episode).toBeNull()
+  })
+
+  it('a link to an episode album opens it in the MFP chip and section', () => {
+    library.showAlbum('e', 'e2')
+    expect([library.chip, library.section, library.episode]).toEqual(['mfp', 'mfp', 'e'])
+    expect(library.open).toBeNull()
+    expect(library.landing).toEqual({ song: 'e2' })
+  })
+
+  it('a link to a local album still opens Albums', () => {
+    library.showAlbum('a')
+    expect([library.chip, library.open]).toEqual(['albums', 'a'])
+  })
+
+  it('the MFP chip picked again goes back to the list', () => {
+    library.pickChip('mfp')
+    library.openEpisode('e')
+    library.pickChip('mfp')
+    expect(library.episode).toBeNull()
+  })
+
+  it('closes an episode that is gone (the setting turned off)', () => {
+    library.pickChip('mfp')
+    library.openEpisode('e')
+    library.load(lib('a'))
+    expect(library.episode).toBeNull()
+    expect(library.mfpAlbums).toEqual([])
+  })
+
+  it('keeps the same albums list when only episodes change', () => {
+    const before = library.albums
+    const next = withMfp()
+    next.albums[1] = { ...next.albums[1], title: 'Renamed' }
+    library.patch({
+      patch: true,
+      epoch: 'x',
+      from: 0,
+      n: 1,
+      albums: [next.albums[1]],
+      tracks: [],
+      goneTracks: []
+    })
+    expect(library.albums).toBe(before)
+    expect(library.mfpAlbums[0].title).toBe('Renamed')
   })
 })

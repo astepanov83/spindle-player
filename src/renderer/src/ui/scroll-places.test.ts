@@ -99,4 +99,15 @@ describe('ScrollPlaces', () => {
     // a search in the same folder moves nothing either, as before
     expect(p.move(at('folders', 'a'), 200, { path: ['folders', 'a'], query: 'x' })).toBeUndefined()
   })
+
+  it('a return to a place seen before shows where it was left (ticket 051)', () => {
+    const p = new ScrollPlaces<number>()
+    p.move(at('albums', 'album:x'), 300, at('folders', 'f'))
+    // another chip, or Back
+    expect(p.move(at('folders', 'f'), 40, at('albums', 'album:x'), true)).toBe(300)
+    // a new place starts at the top
+    expect(p.move(at('albums', 'album:x'), 300, at('folders', 'g'))).toBe('top')
+    // a return to a place never left starts at the top too
+    expect(p.move(at('folders', 'g'), 0, at('artists'), true)).toBe('top')
+  })
 })

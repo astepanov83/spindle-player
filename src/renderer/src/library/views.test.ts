@@ -16,7 +16,8 @@ import {
   songMatches,
   searchSongs,
   filterSongs,
-  filterPlaylists
+  filterPlaylists,
+  episodeRows
 } from './views'
 
 function lib(): { albums: Album[]; tracks: Map<string, Track> } {
@@ -330,5 +331,33 @@ describe('playlist views', () => {
     )
     expect(r.rows.map((t) => t.id)).toEqual(['b/0', 'a/1'])
     expect(r.missing).toBe(2)
+  })
+})
+
+describe('episodeRows (ticket 052)', () => {
+  const { albums, tracks } = lib()
+  const track = (id: string): Track => tracks.get(id)!
+
+  it('lists every episode with no songs under it when nothing is searched', () => {
+    expect(episodeRows(albums, track, '  ').map((r) => [r.album.id, r.songs.length])).toEqual([
+      ['a', 0],
+      ['b', 0]
+    ])
+  })
+
+  it('shows an episode whose title or mixer matches, with no songs under it', () => {
+    expect(episodeRows(albums, track, 'linde').map((r) => [r.album.id, r.songs.length])).toEqual([
+      ['b', 0]
+    ])
+  })
+
+  it('shows an episode with the songs in it that match, under it', () => {
+    const rows = episodeRows(albums, track, 'kite')
+    expect(rows.map((r) => r.album.id)).toEqual(['b'])
+    expect(rows[0].songs.map((t) => t.title)).toEqual(['Kite String'])
+  })
+
+  it('shows nothing when nothing matches', () => {
+    expect(episodeRows(albums, track, 'zzz')).toEqual([])
   })
 })

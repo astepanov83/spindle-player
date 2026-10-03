@@ -104,6 +104,7 @@ const libraryApi: LibraryApi = {
   removeFolder: (path) => send(LibraryChannel.removeFolder, path),
   rescan: () => send(LibraryChannel.rescan),
   setArtists: (changes) => send(LibraryChannel.setArtists, changes),
+  showFolder: (parts) => invoke(LibraryChannel.showFolder, parts),
   onChanged: onLibraryChanged,
   onStatus: onScanStatus,
   onIdsMoved

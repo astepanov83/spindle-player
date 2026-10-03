@@ -19,6 +19,8 @@ export interface Settings {
   coverSources: Record<CoverSource, boolean>
   // what closing the window does; 'ask' until the user picks one
   closeAction: CloseAction
+  // Music For Programming in its own tab (ticket 052); off, the site is never asked
+  mfp: boolean
 }
 
 export interface Size {
@@ -60,7 +62,8 @@ export function defaultSettings(): Settings {
     volume: 70,
     fetchCovers: false,
     coverSources: { musicbrainz: true, deezer: true, itunes: true },
-    closeAction: 'ask'
+    closeAction: 'ask',
+    mfp: false
   }
 }
 
@@ -171,6 +174,7 @@ export function parseStoredSettings(
     fetchCovers: typeof r.fetchCovers === 'boolean' ? r.fetchCovers : base.fetchCovers,
     coverSources: parseCoverSources(r.coverSources, base.coverSources),
     closeAction: oneOf(r.closeAction, closeActions, base.closeAction),
+    mfp: typeof r.mfp === 'boolean' ? r.mfp : base.mfp,
     windowSizes,
     windowPlace: r.windowPlace === undefined ? base.windowPlace : parseWindowPlace(r.windowPlace),
     folders: Array.isArray(r.folders) ? parseFolders(r.folders) : [...base.folders]
@@ -230,6 +234,7 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('windowSizes') && !isKnownSizes(raw.windowSizes)) return false
   if (has('windowPlace') && raw.windowPlace !== null && !isKnownPlace(raw.windowPlace)) return false
   if (has('fetchCovers') && typeof raw.fetchCovers !== 'boolean') return false
+  if (has('mfp') && typeof raw.mfp !== 'boolean') return false
   if (has('closeAction') && !closeActions.includes(raw.closeAction as CloseAction)) return false
   if (
     has('coverSources') &&
@@ -256,6 +261,7 @@ export function pageSettings(s: StoredSettings): Settings {
     volume: s.volume,
     fetchCovers: s.fetchCovers,
     coverSources: { ...s.coverSources },
-    closeAction: s.closeAction
+    closeAction: s.closeAction,
+    mfp: s.mfp
   }
 }

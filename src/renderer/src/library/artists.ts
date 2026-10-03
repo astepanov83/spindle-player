@@ -1,6 +1,5 @@
-// The Artists view (ticket 021): search, what Play plays, the covers for an
-// artist's picture, and mouse Back and Forward between the grid, an artist
-// and an album. No DOM. Who counts as an artist is in shared/artists.ts.
+// The Artists view (ticket 021): search, what Play plays and the covers for
+// an artist's picture. No DOM. Who counts as an artist is in shared/artists.ts.
 import { artistKey, namesOf, type Artist } from '../../../shared/artists'
 import type { Art, ArtistCredit, Track } from '../../../shared/library'
 import { foldedName, foldQuery, sortRows, type Sort } from './views'
@@ -59,49 +58,4 @@ export function artistCovers(
   for (const id of a.albums) if (add(album(id))) return out
   for (const id of a.also) if (add(songArt(id))) return out
   return out
-}
-
-// What the view shows: the grid (no artist), an artist, or an album opened
-// from an artist.
-export interface ArtistPlace {
-  artist: string | null
-  album: string | null
-}
-
-// Plus the places mouse Back left (the latest last), for Forward.
-export interface ArtistNav extends ArtistPlace {
-  ahead: ArtistPlace[]
-}
-
-const same = (a: ArtistPlace | undefined, b: ArtistPlace): boolean =>
-  !!a && a.artist === b.artist && a.album === b.album
-
-// The place above: the artist for an album, the grid for an artist.
-function up(p: ArtistPlace): ArtistPlace | undefined {
-  if (p.album) return { artist: p.artist, album: null }
-  if (p.artist) return { artist: null, album: null }
-  return undefined
-}
-
-// A click: opening what Forward would open keeps the rest for Forward.
-export function goToArtist(nav: ArtistNav, to: ArtistPlace): ArtistNav {
-  const ahead = same(nav.ahead.at(-1), to) ? nav.ahead.slice(0, -1) : []
-  return { artist: to.artist, album: to.album, ahead }
-}
-
-export function artistBack(nav: ArtistNav): ArtistNav {
-  const u = up(nav)
-  if (!u) return nav
-  return { ...u, ahead: [...nav.ahead, { artist: nav.artist, album: nav.album }] }
-}
-
-// Forward opens what Back left last, if it is still there and right below
-// the place shown.
-export function artistForward(nav: ArtistNav, exists: (p: ArtistPlace) => boolean): ArtistNav {
-  const next = nav.ahead.at(-1)
-  if (!next) return nav
-  const here = { artist: nav.artist, album: nav.album }
-  const above = up(next)
-  if (!above || !same(above, here) || !exists(next)) return { ...here, ahead: [] }
-  return { ...next, ahead: nav.ahead.slice(0, -1) }
 }

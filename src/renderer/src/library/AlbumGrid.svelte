@@ -19,7 +19,7 @@
     scrollEl,
     items,
     sub = 'artist',
-    onopen = (id) => (library.open = id)
+    onopen = (id) => library.openAlbum(id)
   }: {
     scrollEl: HTMLElement | undefined
     // these albums instead of the library's, with no search (an artist's)

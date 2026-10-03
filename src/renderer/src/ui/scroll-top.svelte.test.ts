@@ -15,14 +15,15 @@ describe('libraryView while searching', () => {
   it('puts the results below the grid or the open album', () => {
     library.query = 'harbor'
     expect(libraryView('albums').path).toEqual(['albums', 'search'])
-    library.open = 'a'
+    library.openAlbum('a')
+    library.query = 'harbor'
     expect(libraryView('albums').path).toEqual(['albums', 'album:a', 'search'])
-    library.searchAll = 'songs'
+    library.showAll('songs')
     expect(libraryView('albums').path).toEqual(['albums', 'album:a', 'search', 'all:songs'])
   })
 
   it('puts the filtered artist grid below the open artist', () => {
-    library.artist = 'k'
+    library.openArtist('k')
     library.query = 'o'
     expect(libraryView('artists').path).toEqual(['artists', 'artist:k', 'search'])
   })
@@ -33,5 +34,15 @@ describe('libraryView while searching', () => {
     expect(libraryView('songs').path).toEqual(['songs'])
     library.query = '  '
     expect(libraryView('albums').path).toEqual(['albums'])
+  })
+})
+
+describe('libraryView for MFP (ticket 052)', () => {
+  it('puts the open episode below the list, and filters the list in place', () => {
+    expect(libraryView('mfp').path).toEqual(['mfp'])
+    library.openEpisode('e')
+    expect(libraryView('mfp').path).toEqual(['mfp', 'episode:e'])
+    library.query = 'x'
+    expect(libraryView('mfp').path).toEqual(['mfp', 'episode:e'])
   })
 })

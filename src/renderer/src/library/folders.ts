@@ -1,5 +1,5 @@
 // The Folders view (ticket 020): the folder tree from main's folder table,
-// search, and mouse Back and Forward between a folder and its subfolders. No DOM.
+// search, and what Play plays. No DOM.
 import type { Folder, Track } from '../../../shared/library'
 import { foldedName, foldQuery, songOrAlbumHas, sortRows, type Sort } from './views'
 
@@ -117,45 +117,30 @@ export function crumbs(tree: FolderTree, i: number): number[] {
   return out
 }
 
-// The key of the folder above: null for the list of music folders, undefined
-// when there is nothing above (the top, or the only music folder).
-export function folderUp(tree: FolderTree, i: number | null): string | null | undefined {
-  if (i === null) return undefined
-  const p = tree.nodes[i].parent
-  if (p >= 0) return tree.nodes[p].key
-  return tree.roots.length > 1 ? null : undefined
+// The deepest folder that holds all these songs' folders, so an album split
+// into "CD1" and "CD2" gives their parent. null for none, or two music folders.
+export function commonFolder(tree: FolderTree, folders: number[]): number | null {
+  let shared: number[] | null = null
+  for (const f of new Set(folders)) {
+    if (!tree.nodes[f]) return null
+    const path = crumbs(tree, f)
+    if (!shared) shared = path
+    let n = 0
+    while (n < shared.length && shared[n] === path[n]) n++
+    shared = shared.slice(0, n)
+  }
+  return shared?.at(-1) ?? null
 }
 
-// The open folder, and the folders mouse Back left (the latest last), for Forward.
-export interface FolderNav {
-  folder: string | null
-  below: string[]
-}
+// The music folder's full path, then each name down to this folder.
+export const folderParts = (tree: FolderTree, i: number): string[] => tree.nodes[i].key.split(SEP)
 
-const keyOf = (tree: FolderTree, i: number | null): string | null =>
-  i === null ? null : tree.nodes[i].key
-
-export function openFolder(nav: FolderNav, key: string | null): FolderNav {
-  const below = nav.below.at(-1) === key ? nav.below.slice(0, -1) : []
-  return { folder: key, below }
-}
-
-export function folderBack(tree: FolderTree, nav: FolderNav): FolderNav {
-  const i = shownFolder(tree, nav.folder)
-  const up = folderUp(tree, i)
-  if (up === undefined || i === null) return nav
-  return { folder: up, below: [...nav.below, tree.nodes[i].key] }
-}
-
-// Forward opens the folder Back left last, if it is still there and right
-// below the one shown.
-export function folderForward(tree: FolderTree, nav: FolderNav): FolderNav {
-  const key = nav.below.at(-1)
-  if (key === undefined) return nav
-  const i = tree.byKey.get(key)
-  const here = keyOf(tree, shownFolder(tree, nav.folder))
-  if (i === undefined || folderUp(tree, i) !== here) return { folder: nav.folder, below: [] }
-  return { folder: key, below: nav.below.slice(0, -1) }
+// The page doesn't know the system's separator, so it takes the music folder's.
+export function folderPath(parts: string[]): string {
+  const [root, ...names] = parts
+  const sep = root.includes('\\') && !root.includes('/') ? '\\' : '/'
+  const base = root.endsWith(sep) ? root.slice(0, -1) : root
+  return [base, ...names].join(sep)
 }
 
 // Search in a folder: its songs by title, artist or album, and the subfolders

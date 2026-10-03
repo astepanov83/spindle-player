@@ -86,6 +86,32 @@ export function searchSongs(albums: Album[], track: (id: string) => Track, q: st
   return out
 }
 
+// One row of the MFP list (ticket 052): an episode, and the songs in it the
+// search found. No songs when nothing is searched or the episode itself matched.
+export interface EpisodeRow {
+  album: Album
+  songs: Track[]
+}
+
+export function episodeRows(
+  albums: Album[],
+  track: (id: string) => Track,
+  q: string
+): EpisodeRow[] {
+  const s = foldQuery(q)
+  if (!s) return albums.map((album) => ({ album, songs: [] }))
+  const out: EpisodeRow[] = []
+  for (const album of albums) {
+    if (albumText(album).includes(s)) {
+      out.push({ album, songs: [] })
+      continue
+    }
+    const songs = album.trackIds.map(track).filter((t) => songText(t).includes(s))
+    if (songs.length) out.push({ album, songs })
+  }
+  return out
+}
+
 // A playlist's rows by title, artist or album, as in Folders.
 export function filterSongs(rows: Track[], q: string): Track[] {
   const s = foldQuery(q)

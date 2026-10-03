@@ -180,6 +180,24 @@ describe('applyPatch', () => {
     expect(patched(old, next)).toEqual(next)
   })
 
+  it('leaves online songs (no folder) alone when the folders move', () => {
+    const online = track('9', 'm', { folder: -1, online: 'mfp' })
+    const albums = [album('x', ['1']), album('m', ['9'], { online: 'mfp' })]
+    const old = { ...base(), albums, tracks: [...base().tracks, online] }
+    const next: LibraryData = {
+      ...base(),
+      albums,
+      folders: [
+        { name: '/a', parent: -1 },
+        { name: '/m', parent: -1 }
+      ],
+      tracks: [track('1', 'x', { folder: 1 }), online]
+    }
+    const d = diffLibrary(old, next)!
+    expect(d.tracks).toEqual([])
+    expect(patched(old, next)).toEqual(next)
+  })
+
   function base(): LibraryData {
     return lib([album('x', ['1'])], [track('1', 'x')])
   }

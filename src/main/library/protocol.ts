@@ -3,17 +3,19 @@
 //   spindle://cover/mosaic/<hash>-<hash>-<hash>-<hash>: 4 small covers in one picture
 //   spindle://radio/<station id>?stream=<n> (see radio/stream.ts)
 //   spindle://radio-logo/<station id>: a search result's logo (radio/result-logos.ts)
+// A media id can be an online mp3 (ticket 052): main fetches it (online-media.ts).
 // Only files the index knows are served. The page can't name a path.
 // spindle://media/<file id>?decode asks for the file as WAV decoded by ffmpeg
 // (see decode.ts); files Chromium can't play are always served that way.
 import { readFile } from 'fs/promises'
 import { Readable } from 'stream'
-import { protocol } from 'electron'
+import { net, protocol } from 'electron'
 import { extOf, needsDecoding } from './tags'
 import { isCoverHash } from './cover-names'
 import { dataSize, DecodeStream, ffmpegArgs, IdleError, startFfmpeg, wavHeader } from './decode'
 import { DecodePlans } from './decode-plan'
 import { openMedia } from './media-file'
+import { onlineMedia } from './online-media'
 import { probeLength, probeTags } from './probe'
 import { audioType, parseRange, type RangeResult } from './range'
 import type { LibraryService } from './service'
@@ -164,6 +166,12 @@ async function media(
     console.error(`spindle://media/${id}: not in the library index; answered 404`)
     return notFound()
   }
+  if ('url' in m)
+    return onlineMedia(m.url, req, decode, {
+      fetch: (u, init) => net.fetch(String(u), init),
+      userAgent: lib.userAgent,
+      log: (t) => console.error(`spindle://media/${id}: ${t}`)
+    })
   const file = await openMedia(m.path)
   if (!file) return notFound()
   lib.mediaOpened(file.dev)

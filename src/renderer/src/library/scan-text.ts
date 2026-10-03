@@ -1,6 +1,6 @@
 // The scan status lines for the settings sheet and the empty library.
 import type { DropResult } from '../../../shared/ipc'
-import type { FetchStatus, ScanStatus } from '../../../shared/library'
+import type { FetchStatus, MfpStatus, ScanStatus } from '../../../shared/library'
 import { rootName } from './folders'
 
 const n = (x: number): string => x.toLocaleString('en-US')
@@ -54,6 +54,31 @@ export function canRescan(s: ScanStatus, pageFailed: boolean): boolean {
     !libraryProblem(s, pageFailed) &&
     !s.settingsUnreadable
   )
+}
+
+// Whole calendar days from `then` to `now`, in local time.
+function daysAgo(then: number, now: number): number {
+  const start = (t: number): number => {
+    const d = new Date(t)
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  }
+  return Math.round((start(now) - start(then)) / (24 * 3600 * 1000))
+}
+
+// Music For Programming's line in the settings sheet (ticket 052).
+export function mfpLine(m: MfpStatus | undefined, now: number): string | undefined {
+  if (!m) return undefined
+  const site = 'musicforprogramming.net'
+  const count = plural(m.episodes, 'episode', 'episodes')
+  if (m.running) return m.episodes ? `${count}, looking for new ones…` : `Reading ${site}…`
+  const parts: string[] = []
+  if (m.episodes) {
+    const d = daysAgo(m.fetchedAt, now)
+    const when = d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${n(d)} days ago`
+    parts.push(`${count}, updated ${when}`)
+  }
+  if (m.error) parts.push(`Could not read ${site}: ${m.error}`)
+  return parts.join(' · ') || undefined
 }
 
 // The online cover lookup's line in the settings sheet (ticket 014).

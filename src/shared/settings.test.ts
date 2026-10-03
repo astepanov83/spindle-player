@@ -26,6 +26,7 @@ describe('parseStoredSettings', () => {
       fetchCovers: true,
       coverSources: { musicbrainz: false, deezer: true, itunes: true },
       closeAction: 'minimize',
+      mfp: true,
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowPlace: { x: -1200, y: 40, maximized: true },
       folders: ['/home/me/Music', '/mnt/nas/music']
@@ -120,6 +121,7 @@ describe('parseStoredSettings with a base', () => {
     fetchCovers: true,
     coverSources: { musicbrainz: true, deezer: false, itunes: true },
     closeAction: 'quit',
+    mfp: false,
     windowSizes: { focus: { width: 500, height: 700 } },
     windowPlace: { x: 40, y: 60, maximized: false },
     folders: ['/m']
@@ -261,6 +263,26 @@ describe('cover fetch settings', () => {
     const p = pageSettings(parseStoredSettings({ fetchCovers: true }))
     expect(p.fetchCovers).toBe(true)
     expect(p.coverSources.itunes).toBe(true)
+  })
+})
+
+describe('Music For Programming setting', () => {
+  it('is off by default', () => {
+    expect(parseStoredSettings(undefined).mfp).toBe(false)
+  })
+
+  it('keeps a switch and falls back on a wrong one', () => {
+    expect(parseStoredSettings({ mfp: true }).mfp).toBe(true)
+    expect(parseStoredSettings({ mfp: 'yes' }).mfp).toBe(false)
+  })
+
+  it('knows the field in a file', () => {
+    expect(isKnownSettingsFile({ mfp: true })).toBe(true)
+    expect(isKnownSettingsFile({ mfp: 1 })).toBe(false)
+  })
+
+  it('gives the page the field', () => {
+    expect(pageSettings(parseStoredSettings({ mfp: true })).mfp).toBe(true)
   })
 })
 

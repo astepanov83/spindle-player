@@ -1,6 +1,7 @@
 // Where each library view was scrolled when it was left (ticket 042). Going
-// back up (mouse Back, a Back button, the path bar) returns there; a new page,
-// Forward, or another section starts at the top.
+// back up (a back link, the path bar) returns there, and so does a return to
+// a place seen before (Back, Forward, another chip, ticket 051); a new page
+// starts at the top.
 
 // A view is its path from the section down: ['albums', 'album:<id>'],
 // ['folders', 'folder:<key>', ...], ['artists', 'artist:<key>', 'album:<id>'].
@@ -25,12 +26,12 @@ export class ScrollPlaces<P> {
 
   // Keeps where `from` was left and says where `to` starts: a kept place,
   // 'top', or undefined when the view did not change (a search in it moves
-  // nothing, as before).
-  move(from: View | undefined, place: P, to: View): P | 'top' | undefined {
+  // nothing, as before). `returning`: `to` is a place seen before.
+  move(from: View | undefined, place: P, to: View, returning = false): P | 'top' | undefined {
     if (!from) return 'top'
     if (same(from.path, to.path)) return undefined
     this.#places.set(keyOf(from), { place, query: from.query })
-    if (!above(to.path, from.path)) return 'top'
+    if (!returning && !above(to.path, from.path)) return 'top'
     // other search text shows other rows, so the old place means nothing.
     // Clearing a search goes up from the results to the view they covered,
     // which was left with no text.

@@ -23,6 +23,7 @@ import { stopAllDecoders } from './library/decode'
 import { handleProtocol, registerScheme } from './library/protocol'
 import { LibraryService } from './library/service'
 import { pageIpc } from './page-ipc'
+import { showFolder } from './show-folder'
 import { findStreams } from './radio/find-streams'
 import { fetchLogo } from './radio/logo-fetch'
 import {
@@ -166,6 +167,7 @@ page.on(SettingsChannel.save, (_, raw, toFile) => {
     library.setFetch(next.fetchCovers, next.coverSources)
     songCovers.settingChanged()
   }
+  if (next.mfp !== before.mfp) library.setMfp(next.mfp)
 })
 
 page.handle(LibraryChannel.load, () => library.load())
@@ -175,6 +177,7 @@ page.handle(LibraryChannel.addDropped, (_, paths) => library.addDropped(paths))
 page.on(LibraryChannel.removeFolder, (_, path) => library.removeFolder(path))
 page.on(LibraryChannel.rescan, () => library.scan(true))
 page.on(LibraryChannel.setArtists, (_, changes) => library.setArtists(changes))
+page.handle(LibraryChannel.showFolder, (_, parts) => showFolder(parts, store.get().folders))
 
 page.handle(PlaylistChannel.load, () => playlists.get())
 page.on(PlaylistChannel.save, (_, raw) => playlists.setFromPage(raw))

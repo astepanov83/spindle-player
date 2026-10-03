@@ -4,6 +4,8 @@
   import AlbumPage from './AlbumPage.svelte'
   import ArtistView from './ArtistView.svelte'
   import FolderView from './FolderView.svelte'
+  import MfpView from './MfpView.svelte'
+  import HistoryButtons from './HistoryButtons.svelte'
   import NoLibrary from './NoLibrary.svelte'
   import PlaylistView from './PlaylistView.svelte'
   import RadioView from './RadioView.svelte'
@@ -16,19 +18,23 @@
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
   import { folderSearchText } from './folders'
-  import { showPage } from './side-buttons'
+  import { libraryOnScreen } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { songRows } from './views'
-  import { library, type Page, type Section } from '../stores/library.svelte'
+  import { library, type Section } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
+  import { settings } from '../stores/settings.svelte'
 
-  const sections: [Section, IconName, string][] = [
+  const allSections: [Section, IconName, string][] = [
     ['songs', 'note', 'Songs'],
     ['albums', 'disc', 'Albums'],
     ['artists', 'person', 'Artists'],
     ['folders', 'folder', 'Folders'],
-    ['radio', 'radio', 'Radio']
+    ['radio', 'radio', 'Radio'],
+    ['mfp', 'viz', 'MFP']
   ]
+  // MFP only while its setting is on (ticket 052)
+  const sections = $derived(allSections.filter(([s]) => s !== 'mfp' || settings.mfp))
 
   let scrollEl: HTMLDivElement | undefined = $state()
 
@@ -44,9 +50,9 @@
     library.pickSection(s)
   }
 
+  // from the search results: one step to the artist's page
   function openArtist(key: string): void {
-    pick('artists')
-    library.openArtist(key)
+    library.showArtist(key)
   }
 
   const placeholders: Partial<Record<Section, string>> = {
@@ -54,7 +60,8 @@
     albums: 'Search library',
     artists: 'Search artists',
     folders: 'Search folders',
-    radio: 'Search stations'
+    radio: 'Search stations',
+    mfp: 'Search mixes'
   }
 
   function create(): void {
@@ -68,17 +75,7 @@
     () => libraryView(library.section)
   )
 
-  const pages: Partial<Record<Section, Page>> = {
-    albums: 'open',
-    folders: 'folder',
-    artists: 'artist'
-  }
-  // Back and Forward leave the page under the search results alone
-  showPage(() =>
-    searching && (library.section === 'albums' || library.section === 'artists')
-      ? null
-      : (pages[library.section] ?? null)
-  )
+  libraryOnScreen()
 </script>
 
 {#snippet item(sec: Section, icon: IconName, label: string)}
@@ -99,7 +96,7 @@
           : (placeholders[library.section] ?? 'Search this playlist')}
       />
     </div>
-    <div class="sidehead section-label">Library</div>
+    <div class="sidehead section-label">Library <HistoryButtons size={26} /></div>
     {#each sections as [sec, icon, label] (sec)}
       {@render item(sec, icon, label)}
     {/each}
@@ -117,8 +114,10 @@
   <div class="main" bind:this={scrollEl}>
     {#if library.section === 'radio'}
       <RadioView searchAt="left" />
+    {:else if library.section === 'mfp'}
+      <MfpView />
     {:else if !library.albums.length}
-      <!-- radio needs no songs, so the sidebar stays -->
+      <!-- radio and MFP need no songs, so the sidebar stays -->
       <div class="fill"><NoLibrary /></div>
     {:else if library.section === 'songs'}
       <SongTable title="Songs" meta="Library" items={songs} {scrollEl} />
@@ -180,6 +179,10 @@
     align-items: center;
     justify-content: space-between;
     padding: 14px 10px 6px;
+  }
+  /* the arrows sit in the label's row without making it taller */
+  .sidehead > :global(.hist) {
+    margin: -6px -6px -6px 0;
   }
   .add {
     width: 24px;

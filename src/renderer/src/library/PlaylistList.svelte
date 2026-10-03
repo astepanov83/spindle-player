@@ -10,17 +10,15 @@
 
   const shown = $derived(filterPlaylists(playlists.list, library.query))
 
-  // a playlist opens with no search: the text was for playlist names
+  // a playlist opens with no search (a step clears it): the text was for playlist names
   function create(): void {
-    library.query = ''
     const id = playlists.create()
-    library.openPlaylist = id
+    library.openPlaylistPage(id)
     playlists.editing = id
   }
 
   function open(id: string): void {
-    library.query = ''
-    library.openPlaylist = id
+    library.openPlaylistPage(id)
   }
 </script>
 

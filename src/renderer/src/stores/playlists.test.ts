@@ -26,21 +26,30 @@ describe('removing a playlist', () => {
   })
 })
 
-describe('removing a closed playlist', () => {
-  it('does not come back on mouse Forward', () => {
+describe('removing a playlist in history (ticket 051)', () => {
+  it('does not come back on Back or Forward', () => {
     const a = playlists.create()
-    library.openPlaylist = a
-    library.back('openPlaylist')
+    library.openPlaylistPage(null)
+    library.openPlaylistPage(a)
+    library.back()
     playlists.remove(a)
-    library.forward('openPlaylist')
+    library.forward()
     expect(library.openPlaylist).toBeNull()
+    expect(library.canForward).toBe(false)
+  })
+
+  it('leaves the playlist shown, in both templates', () => {
+    const a = playlists.create()
+    library.showPlaylist(a)
+    playlists.remove(a)
+    expect([library.openPlaylist, library.section]).toEqual([null, 'songs'])
   })
 })
 
 describe('removing a playlist while its rows are filtered (ticket 039)', () => {
   it('clears the search text, which was for its rows', () => {
     const a = playlists.create()
-    library.section = `pl:${a}`
+    library.go({ section: `pl:${a}` })
     library.query = 'blue'
     playlists.remove(a)
     expect(library.section).toBe('songs')
@@ -50,7 +59,7 @@ describe('removing a playlist while its rows are filtered (ticket 039)', () => {
   it('keeps the text when another playlist is removed', () => {
     const a = playlists.create()
     const b = playlists.create()
-    library.section = `pl:${a}`
+    library.go({ section: `pl:${a}` })
     library.query = 'blue'
     playlists.remove(b)
     expect(library.query).toBe('blue')

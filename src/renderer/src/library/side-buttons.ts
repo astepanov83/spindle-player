@@ -1,27 +1,23 @@
-// The mouse side buttons, Alt+Left / Alt+Right and Backspace move between a
-// list and the page opened from it.
+// The mouse side buttons, Alt+Left / Alt+Right and Backspace go Back and
+// Forward through the library's history, in any chip or section (ticket 051).
 import { onDestroy } from 'svelte'
-import { library, type Page } from '../stores/library.svelte'
+import { library } from '../stores/library.svelte'
 
-// The library view on screen says which page Back and Forward work on.
-let shown: () => Page | null = () => null
+// Only while a library view is on screen: Focus has none to go back in.
+let shown = 0
 
 // Call during setup of the view (Studio's chips, Classic's sidebar).
-export function showPage(get: () => Page | null): void {
-  shown = get
-  onDestroy(() => {
-    if (shown === get) shown = () => null
-  })
+export function libraryOnScreen(): void {
+  shown++
+  onDestroy(() => shown--)
 }
 
 export function goBack(): void {
-  const page = shown()
-  if (page) library.back(page)
+  if (shown) library.back()
 }
 
 export function goForward(): void {
-  const page = shown()
-  if (page) library.forward(page)
+  if (shown) library.forward()
 }
 
 // Chromium numbers them 3 (Back) and 4 (Forward).

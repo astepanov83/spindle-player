@@ -4,6 +4,8 @@
   import AlbumPage from './AlbumPage.svelte'
   import ArtistView from './ArtistView.svelte'
   import FolderView from './FolderView.svelte'
+  import MfpView from './MfpView.svelte'
+  import HistoryButtons from './HistoryButtons.svelte'
   import NoLibrary from './NoLibrary.svelte'
   import PlaylistList from './PlaylistList.svelte'
   import PlaylistView from './PlaylistView.svelte'
@@ -14,17 +16,21 @@
   import ViewHead from './ViewHead.svelte'
   import { fmtCount } from '../format'
   import { folderSearchText } from './folders'
-  import { showPage } from './side-buttons'
+  import { libraryOnScreen } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
-  import { library, type Chip, type Page } from '../stores/library.svelte'
+  import { library, type Chip } from '../stores/library.svelte'
+  import { settings } from '../stores/settings.svelte'
 
-  const chips: [Chip, string][] = [
+  const allChips: [Chip, string][] = [
     ['albums', 'Albums'],
     ['artists', 'Artists'],
     ['folders', 'Folders'],
     ['playlists', 'Playlists'],
-    ['radio', 'Radio']
+    ['radio', 'Radio'],
+    ['mfp', 'MFP']
   ]
+  // MFP only while its setting is on (ticket 052)
+  const chips = $derived(allChips.filter(([c]) => c !== 'mfp' || settings.mfp))
 
   let scrollEl: HTMLDivElement | undefined = $state()
 
@@ -34,9 +40,9 @@
     library.pickChip(c)
   }
 
+  // from the search results: one step to the artist's page
   function openArtist(key: string): void {
-    pick('artists')
-    library.openArtist(key)
+    library.showArtist(key)
   }
 
   const placeholders: Record<Chip, string> = {
@@ -44,23 +50,11 @@
     artists: 'Search artists',
     folders: 'Search folders',
     playlists: 'Search playlists',
-    radio: 'Search stations'
+    radio: 'Search stations',
+    mfp: 'Search mixes'
   }
 
-  const pages: Partial<Record<Chip, Page>> = {
-    albums: 'open',
-    playlists: 'openPlaylist',
-    folders: 'folder',
-    artists: 'artist'
-  }
-  // Back and Forward leave the page under the search results alone
-  const page: Page | null = $derived(
-    searching && (library.chip === 'albums' || library.chip === 'artists')
-      ? null
-      : (pages[library.chip] ?? null)
-  )
-
-  showPage(() => page)
+  libraryOnScreen()
 
   scrollTopOnChange(
     () => scrollEl,
@@ -70,13 +64,16 @@
 
 <div class="lib" data-notice-host>
   <div class="top">
-    <SearchBox
-      placeholder={library.chip === 'playlists' && library.openPlaylist
-        ? 'Search this playlist'
-        : library.chip === 'folders'
-          ? folderSearchText(library.folders, library.folder)
-          : placeholders[library.chip]}
-    />
+    <div class="searchrow">
+      <HistoryButtons />
+      <SearchBox
+        placeholder={library.chip === 'playlists' && library.openPlaylist
+          ? 'Search this playlist'
+          : library.chip === 'folders'
+            ? folderSearchText(library.folders, library.folder)
+            : placeholders[library.chip]}
+      />
+    </div>
     <!-- the scan line takes the row's spare room, so the grid never moves -->
     <div class="chiprow">
       <div class="chips">
@@ -92,8 +89,10 @@
   <div class="scroll" bind:this={scrollEl}>
     {#if library.chip === 'radio'}
       <RadioView searchAt="above" />
+    {:else if library.chip === 'mfp'}
+      <MfpView />
     {:else if !library.albums.length}
-      <!-- radio needs no songs, so the chips stay -->
+      <!-- radio and MFP need no songs, so the chips stay -->
       <div class="fill">
         <NoLibrary view={library.chip === 'playlists' ? 'playlists' : undefined} />
       </div>
@@ -130,6 +129,17 @@
     flex-direction: column;
     gap: 12px;
     padding: 16px 22px 12px;
+  }
+  .searchrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* the arrows hang left of the search box, so it lines up with the chips */
+    margin-left: -6px;
+  }
+  .searchrow > :global(.search) {
+    flex: 1;
+    min-width: 0;
   }
   .chiprow {
     display: flex;

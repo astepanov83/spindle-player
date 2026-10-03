@@ -59,6 +59,7 @@ export const LibraryChannel = {
   removeFolder: 'library:remove-folder',
   rescan: 'library:rescan',
   setArtists: 'library:set-artists',
+  showFolder: 'library:show-folder',
   // main to page: what changed in the library (a patch, see library-patch.ts)
   changed: 'library:changed',
   // main to page: scan progress and the folder list
@@ -101,6 +102,9 @@ export interface LibraryApi {
   rescan(): void
   // rename or split artists (ticket 024); the library comes back with them
   setArtists(changes: ArtistChanges): void
+  // opens a folder in the system's file manager: a music folder's path, then
+  // the names below it; false when it is gone or could not be opened
+  showFolder(parts: string[]): Promise<boolean>
   onChanged(listener: (library: Uint8Array) => void): () => void
   onStatus(listener: (status: ScanStatus) => void): () => void
   onIdsMoved(listener: (moves: IdMoves) => void): () => void
@@ -255,6 +259,7 @@ export interface PageChannels {
   [LibraryChannel.addDropped]: (paths: string[]) => Promise<DropResult>
   [LibraryChannel.rescan]: LibraryApi['rescan']
   [LibraryChannel.setArtists]: LibraryApi['setArtists']
+  [LibraryChannel.showFolder]: LibraryApi['showFolder']
   [PlaylistChannel.load]: PlaylistsApi['load']
   [PlaylistChannel.save]: PlaylistsApi['save']
   [RadioChannel.stations]: RadioApi['stations']

@@ -2,6 +2,7 @@
 <script lang="ts">
   import CoverFetch from './CoverFetch.svelte'
   import MusicFolders from './MusicFolders.svelte'
+  import OnlineMusic from './OnlineMusic.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Seg from '../ui/Seg.svelte'
   import type { QueueMode, TemplateId } from '../../../shared/layout'
@@ -121,6 +122,7 @@
   </div>
   <CoverFetch />
   <MusicFolders />
+  <OnlineMusic />
 </div>
 
 <style>

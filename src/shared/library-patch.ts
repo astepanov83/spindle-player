@@ -125,7 +125,7 @@ function folderMoves(old: Folder[], next: Folder[]): number[] {
 // The same song, once its folder is renumbered.
 function sameTrack(o: Track, t: Track, moves: number[] | undefined): boolean {
   if (!moves) return same(o, t)
-  if ((moves[o.folder] ?? -1) !== t.folder) return false
+  if ((o.folder < 0 ? o.folder : (moves[o.folder] ?? -1)) !== t.folder) return false
   const x = o as unknown as Record<string, unknown>
   const y = t as unknown as Record<string, unknown>
   const keys = Object.keys(x)
@@ -166,7 +166,8 @@ function renumber(tracks: Map<string, Track>, p: PatchBody): Track[] {
   const sent = new Set([...p.goneTracks, ...p.tracks.map((t) => t.id)])
   const out: Track[] = []
   for (const t of tracks.values()) {
-    if (sent.has(t.id)) continue
+    // an online song is in no folder
+    if (sent.has(t.id) || t.folder < 0) continue
     const to = moves[t.folder] ?? -1
     if (to < 0) throw new Error(`the library patch drops the folder of song ${t.id}`)
     if (to !== t.folder) out.push({ ...t, folder: to })

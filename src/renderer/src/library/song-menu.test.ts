@@ -36,12 +36,14 @@ vi.mock('../stores/queue.svelte', () => ({
     playRowNext: (i: number) => fake.calls.push(`row next ${i}`)
   }
 }))
-vi.stubGlobal('window', { playlistsApi: { save: vi.fn() } })
+const showFolder = vi.fn(async (parts: string[]) => parts.length > 0)
+vi.stubGlobal('window', { playlistsApi: { save: vi.fn() }, libraryApi: { showFolder } })
 
 const { playlistMenu, songMenu, sections } = await import('./song-menu')
 const { playlists } = await import('../stores/playlists.svelte')
 const { library } = await import('../stores/library.svelte')
 const { layout } = await import('../stores/layout.svelte')
+const { notice } = await import('../stores/notice.svelte')
 
 const labels = (entries: MenuEntry[]): string[] =>
   entries.map((e) => (e === 'line' ? '---' : 'heading' in e ? `# ${e.heading}` : e.label))
@@ -166,7 +168,7 @@ describe('Go to (ticket 040)', () => {
       folder: 0
     })
     library.load({ albums: [album], tracks: [track('s1'), track('s2')], folders: [] })
-    library.chip = 'radio'
+    library.go({ chip: 'radio' })
   }
 
   it('one song goes to its album and its artist, between the queue and the playlists', () => {
@@ -206,10 +208,73 @@ describe('Go to (ticket 040)', () => {
     expect(library.artist).toBe('b')
   })
 
+  it('an MFP song goes to its episode, and not to an artist (ticket 052)', () => {
+    const base = {
+      year: 0,
+      palette: defaultPalettes,
+      cover: '',
+      coverLarge: ''
+    }
+    const t = (id: string, albumId: string, online?: 'mfp'): Track => ({
+      id,
+      title: id,
+      duration: 1,
+      albumId,
+      artist: 'Marina Vale',
+      album: albumId,
+      no: 1,
+      disc: 1,
+      codec: '',
+      folder: online ? -1 : 0,
+      ...(online ? { online } : {})
+    })
+    library.load({
+      albums: [
+        { ...base, id: 'al', title: 'Blue Hours', artist: 'Marina Vale', trackIds: ['s1'] },
+        { ...base, id: 'ep', title: '01: Mixer', artist: 'Mixer', trackIds: ['m1'], online: 'mfp' }
+      ],
+      tracks: [t('s1', 'al'), t('m1', 'ep', 'mfp')],
+      folders: []
+    })
+    const m = songMenu(['m1'])
+    expect(labels(m)).toContain('Go to album')
+    expect(labels(m)).not.toContain('Go to artist')
+    pick(m, 'Go to album')
+    expect([library.chip, library.episode, library.landing]).toEqual(['mfp', 'ep', { song: 'm1' }])
+  })
+
   it('is left out for several songs, and where there is no library (Focus)', () => {
     song('Marina Vale')
     expect(labels(songMenu(['s1', 's2']))).not.toContain('Go to album')
     fake.hasLibrary = false
     expect(labels(songMenu(['s1']))).not.toContain('Go to album')
+  })
+})
+
+describe('Show in file manager', () => {
+  const folder = ['/home/me/Music', 'Rock', 'A']
+
+  it('comes before the playlists when the songs have a folder', () => {
+    const entries = songMenu(['a', 'b'], { folder })
+    expect(labels(entries).slice(0, 5)).toEqual([
+      'Play next',
+      'Add to queue',
+      '---',
+      'Show in file manager',
+      '---'
+    ])
+    pick(entries, 'Show in file manager')
+    expect(showFolder).toHaveBeenLastCalledWith(folder)
+  })
+
+  it('is left out with no folder', () => {
+    expect(labels(songMenu(['a']))).not.toContain('Show in file manager')
+  })
+
+  it('says so when the folder could not be opened', async () => {
+    showFolder.mockResolvedValueOnce(false)
+    pick(songMenu(['a'], { folder }), 'Show in file manager')
+    await vi.waitFor(() => expect(notice.text).toBe("Couldn't open /home/me/Music/Rock/A"))
+    notice.hide()
   })
 })

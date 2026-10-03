@@ -43,10 +43,10 @@
     queue.playList(playIds(), 0, p.name, { kind: 'playlist', id })
   }
 
-  // the text filtered this playlist's rows; the list would take it as a name
+  // a step clears the text: it filtered this playlist's rows, and the list
+  // would take it as a name
   function toList(): void {
-    library.query = ''
-    library.openPlaylist = null
+    library.openPlaylistPage(null)
   }
 
   function focus(node: HTMLInputElement): void {

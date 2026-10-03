@@ -2,17 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Artist } from '../../../shared/artists'
 import type { Track } from '../../../shared/library'
 import { fallbackPalettes, type ThemePalettes } from '../../../shared/palette'
-import {
-  artistBack,
-  artistLinks,
-  artistCovers,
-  artistForward,
-  artistPageSongs,
-  artistSongs,
-  filterArtists,
-  goToArtist,
-  type ArtistNav
-} from './artists'
+import { artistLinks, artistCovers, artistPageSongs, artistSongs, filterArtists } from './artists'
 import type { Sort } from './views'
 
 const artist = (name: string, albums: string[] = [], also: string[] = []): Artist => ({
@@ -88,43 +78,6 @@ describe('artistCovers', () => {
     expect(coversOf(artist('A', ['a', 'b', 'e'], ['x1', 'y1']))).toEqual(['ca', 'cx'])
     expect(coversOf(artist('A', ['a', 'c', 'd'], ['x1', 'y1']))).toEqual(['ca', 'cc', 'cd', 'cx'])
     expect(coversOf(artist('A', ['b']))).toEqual([])
-  })
-})
-
-describe('Back and Forward in Artists', () => {
-  const top: ArtistNav = { artist: null, album: null, ahead: [] }
-  const all = (): boolean => true
-
-  it('Back goes from an album to its artist, then to the grid; Forward comes back down', () => {
-    let nav = goToArtist(top, { artist: 'q', album: null })
-    nav = goToArtist(nav, { artist: 'q', album: 'a' })
-    nav = artistBack(nav)
-    expect(nav).toMatchObject({ artist: 'q', album: null })
-    nav = artistBack(nav)
-    expect(nav).toMatchObject({ artist: null, album: null })
-    expect(artistBack(nav)).toEqual(nav)
-    nav = artistForward(nav, all)
-    expect(nav).toMatchObject({ artist: 'q', album: null })
-    nav = artistForward(nav, all)
-    expect(nav).toMatchObject({ artist: 'q', album: 'a', ahead: [] })
-    expect(artistForward(nav, all)).toEqual(nav)
-  })
-
-  it('opening something else forgets what Forward would open', () => {
-    let nav = artistBack(goToArtist(top, { artist: 'q', album: null }))
-    nav = goToArtist(nav, { artist: 'b', album: null })
-    expect(nav.ahead).toEqual([])
-    // opening the same one Forward would open keeps the rest
-    nav = artistBack(artistBack(goToArtist(nav, { artist: 'b', album: 'x' })))
-    nav = goToArtist(nav, { artist: 'b', album: null })
-    expect(nav.ahead).toEqual([{ artist: 'b', album: 'x' }])
-  })
-
-  it('Forward does nothing when what Back closed is gone or does not fit here', () => {
-    const closed = artistBack(goToArtist(top, { artist: 'q', album: null }))
-    expect(artistForward(closed, () => false)).toMatchObject({ artist: null, ahead: [] })
-    const other = { ...closed, artist: 'b' }
-    expect(artistForward(other, all)).toMatchObject({ artist: 'b', ahead: [] })
   })
 })
 

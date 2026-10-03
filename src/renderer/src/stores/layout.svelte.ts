@@ -40,9 +40,7 @@ class LayoutStore {
 
   chooseTemplate(id: TemplateId): void {
     settings.template = id
-    library.open = null
-    // the other template shows another chip or section: the text was not for it
-    library.query = ''
+    library.templateChanged()
     this.#reset()
   }
 

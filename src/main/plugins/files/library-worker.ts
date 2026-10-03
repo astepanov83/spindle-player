@@ -87,6 +87,11 @@ const dirPace = new Pacer(8, 1, false, undefined, undefined, turns)
 const statPace = new Pacer(16, 2, false, undefined, undefined, turns)
 const readPace = new Pacer(4, 1, true, undefined, undefined, turns)
 
+// Music files is on. Off: no scan, no album or artist lookup, and the index,
+// fetched-covers.json and artist-overrides.json are not written. The radio's
+// song cover lookups go on (see 'set-on').
+let on = true
+
 let playing = false
 let playingDev: number | undefined
 // devices of the music folders being scanned
@@ -189,7 +194,7 @@ let fetchSetting: { on: boolean; sources: Record<CoverSource, boolean> } | undef
 
 function saveFetched(): void {
   fetchedEdits++
-  fetchedWriter?.schedule(serializeFetched(fetched, photos))
+  if (on) fetchedWriter?.schedule(serializeFetched(fetched, photos))
 }
 
 const abortableSleep = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -308,10 +313,12 @@ function loadOverrides(s: WorkerStart): void {
     )
 }
 
-const saveOverrides = (): void => overridesWriter?.schedule(serializeOverrides(overrides))
+const saveOverrides = (): void => {
+  if (on) overridesWriter?.schedule(serializeOverrides(overrides))
+}
 
 function setOverrides(c: ArtistChanges): void {
-  if (!applyChanges(overrides, c)) return
+  if (!on || !applyChanges(overrides, c)) return
   saveOverrides()
   dirty = true
   publisher.now()
@@ -384,7 +391,7 @@ const makeWriter = (): JsonFileWriter<unknown> =>
 let closing = false
 
 function saveIndex(): void {
-  if (!unsaved || closing || !writer) return
+  if (!unsaved || closing || !writer || !on) return
   unsaved = false
   writer.schedule(serializeIndex(ix))
 }
@@ -620,6 +627,22 @@ async function readImage(
   return im
 }
 
+// Turned off: a scan running stops, the lookup holds, and what was read or
+// found while on is written now, as nothing is written while off. Turned on:
+// main asks for a scan, as at start.
+function setOn(next: boolean): void {
+  if (next === on) return
+  if (!next) {
+    chain.stop()
+    fetcher?.hold()
+    saveIndex()
+    writer?.flushSync()
+    fetchedWriter?.flushSync()
+    overridesWriter?.flushSync()
+  }
+  on = next
+}
+
 // Old id -> new id of songs whose path moved this run, so a song that was
 // playing under its old id still plays.
 let aliases: IdMoves = {}
@@ -781,6 +804,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       // here, not when ready: a 'keep-covers' after it may come before that
       keptCovers = m.start.keepCovers
       keptEdits++
+      on = m.start.on
       started(m.start)
       break
     case 'keep-covers':
@@ -788,6 +812,8 @@ port.on('message', (e: Electron.MessageEvent) => {
       keptEdits++
       break
     case 'scan':
+      // main asks for none while off
+      if (!on) break
       // a manual Rescan looks up every miss again
       if (m.retryFailed) {
         const albums = dropNotFound(fetched)
@@ -807,13 +833,16 @@ port.on('message', (e: Electron.MessageEvent) => {
     case 'cancel':
       songLookups.get(m.req)?.abort()
       break
+    case 'set-on':
+      setOn(m.on)
+      break
     case 'artist-overrides':
       void ready.then(() => setOverrides(m.changes))
       break
     case 'resume':
       // a new window: go on unless a scan runs (it releases when done) or none
       // has ended yet (the lookup waits for the first)
-      if (pruned && !chain.busy && !closing) fetcher?.release()
+      if (on && pruned && !chain.busy && !closing) fetcher?.release()
       break
     case 'playing':
       playing = m.playing

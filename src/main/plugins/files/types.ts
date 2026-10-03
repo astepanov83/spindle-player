@@ -107,6 +107,8 @@ export interface WorkerStart {
   userAgent: string
   // covers main uses that the index does not know: station logos (ticket 030)
   keepCovers: string[]
+  // Music files is on (see 'set-on')
+  on: boolean
 }
 
 // What main needs to serve a file: its path, and for a file ffmpeg decodes,
@@ -163,6 +165,10 @@ export type WorkerIn =
   | { type: 'song-cover'; req: number; artist: string; song: string }
   // main gave up on an ask (a new title came): stop it
   | { type: 'cancel'; req: number }
+  // Music files turned on or off. Off: no scan, no album or artist lookup, and
+  // no writes to the index, fetched-covers.json or artist-overrides.json.
+  // Song cover lookups for the radio go on.
+  | { type: 'set-on'; on: boolean }
 
 // the library process to main
 export type WorkerOut =

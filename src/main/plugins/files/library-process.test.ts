@@ -20,7 +20,8 @@ const start: WorkerStart = {
   fetchedPath: '/u/fetched-covers.json',
   overridesPath: '/u/artist-overrides.json',
   userAgent: 'Spindle/test',
-  keepCovers: []
+  keepCovers: [],
+  on: true
 }
 
 function setup(): {

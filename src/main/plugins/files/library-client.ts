@@ -187,6 +187,12 @@ export class LibraryClient {
       this.o.post({ type: 'scan', id: s.id, folders: this.o.folders(), retryFailed: s.retryFailed })
   }
 
+  // Music files turned off: the scan asked for is not asked again after a
+  // crash. The process stops it itself (see 'set-on').
+  forget(): void {
+    this.#scan = undefined
+  }
+
   // The app window closed: stop scanning, and don't start that scan again.
   stop(): void {
     this.#scan = undefined

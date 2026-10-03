@@ -128,7 +128,10 @@ async function media(
 // The hosts the library serves.
 export function libraryRoutes(lib: LibraryService): Record<string, Route> {
   return {
+    // nothing is served while Music files is off
     media: (req, url, parts) =>
-      parts.length === 1 ? media(lib, parts[0], req, url.searchParams.has('decode')) : notFound()
+      parts.length === 1 && lib.on
+        ? media(lib, parts[0], req, url.searchParams.has('decode'))
+        : notFound()
   }
 }

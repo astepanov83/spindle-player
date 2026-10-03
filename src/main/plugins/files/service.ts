@@ -35,7 +35,12 @@ export class LibraryService {
   #playing = false
   // device of the last audio file the page opened
   #playingDev: number | undefined
-  #scannedOnStart = false
+  // the page asked for the library once; the first scan waits for that
+  #pageLoaded = false
+  // Music files is on. Off: no scans, no changes to the folders or artist
+  // names, no audio and no covers made from the music files. The library is
+  // still read and given to the page, and the radio's song lookup goes on.
+  #on: boolean
 
   constructor(
     readonly store: SettingsStore,
@@ -48,8 +53,10 @@ export class LibraryService {
     readonly covers: CoverCache,
     // covers other plugins keep that the index does not know (station logos), for the prune
     readonly keepCovers: () => string[] = () => [],
-    readonly dir = app.getPath('userData')
+    readonly dir = app.getPath('userData'),
+    on = true
   ) {
+    this.#on = on
     if (!this.ffmpeg || !this.ffprobe)
       console.error(
         'ffmpeg or ffprobe not found (npm run fetch-ffmpeg); APE, WMA and the like will not play'
@@ -82,7 +89,8 @@ export class LibraryService {
         fetchedPath: join(this.dir, 'fetched-covers.json'),
         overridesPath: join(this.dir, 'artist-overrides.json'),
         userAgent: this.userAgent,
-        keepCovers: this.keepCovers()
+        keepCovers: this.keepCovers(),
+        on: this.#on
       }),
       // a library process that dies is started again a few times, then left dead
       new RestartBudget(3, 60000),
@@ -133,8 +141,8 @@ export class LibraryService {
   async load(): Promise<{ library: Uint8Array; status: ScanStatus; moves: IdMoves }> {
     const library = await this.#client.library()
     // after the reply is on its way, so the scan doesn't delay the first paint
-    if (!this.#scannedOnStart) {
-      this.#scannedOnStart = true
+    if (!this.#pageLoaded) {
+      this.#pageLoaded = true
       setTimeout(() => this.scan(false), 0)
     }
     // every id map of the run: one sent at start may have come before the page listened
@@ -144,7 +152,20 @@ export class LibraryService {
   // A scan already running stops; what it read stays. Files that failed last
   // time are read again only on a manual Rescan (retryFailed).
   scan(retryFailed: boolean): void {
-    this.#client.scan(retryFailed)
+    if (this.#on) this.#client.scan(retryFailed)
+  }
+
+  get on(): boolean {
+    return this.#on
+  }
+
+  // Turned on again: a scan as at start (once the page has asked for the library).
+  setOn(on: boolean): void {
+    if (on === this.#on) return
+    this.#on = on
+    if (!on) this.#client.forget()
+    this.#post({ type: 'set-on', on })
+    if (on && this.#pageLoaded) this.scan(false)
   }
 
   // The app window closed: no more scanning until a new one opens, so nothing
@@ -190,7 +211,7 @@ export class LibraryService {
 
   async addFolder(win: BrowserWindow | null): Promise<void> {
     // the list would change in memory only (the page greys the button out too)
-    if (!this.store.readable) return
+    if (!this.store.readable || !this.#on) return
     const options: Electron.OpenDialogOptions = {
       title: 'Add music folder',
       buttonLabel: 'Add',
@@ -203,6 +224,7 @@ export class LibraryService {
 
   // Folders dropped on the window (ticket 047). Only folders that exist are added.
   addDropped(paths: unknown): Promise<DropResult> {
+    if (!this.#on) return Promise.resolve({ added: [], known: 0, other: 0 })
     const isDir = (p: string): Promise<boolean> =>
       stat(p).then(
         (s) => s.isDirectory(),
@@ -212,7 +234,7 @@ export class LibraryService {
   }
 
   removeFolder(path: unknown): void {
-    if (!this.store.readable) return
+    if (!this.store.readable || !this.#on) return
     const folders = this.store.get().folders
     if (typeof path !== 'string' || !folders.includes(path)) return
     this.#setFolders(folders.filter((f) => f !== path))
@@ -221,6 +243,8 @@ export class LibraryService {
   // The status carries the list the settings sheet shows. It is set here too,
   // since a process that is gone for good sends no more status.
   #setFolders(folders: string[]): void {
+    // turned off while the folder dialog or the disk was asked
+    if (!this.#on) return
     this.store.setFolders(folders)
     this.#client.setStatus({ folders: this.store.get().folders })
     this.scan(false)
@@ -228,12 +252,13 @@ export class LibraryService {
 
   // The page renamed or split artists; checked here, since the page can't be trusted.
   setArtists(changes: unknown): void {
-    const c = parseChanges(changes)
+    const c = this.#on && parseChanges(changes)
     if (c) this.#post({ type: 'artist-overrides', changes: c })
   }
 
   // Only files in the index are served, by id; never a path from the page.
   async mediaInfo(id: string): Promise<MediaInfo | undefined> {
+    if (!this.#on) return undefined
     return (await this.#client.ask({ type: 'find-track', id })).media
   }
 
@@ -250,6 +275,7 @@ export class LibraryService {
 
   // The picture a cover hash was made from, to make the large size.
   async coverSource(hash: string): Promise<Uint8Array | undefined> {
+    if (!this.#on) return undefined
     return (await this.#client.ask({ type: 'cover-source', hash })).data
   }
 

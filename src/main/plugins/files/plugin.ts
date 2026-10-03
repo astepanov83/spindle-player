@@ -13,6 +13,8 @@ export class FilesPlugin implements MainPlugin {
   readonly id: PluginId = 'files'
   #library: LibraryService | undefined
   #flushed = false
+  // set from the saved setting at start; see LibraryService for what off stops
+  #on = false
 
   constructor(
     private readonly o: {
@@ -27,14 +29,17 @@ export class FilesPlugin implements MainPlugin {
   }
 
   start(ctx: PluginContext): void {
-    // Starts reading the index now, while the window loads.
+    this.#on = ctx.settings.get().plugins[this.id]
+    // Starts reading the index now, while the window loads, on or off: the
+    // page gets the library either way, and the radio's song lookup runs in it.
     const library = new LibraryService(
       ctx.settings,
       ctx.toPage,
       ctx.idsMoved,
       ctx.covers.get().cache,
       this.o.keptByOthers,
-      ctx.userData
+      ctx.userData,
+      this.#on
     )
     this.#library = library
     ctx.covers.provide({
@@ -54,13 +59,21 @@ export class FilesPlugin implements MainPlugin {
     page.on(LibraryChannel.removeFolder, (_, path) => library.removeFolder(path))
     page.on(LibraryChannel.rescan, () => library.scan(true))
     page.on(LibraryChannel.setArtists, (_, changes) => library.setArtists(changes))
-    page.handle(LibraryChannel.showFolder, (_, parts) => showFolder(parts, settings.get().folders))
+    page.handle(LibraryChannel.showFolder, (_, parts) =>
+      this.#on ? showFolder(parts, settings.get().folders) : false
+    )
   }
 
-  setOn(): void {
-    // turning it off is ticket 063
+  setOn(on: boolean): void {
+    this.#on = on
+    this.#library?.setOn(on)
+    // the audio of a song that was playing; the page leaves it too
+    if (!on) stopAllDecoders()
   }
 
+  // None to list: the only prune runs in the library process, which keeps the
+  // covers of the index and the lookup itself, and it runs only after a scan,
+  // so never while off.
   keptCovers(): string[] {
     return []
   }

@@ -1,6 +1,7 @@
 // The core's way to plugins: what an item is, how to play it, which page a
 // link opens. The page halves by plugin id; a plugin that is off is not asked.
 import { plugins, type PluginId } from '../../../shared/plugins'
+import type { IdMoves } from '../../../shared/id-moves'
 import type { ItemKey } from '../../../shared/plugins/items'
 import { library, playlistsTab, type NavTab } from '../stores/library.svelte'
 import { pluginOn } from '../stores/settings.svelte'
@@ -161,6 +162,28 @@ export function statusLines(): string[] {
 // The cover lookup's lines of the plugins that are on, for Settings.
 export function coverLines(): { text: string; busy: boolean }[] {
   return plugins.flatMap((p) => (pluginOn(p.id) ? (halves[p.id].coverLines?.() ?? []) : []))
+}
+
+// Each plugin's start, asked for at once, on or off: a plugin turned on later
+// has its data. Once all have answered, `load` loads them in list order and
+// gives the ids each one moved, and `listen` lets them hear main's news.
+export async function startPlugins(): Promise<{
+  load(): { plugin: PluginId; moves: IdMoves }[]
+  listen(idsMoved: (plugin: PluginId, moves: IdMoves) => void): void
+}> {
+  const started = await Promise.all(
+    entries.map(async (e) => ({ id: e.id, start: await e.half.start?.() }))
+  )
+  return {
+    load: () =>
+      started.flatMap(({ id, start }) => {
+        const moves = start?.load()
+        return moves ? [{ plugin: id, moves }] : []
+      }),
+    listen: (idsMoved) => {
+      for (const { id, start } of started) start?.listen?.((moves) => idsMoved(id, moves))
+    }
+  }
 }
 
 // Whether a plugin that is on takes files dropped on the window.

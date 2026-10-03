@@ -5,6 +5,7 @@ import { complete, songPlayable, songState } from './items'
 import { canOpenMfp, keepMfp, mfpPath, mfpTabOf, mfpTabs } from './nav'
 import { mfpPage, mfpSearch } from './page'
 import { mfpActSetting, mfpSettings } from './settings'
+import { startMfp } from './start'
 import { mfp } from './store.svelte'
 
 export const mfpHalf: PageHalf = {
@@ -19,5 +20,6 @@ export const mfpHalf: PageHalf = {
   search: mfpSearch,
   settings: () => mfpSettings(),
   actSetting: mfpActSetting,
-  version: () => mfp.revision * 2 + (complete() ? 1 : 0)
+  version: () => mfp.revision * 2 + (complete() ? 1 : 0),
+  start: startMfp
 }

@@ -1,5 +1,6 @@
 // What the core asks a plugin's page half about its items. See
 // work/specs/plugins.md, "Items". Plain data: the core draws it.
+import type { IdMoves } from '../../../shared/id-moves'
 import type { Art } from '../../../shared/library'
 import type { PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
@@ -483,6 +484,9 @@ export interface PageHalf {
   coverLines?(): { text: string; busy: boolean }[]
   // Files from the system dropped on the window, asked while it is on.
   drop?(dropped: File[]): void
+  // At start: asks main for its data, at once with the core's own asks (see
+  // PluginStart). Never rejects: a failed ask leaves it with its defaults.
+  start?(): Promise<PluginStart>
   // a plugin whose items are live (radio): it drives its own item
   live?: LivePlugin
   // One of the item's actions was used: a button (no value), or an option
@@ -492,6 +496,16 @@ export interface PageHalf {
   // button turned on). Undefined: the Playable's. Live items use their handle.
   can?(id: string): Can | undefined
   actions?(id: string): Action[] | undefined
+}
+
+// A plugin's start, once its asks are answered. `load` runs once the settings
+// are in, before the playlists and the queue: it gives the ids that moved
+// (see id-moves.ts), renamed in them before they load. `listen` runs once the
+// queue is back, for main's news after that; ids that move later go to
+// `idsMoved`, which renames them in the queue and the playlists.
+export interface PluginStart {
+  load(): IdMoves | undefined
+  listen?(idsMoved: (moves: IdMoves) => void): void
 }
 
 // A song heard on a live item, for the Queue part's list (newest last).

@@ -5,6 +5,7 @@ import type { ItemState, LivePlugin, PageHalf } from '../types'
 import { stationLine, stepStation } from './logic'
 import { actOnStation, radioBlocks } from './page'
 import { radioSearch } from './search.svelte'
+import { startRadio } from './start'
 import { radio, radioPage } from './store.svelte'
 
 const missing: ItemState = { state: 'missing' }
@@ -66,6 +67,7 @@ export const radioHalf: PageHalf = {
   typed: (_tab, query, enter) => (enter ? radioSearch.now(query) : radioSearch.want(query)),
   version: () => (radio.loaded ? 1 : 0),
   live,
+  start: startRadio,
   // The bar's actions are the playing station's (store.svelte.ts, #actions);
   // the others, a row's star and menu (page.ts).
   act: (id, actionId, value) => {

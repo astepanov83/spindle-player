@@ -1,6 +1,7 @@
 <!-- Artists as round pictures, drawn a row at a time like the album grid, so
      10k artists stay fast. -->
 <script lang="ts">
+  import { queueLink } from '../../../shared/saved-queue'
   import { fmtCount } from '../format'
   import Empty from './Empty.svelte'
   import ArtistPic from './ArtistPic.svelte'
@@ -115,7 +116,7 @@
               sections(
                 songMenu(artistSongs(a, album), {
                   from: a.name,
-                  link: { kind: 'artist', id: a.key }
+                  link: queueLink('artist', a.key)
                 }),
                 [{ label: 'Edit artist', run: () => edit(a) }]
               )
@@ -132,7 +133,7 @@
               class="qp"
               aria-label="Play {a.name}"
               onclick={() =>
-                queue.playList(artistSongs(a, album), 0, a.name, { kind: 'artist', id: a.key })}
+                queue.playList(artistSongs(a, album), 0, a.name, queueLink('artist', a.key))}
             >
               <Icon name="play" />
             </button>

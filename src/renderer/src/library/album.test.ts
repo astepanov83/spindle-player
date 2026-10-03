@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { queueLink } from '../../../shared/saved-queue'
 import type { Track } from '../../../shared/library'
 import { albumButton, albumLabel, albumLines } from './album'
 
@@ -74,7 +75,7 @@ describe('albumLabel', () => {
 })
 
 describe('albumButton', () => {
-  const link = { kind: 'album' as const, id: 'al' }
+  const link = queueLink('album', 'al')
   // the queue came from this album, its song is on, radio is off, nothing ended
   const q = {
     link,
@@ -86,8 +87,8 @@ describe('albumButton', () => {
 
   it('plays the album from the start when the queue came from elsewhere', () => {
     expect(albumButton('al', { ...q, link: undefined })).toBe('play')
-    expect(albumButton('al', { ...q, link: { kind: 'album', id: 'other' } })).toBe('play')
-    expect(albumButton('al', { ...q, link: { kind: 'playlist', id: 'al' } })).toBe('play')
+    expect(albumButton('al', { ...q, link: queueLink('album', 'other') })).toBe('play')
+    expect(albumButton('al', { ...q, link: queueLink('playlist', 'al') })).toBe('play')
   })
 
   it('pauses and resumes while the queue is this album', () => {

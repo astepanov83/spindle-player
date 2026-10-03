@@ -9,6 +9,7 @@ import { menu, type MenuEntry, type MenuItem } from '../stores/menu.svelte'
 import { notice } from '../stores/notice.svelte'
 import { playlists } from '../stores/playlists.svelte'
 import { queue } from '../stores/queue.svelte'
+import { trackIdOf } from '../stores/item-tracks'
 
 export interface SongMenuOptions {
   // the songs are rows of this playlist: they can leave it
@@ -39,7 +40,7 @@ function queuePart(ids: string[], o: SongMenuOptions): MenuEntry[] {
     ]
   }
   // the queue may have changed while the menu was open
-  const same = (): boolean => queue.items[row] === ids[0]
+  const same = (): boolean => row < queue.items.length && trackIdOf(queue.items[row]) === ids[0]
   const entries: MenuEntry[] = [
     { label: 'Remove from queue', run: () => same() && queue.remove(row) }
   ]

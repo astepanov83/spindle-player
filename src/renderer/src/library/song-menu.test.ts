@@ -1,12 +1,13 @@
 // The song menu's entries, with the queue faked.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { queueLink } from '../../../shared/saved-queue'
 import type { Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 import type { MenuEntry, MenuItem } from '../stores/menu.svelte'
 
 const fake = vi.hoisted(() => ({
   calls: [] as string[],
-  items: ['a', 'b', 'c'],
+  items: ['files:a', 'files:b', 'files:c'],
   index: 1,
   hasLibrary: true
 }))
@@ -28,10 +29,10 @@ vi.mock('../stores/queue.svelte', () => ({
     get index() {
       return fake.index
     },
-    playNext: (ids: string[], from = '', link?: { kind: string; id: string }) =>
-      fake.calls.push(`next ${ids} ${from}` + (link ? ` ${link.kind}:${link.id}` : '')),
-    append: (ids: string[], from = '', link?: { kind: string; id: string }) =>
-      fake.calls.push(`add ${ids} ${from}` + (link ? ` ${link.kind}:${link.id}` : '')),
+    playNext: (ids: string[], from = '', link?: { plugin: string; page: string }) =>
+      fake.calls.push(`next ${ids} ${from}` + (link ? ` ${link.plugin}:${link.page}` : '')),
+    append: (ids: string[], from = '', link?: { plugin: string; page: string }) =>
+      fake.calls.push(`add ${ids} ${from}` + (link ? ` ${link.plugin}:${link.page}` : '')),
     remove: (i: number) => fake.calls.push(`remove ${i}`),
     playRowNext: (i: number) => fake.calls.push(`row next ${i}`)
   }
@@ -54,10 +55,10 @@ const pick = (entries: MenuEntry[], label: string): void =>
 
 beforeEach(() => {
   fake.calls = []
-  fake.items = ['a', 'b', 'c']
+  fake.items = ['files:a', 'files:b', 'files:c']
   fake.index = 1
   fake.hasLibrary = true
-  playlists.load([{ id: 'p1', name: 'Mix', trackIds: [] }])
+  playlists.load([{ id: 'p1', name: 'Mix', items: [] }])
 })
 
 describe('songMenu', () => {
@@ -80,10 +81,10 @@ describe('songMenu', () => {
   })
 
   it('names where the songs come from, so "From" can open it (ticket 040)', () => {
-    const m = songMenu(['x'], { from: 'Mix', link: { kind: 'playlist', id: 'p1' } })
+    const m = songMenu(['x'], { from: 'Mix', link: queueLink('playlist', 'p1') })
     pick(m, 'Play next')
     pick(m, 'Add to queue')
-    expect(fake.calls).toEqual(['next x Mix playlist:p1', 'add x Mix playlist:p1'])
+    expect(fake.calls).toEqual(['next x Mix core:playlist/p1', 'add x Mix core:playlist/p1'])
   })
 
   it('a queue row can leave the queue or move up to play next', () => {
@@ -103,7 +104,7 @@ describe('songMenu', () => {
 
   it('does nothing to a queue row that moved away since the menu opened', () => {
     const m = songMenu(['c'], { queueRow: 2 })
-    fake.items = ['c', 'a', 'b']
+    fake.items = ['files:c', 'files:a', 'files:b']
     pick(m, 'Remove from queue')
     pick(m, 'Play next')
     expect(fake.calls).toEqual([])
@@ -111,8 +112,8 @@ describe('songMenu', () => {
 
   it('rows of a playlist can leave it, and it is not offered to add to', () => {
     playlists.load([
-      { id: 'p1', name: 'Mix', trackIds: ['x'] },
-      { id: 'p2', name: 'Other', trackIds: [] }
+      { id: 'p1', name: 'Mix', items: ['files:x'] },
+      { id: 'p2', name: 'Other', items: [] }
     ])
     const m = labels(songMenu(['x'], { inPlaylist: 'p1' }))
     expect(m).not.toContain('Mix')

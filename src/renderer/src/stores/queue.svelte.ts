@@ -1,7 +1,8 @@
 // The list you played from, and the song playing from it. See work/specs/queue.md.
 // The moves are plain functions in queue/logic.ts; this store plays what they pick.
-import { moveIds, type IdMoves } from '../../../shared/id-moves'
+import { moveKeys, type IdMoves } from '../../../shared/id-moves'
 import type { Album, Art, Track } from '../../../shared/library'
+import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink, QueuePlace, SavedQueue } from '../../../shared/saved-queue'
 import { engine, mediaUrl, type EngineError, type EngineEvents } from '../audio/engine'
 import {
@@ -22,6 +23,8 @@ import {
   type NextOptions,
   type QueueState
 } from '../queue/logic'
+import { albumLink } from '../library/album'
+import { hasItem, keysOfTracks, trackIdOf } from './item-tracks'
 import { library } from './library.svelte'
 import { notice } from './notice.svelte'
 import { play, player, seek as seekSong } from './player.svelte'
@@ -30,7 +33,7 @@ import { play, player, seek as seekSong } from './player.svelte'
 const savePosEverySec = 5
 
 class QueueStore {
-  items: string[] = $state.raw([])
+  items: ItemKey[] = $state.raw([])
   index = $state(0)
   from = $state('')
   // what "From" opens (ticket 040)
@@ -47,7 +50,7 @@ class QueueStore {
 
   // nothing until a song is picked
   current: Track | undefined = $derived(
-    this.items.length ? library.track(this.items[this.index]) : undefined
+    this.items.length ? library.track(trackIdOf(this.items[this.index])) : undefined
   )
   currentAlbum: Album | undefined = $derived(
     this.current ? library.album(this.current.albumId) : undefined
@@ -146,12 +149,13 @@ class QueueStore {
     this.savePos()
   }
 
-  // Replaces the queue with a list and plays the clicked song.
+  // Replaces the queue with a list of songs and plays the clicked one.
   playList(ids: string[], index: number, from: string, link?: QueueLink): void {
     if (!ids.length) return
     this.#claim()
     this.#fails = 0
-    const s: QueueState = { items: ids, index: Math.min(index, ids.length - 1), from }
+    const items = keysOfTracks(ids)
+    const s: QueueState = { items, index: Math.min(index, ids.length - 1), from }
     if (link) s.link = link
     this.#set(s)
     this.#start()
@@ -159,7 +163,7 @@ class QueueStore {
 
   playAlbum(albumId: string, index: number): void {
     const al = library.album(albumId)
-    this.playList(al.trackIds, index, al.title, { kind: 'album', id: al.id })
+    this.playList(al.trackIds, index, al.title, albumLink(al))
   }
 
   // Clicking a row; the current one starts again.
@@ -173,13 +177,13 @@ class QueueStore {
   // "Play next" from a menu. An empty queue takes the songs, the first one
   // loaded paused; `from` names them then.
   playNext(ids: string[], from = '', link?: QueueLink): void {
-    const s = insertNext(this.#state(), ids, from, link)
+    const s = insertNext(this.#state(), keysOfTracks(ids), from, link)
     this.#add(s, this.index + 1, queueNotice('next', ids, this.#title(ids)))
   }
 
   // "Add to queue" from a menu.
   append(ids: string[], from = '', link?: QueueLink): void {
-    const s = append(this.#state(), ids, from, link)
+    const s = append(this.#state(), keysOfTracks(ids), from, link)
     this.#add(s, this.items.length, queueNotice('add', ids, this.#title(ids)))
   }
 
@@ -194,6 +198,7 @@ class QueueStore {
     notice.show(text)
   }
 
+  // `ids` are track ids
   #title(ids: string[]): string {
     return ids.length && library.has(ids[0]) ? library.track(ids[0]).title : ''
   }
@@ -201,7 +206,7 @@ class QueueStore {
   // "Play next" on a queue row: it moves up to right after the current song.
   playRowNext(i: number): void {
     if (i === this.index || i < 0 || i >= this.items.length) return
-    const id = this.items[i]
+    const id = trackIdOf(this.items[i])
     if (i === this.index + 1) {
       // already next: it only has to count as a Play next song, for shuffle
       this.#next ||= 1
@@ -343,14 +348,14 @@ class QueueStore {
   prune(): void {
     // the id, not this.current: after the load that already points at the new data
     const before = this.items[this.index]
-    this.#set(prune(this.#state(), (id) => library.has(id)))
+    this.#set(prune(this.#state(), hasItem))
     if (this.items[this.index] !== before) this.#start(player.playing)
   }
 
   // Songs whose ids changed (see id-moves.ts). They are the same songs, so
   // nothing restarts. Called just before the library with the new ids loads.
   moveIds(moves: IdMoves): void {
-    const items = moveIds(this.items, moves)
+    const items = moveKeys(this.items, moves)
     if (items !== this.items) this.#set({ ...this.#state(), items })
   }
 
@@ -361,7 +366,7 @@ class QueueStore {
 
   // The queue from the last run, loaded paused where it was.
   restore(saved: SavedQueue): void {
-    const s = prune(saved, (id) => library.has(id))
+    const s = prune(saved, hasItem)
     if (!s.items.length) return
     this.items = s.items
     this.index = s.index

@@ -20,7 +20,7 @@ import { radio } from './stores/radio.svelte'
 import { loadSettings } from './stores/settings.svelte'
 import { dropText, ScanWatch } from './library/scan-text'
 import { orFallback } from './start'
-import { emptyQueue } from '../../shared/saved-queue'
+import { emptyQueues } from '../../shared/saved-queue'
 import { defaultSettings } from '../../shared/settings'
 import type { ScanStatus } from '../../shared/library'
 import type { LibraryMessage } from '../../shared/library-patch'
@@ -62,7 +62,7 @@ const [saved, lib, lists, lastQueue, stations] = await Promise.all([
     'the library'
   ),
   orFallback(() => window.playlistsApi.load(), [], 'the playlists'),
-  orFallback(() => window.playbackApi.loadQueue(), emptyQueue(), 'the queue'),
+  orFallback(() => window.playbackApi.loadQueue(), emptyQueues(), 'the queue'),
   orFallback(() => window.radioApi.stations(), [], 'the radio stations')
 ])
 loadSettings(saved.value, saved.ok)

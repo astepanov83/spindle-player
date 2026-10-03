@@ -112,3 +112,37 @@ describe('a new playlist from songs (ticket 045)', () => {
     expect(playlists.get(playlists.create())?.name).toMatch(/^New playlist/)
   })
 })
+
+describe('item keys (ticket 055)', () => {
+  const song = (id: string, online?: 'mfp'): Track => ({
+    id,
+    title: id,
+    duration: 60,
+    albumId: 'x',
+    artist: 'A',
+    album: 'X',
+    no: 1,
+    disc: 1,
+    codec: '',
+    folder: online ? -1 : 0,
+    ...(online ? { online } : {})
+  })
+
+  it('keeps songs as keys of their plugin, and removes them by their track id', () => {
+    library.load({ albums: [], tracks: [song('f1'), song('m1', 'mfp')], folders: [] })
+    const id = playlists.create(['f1', 'm1'])
+    expect(playlists.get(id)?.items).toEqual(['files:f1', 'mfp:m1'])
+    playlists.add(id, ['m1', 'gone'])
+    // a song the library doesn't know counts as a file's
+    expect(playlists.get(id)?.items).toEqual(['files:f1', 'mfp:m1', 'files:gone'])
+    playlists.removeTracks(id, ['m1', 'gone'])
+    expect(playlists.get(id)?.items).toEqual(['files:f1'])
+  })
+
+  it("renames only the files plugin's keys when ids move", () => {
+    const id = playlists.create()
+    playlists.load([{ id, name: 'Mix', items: ['files:a', 'mfp:a'] }])
+    playlists.moveIds({ a: 'b' })
+    expect(playlists.get(id)?.items).toEqual(['files:b', 'mfp:a'])
+  })
+})

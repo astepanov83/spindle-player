@@ -1,11 +1,14 @@
-// Playlists: a name and a list of track ids, saved in playlists.json in userData.
+// Playlists: a name and a list of items, saved in playlists.json in userData.
 // Main checks the file; the page edits the list with the functions below.
+// Version 2 holds item keys (ticket 055); main converts an older file once at
+// start (main/convert-files.ts).
+import { isKeyOfKind, type ItemKey } from './plugins/items'
 
 export interface Playlist {
   id: string
   name: string
   // Songs that left the library stay here, so they come back after a rescan finds them.
-  trackIds: string[]
+  items: ItemKey[]
 }
 
 export const maxNameLength = 200
@@ -20,8 +23,9 @@ export function cleanName(name: string, fallback = 'Playlist'): string {
   return n || fallback
 }
 
-// The file may be old, hand-edited or half written. A bad playlist is dropped
-// on its own; a bad track id is dropped from its playlist.
+// The file may be hand-edited or half written. A bad playlist is dropped on
+// its own; a bad item is dropped from its playlist, and so is a live one (a
+// station): My stations keeps those.
 export function parsePlaylists(raw: unknown): Playlist[] {
   const list = isObject(raw) && Array.isArray(raw.playlists) ? raw.playlists : []
   const out: Playlist[] = []
@@ -29,11 +33,9 @@ export function parsePlaylists(raw: unknown): Playlist[] {
   for (const p of list) {
     if (!isObject(p) || typeof p.id !== 'string' || !p.id || ids.has(p.id)) continue
     if (typeof p.name !== 'string') continue
-    const trackIds = Array.isArray(p.trackIds)
-      ? p.trackIds.filter((t): t is string => typeof t === 'string' && t.length > 0)
-      : []
+    const items = Array.isArray(p.items) ? p.items.filter((t) => isKeyOfKind(t, 'track')) : []
     ids.add(p.id)
-    out.push({ id: p.id, name: cleanName(p.name), trackIds: [...new Set(trackIds)] })
+    out.push({ id: p.id, name: cleanName(p.name), items: [...new Set(items)] })
   }
   return out
 }
@@ -41,7 +43,7 @@ export function parsePlaylists(raw: unknown): Playlist[] {
 // True when the next save would write the file back as it is. Anything else (a
 // newer version, a playlist this version drops) is copied before it is replaced.
 export function isKnownPlaylistsFile(raw: unknown): boolean {
-  if (!isObject(raw) || raw.version !== 1 || !Array.isArray(raw.playlists)) return false
+  if (!isObject(raw) || raw.version !== 2 || !Array.isArray(raw.playlists)) return false
   const again = playlistsFile(parsePlaylists(raw))
   return (
     JSON.stringify(again) === JSON.stringify({ version: raw.version, playlists: raw.playlists })
@@ -49,8 +51,8 @@ export function isKnownPlaylistsFile(raw: unknown): boolean {
 }
 
 // What the file holds.
-export function playlistsFile(list: Playlist[]): { version: 1; playlists: Playlist[] } {
-  return { version: 1, playlists: list }
+export function playlistsFile(list: Playlist[]): { version: 2; playlists: Playlist[] } {
+  return { version: 2, playlists: list }
 }
 
 // "New playlist", then "New playlist 2", "New playlist 3"... The number
@@ -79,9 +81,9 @@ export function create(
   list: Playlist[],
   id: string,
   name: string,
-  trackIds: string[] = []
+  items: ItemKey[] = []
 ): Playlist[] {
-  return [...list, { id, name: cleanName(name), trackIds: [...new Set(trackIds)] }]
+  return [...list, { id, name: cleanName(name), items: [...new Set(items)] }]
 }
 
 export function rename(list: Playlist[], id: string, name: string): Playlist[] {
@@ -93,25 +95,23 @@ export function remove(list: Playlist[], id: string): Playlist[] {
 }
 
 // Adds songs at the end. A song already in the playlist is not added again.
-export function addTracks(
+export function addItems(
   list: Playlist[],
   id: string,
-  trackIds: string[]
+  items: ItemKey[]
 ): { list: Playlist[]; added: number } {
   let added = 0
   const next = list.map((p) => {
     if (p.id !== id) return p
-    const have = new Set(p.trackIds)
-    const fresh = [...new Set(trackIds)].filter((t) => !have.has(t))
+    const have = new Set(p.items)
+    const fresh = [...new Set(items)].filter((t) => !have.has(t))
     added = fresh.length
-    return fresh.length ? { ...p, trackIds: [...p.trackIds, ...fresh] } : p
+    return fresh.length ? { ...p, items: [...p.items, ...fresh] } : p
   })
   return { list: added ? next : list, added }
 }
 
-export function removeTracks(list: Playlist[], id: string, trackIds: string[]): Playlist[] {
-  const drop = new Set(trackIds)
-  return list.map((p) =>
-    p.id === id ? { ...p, trackIds: p.trackIds.filter((t) => !drop.has(t)) } : p
-  )
+export function removeItems(list: Playlist[], id: string, items: ItemKey[]): Playlist[] {
+  const drop = new Set<string>(items)
+  return list.map((p) => (p.id === id ? { ...p, items: p.items.filter((t) => !drop.has(t)) } : p))
 }

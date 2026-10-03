@@ -27,7 +27,7 @@ import {
   type SortKey
 } from '../library/views'
 import { emptyTree, folderTree, type FolderTree } from '../library/folders'
-import type { QueueLink } from '../../../shared/saved-queue'
+import { linkTarget, type QueueLink } from '../../../shared/saved-queue'
 import {
   emptyHistory,
   goBack,
@@ -503,19 +503,24 @@ class LibraryStore {
 
   // Whether a link still has something to open after a rescan. Playlists
   // are not the library's: the caller checks those.
+  // An episode is an album here; showAlbum opens its page.
   canShow(link: QueueLink): boolean {
     void this.#version
-    if (link.kind === 'album') return this.#albumIndex.has(link.id)
-    if (link.kind === 'artist') return this.#artistIndex.has(link.id)
-    if (link.kind === 'folder') return this.folders.byKey.has(link.id)
+    const to = linkTarget(link)
+    if (!to) return false
+    if (to.kind === 'album' || to.kind === 'episode') return this.#albumIndex.has(to.id)
+    if (to.kind === 'artist') return this.#artistIndex.has(to.id)
+    if (to.kind === 'folder') return this.folders.byKey.has(to.id)
     return true
   }
 
   showFrom(link: QueueLink): void {
-    if (link.kind === 'album') this.showAlbum(link.id)
-    else if (link.kind === 'artist') this.showArtist(link.id)
-    else if (link.kind === 'folder') this.showFolder(link.id)
-    else this.showPlaylist(link.id)
+    const to = linkTarget(link)
+    if (!to) return
+    if (to.kind === 'album' || to.kind === 'episode') this.showAlbum(to.id)
+    else if (to.kind === 'artist') this.showArtist(to.id)
+    else if (to.kind === 'folder') this.showFolder(to.id)
+    else this.showPlaylist(to.id)
   }
 
   sortArtist(k: SortKey): void {

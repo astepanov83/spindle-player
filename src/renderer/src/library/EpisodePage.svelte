@@ -2,7 +2,7 @@
      of the episode's mp3 at a guessed time. Like the album page, without the
      folder and the artist links. -->
 <script lang="ts">
-  import type { QueueLink } from '../../../shared/saved-queue'
+  import { queueLink, type QueueLink } from '../../../shared/saved-queue'
   import Cover from '../ui/Cover.svelte'
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
@@ -22,7 +22,7 @@
   const tracks = $derived(al.trackIds.map((id) => library.track(id)))
   // the search box filters the songs in place
   const shown = $derived(tracks.filter((t) => songMatches(t, library.query)))
-  const link = $derived<QueueLink>({ kind: 'album', id: albumId })
+  const link = $derived<QueueLink>(queueLink('episode', albumId))
   const length = $derived(tracks.reduce((s, t) => s + t.duration, 0))
   const meta = $derived(
     [al.artist, al.year || '', fmtCount(tracks.length, 'song', 'songs'), fmtLength(length)]

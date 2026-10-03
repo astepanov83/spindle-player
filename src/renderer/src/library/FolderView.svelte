@@ -10,7 +10,7 @@
   import { crumbs, filterFolder, folderPlaySongs, folderSongs, shownFolder } from './folders'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
-  import type { QueueLink } from '../../../shared/saved-queue'
+  import { queueLink, type QueueLink } from '../../../shared/saved-queue'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
@@ -61,7 +61,7 @@
     )
 
   // the top list of music folders has no key to open again
-  const link = $derived<QueueLink | undefined>(node && { kind: 'folder', id: node.key })
+  const link = $derived<QueueLink | undefined>(node && queueLink('folder', node.key))
 
   function play(shuffle: boolean): void {
     const ids = playIds()
@@ -134,7 +134,7 @@
       style:transform="translateY({v.offset(item)}px)"
       onclick={() => library.openFolder(f.key)}
       oncontextmenu={(e) =>
-        openSongMenu(e, songIds(i), { from: f.name, link: { kind: 'folder', id: f.key } })}
+        openSongMenu(e, songIds(i), { from: f.name, link: queueLink('folder', f.key) })}
     >
       <Thumb src={f.cover} size={40} radius={6} />
       <span class="nm">

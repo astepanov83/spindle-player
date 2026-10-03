@@ -2,7 +2,7 @@
 // engine's events and passes them to the side that plays. NowPlaying, the
 // controls, the media session and the app colors read title, sub and art here.
 import type { Art, Track } from '../../../shared/library'
-import type { SavedPlaying, SavedQueue } from '../../../shared/saved-queue'
+import { savedStation, type SavedPlaying, type SavedQueues } from '../../../shared/saved-queue'
 import type { Station } from '../../../shared/stations'
 import { engine, type EngineEvents } from '../audio/engine'
 import { stepStation } from '../radio/logic'
@@ -153,19 +153,19 @@ class PlayingStore {
   // longer in My stations (or one from search) gives the queue back.
   // `stationsRead` false: My stations could not be read this run, so radio is
   // not forgotten in queue.json; it comes back when they can be read.
-  restore(saved: SavedQueue, stationsRead = true): void {
-    const station =
-      saved.kind === 'radio' ? radio.stations.find((s) => s.id === saved.station) : undefined
+  restore(saved: SavedQueues, stationsRead = true): void {
+    const id = savedStation(saved)
+    const station = id === undefined ? undefined : radio.stations.find((s) => s.id === id)
     // what queue.json holds now
-    this.#saved = saved.kind === 'radio' ? `radio:${saved.station}` : 'queue'
+    this.#saved = id === undefined ? 'queue' : `radio:${id}`
     if (station) {
       this.kind = 'radio'
       queue.active = false
       radio.select(station)
-    } else if (saved.kind === 'radio' && stationsRead) {
+    } else if (id !== undefined && stationsRead) {
       this.#save({ kind: 'queue' })
     }
-    queue.restore(saved)
+    queue.restore(saved.track)
   }
 
   #save(p: SavedPlaying): void {

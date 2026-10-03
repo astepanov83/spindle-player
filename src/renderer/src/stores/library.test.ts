@@ -1,5 +1,6 @@
 // The library store: where it is, its history (ticket 051), and the library it holds.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { queueLink } from '../../../shared/saved-queue'
 import type { LibraryData, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 
@@ -489,24 +490,24 @@ describe('links from what plays (ticket 040)', () => {
   })
 
   it('opens what "From" names', () => {
-    library.showFrom({ kind: 'album', id: 'b' })
+    library.showFrom(queueLink('album', 'b'))
     expect([library.chip, library.open, library.landing]).toEqual(['albums', 'b', { song: null }])
-    library.showFrom({ kind: 'artist', id: 'x' })
+    library.showFrom(queueLink('artist', 'x'))
     expect([library.chip, library.artist]).toEqual(['artists', 'x'])
-    library.showFrom({ kind: 'playlist', id: 'p1' })
+    library.showFrom(queueLink('playlist', 'p1'))
     expect(library.openPlaylist).toBe('p1')
-    library.showFrom({ kind: 'folder', id: 'k' })
+    library.showFrom(queueLink('folder', 'k'))
     expect([library.chip, library.section, library.folder]).toEqual(['folders', 'folders', 'k'])
     // every link starts its page at the top, also one already open
     expect(library.landing).toEqual({ song: null })
   })
 
   it('says whether "From" still has something to open', () => {
-    expect(library.canShow({ kind: 'album', id: 'a' })).toBe(true)
-    expect(library.canShow({ kind: 'album', id: 'gone' })).toBe(false)
-    expect(library.canShow({ kind: 'artist', id: 'x' })).toBe(true)
-    expect(library.canShow({ kind: 'artist', id: 'y' })).toBe(false)
-    expect(library.canShow({ kind: 'folder', id: 'nowhere' })).toBe(false)
+    expect(library.canShow(queueLink('album', 'a'))).toBe(true)
+    expect(library.canShow(queueLink('album', 'gone'))).toBe(false)
+    expect(library.canShow(queueLink('artist', 'x'))).toBe(true)
+    expect(library.canShow(queueLink('artist', 'y'))).toBe(false)
+    expect(library.canShow(queueLink('folder', 'nowhere'))).toBe(false)
   })
 })
 

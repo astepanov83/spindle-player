@@ -15,6 +15,8 @@
   import { queue } from '../stores/queue.svelte'
   import { radio } from '../stores/radio.svelte'
   import { openSongMenu } from '../library/song-menu'
+  import { linkTarget } from '../../../shared/saved-queue'
+  import { trackIdOf } from '../stores/item-tracks'
 
   // header and close are set by the container, not by templates
   let { header = false, close = false }: { header?: boolean; close?: boolean } = $props()
@@ -53,7 +55,9 @@
     seen = currentKey()
   }
 
-  const total = $derived(queue.items.reduce((s, id) => s + library.track(id).duration, 0))
+  const total = $derived(
+    queue.items.reduce((s, key) => s + library.track(trackIdOf(key)).duration, 0)
+  )
   const sum = $derived(
     `${queue.items.length.toLocaleString()} ${queue.items.length === 1 ? 'song' : 'songs'}` +
       ` · ${fmtLength(total)}`
@@ -62,7 +66,8 @@
   const openFrom = $derived.by(() => {
     const link = queue.link
     if (!link || !library.canShow(link)) return undefined
-    if (link.kind === 'playlist' && !playlists.get(link.id)) return undefined
+    const to = linkTarget(link)
+    if (to?.kind === 'playlist' && !playlists.get(to.id)) return undefined
     return () => {
       // the drawer would cover the page opened
       layout.showQueue = false
@@ -229,7 +234,7 @@
         }}
       >
         {#each v.items as item (item.key)}
-          {@const id = queue.items[item.index]}
+          {@const id = trackIdOf(queue.items[item.index])}
           {@const t = library.track(id)}
           {@const cur = item.index === queue.index}
           <button
@@ -256,7 +261,7 @@
           </button>
         {/each}
         {#if drag}
-          {@const t = library.track(queue.items[drag.from])}
+          {@const t = library.track(trackIdOf(queue.items[drag.from]))}
           <div
             class="qrow ghost"
             class:cur-row={drag.from === queue.index}

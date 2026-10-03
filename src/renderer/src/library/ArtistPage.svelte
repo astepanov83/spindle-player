@@ -2,6 +2,7 @@
      songs on other albums in the song table. Edit renames or splits them
      (ticket 024). -->
 <script lang="ts">
+  import { queueLink } from '../../../shared/saved-queue'
   import { fmtCount } from '../format'
   import { untrack } from 'svelte'
   import { artistKey, type Artist, type ArtistTag } from '../../../shared/artists'
@@ -39,10 +40,12 @@
     const ids = playIds()
     if (!ids.length) return
     if (shuffle) player.shuffle = true
-    queue.playList(ids, shuffle ? Math.floor(Math.random() * ids.length) : 0, a.name, {
-      kind: 'artist',
-      id: a.key
-    })
+    queue.playList(
+      ids,
+      shuffle ? Math.floor(Math.random() * ids.length) : 0,
+      a.name,
+      queueLink('artist', a.key)
+    )
   }
 
   // the names in the editor: one renames, two or more split
@@ -176,7 +179,7 @@
           onclick={(e) =>
             openSongMenu(e, playIds(), {
               from: a.name,
-              link: { kind: 'artist', id: a.key }
+              link: queueLink('artist', a.key)
             })}><Icon name="more" size={18} /></button
         >
       {/if}
@@ -197,7 +200,7 @@
     {scrollEl}
     sort={library.artistSort}
     onsort={(k) => library.sortArtist(k)}
-    link={{ kind: 'artist', id: a.key }}
+    link={queueLink('artist', a.key)}
     count={albums.length > 0}
   >
     <!-- with no albums above, "Also on" would head nothing, and the header

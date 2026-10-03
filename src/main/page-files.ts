@@ -1,6 +1,6 @@
 // Files the page edits: playlists and the saved queue. Main checks what the
 // page sends like a file read, keeps the latest, and writes it a bit later.
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { app } from 'electron'
 import {
   isKnownPlaylistsFile,
@@ -13,9 +13,18 @@ import {
   applyPlaying,
   isKnownQueueFile,
   parseSavedQueue,
-  type SavedQueue
+  parseSavedQueues,
+  type SavedQueues
 } from '../shared/saved-queue'
 import { moveQueue, movePlaylists, type IdMoves } from '../shared/id-moves'
+import {
+  convertPlaylists,
+  convertQueue,
+  isOldPlaylistsFile,
+  isOldQueueFile,
+  readMfpIds,
+  type MfpIds
+} from './convert-files'
 import { JsonFileWriter, openJsonFile, removeStrayTmp } from './json-file'
 
 // Reads the file at start. A file that can't be read gets no writer, so it is
@@ -33,14 +42,28 @@ function open<T>(
   return { value: file.value, writer }
 }
 
+// An old file was converted: it is on disk at once, so it is converted only
+// once. openJsonFile kept the old one as "<name>.unknown" first.
+function writeConverted<T>(writer: JsonFileWriter<T> | undefined, data: T): void {
+  if (!writer) return
+  writer.schedule(data)
+  writer.flushSync()
+}
+
+// MFP's ids for a conversion, from mfp.json next to the file.
+const mfpIdsBeside = (path: string): MfpIds => readMfpIds(join(dirname(path), 'mfp.json'))
+
 export class PlaylistFile {
   #data: Playlist[]
   #writer: JsonFileWriter<unknown> | undefined
 
   constructor(readonly path = join(app.getPath('userData'), 'playlists.json')) {
     const f = open<unknown>(path, 'Playlists file', isKnownPlaylistsFile, 500)
-    this.#data = parsePlaylists(f.value)
     this.#writer = f.writer
+    if (isOldPlaylistsFile(f.value)) {
+      this.#data = convertPlaylists(f.value, mfpIdsBeside(path))
+      writeConverted(this.#writer, playlistsFile(this.#data))
+    } else this.#data = parsePlaylists(f.value)
   }
 
   get(): Playlist[] {
@@ -73,24 +96,27 @@ export class PlaylistFile {
 }
 
 export class QueueFile {
-  #data: SavedQueue
-  #writer: JsonFileWriter<SavedQueue> | undefined
+  #data: SavedQueues
+  #writer: JsonFileWriter<SavedQueues> | undefined
 
   constructor(readonly path = join(app.getPath('userData'), 'queue.json')) {
     // one line: a queue made from a big song table holds thousands of ids
-    const f = open<SavedQueue>(path, 'Queue file', isKnownQueueFile, 1000, 0)
-    this.#data = parseSavedQueue(f.value)
+    const f = open<SavedQueues>(path, 'Queue file', isKnownQueueFile, 1000, 0)
     this.#writer = f.writer
+    if (isOldQueueFile(f.value)) {
+      this.#data = convertQueue(f.value, mfpIdsBeside(path))
+      writeConverted(this.#writer, this.#data)
+    } else this.#data = parseSavedQueues(f.value)
   }
 
-  get(): SavedQueue {
+  get(): SavedQueues {
     return this.#data
   }
 
-  // What plays comes on its own (setPlaying), so a new list keeps it.
+  // The page sends the track queue. What plays comes on its own (setPlaying),
+  // so a new list keeps it.
   setFromPage(raw: unknown): void {
-    const { kind, station } = this.#data
-    this.#data = applyPlaying(parseSavedQueue(raw), kind ? { kind, station } : { kind: 'queue' })
+    this.#data = { ...this.#data, track: parseSavedQueue(raw) }
     this.#writer?.schedule(this.#data)
   }
 
@@ -106,7 +132,7 @@ export class QueueFile {
   moveIds(moves: IdMoves): boolean {
     const moved = moveQueue(this.#data, moves)
     if (moved === this.#data) return true
-    this.#data = parseSavedQueue(moved)
+    this.#data = parseSavedQueues(moved)
     if (!this.#writer) return false
     this.#writer.schedule(this.#data)
     return this.#writer.flushSync()
@@ -114,9 +140,9 @@ export class QueueFile {
 
   // The current song and position come on their own and more often, without the whole list.
   setPlace(raw: unknown): void {
-    const next = applyPlace(this.#data, raw)
-    if (next === this.#data) return
-    this.#data = next
+    const track = applyPlace(this.#data.track, raw)
+    if (track === this.#data.track) return
+    this.#data = { ...this.#data, track }
     this.#writer?.schedule(this.#data)
   }
 

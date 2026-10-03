@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { QueueLink } from '../../../shared/saved-queue'
+  import { queueLink, type QueueLink } from '../../../shared/saved-queue'
   import Cover from '../ui/Cover.svelte'
   import Eq from '../ui/Eq.svelte'
   import GoLink from '../ui/GoLink.svelte'
@@ -26,7 +26,7 @@
   const tracks = $derived(al.trackIds.map((id) => library.track(id)))
   // one link per artist of a split credit
   const artists = $derived(artistLinks(al, (key) => !!library.getArtist(key)))
-  const link = $derived<QueueLink>({ kind: 'album', id: albumId })
+  const link = $derived<QueueLink>(queueLink('album', albumId))
   const minutes = $derived(Math.round(tracks.reduce((s, t) => s + t.duration, 0) / 60))
   const lines = $derived(albumLines(tracks))
   // where the album is on disk; null while the folder table is not in yet

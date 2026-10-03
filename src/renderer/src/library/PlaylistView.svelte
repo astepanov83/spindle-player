@@ -7,6 +7,8 @@
   import { library } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { queueLink } from '../../../shared/saved-queue'
+  import { trackIdsOf } from '../stores/item-tracks'
 
   let {
     id,
@@ -18,7 +20,7 @@
   const view = $derived(
     p
       ? playlistRows(
-          p.trackIds,
+          trackIdsOf(p.items),
           (t) => library.has(t),
           (t) => library.track(t)
         )
@@ -40,7 +42,7 @@
 
   function play(): void {
     if (!p) return
-    queue.playList(playIds(), 0, p.name, { kind: 'playlist', id })
+    queue.playList(playIds(), 0, p.name, queueLink('playlist', id))
   }
 
   // a step clears the text: it filtered this playlist's rows, and the list
@@ -82,7 +84,7 @@
     sort={library.playlistSort(id)}
     onsort={(k) => library.sortPlaylist(id, k)}
     playlistId={id}
-    link={{ kind: 'playlist', id }}
+    link={queueLink('playlist', id)}
   >
     {#snippet head()}
       <div class="head">
@@ -125,14 +127,14 @@
               openSongMenu(e, playIds(), {
                 onPlaylist: id,
                 from: p.name,
-                link: { kind: 'playlist', id }
+                link: queueLink('playlist', id)
               })}><Icon name="more" size={18} /></button
           >
         </div>
       </div>
     {/snippet}
   </SongTable>
-  {#if !p.trackIds.length}
+  {#if !p.items.length}
     <p class="hint">
       Empty for now. Right-click a song to add it, or use "Add to playlist" on an album page.
     </p>

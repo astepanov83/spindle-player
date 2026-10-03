@@ -1,5 +1,6 @@
 <!-- Cover grid, drawn a row at a time so a big library stays fast. -->
 <script lang="ts">
+  import { albumLink } from './album'
   import type { Album } from '../../../shared/library'
   import Empty from './Empty.svelte'
   import Cover from '../ui/Cover.svelte'
@@ -86,7 +87,7 @@
           oncontextmenu={(e) =>
             openSongMenu(e, al.trackIds, {
               from: al.title,
-              link: { kind: 'album', id: al.id }
+              link: albumLink(al)
             })}
         >
           <div class="cvwrap">

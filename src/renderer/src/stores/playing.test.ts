@@ -1,6 +1,7 @@
 // The playing store with a fake engine: queue to radio and back, and what a
 // restart brings back.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { emptyQueues, type SavedQueues } from '../../../shared/saved-queue'
 import type { EngineEvents } from '../audio/engine'
 import type { LibraryData, Track } from '../../../shared/library'
 import type { Station } from '../../../shared/stations'
@@ -116,7 +117,7 @@ describe('queue to radio', () => {
     expect(playing.kind).toBe('radio')
     expect(savePlaying).toHaveBeenLastCalledWith({ kind: 'radio', station: 'a' })
     expect(loads()).toEqual(['load spindle://radio/a?stream=0 live'])
-    expect(queue.items).toEqual(['s0', 's1', 's2'])
+    expect(queue.items).toEqual(['files:s0', 'files:s1', 'files:s2'])
     expect(queue.index).toBe(1)
     // the engine's time is the stream's now, not the song's
     fake.on.time!(5)
@@ -203,12 +204,20 @@ describe('back to the queue', () => {
 })
 
 describe('after a restart', () => {
-  const saved = { items: ['s0', 's1', 's2'], index: 2, from: 'Mix', pos: 30 }
+  const saved: SavedQueues = {
+    ...emptyQueues(),
+    track: { items: ['files:s0', 'files:s1', 'files:s2'], index: 2, from: 'Mix', pos: 30 }
+  }
+  const onRadio = (station: string): SavedQueues => ({
+    ...saved,
+    live: { current: `radio:${station}` },
+    active: 'live'
+  })
 
   it('radio comes back with the station selected and paused', async () => {
     await playing.backToQueue()
     fake.calls = []
-    playing.restore({ ...saved, kind: 'radio', station: 'b' })
+    playing.restore(onRadio('b'))
     expect(playing.kind).toBe('radio')
     expect(radio.station?.id).toBe('b')
     expect(player.playing).toBe(false)
@@ -230,14 +239,14 @@ describe('after a restart', () => {
     fake.calls = []
     savePlaying.mockClear()
     // the stations list is empty then, so the station is not found
-    playing.restore({ ...saved, kind: 'radio', station: 'gone' }, false)
+    playing.restore(onRadio('gone'), false)
     expect(playing.kind).toBe('queue')
     expect(fake.calls).toEqual(['load media/s2 at 30'])
     expect(savePlaying).not.toHaveBeenCalled()
   })
 
   it('after that, playing a song saves the queue, so the next start brings the song back', async () => {
-    playing.restore({ ...saved, kind: 'radio', station: 'gone' }, false)
+    playing.restore(onRadio('gone'), false)
     savePlaying.mockClear()
     queue.jump(0)
     expect(savePlaying).toHaveBeenCalledWith({ kind: 'queue' })
@@ -248,7 +257,7 @@ describe('after a restart', () => {
 
   it('a station no longer in My stations gives the queue back', async () => {
     fake.calls = []
-    playing.restore({ ...saved, kind: 'radio', station: 'gone' })
+    playing.restore(onRadio('gone'))
     expect(playing.kind).toBe('queue')
     expect(fake.calls).toEqual(['load media/s2 at 30'])
     expect(savePlaying).toHaveBeenLastCalledWith({ kind: 'queue' })

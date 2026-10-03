@@ -2,7 +2,7 @@ import type { ArtistChanges } from './artist-overrides'
 import type { IdMoves } from './id-moves'
 import type { ScanStatus } from './library'
 import type { Playlist } from './playlists'
-import type { QueuePlace, SavedPlaying, SavedQueue } from './saved-queue'
+import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
 import type { Settings } from './settings'
 import type { HistoryEntry, SongCover, Station, StationLogo } from './stations'
 
@@ -133,9 +133,9 @@ export const PlaybackChannel = {
 
 // What the preload exposes to the page as `window.playbackApi`.
 export interface PlaybackApi {
-  // the queue and position from the last run
-  loadQueue(): Promise<SavedQueue>
-  // the whole list; sent only when the list changes
+  // the queues, their places and what played, from the last run
+  loadQueue(): Promise<SavedQueues>
+  // the track queue's whole list; sent only when the list changes
   saveQueue(queue: SavedQueue): void
   // the current song and seconds into it; sent on every song change and while playing
   savePlace(place: QueuePlace): void

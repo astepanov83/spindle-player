@@ -3,6 +3,7 @@
 // loads fresh modules each test: the effect must share this file's Svelte.
 import { flushSync } from 'svelte'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { queueLink } from '../../../shared/saved-queue'
 import type { LibraryData } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 import { library } from '../stores/library.svelte'
@@ -109,7 +110,7 @@ describe('where a link lands (ticket 040)', () => {
     flushSync()
     await settle()
     box!.scrollTop = 300
-    library.showFrom({ kind: 'album', id: 'a' })
+    library.showFrom(queueLink('album', 'a'))
     flushSync()
     await settle()
     expect(box!.scrollTop).toBe(0)

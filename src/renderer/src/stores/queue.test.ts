@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EngineError, EngineEvents } from '../audio/engine'
 import type { Album, LibraryData, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
+import { queueLink } from '../../../shared/saved-queue'
 
 const fake = vi.hoisted(() => ({
   on: {} as Partial<EngineEvents>,
@@ -115,7 +116,7 @@ describe('a song ends', () => {
     fake.reset()
     player.pos = 100
     fake.on.ended!()
-    expect(queue.items).toEqual(['a0', 'a1', 'a2'])
+    expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:a2'])
     expect(playing()).toBe('a2')
     expect(player.playing).toBe(false)
     expect(player.pos).toBe(0)
@@ -180,7 +181,7 @@ describe('a song ends', () => {
     fake.on.ended!()
     fake.reset()
     queue.append(['b0', 'b1'])
-    expect(queue.items).toEqual(['a0', 'a1', 'a2', 'b0', 'b1'])
+    expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:a2', 'files:b0', 'files:b1'])
     expect(playing()).toBe('b0')
     expect(queue.ended).toBe(false)
     expect(player.playing).toBe(false)
@@ -193,7 +194,7 @@ describe('a song ends', () => {
     fake.on.ended!()
     fake.reset()
     queue.playNext(['b0', 'b1'])
-    expect(queue.items).toEqual(['a0', 'a1', 'a2', 'b0', 'b1'])
+    expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:a2', 'files:b0', 'files:b1'])
     expect(playing()).toBe('b0')
     expect(queue.ended).toBe(false)
     expect(player.playing).toBe(false)
@@ -254,7 +255,7 @@ describe('a song fails', () => {
   })
 
   it('stays put when paused, as after a restore', () => {
-    queue.restore({ items: ['a0', 'a1'], index: 0, from: 'Album a', pos: 12 })
+    queue.restore({ items: ['files:a0', 'files:a1'], index: 0, from: 'Album a', pos: 12 })
     fake.reset()
     fake.on.error!(bad)
     expect(playing()).toBe('a0')
@@ -265,7 +266,7 @@ describe('a song fails', () => {
   it('stops at the end of the queue when every song fails', () => {
     queue.playAlbum('a', 0)
     for (let i = 0; i < 3; i++) fake.on.error!(bad)
-    expect(queue.items).toEqual(['a0', 'a1', 'a2'])
+    expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:a2'])
     expect(player.playing).toBe(false)
     expect(notice.text).toBe('Format can\'t be played, stopped at the end of the list: "A 2"')
   })
@@ -306,7 +307,7 @@ describe('a rescan', () => {
     l.albums[0].trackIds = ['a0', 'a2']
     library.load(l)
     queue.prune()
-    expect(queue.items).toEqual(['a0', 'a2'])
+    expect(queue.items).toEqual(['files:a0', 'files:a2'])
     expect(playing()).toBe('a2')
     expect(fake.calls).toEqual(['load media/a2', 'play'])
   })
@@ -317,7 +318,7 @@ describe('a rescan', () => {
     l.albums[0].trackIds = ['a0', 'a1']
     library.load(l)
     queue.prune()
-    expect(queue.items).toEqual(['a0', 'a1'])
+    expect(queue.items).toEqual(['files:a0', 'files:a1'])
     expect(fake.calls).toEqual([])
   })
 })
@@ -333,12 +334,12 @@ describe('ids that changed', () => {
     l.albums[0].trackIds = ['n0', 'n1', 'a2']
     library.load(l)
     queue.prune()
-    expect(queue.items).toEqual(['n0', 'n1', 'a2'])
+    expect(queue.items).toEqual(['files:n0', 'files:n1', 'files:a2'])
     expect(playing()).toBe('n1')
     expect(fake.calls).toEqual([])
     expect(saveQueue).toHaveBeenCalledTimes(1)
     expect(saveQueue).toHaveBeenLastCalledWith(
-      expect.objectContaining({ items: ['n0', 'n1', 'a2'] })
+      expect.objectContaining({ items: ['files:n0', 'files:n1', 'files:a2'] })
     )
   })
 
@@ -363,10 +364,10 @@ describe('saving', () => {
     queue.playAlbum('b', 1)
     expect(saveQueue).toHaveBeenCalledTimes(1)
     expect(saveQueue).toHaveBeenLastCalledWith({
-      items: ['b0', 'b1'],
+      items: ['files:b0', 'files:b1'],
       index: 1,
       from: 'Album b',
-      link: { kind: 'album', id: 'b' },
+      link: queueLink('album', 'b'),
       pos: 0
     })
   })
@@ -448,7 +449,12 @@ describe('tracks of a disc image', () => {
   })
 
   it('come back at the saved place in the track', () => {
-    queue.restore({ items: ['c0', 'c1', 'c2'], index: 1, from: 'Album c', pos: 30 })
+    queue.restore({
+      items: ['files:c0', 'files:c1', 'files:c2'],
+      index: 1,
+      from: 'Album c',
+      pos: 30
+    })
     expect(fake.calls).toEqual(['load media/img 100-250 at 30'])
   })
 })
@@ -456,7 +462,7 @@ describe('tracks of a disc image', () => {
 describe('queue actions (ticket 037)', () => {
   it('Play next puts songs right after the current one, with nothing reloaded', () => {
     queue.playNext(['b0', 'b1'])
-    expect(queue.items).toEqual(['a0', 'b0', 'b1', 'a1', 'a2'])
+    expect(queue.items).toEqual(['files:a0', 'files:b0', 'files:b1', 'files:a1', 'files:a2'])
     expect(playing()).toBe('a0')
     expect(fake.calls).toEqual([])
     expect(notice.text).toBe('Playing next: 2 songs')
@@ -465,7 +471,7 @@ describe('queue actions (ticket 037)', () => {
 
   it('Add to queue puts songs at the end', () => {
     queue.append(['b1'])
-    expect(queue.items).toEqual(['a0', 'a1', 'a2', 'b1'])
+    expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:a2', 'files:b1'])
     expect(fake.calls).toEqual([])
     expect(notice.text).toBe('Added to the queue: "B 1"')
   })
@@ -475,7 +481,7 @@ describe('queue actions (ticket 037)', () => {
     queue.clear()
     fake.reset()
     queue.append(['b0', 'b1'], 'Album b')
-    expect(queue.items).toEqual(['b0', 'b1'])
+    expect(queue.items).toEqual(['files:b0', 'files:b1'])
     expect(queue.from).toBe('Album b')
     expect(playing()).toBe('b0')
     expect(fake.calls).toEqual(['load media/b0'])
@@ -483,25 +489,50 @@ describe('queue actions (ticket 037)', () => {
   })
 
   it('keeps what "From" opens, from a list, a menu and the last run (ticket 040)', () => {
-    expect(queue.link).toEqual({ kind: 'album', id: 'a' })
+    expect(queue.link).toEqual(queueLink('album', 'a'))
     queue.playList(['b0'], 0, 'search "b"')
     expect(queue.link).toBeUndefined()
     queue.clear()
     queue.clear()
-    queue.playNext(['b0'], 'Mix', { kind: 'playlist', id: 'p1' })
-    expect(queue.link).toEqual({ kind: 'playlist', id: 'p1' })
+    queue.playNext(['b0'], 'Mix', queueLink('playlist', 'p1'))
+    expect(queue.link).toEqual(queueLink('playlist', 'p1'))
     expect(saveQueue).toHaveBeenLastCalledWith(
-      expect.objectContaining({ from: 'Mix', link: { kind: 'playlist', id: 'p1' } })
+      expect.objectContaining({ from: 'Mix', link: queueLink('playlist', 'p1') })
     )
-    queue.restore({ items: ['a1'], index: 0, from: 'X', link: { kind: 'artist', id: 'x' }, pos: 0 })
-    expect(queue.link).toEqual({ kind: 'artist', id: 'x' })
+    queue.restore({
+      items: ['files:a1'],
+      index: 0,
+      from: 'X',
+      link: queueLink('artist', 'x'),
+      pos: 0
+    })
+    expect(queue.link).toEqual(queueLink('artist', 'x'))
+  })
+
+  it('plays an MFP album as mfp items, its "From" opening the episode (ticket 055)', () => {
+    const l = lib(['a', 3], ['e', 2])
+    l.albums[1].online = 'mfp'
+    for (const t of l.tracks) if (t.albumId === 'e') t.online = 'mfp'
+    library.load(l)
+    queue.playAlbum('e', 1)
+    expect(queue.items).toEqual(['mfp:e0', 'mfp:e1'])
+    expect(queue.link).toEqual(queueLink('episode', 'e'))
+    expect(playing()).toBe('e1')
+    queue.append(['a0'])
+    expect(queue.items).toEqual(['mfp:e0', 'mfp:e1', 'files:a0'])
+  })
+
+  it('moves only files keys when ids change', () => {
+    queue.restore({ items: ['files:a0', 'mfp:a1', 'files:a2'], index: 0, from: 'X', pos: 0 })
+    queue.moveIds({ a0: 'n0', a1: 'n1' })
+    expect(queue.items).toEqual(['files:n0', 'mfp:a1', 'files:a2'])
   })
 
   it('removing a row before the current song keeps it playing', () => {
     queue.jump(2)
     fake.reset()
     queue.remove(0)
-    expect(queue.items).toEqual(['a1', 'a2'])
+    expect(queue.items).toEqual(['files:a1', 'files:a2'])
     expect(queue.index).toBe(1)
     expect(playing()).toBe('a2')
     expect(fake.calls).toEqual([])
@@ -545,7 +576,7 @@ describe('queue actions (ticket 037)', () => {
     queue.jump(1)
     fake.reset()
     queue.move(2, 0)
-    expect(queue.items).toEqual(['a2', 'a0', 'a1'])
+    expect(queue.items).toEqual(['files:a2', 'files:a0', 'files:a1'])
     expect(queue.index).toBe(2)
     expect(playing()).toBe('a1')
     queue.move(2, 0)
@@ -556,7 +587,7 @@ describe('queue actions (ticket 037)', () => {
 
   it('Play next on a queue row moves it up to play next', () => {
     queue.playRowNext(2)
-    expect(queue.items).toEqual(['a0', 'a2', 'a1'])
+    expect(queue.items).toEqual(['files:a0', 'files:a2', 'files:a1'])
     expect(notice.text).toBe('Playing next: "A 2"')
     fake.on.ended!()
     expect(playing()).toBe('a2')
@@ -565,7 +596,7 @@ describe('queue actions (ticket 037)', () => {
   it('Play next on the row right after the current one still plays it first with shuffle', () => {
     player.shuffle = true
     queue.playRowNext(1)
-    expect(queue.items).toEqual(['a0', 'a1', 'a2'])
+    expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:a2'])
     expect(savePlace).toHaveBeenLastCalledWith({ index: 0, pos: 0, next: 1 })
     fake.on.ended!()
     expect(playing()).toBe('a1')
@@ -575,7 +606,7 @@ describe('queue actions (ticket 037)', () => {
     queue.jump(1)
     fake.reset()
     queue.clear()
-    expect(queue.items).toEqual(['a1'])
+    expect(queue.items).toEqual(['files:a1'])
     expect(playing()).toBe('a1')
     expect(fake.calls).toEqual([])
     expect(notice.text).toBe('Cleared the queue')
@@ -615,7 +646,13 @@ describe('queue actions (ticket 037)', () => {
   })
 
   it('comes back with the Play next songs after a restart', () => {
-    queue.restore({ items: ['a0', 'b0', 'a1', 'a2'], index: 0, from: 'X', pos: 3, next: 1 })
+    queue.restore({
+      items: ['files:a0', 'files:b0', 'files:a1', 'files:a2'],
+      index: 0,
+      from: 'X',
+      pos: 3,
+      next: 1
+    })
     player.shuffle = true
     fake.on.ended!()
     expect(playing()).toBe('b0')
@@ -638,7 +675,7 @@ describe('queue actions (ticket 037)', () => {
     queue.active = false
     queue.append(['b0'])
     queue.active = true
-    expect(queue.items).toEqual(['b0'])
+    expect(queue.items).toEqual(['files:b0'])
     expect(fake.calls).toEqual([])
   })
 })

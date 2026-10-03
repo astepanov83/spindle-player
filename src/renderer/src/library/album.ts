@@ -1,6 +1,6 @@
 // The album page's rows, label and Play button. No DOM.
 import { isVarious, type Album, type Track } from '../../../shared/library'
-import type { QueueLink } from '../../../shared/saved-queue'
+import { linkTarget, queueLink, type QueueLink } from '../../../shared/saved-queue'
 
 // A "Disc 2" label, or a song with its place in the album (`at`, for
 // playAlbum) and the number shown (0: none).
@@ -35,6 +35,11 @@ export function albumLabel(al: Pick<Album, 'artist' | 'artistTag' | 'year'>): st
   return al.year ? `${kind} · ${al.year}` : kind
 }
 
+// What "From" opens for an album's songs: an MFP album is an episode, with its own page.
+export function albumLink(al: Pick<Album, 'id' | 'online'>): QueueLink {
+  return queueLink(al.online === 'mfp' ? 'episode' : 'album', al.id)
+}
+
 // What the queue says, for the album page's Play button.
 export interface QueueSide {
   link: QueueLink | undefined
@@ -53,7 +58,11 @@ export interface QueueSide {
 // would only replay the last song. Add to queue keeps the old link, so the
 // song on must be from this album too.
 export function albumButton(albumId: string, q: QueueSide): 'play' | 'pause' | 'resume' {
-  const ours = q.link?.kind === 'album' && q.link.id === albumId && q.currentAlbum === albumId
+  const to = q.link && linkTarget(q.link)
+  const ours =
+    (to?.kind === 'album' || to?.kind === 'episode') &&
+    to.id === albumId &&
+    q.currentAlbum === albumId
   if (!q.queuePlays || !ours || q.ended) return 'play'
   return q.sounding ? 'pause' : 'resume'
 }

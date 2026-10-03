@@ -111,6 +111,16 @@ describe('StationsStore', () => {
     expect(store.get('a')).toBeUndefined()
   })
 
+  it('reads a file with a saved logo as its own, with no copy kept aside', () => {
+    const store = new StationsStore(path)
+    const logo = { hash: 'a'.repeat(40), palette: fallbackPalettes('x'), v: 3, from: 'bundled:x' }
+    store.setLogo('metal-only', logo)
+    store.flushSync()
+    new StationsStore(path)
+    expect(readdirSync(dir)).toEqual(['stations.json'])
+    expect(console.error).not.toHaveBeenCalled()
+  })
+
   it('sets the logo of a saved station, and writes it', () => {
     const store = new StationsStore(path)
     store.save(st('a'))

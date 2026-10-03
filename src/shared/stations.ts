@@ -195,7 +195,17 @@ export function parseStations(raw: unknown): Station[] {
 // (a newer version, a station this version drops) is copied before it is replaced.
 export function isKnownStationsFile(raw: unknown): boolean {
   if (!isObject(raw) || raw.version !== 1 || !Array.isArray(raw.stations)) return false
-  return JSON.stringify(stationsFile(parseStations(raw))) === JSON.stringify(raw)
+  return sortedJson(stationsFile(parseStations(raw))) === sortedJson(raw)
+}
+
+// JSON with the keys in a fixed order: a saved logo or station may list its
+// keys in another order than the parser builds them, which is no change.
+function sortedJson(v: unknown): string {
+  return JSON.stringify(v, (_k, x: unknown) =>
+    isObject(x)
+      ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : x
+  )
 }
 
 export function stationsFile(stations: Station[]): SavedStations {

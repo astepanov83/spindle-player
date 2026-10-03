@@ -163,6 +163,20 @@ describe('isKnownStationsFile', () => {
     expect(isKnownStationsFile(stationsFile([st('a')]))).toBe(true)
   })
 
+  it('knows a logo and a station whose keys come in another order', () => {
+    const logo = { hash: hashA, palette: colors, v: 2, from: 'x' }
+    const raw = {
+      version: 1,
+      stations: [{ ...st('a'), pls: ['https://a.example/l.pls'], logo }]
+    }
+    // the parser builds logo before pls, and hash, palette, from, v
+    expect(Object.keys(parseStation(raw.stations[0])!)).not.toEqual(Object.keys(raw.stations[0]))
+    expect(isKnownStationsFile(raw)).toBe(true)
+    expect(isKnownStationsFile({ ...raw, stations: [{ ...raw.stations[0], extra: 1 }] })).toBe(
+      false
+    )
+  })
+
   it('does not know a newer version or a file that loses a station', () => {
     expect(isKnownStationsFile({ version: 2, stations: [] })).toBe(false)
     expect(isKnownStationsFile({ version: 1, stations: [st('a'), 'junk'] })).toBe(false)

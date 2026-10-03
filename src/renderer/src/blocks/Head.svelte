@@ -121,8 +121,11 @@
             title={btn.label}
             disabled={btn.disabled}
             onclick={(e) =>
-              openSongMenu(e, btn.songs(), { from: btn.from, link: btn.link, folder: btn.folder })}
-            ><Icon name="more" size={18} /></button
+              openSongMenu(e, btn.songs(), {
+                from: btn.from,
+                link: btn.link,
+                actions: btn.actions?.map((a) => ({ label: a.label, run: () => act(a.id) }))
+              })}><Icon name="more" size={18} /></button
           >
         {:else if 'menu' in btn}
           <button

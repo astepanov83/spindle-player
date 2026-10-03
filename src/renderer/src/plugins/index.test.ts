@@ -260,9 +260,39 @@ describe('pages (ticket 059)', () => {
       p.pluginTabs().find((t) => t.id === id)!
     expect(p.pageBlocks(tab('albums')).map((b) => b.kind)).toEqual(['head', 'tiles'])
     library.query = 'vale'
-    expect(p.pageBlocks(tab('albums'))).toEqual([{ kind: 'view', view: 'search' }])
+    expect(p.pageBlocks(tab('albums')).map((b) => b.kind)).toEqual(['results'])
     expect(p.pageBlocks(tab('radio'))).toEqual([{ kind: 'view', view: 'radio' }])
     expect(p.pageBlocks(tab('playlists'))).toEqual([])
+  })
+
+  it('fill the search results with the groups of each plugin that is on', () => {
+    library.load(lib())
+    const tab = p.pluginTabs().find((t) => t.id === 'albums')!
+    library.query = ' song '
+    const [b] = p.pageBlocks(tab)
+    const groups = b.kind === 'results' ? b.groups : undefined
+    expect(groups?.map((f) => [f.key, f.plugin, f.group.title])).toEqual([
+      ['files:songs', 'files', 'Songs'],
+      ['files:albums', 'files', 'Albums'],
+      ['files:artists', 'files', 'Artists'],
+      ['mfp:mixes', 'mfp', 'In MFP mixes']
+    ])
+    expect(groups?.[3].group).toMatchObject({ songs: ['mfp:m1'] })
+    settings.plugins.mfp = false
+    expect(p.searchGroups('song').map((f) => f.key)).toEqual([
+      'files:songs',
+      'files:albums',
+      'files:artists'
+    ])
+    expect(p.searchGroups('  ')).toEqual([])
+  })
+
+  it('put a group shown whole under the results, for the scroll places', () => {
+    library.load(lib())
+    library.query = 'song'
+    expect(p.pagePath('albums')).toEqual(['search'])
+    library.showAll('files:songs')
+    expect(p.pagePath('albums')).toEqual(['search', 'all:files:songs'])
   })
 
   it('open a tile in its tab as a step, or as a link in the tab that shows it', () => {

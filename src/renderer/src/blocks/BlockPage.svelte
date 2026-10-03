@@ -5,10 +5,10 @@
   import Empty from '../library/Empty.svelte'
   import MfpView from '../library/MfpView.svelte'
   import RadioView from '../library/RadioView.svelte'
-  import SearchResults from '../library/SearchResults.svelte'
   import type { Block, NavKind } from '../plugins/types'
   import Head from './Head.svelte'
   import Nothing from './Nothing.svelte'
+  import Results from './Results.svelte'
   import Rows from './Rows.svelte'
   import Songs from './Songs.svelte'
   import Tiles from './Tiles.svelte'
@@ -68,13 +68,13 @@
       <Empty title={b.title} text={b.text} />
     {:else if b.kind === 'text'}
       <h3 class="part section-label">{b.text}</h3>
+    {:else if b.kind === 'results'}
+      <Results block={b} {scrollEl} />
     {:else if b.view === 'radio'}
-      <!-- the old views, until blocks draw them (tickets 061, 062, 059 part C) -->
+      <!-- the old views, until blocks draw them (tickets 061, 062) -->
       <RadioView {nav} />
-    {:else if b.view === 'mfp'}
-      <MfpView />
     {:else}
-      <SearchResults {scrollEl} />
+      <MfpView />
     {/if}
   {/each}
 {/if}

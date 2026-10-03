@@ -1,7 +1,8 @@
 // Music For Programming's page half. Its episodes are library albums until
 // ticket 061, so it reads the library store.
+import { searchSongs } from '../../library/views'
 import { library } from '../../stores/library.svelte'
-import { trackPlayable, trackState } from '../files/tracks'
+import { trackKey, trackPlayable, trackState } from '../files/tracks'
 import type { PageHalf } from '../types'
 import { canOpenMfp, keepMfp, mfpPath, mfpTabOf, mfpTabs } from './nav'
 
@@ -22,5 +23,13 @@ export const mfpHalf: PageHalf = {
   path: mfpPath,
   // its old view until blocks draw it (ticket 061)
   page: () => [{ kind: 'view', view: 'mfp' }],
+  // songs in the mixes, shown in the library's search results (ticket 052)
+  search: (query) => [
+    {
+      id: 'mixes',
+      title: 'In MFP mixes',
+      songs: searchSongs(library.mfpAlbums, (id) => library.track(id), query).map(trackKey)
+    }
+  ],
   version: () => library.revision * 2 + (complete() ? 1 : 0)
 }

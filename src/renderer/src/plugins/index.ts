@@ -13,6 +13,7 @@ import type {
   Block,
   Can,
   EmptyBlock,
+  FoundGroup,
   ItemAnswer,
   ItemInfo,
   LivePlugin,
@@ -105,10 +106,26 @@ export function openPage(to: PageAddress): void {
 }
 
 // A tab's open page as blocks, from its plugin. The core's Playlists has none:
-// it draws its own.
+// it draws its own. A page of search results gets every plugin's groups.
 export function pageBlocks(tab: ShownTab): Block[] {
   if (tab.plugin === 'core') return []
-  return halves[tab.plugin].page(tab.id, library.page(tab.id), library.query)
+  const blocks = halves[tab.plugin].page(tab.id, library.page(tab.id), library.query)
+  return blocks.map((b) =>
+    b.kind === 'results' ? { ...b, groups: searchGroups(library.query) } : b
+  )
+}
+
+// What the plugins that are on find for the search text, in plugin order.
+// Empty groups too: one shown whole stays while the text changes.
+export function searchGroups(query: string): FoundGroup[] {
+  const q = query.trim()
+  if (!q) return []
+  return plugins.flatMap((p) => {
+    const search = pluginOn(p.id) ? halves[p.id].search : undefined
+    return search
+      ? search(q).map((group) => ({ key: `${p.id}:${group.id}`, plugin: p.id, group }))
+      : []
+  })
 }
 
 // A block's button, tile or row was used. Not while its plugin is off.
@@ -178,7 +195,9 @@ export function pagePath(tab: string): string[] {
   if (!t) return []
   if (t.plugin === 'core') return library.openPlaylist ? [`pl:${library.openPlaylist}`] : []
   const path = halves[t.plugin].path
-  return path ? path(tab, page) : page ? [page] : []
+  const out = path ? path(tab, page) : page ? [page] : []
+  // one group of the search results shown whole is a view below them
+  return library.searchAll && library.query.trim() ? [...out, `all:${library.searchAll}`] : out
 }
 
 // Changes whenever an answer of itemInfo may have changed: a plugin turned on

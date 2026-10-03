@@ -37,11 +37,9 @@ vi.mock('../stores/queue.svelte', () => ({
     playRowNext: (i: number) => fake.calls.push(`row next ${i}`)
   }
 }))
-const showFolder = vi.fn(async (parts: string[]) => parts.length > 0)
 // radio's page half hears main from the start
 vi.stubGlobal('window', {
   playlistsApi: { save: vi.fn() },
-  libraryApi: { showFolder },
   radioApi: { onTitle: () => () => {}, onLogo: () => () => {}, onCover: () => () => {} }
 })
 
@@ -49,7 +47,6 @@ const { playlistMenu, songMenu, sections } = await import('./song-menu')
 const { playlists } = await import('../stores/playlists.svelte')
 const { library } = await import('../stores/library.svelte')
 const { layout } = await import('../stores/layout.svelte')
-const { notice } = await import('../stores/notice.svelte')
 const { settings } = await import('../stores/settings.svelte')
 
 const labels = (entries: MenuEntry[]): string[] =>
@@ -273,11 +270,11 @@ describe('Go to (ticket 040)', () => {
   })
 })
 
-describe('Show in file manager', () => {
-  const folder = ['/home/me/Music', 'Rock', 'A']
+describe("the songs' plugin's entries", () => {
+  const show = { label: 'Show in file manager', run: vi.fn() }
 
-  it('comes before the playlists when the songs have a folder', () => {
-    const entries = songMenu(['files:a', 'files:b'], { folder })
+  it('come after Go to and before the playlists', () => {
+    const entries = songMenu(['files:a', 'files:b'], { actions: [show] })
     expect(labels(entries).slice(0, 5)).toEqual([
       'Play next',
       'Add to queue',
@@ -286,17 +283,10 @@ describe('Show in file manager', () => {
       '---'
     ])
     pick(entries, 'Show in file manager')
-    expect(showFolder).toHaveBeenLastCalledWith(folder)
+    expect(show.run).toHaveBeenCalledOnce()
   })
 
-  it('is left out with no folder', () => {
+  it('are left out when the block gives none', () => {
     expect(labels(songMenu(['files:a']))).not.toContain('Show in file manager')
-  })
-
-  it('says so when the folder could not be opened', async () => {
-    showFolder.mockResolvedValueOnce(false)
-    pick(songMenu(['files:a'], { folder }), 'Show in file manager')
-    await vi.waitFor(() => expect(notice.text).toBe("Couldn't open /home/me/Music/Rock/A"))
-    notice.hide()
   })
 })

@@ -96,21 +96,11 @@ describe('files pages', () => {
     expect(nav.filesPath('folders', `folder/${live}`)).toEqual(
       [m, rock, live].map((k) => `folder:${k}`)
     )
-  })
-
-  it('read and change the open page of each tab', () => {
-    nav.openAlbum('a')
-    nav.openArtist('marinavale')
-    nav.openArtistAlbum('b')
-    nav.openFolder(library.folders.nodes[1].key)
-    expect([nav.shownAlbum(), nav.shownArtist(), nav.shownFolderKey()]).toEqual([
-      'a',
-      { key: 'marinavale', album: 'b' },
-      library.folders.nodes[1].key
-    ])
-    expect(library.page('artists')).toBe('album/b/artist/marinavale')
-    nav.openArtistAlbum(null)
-    expect(library.page('artists')).toBe('artist/marinavale')
+    // the search results and the filtered grid are a view below the page
+    library.query = 'x'
+    expect(nav.filesPath('albums', 'album/a')).toEqual(['album:a', 'search'])
+    expect(nav.filesPath('artists', '')).toEqual(['search'])
+    expect(nav.filesPath('folders', '')).toEqual([`folder:${m}`])
   })
 
   it('give the tabs, Songs only for Classic', () => {
@@ -120,7 +110,7 @@ describe('files pages', () => {
       ['artists', undefined],
       ['folders', undefined]
     ])
-    nav.openFolder(library.folders.nodes[2].key)
+    library.openPage('folders', `folder/${library.folders.nodes[2].key}`)
     expect(nav.filesTabs()[3].search).toBe('Search this folder')
   })
 })

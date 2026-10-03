@@ -27,8 +27,9 @@ import {
   type FolderTree
 } from '../../library/folders'
 import { libraryProblem, scanLine, settingsText, stoppedText } from '../../library/scan-text'
-import { nextSort, songRows, type SortKey } from '../../library/views'
+import { filterAlbums, nextSort, searchSongs, songRows, type SortKey } from '../../library/views'
 import { library } from '../../stores/library.svelte'
+import { notice } from '../../stores/notice.svelte'
 import {
   rowsBlock,
   tilesBlock,
@@ -37,6 +38,7 @@ import {
   type HeadBlock,
   type PageAddress,
   type Piece,
+  type SearchGroup,
   type TilesBlock
 } from '../types'
 import { openArtist, showArtist, followArtist } from './nav'
@@ -114,7 +116,8 @@ const listHead = (title: string, count: string): HeadBlock => ({
   count
 })
 
-// Classic's Songs: every song, in the library's sort
+// Classic's Songs: every song, in the library's sort. The sort is read when
+// drawn, so a sort click doesn't build the 50k list again.
 function songsTable(query: string): Block {
   return {
     kind: 'songs',
@@ -122,13 +125,16 @@ function songsTable(query: string): Block {
     items: songRows(library.albums, (id) => library.track(id), query).map(trackKey),
     from: 'Songs',
     meta: 'Library',
-    sort: library.sort
+    get sort() {
+      return library.sort
+    }
   }
 }
 
 function albumsPage(page: string, query: string): Block[] {
-  // the results show over the grid or the open album (part C draws them)
-  if (query.trim()) return [{ kind: 'view', view: 'search' }]
+  // every plugin's results show over the grid or the open album (ticket 039)
+  if (query.trim())
+    return [{ kind: 'results', empty: 'No song, album or artist has that in its name.' }]
   const p = parsePage(page)
   if (p?.kind === 'album' && library.findAlbum(p.id))
     return albumBlocks(library.album(p.id), { label: 'All albums', to: files('') })
@@ -140,7 +146,7 @@ function albumsPage(page: string, query: string): Block[] {
 
 // Albums as covers. On an artist's page the line under names the year, and
 // an album opens under the artist.
-export function albumTiles(albums: Album[], under?: { artist: string }): TilesBlock {
+function albumTiles(albums: Album[], under?: { artist: string }): TilesBlock {
   return tilesBlock<Album>({
     items: albums,
     key: (al) => albumPage(al.id),
@@ -174,7 +180,7 @@ const artistCount = (a: Artist): string =>
     ? fmtCount(a.albums.length, 'album', 'albums')
     : fmtCount(a.also.length, 'song', 'songs')
 
-export function artistTiles(artists: Artist[]): TilesBlock {
+function artistTiles(artists: Artist[]): TilesBlock {
   return tilesBlock<Artist>({
     items: artists,
     round: true,
@@ -214,18 +220,34 @@ function artistsPage(page: string, query: string): Block[] {
   ]
 }
 
+const showFolderId = 'show-folder'
+
+// Where an album is on disk: its folder and that folder's parts as
+// folderParts gives them. None while the folder table is not in yet.
+function albumFolder(al: Album): { at: number; parts: string[] } | undefined {
+  const at = commonFolder(
+    library.folders,
+    al.trackIds.map((t) => library.track(t).folder)
+  )
+  return at === null ? undefined : { at, parts: folderParts(library.folders, at) }
+}
+
+// "Show in file manager" in an album's song menu (ticket 050)
+async function showAlbumFolder(id: string): Promise<void> {
+  const al = library.findAlbum(id)
+  const where = al && albumFolder(al)
+  if (!where) return
+  if (!(await window.libraryApi.showFolder(where.parts)))
+    notice.show(`Couldn't open ${folderPath(where.parts)}`)
+}
+
 function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
   const id = albumPage(al.id)
   const tracks = al.trackIds.map((t) => library.track(t))
   const items = trackKeys(al.trackIds)
   const link = albumLink(al)
   const minutes = Math.round(tracks.reduce((s, t) => s + t.duration, 0) / 60)
-  // where the album is on disk; null while the folder table is not in yet
-  const folder = commonFolder(
-    library.folders,
-    tracks.map((t) => t.folder)
-  )
-  const parts = folder === null ? undefined : folderParts(library.folders, folder)
+  const where = albumFolder(al)
   // one link per artist of a split credit
   const names = artistLinks(al, (key) => !!library.getArtist(key)).flatMap(
     ({ name, key }, i): Piece[] => [
@@ -266,14 +288,14 @@ function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
         songs: () => items,
         from: al.title,
         link,
-        folder: parts
+        ...(where ? { actions: [{ id: showFolderId, label: 'Show in file manager' }] } : {})
       }
     ]
   }
-  if (parts && folder !== null)
+  if (where)
     head.where = {
-      text: folderPath(parts),
-      to: files(folderPage(library.folders.nodes[folder].key))
+      text: folderPath(where.parts),
+      to: files(folderPage(library.folders.nodes[where.at].key))
     }
   return [head, { kind: 'songs', id, items, from: al.title, link, numbers, groups }]
 }
@@ -371,7 +393,9 @@ function artistBlocks(a: Artist): Block[] {
       // already counts the songs
       ...(albums.length ? { label: 'Also on' } : {}),
       count: albums.length > 0,
-      sort: library.artistSort
+      get sort() {
+        return library.artistSort
+      }
     })
   return blocks
 }
@@ -501,9 +525,25 @@ function foldersPage(page: string, query: string): Block[] {
       from: title,
       link,
       label: 'Songs in this folder',
-      sort: library.folderSort
+      get sort() {
+        return library.folderSort
+      }
     })
   return blocks
+}
+
+// What the search box finds in the music folders (ticket 039): songs by
+// title or their own artist, albums, artists.
+export function filesSearch(query: string): SearchGroup[] {
+  return [
+    {
+      id: 'songs',
+      title: 'Songs',
+      songs: searchSongs(library.albums, (id) => library.track(id), query).map(trackKey)
+    },
+    { id: 'albums', title: 'Albums', tiles: albumTiles(filterAlbums(library.albums, query)) },
+    { id: 'artists', title: 'Artists', tiles: artistTiles(filterArtists(library.artists, query)) }
+  ]
 }
 
 // A block's button was used (see the blocks above for the targets).
@@ -511,6 +551,7 @@ export function filesAct(target: string, id: string, value?: string): void {
   if (id === 'add-folder') return void window.libraryApi.addFolder()
   if (id === 'sort' && value) return sortBy(target, value as SortKey)
   const p = parsePage(target)
+  if (p?.kind === 'album' && id === showFolderId) return void showAlbumFolder(p.id)
   const a = p?.kind === 'artist' && !p.album ? library.getArtist(p.key) : undefined
   if (a) artistAct(a, id, value)
 }

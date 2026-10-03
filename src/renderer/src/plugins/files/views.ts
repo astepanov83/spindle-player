@@ -1,4 +1,4 @@
-// For the old views (MFP, the search results) until blocks draw them: the
+// For the old MFP views until blocks draw them (ticket 061): the
 // song playing, and an album played as the queue.
 import type { Track } from '../../../../shared/library'
 import { albumLink } from '../../library/album'

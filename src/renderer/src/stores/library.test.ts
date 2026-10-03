@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { queueLink } from '../../../shared/saved-queue'
 import type { LibraryData, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
+import { albumPage, artistPage, folderPage, parsePage } from '../plugins/files/pages'
 
 // radio's page half hears main from the start
 vi.stubGlobal('window', {
@@ -13,7 +14,16 @@ vi.stubGlobal('window', {
 let library: typeof import('./library.svelte').library
 let settings: typeof import('./settings.svelte').settings
 let p: typeof import('../plugins')
-let files: typeof import('../plugins/files/nav')
+type FilesNav = typeof import('../plugins/files/nav')
+let files: FilesNav & {
+  shownAlbum(): string | null
+  openAlbum(id: string | null): void
+  shownArtist(): { key: string | null; album: string | null }
+  openArtistAlbum(id: string | null): void
+  shownFolderKey(): string | null
+  openFolder(key: string | null): void
+  showFolder(key: string): void
+}
 let mfp: typeof import('../plugins/mfp/nav')
 
 function lib(...ids: string[]): LibraryData {
@@ -30,6 +40,48 @@ function lib(...ids: string[]): LibraryData {
   return { albums, tracks: [], folders: [] }
 }
 
+// The files tabs' pages, read and opened as the app's blocks do: a tile or a
+// back link opens a page of its tab, a link opens it in its tab.
+function filesHelpers(nav: FilesNav): typeof files {
+  const open = (tab: string): ReturnType<typeof parsePage> => parsePage(library.page(tab))
+  return {
+    ...nav,
+    // Albums: the open album, null for the grid
+    shownAlbum(): string | null {
+      const p = open('albums')
+      return p?.kind === 'album' ? p.id : null
+    },
+    openAlbum(id: string | null): void {
+      library.openPage('albums', id ? albumPage(id) : '')
+    },
+    // Artists: the open artist (null for the grid), and an album opened from it
+    shownArtist(): { key: string | null; album: string | null } {
+      const p = open('artists')
+      return p?.kind === 'artist'
+        ? { key: p.key, album: p.album ?? null }
+        : { key: null, album: null }
+    },
+    // null goes back to the artist
+    openArtistAlbum(id: string | null): void {
+      const p = open('artists')
+      if (p?.kind === 'artist') library.openPage('artists', artistPage(p.key, id))
+    },
+    // Folders: the open folder by key, null for the top
+    shownFolderKey(): string | null {
+      const p = open('folders')
+      return p?.kind === 'folder' ? p.key : null
+    },
+    // the path bar and subfolders keep the search text
+    openFolder(key: string | null): void {
+      library.openPage('folders', key ? folderPage(key) : '', true)
+    },
+    // a link, as from the album page's folder line
+    showFolder(key: string): void {
+      p.openPage({ plugin: 'files', page: folderPage(key) })
+    }
+  }
+}
+
 // what App's effect does when a plugin is turned on or off
 const tabsChanged = (): void => library.setTabs(p.navTabs())
 
@@ -39,7 +91,7 @@ beforeEach(async () => {
   library = (await import('./library.svelte')).library
   settings = (await import('./settings.svelte')).settings
   p = await import('../plugins')
-  files = await import('../plugins/files/nav')
+  files = filesHelpers(await import('../plugins/files/nav'))
   mfp = await import('../plugins/mfp/nav')
   settings.plugins = { files: true, radio: true, mfp: true }
   library.load(lib('a', 'b'))
@@ -163,11 +215,15 @@ describe('Back and Forward (ticket 051)', () => {
 
   it('brings back the search text a step had', () => {
     library.query = 'blue'
-    library.showAll('albums')
+    library.showAll('files:albums')
     files.openAlbum('a')
     expect([library.query, library.searchAll]).toEqual(['', null])
     library.back()
-    expect([library.query, library.searchAll, files.shownAlbum()]).toEqual(['blue', 'albums', null])
+    expect([library.query, library.searchAll, files.shownAlbum()]).toEqual([
+      'blue',
+      'files:albums',
+      null
+    ])
     // typing is not a step
     library.query = 'blue h'
     library.back()
@@ -479,13 +535,13 @@ describe('search text (ticket 039)', () => {
 
   it('"Show all" goes back to the results when the text is cleared', () => {
     library.query = 'harbor'
-    library.showAll('songs')
+    library.showAll('files:songs')
     library.query = 'harbor l'
-    expect(library.searchAll).toBe('songs')
+    expect(library.searchAll).toBe('files:songs')
     library.query = ' '
     expect(library.searchAll).toBeNull()
     library.query = 'harbor'
-    library.showAll('albums')
+    library.showAll('files:albums')
     library.pickTab('artists')
     expect(library.searchAll).toBeNull()
   })

@@ -38,8 +38,6 @@ import {
   type Walk
 } from '../library/history'
 
-export type SearchGroup = 'songs' | 'albums' | 'artists' | 'mfp'
-
 // The core's own tab (spec "Pages and tabs"): its pages are "playlist/<id>".
 export const playlistsTab = 'playlists'
 export const playlistPage = (id: string): string => `playlist/${id}`
@@ -53,8 +51,9 @@ export interface Nav {
   tab: string
   // a tab not in it shows its top; never ''
   pages: Readonly<Record<string, string>>
-  // the search results' group shown whole after "Show all", null for all groups
-  searchAll: SearchGroup | null
+  // the search results' group shown whole after "Show all" (its FoundGroup
+  // key, "files:songs"), null for all groups
+  searchAll: string | null
 }
 
 // What the store needs of a tab that shows: where, and what is left of its
@@ -337,7 +336,7 @@ class LibraryStore {
     return this.#nav.pages[tab] ?? ''
   }
 
-  get searchAll(): SearchGroup | null {
+  get searchAll(): string | null {
     return this.#nav.searchAll
   }
 
@@ -473,7 +472,7 @@ class LibraryStore {
   }
 
   // "Show all" in the search results; null is "All results"
-  showAll(group: SearchGroup | null): void {
+  showAll(group: string | null): void {
     this.go({ searchAll: group }, true)
   }
 

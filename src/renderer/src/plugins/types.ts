@@ -44,7 +44,15 @@ export interface Tab {
 // Lists hold the plugin's arrays as they are and make a tile or row only when
 // it is drawn, so a 50k list costs what it costs to keep.
 export type Block =
-  HeadBlock | TilesBlock | SongsBlock | RowsBlock | TreeBlock | EmptyBlock | TextBlock | ViewBlock
+  | HeadBlock
+  | TilesBlock
+  | SongsBlock
+  | RowsBlock
+  | TreeBlock
+  | EmptyBlock
+  | TextBlock
+  | ResultsBlock
+  | ViewBlock
 
 // A piece of a line: plain text, or a name that opens its page.
 export interface Piece {
@@ -74,10 +82,11 @@ export type HeadButton =
       // the label; More shows an icon and this as its tooltip
       label: string
       songs: () => ItemKey[]
-      // the song menu's "From", and the folder for "Show in file manager"
+      // the song menu's "From"
       from?: string
       link?: QueueLink
-      folder?: string[]
+      // the plugin's own entries in that menu: act(head id, id)
+      actions?: { id: string; label: string }[]
       disabled?: boolean
     }
   | {
@@ -173,7 +182,8 @@ export interface SongsBlock {
   label?: string
   // the song count on the right; off where the head says it already
   count?: boolean
-  // a column head was clicked: act(id, 'sort', its key)
+  // a column head was clicked: act(id, 'sort', its key). May be a getter, so
+  // a sort click only sorts and doesn't build the page's list again.
   sort?: Sort | null
   // an album's list: each song's number (0: none), and "Disc 2" before a song
   numbers?: number[]
@@ -230,12 +240,33 @@ export interface TextBlock {
   text: string
 }
 
+// What a search found in one plugin: songs, or tiles (albums, artists). The
+// core shows the first few of each group with "Show all" (spec "Pages and
+// tabs", Search).
+export type SearchGroup =
+  { id: string; title: string; songs: ItemKey[] } | { id: string; title: string; tiles: TilesBlock }
+
+// The search results of every plugin that is on, for the box's text: the
+// page a plugin shows while it is searched (Albums). The plugin gives the
+// "No matches" text; the core fills `groups` from each plugin's search().
+export interface ResultsBlock {
+  kind: 'results'
+  empty: string
+  groups?: FoundGroup[]
+}
+
+// A group with its plugin. `key` names it in Nav's searchAll after "Show all".
+export interface FoundGroup {
+  key: string
+  plugin: PluginId
+  group: SearchGroup
+}
+
 // Temporary: a plugin's old view, which the core draws as it is until blocks
-// draw it. Radio's goes in ticket 062, MFP's in 061, the search results in
-// 059 part C; then this kind goes.
+// draw it. Radio's goes in ticket 062, MFP's in 061; then this kind goes.
 export interface ViewBlock {
   kind: 'view'
-  view: 'radio' | 'mfp' | 'search'
+  view: 'radio' | 'mfp'
 }
 
 // A list block for a plugin's own array: its tiles and rows are typed by it.
@@ -352,6 +383,10 @@ export interface PageHalf {
   path?(tab: string, page: string): string[]
   // a page of one of its tabs, with the search box's text
   page(tab: string, page: string, query: string): Block[]
+  // What it finds for the search box's text (trimmed, not empty), at once
+  // and with no network, in the order shown. A group with nothing in it is
+  // not listed.
+  search?(query: string): SearchGroup[]
   // What the core's Playlists page shows while this plugin has found no
   // songs at all: none once it has some. `noPlaylists`: Studio's list of
   // playlists with none in it, which says what playlists are for.

@@ -1,9 +1,9 @@
-// The files plugin's tabs and their open pages, with small helpers to read
-// and open them (its actions use some; the store's tests most).
+// The files plugin's tabs and their open pages, with the helpers its actions
+// open pages with.
 import { crumbs, folderSearchText, shownFolder } from '../../library/folders'
 import { library } from '../../stores/library.svelte'
 import type { PageAddress, Tab } from '../types'
-import { albumPage, artistPage, filesTabOf, folderPage, parsePage } from './pages'
+import { artistPage, filesTabOf, parsePage } from './pages'
 
 // the music folders' albums, not MFP's episodes
 function localAlbum(id: string): boolean {
@@ -26,9 +26,15 @@ export function filesTabs(): Tab[] {
       id: 'folders',
       label: 'Folders',
       icon: 'folder',
-      search: folderSearchText(library.folders, shownFolderKey())
+      search: folderSearchText(library.folders, openFolderKey())
     }
   ]
+}
+
+// the open folder's key, null for the top
+function openFolderKey(): string | null {
+  const p = parsePage(library.page('folders'))
+  return p?.kind === 'folder' ? p.key : null
 }
 
 export function canOpenFiles(to: PageAddress): boolean {
@@ -67,28 +73,8 @@ export function filesPath(tab: string, page: string): string[] {
   // The search results (Albums) and the filtered grid (Artists) show over
   // the open view, so they are a view below it (ticket 039). Other views
   // filter in place and stay the same view.
-  if (library.query.trim() && (tab === 'albums' || tab === 'artists')) {
-    path.push('search')
-    if (tab === 'albums' && library.searchAll) path.push(`all:${library.searchAll}`)
-  }
+  if (library.query.trim() && (tab === 'albums' || tab === 'artists')) path.push('search')
   return path
-}
-
-// Albums: the open album, null for the grid
-export function shownAlbum(): string | null {
-  const p = parsePage(library.page('albums'))
-  return p?.kind === 'album' ? p.id : null
-}
-
-// from the grid or the search results; null is the back link
-export function openAlbum(id: string | null): void {
-  library.openPage('albums', id ? albumPage(id) : '')
-}
-
-// Artists: the open artist (null for the grid), and an album opened from it
-export function shownArtist(): { key: string | null; album: string | null } {
-  const p = parsePage(library.page('artists'))
-  return p?.kind === 'artist' ? { key: p.key, album: p.album ?? null } : { key: null, album: null }
 }
 
 // null goes back to the grid
@@ -97,16 +83,11 @@ export function openArtist(key: string | null): void {
   library.openPage('artists', key ? artistPage(key) : '')
 }
 
-// null goes back to the artist
-export function openArtistAlbum(id: string | null): void {
-  const { key } = shownArtist()
-  if (key) library.openPage('artists', artistPage(key, id))
-}
-
 // The open artist is renamed or split: show `key` once it is in the library,
 // with the album opened from it, if any.
 export function followArtist(key: string): void {
-  const was = shownArtist().key
+  const open = parsePage(library.page('artists'))
+  const was = open?.kind === 'artist' ? open.key : null
   library.follow({
     tab: 'artists',
     to: (page) => {
@@ -121,24 +102,11 @@ export function followArtist(key: string): void {
   })
 }
 
-// Folders: the open folder by key (see folders.ts), null for the top
-export function shownFolderKey(): string | null {
-  const p = parsePage(library.page('folders'))
-  return p?.kind === 'folder' ? p.key : null
-}
-
-// The path bar and subfolders. The search text stays, so a match deeper down
-// can be followed to.
-export function openFolder(key: string | null): void {
-  library.openPage('folders', key ? folderPage(key) : '', true)
-}
-
-// A link to a page of the plugin (the album page's artist and folder, an
-// artist in the search results). Something a rescan removed opens nothing.
+// A link to a page of the plugin (an artist's Edit from the search results).
+// Something a rescan removed opens nothing.
 function showLink(page: string): void {
   const tab = filesTabOf(page)
   if (tab && canOpenFiles({ plugin: 'files', page })) library.link(tab, page)
 }
 
 export const showArtist = (key: string): void => showLink(artistPage(key))
-export const showFolder = (key: string): void => showLink(folderPage(key))

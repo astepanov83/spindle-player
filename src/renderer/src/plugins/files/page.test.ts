@@ -6,7 +6,11 @@ import type { Album, LibraryData, Track } from '../../../../shared/library'
 import { defaultPalettes } from '../../../../shared/palette'
 import type { Block, HeadBlock, RowsBlock, SongsBlock, TilesBlock } from '../types'
 
-const api = { addFolder: vi.fn(), setArtists: vi.fn() }
+const api = {
+  addFolder: vi.fn(),
+  setArtists: vi.fn(),
+  showFolder: vi.fn(async (parts: string[]) => parts.length > 0)
+}
 vi.stubGlobal('window', {
   libraryApi: api,
   radioApi: { onTitle: () => () => {}, onLogo: () => () => {}, onCover: () => () => {} }
@@ -67,6 +71,7 @@ beforeEach(async () => {
   vi.resetModules()
   api.addFolder.mockClear()
   api.setArtists.mockClear()
+  api.showFolder.mockClear()
   library = (await import('../../stores/library.svelte')).library
   page = await import('./page')
 })
@@ -101,6 +106,23 @@ describe('before there are songs', () => {
   })
 })
 
+describe('search (tickets 039, 059)', () => {
+  beforeEach(() => library.load(lib()))
+
+  it('finds songs by title or their artist, albums and artists, not MFP songs', () => {
+    const [found, albums, artists] = page.filesSearch('juno')
+    expect(found).toEqual({ id: 'songs', title: 'Songs', songs: ['files:b1'] })
+    expect(albums).toMatchObject({ id: 'albums', title: 'Albums' })
+    expect('tiles' in albums && albums.tiles.items).toEqual([library.album('b')])
+    expect('tiles' in artists && artists.tiles.round).toBe(true)
+    expect('tiles' in artists && artists.tiles.items).toEqual([library.getArtist('junopark')])
+    expect(page.filesSearch('song m1')[0]).toMatchObject({ songs: [] })
+    expect(page.filesSearch('song a')[0]).toMatchObject({
+      songs: ['files:a1', 'files:a2', 'files:a3']
+    })
+  })
+})
+
 describe('pages', () => {
   beforeEach(() => library.load(lib()))
 
@@ -116,8 +138,31 @@ describe('pages', () => {
     expect(tile.link).toEqual({ plugin: 'files', page: 'album/a' })
   })
 
-  it('Albums with search text: the old search results', () => {
-    expect(kinds(page.filesPage('albums', 'album/a', 'juno'))).toEqual(['view'])
+  it('Albums with search text: the search results, over the open album', () => {
+    expect(page.filesPage('albums', 'album/a', 'juno')).toEqual([
+      { kind: 'results', empty: 'No song, album or artist has that in its name.' }
+    ])
+    // only spaces is no search
+    expect(kinds(page.filesPage('albums', 'album/a', '  '))).toEqual(['head', 'songs'])
+  })
+
+  it("an album's song menu offers its folder in the file manager (ticket 050)", async () => {
+    const [h] = page.filesPage('albums', 'album/a', '')
+    const more = head(h).buttons?.find((b) => 'menu' in b && b.menu === 'songs')
+    expect(more && 'actions' in more && more.actions).toEqual([
+      { id: 'show-folder', label: 'Show in file manager' }
+    ])
+    page.filesAct(head(h).id, 'show-folder')
+    expect(api.showFolder).toHaveBeenLastCalledWith(['/m', 'Rock'])
+    // it says so when the folder could not be opened
+    api.showFolder.mockResolvedValueOnce(false)
+    page.filesAct(head(h).id, 'show-folder')
+    const { notice } = await import('../../stores/notice.svelte')
+    await vi.waitFor(() => expect(notice.text).toBe("Couldn't open /m/Rock"))
+    // from an album opened under its artist too
+    const [under] = page.filesPage('artists', 'album/b/artist/junopark', '')
+    page.filesAct(head(under).id, 'show-folder')
+    expect(api.showFolder).toHaveBeenLastCalledWith(['/m', 'Rock', 'Live'])
   })
 
   it('an album: its head with links, and its songs with discs', () => {
@@ -254,6 +299,8 @@ describe('pages', () => {
     })
     page.filesAct(songs(s).id, 'sort', 't')
     expect(library.sort).toEqual({ k: 't', dir: 1 })
+    // the block reads the sort when drawn: the same block has the new one
+    expect(songs(s).sort).toEqual({ k: 't', dir: 1 })
     page.filesAct('folders', 'sort', 'd')
     expect(library.folderSort).toEqual({ k: 'd', dir: 1 })
     page.filesAct('artist/junopark', 'sort', 'al')

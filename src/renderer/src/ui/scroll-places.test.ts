@@ -78,7 +78,7 @@ describe('ScrollPlaces', () => {
   it('"All results" goes back to the results for the same text only', () => {
     const p = new ScrollPlaces<number>()
     const results = (query: string): View => ({ path: ['albums', 'search'], query })
-    const all = (query: string): View => ({ path: ['albums', 'search', 'all:songs'], query })
+    const all = (query: string): View => ({ path: ['albums', 'search', 'all:files:songs'], query })
     p.move(results('e'), 400, all('e'))
     expect(p.move(all('e'), 0, results('e'))).toBe(400)
     p.move(results('e'), 400, all('e'))

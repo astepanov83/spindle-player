@@ -1,13 +1,13 @@
-// The menu for songs: the queue first, then Go to, the folder, then the playlists. Each
-// part is a function; a new part is one more argument to `sections`. Songs
-// come as item keys.
+// The menu for songs (spec "Pages and tabs", Song menu): the core's queue
+// part, then the item's links (Go to), then what the songs' plugin offers
+// (Show in file manager), then the core's playlists. Each part is a
+// function; a new part is one more argument to `sections`. Songs come as
+// item keys.
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
-import { folderPath } from './folders'
 import { canOpen, infoOf, openPage } from '../plugins'
 import { layout } from '../stores/layout.svelte'
 import { menu, type MenuEntry, type MenuItem } from '../stores/menu.svelte'
-import { notice } from '../stores/notice.svelte'
 import { playlists } from '../stores/playlists.svelte'
 import { queue } from '../stores/queue.svelte'
 
@@ -22,8 +22,8 @@ export interface SongMenuOptions {
   from?: string
   // what "From" opens then
   link?: QueueLink
-  // the folder the songs are in, as folderParts gives it: "Show in file manager"
-  folder?: string[]
+  // the plugin's own entries, from the block the menu opened on (HeadButton.actions)
+  actions?: MenuItem[]
 }
 
 // The parts in order, with a line between, leaving out empty ones.
@@ -67,16 +67,6 @@ function goToPart(keys: ItemKey[]): MenuEntry[] {
     }))
 }
 
-function folderPart(o: SongMenuOptions): MenuEntry[] {
-  const parts = o.folder
-  if (!parts) return []
-  const run = async (): Promise<void> => {
-    if (!(await window.libraryApi.showFolder(parts)))
-      notice.show(`Couldn't open ${folderPath(parts)}`)
-  }
-  return [{ label: 'Show in file manager', run: () => void run() }]
-}
-
 function playlistPart(keys: ItemKey[], o: SongMenuOptions): MenuEntry[] {
   const entries: MenuEntry[] = [{ heading: 'Add to playlist' }]
   for (const p of playlists.list) {
@@ -95,7 +85,7 @@ function playlistPart(keys: ItemKey[], o: SongMenuOptions): MenuEntry[] {
 }
 
 export function songMenu(keys: ItemKey[], o: SongMenuOptions = {}): MenuEntry[] {
-  return sections(queuePart(keys, o), goToPart(keys), folderPart(o), playlistPart(keys, o))
+  return sections(queuePart(keys, o), goToPart(keys), o.actions ?? [], playlistPart(keys, o))
 }
 
 // Only the playlists, for the "Add to playlist" buttons on page headers.

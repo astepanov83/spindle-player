@@ -29,8 +29,8 @@ describe('libraryView while searching', () => {
   it('puts the results below the grid or the open album', () => {
     expect(path('albums', '', 'harbor')).toEqual(['albums', 'search'])
     expect(path('albums', 'album/a', 'harbor')).toEqual(['albums', 'album:a', 'search'])
-    library.showAll('songs')
-    expect(libraryView().path).toEqual(['albums', 'album:a', 'search', 'all:songs'])
+    library.showAll('files:songs')
+    expect(libraryView().path).toEqual(['albums', 'album:a', 'search', 'all:files:songs'])
   })
 
   it('puts the filtered artist grid below the open artist', () => {

@@ -1,32 +1,40 @@
-<!-- "Online music" in the settings sheet (ticket 052). Off, the site is never asked. -->
+<!-- "Plugins" in the settings sheet: a switch per plugin. Off, MFP never asks the site. -->
 <script lang="ts">
+  import { plugins, switchablePlugins } from '../../../shared/plugins'
   import { mfpLine } from '../library/scan-text'
   import Spinner from '../ui/Spinner.svelte'
   import { library } from '../stores/library.svelte'
   import { settings } from '../stores/settings.svelte'
 
-  const m = $derived(settings.mfp ? library.status.mfp : undefined)
+  const shown = plugins.filter((p) => switchablePlugins.includes(p.id))
+  const m = $derived(settings.plugins.mfp ? library.status.mfp : undefined)
   const line = $derived(mfpLine(m, Date.now()))
 </script>
 
 <div class="set">
-  <span class="section-label">Online music</span>
-  <label class="check">
-    <input type="checkbox" bind:checked={settings.mfp} />
-    Music For Programming
-  </label>
-  {#if settings.mfp}
-    <p class="hint">
-      Mixes from musicforprogramming.net, in the MFP tab. Song times inside a mix are guessed: the
-      site gives none.
-    </p>
-    {#if line}
-      <p class="hint status" aria-live="polite">
-        {#if m?.running}<Spinner />{/if}
-        <span>{line}</span>
-      </p>
+  <span class="section-label">Plugins</span>
+  {#each shown as p (p.id)}
+    <label class="check">
+      <input type="checkbox" bind:checked={settings.plugins[p.id]} />
+      {p.name}
+    </label>
+    {#if settings.plugins[p.id]}
+      {#if p.id === 'mfp'}
+        <p class="hint">
+          Mixes from musicforprogramming.net, in the MFP tab. Song times inside a mix are guessed:
+          the site gives none.
+        </p>
+        {#if line}
+          <p class="hint status" aria-live="polite">
+            {#if m?.running}<Spinner />{/if}
+            <span>{line}</span>
+          </p>
+        {/if}
+      {:else}
+        <p class="hint">{p.about}</p>
+      {/if}
     {/if}
-  {/if}
+  {/each}
 </div>
 
 <style>

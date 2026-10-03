@@ -1,4 +1,5 @@
 import type { QueueMode, Template, TemplateId } from './layout'
+import { isPluginId, plugins, type PluginId } from './plugins'
 import { templateIds, templates } from './templates'
 
 export type VisualizerStyle = 'ring' | 'spectrum' | 'wave' | 'off'
@@ -19,8 +20,8 @@ export interface Settings {
   coverSources: Record<CoverSource, boolean>
   // what closing the window does; 'ask' until the user picks one
   closeAction: CloseAction
-  // Music For Programming in its own tab (ticket 052); off, the site is never asked
-  mfp: boolean
+  // which plugins are on; MFP off means the site is never asked
+  plugins: Record<PluginId, boolean>
 }
 
 export interface Size {
@@ -53,6 +54,10 @@ export const themeChoices: ThemeChoice[] = ['dark', 'light', 'system']
 export const coverSources: CoverSource[] = ['musicbrainz', 'deezer', 'itunes']
 export const closeActions: CloseAction[] = ['ask', 'minimize', 'quit']
 
+function pluginDefaults(): Record<PluginId, boolean> {
+  return Object.fromEntries(plugins.map((p) => [p.id, p.defaultOn])) as Record<PluginId, boolean>
+}
+
 export function defaultSettings(): Settings {
   return {
     template: 'studio',
@@ -63,7 +68,7 @@ export function defaultSettings(): Settings {
     fetchCovers: false,
     coverSources: { musicbrainz: true, deezer: true, itunes: true },
     closeAction: 'ask',
-    mfp: false
+    plugins: pluginDefaults()
   }
 }
 
@@ -124,6 +129,21 @@ function parseCoverSources(
   return out
 }
 
+// `legacyMfp` is the old top-level `mfp` field, read only when `plugins` is missing.
+function parsePlugins(
+  v: unknown,
+  legacyMfp: unknown,
+  base: Record<PluginId, boolean>
+): Record<PluginId, boolean> {
+  const out = { ...base }
+  if (!isObject(v)) {
+    if (typeof legacyMfp === 'boolean') out.mfp = legacyMfp
+    return out
+  }
+  for (const p of plugins) if (typeof v[p.id] === 'boolean') out[p.id] = v[p.id] as boolean
+  return out
+}
+
 // Absolute on Linux and macOS, or with a drive letter on Windows.
 function isAbsolutePath(p: string): boolean {
   return p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\')
@@ -174,14 +194,15 @@ export function parseStoredSettings(
     fetchCovers: typeof r.fetchCovers === 'boolean' ? r.fetchCovers : base.fetchCovers,
     coverSources: parseCoverSources(r.coverSources, base.coverSources),
     closeAction: oneOf(r.closeAction, closeActions, base.closeAction),
-    mfp: typeof r.mfp === 'boolean' ? r.mfp : base.mfp,
+    plugins: parsePlugins(r.plugins, r.mfp, base.plugins),
     windowSizes,
     windowPlace: r.windowPlace === undefined ? base.windowPlace : parseWindowPlace(r.windowPlace),
     folders: Array.isArray(r.folders) ? parseFolders(r.folders) : [...base.folders]
   }
 }
 
-const storedKeys = Object.keys(defaultStoredSettings())
+// `mfp` is the old field: still read, and dropped by the next save
+const storedKeys = [...Object.keys(defaultStoredSettings()), 'mfp']
 
 // Every template named is one this version has, with a mode it offers. A
 // template left out is fine: the save only adds it.
@@ -235,6 +256,12 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('windowPlace') && raw.windowPlace !== null && !isKnownPlace(raw.windowPlace)) return false
   if (has('fetchCovers') && typeof raw.fetchCovers !== 'boolean') return false
   if (has('mfp') && typeof raw.mfp !== 'boolean') return false
+  if (
+    has('plugins') &&
+    (!isObject(raw.plugins) ||
+      Object.entries(raw.plugins).some(([k, v]) => !isPluginId(k) || typeof v !== 'boolean'))
+  )
+    return false
   if (has('closeAction') && !closeActions.includes(raw.closeAction as CloseAction)) return false
   if (
     has('coverSources') &&
@@ -262,6 +289,6 @@ export function pageSettings(s: StoredSettings): Settings {
     fetchCovers: s.fetchCovers,
     coverSources: { ...s.coverSources },
     closeAction: s.closeAction,
-    mfp: s.mfp
+    plugins: { ...s.plugins }
   }
 }

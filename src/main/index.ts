@@ -167,7 +167,8 @@ page.on(SettingsChannel.save, (_, raw, toFile) => {
     library.setFetch(next.fetchCovers, next.coverSources)
     songCovers.settingChanged()
   }
-  if (next.mfp !== before.mfp) library.setMfp(next.mfp)
+  // until the MFP plugin owns its own start and stop (061)
+  if (next.plugins.mfp !== before.plugins.mfp) library.setMfp(next.plugins.mfp)
 })
 
 page.handle(LibraryChannel.load, () => library.load())

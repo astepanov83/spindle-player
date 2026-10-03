@@ -23,7 +23,7 @@
   import { songRows } from './views'
   import { library, type Section } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
-  import { settings } from '../stores/settings.svelte'
+  import { pluginOn } from '../stores/settings.svelte'
 
   const allSections: [Section, IconName, string][] = [
     ['songs', 'note', 'Songs'],
@@ -34,7 +34,7 @@
     ['mfp', 'viz', 'MFP']
   ]
   // MFP only while its setting is on (ticket 052)
-  const sections = $derived(allSections.filter(([s]) => s !== 'mfp' || settings.mfp))
+  const sections = $derived(allSections.filter(([s]) => s !== 'mfp' || pluginOn('mfp')))
 
   let scrollEl: HTMLDivElement | undefined = $state()
 

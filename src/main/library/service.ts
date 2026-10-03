@@ -85,7 +85,7 @@ export class LibraryService {
         overridesPath: join(this.dir, 'artist-overrides.json'),
         userAgent: this.userAgent,
         keepCovers: this.keepCovers(),
-        mfp: { on: this.store.live().mfp, path: join(this.dir, 'mfp.json') }
+        mfp: { on: this.store.live().plugins.mfp, path: join(this.dir, 'mfp.json') }
       }),
       // a library process that dies is started again a few times, then left dead
       new RestartBudget(3, 60000),

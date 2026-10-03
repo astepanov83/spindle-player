@@ -14,7 +14,7 @@
   import { library } from '../stores/library.svelte'
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
-  import { settings } from '../stores/settings.svelte'
+  import { pluginOn } from '../stores/settings.svelte'
 
   const rows = $derived(episodeRows(library.mfpAlbums, (id) => library.track(id), library.query))
   const status = $derived(mfpLine(library.status.mfp, Date.now()))
@@ -30,7 +30,7 @@
   }
 </script>
 
-{#if !settings.mfp}
+{#if !pluginOn('mfp')}
   <Empty
     title="Music For Programming is off"
     text="Turn it on in Settings, under Online music, to play the mixes from musicforprogramming.net."

@@ -19,7 +19,7 @@
   import { libraryOnScreen } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { library, type Chip } from '../stores/library.svelte'
-  import { settings } from '../stores/settings.svelte'
+  import { pluginOn } from '../stores/settings.svelte'
 
   const allChips: [Chip, string][] = [
     ['albums', 'Albums'],
@@ -30,7 +30,7 @@
     ['mfp', 'MFP']
   ]
   // MFP only while its setting is on (ticket 052)
-  const chips = $derived(allChips.filter(([c]) => c !== 'mfp' || settings.mfp))
+  const chips = $derived(allChips.filter(([c]) => c !== 'mfp' || pluginOn('mfp')))
 
   let scrollEl: HTMLDivElement | undefined = $state()
 

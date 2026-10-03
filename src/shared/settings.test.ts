@@ -26,7 +26,7 @@ describe('parseStoredSettings', () => {
       fetchCovers: true,
       coverSources: { musicbrainz: false, deezer: true, itunes: true },
       closeAction: 'minimize',
-      mfp: true,
+      plugins: { files: true, radio: false, mfp: true },
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowPlace: { x: -1200, y: 40, maximized: true },
       folders: ['/home/me/Music', '/mnt/nas/music']
@@ -121,7 +121,7 @@ describe('parseStoredSettings with a base', () => {
     fetchCovers: true,
     coverSources: { musicbrainz: true, deezer: false, itunes: true },
     closeAction: 'quit',
-    mfp: false,
+    plugins: { files: true, radio: true, mfp: false },
     windowSizes: { focus: { width: 500, height: 700 } },
     windowPlace: { x: 40, y: 60, maximized: false },
     folders: ['/m']
@@ -266,23 +266,37 @@ describe('cover fetch settings', () => {
   })
 })
 
-describe('Music For Programming setting', () => {
-  it('is off by default', () => {
-    expect(parseStoredSettings(undefined).mfp).toBe(false)
+describe('plugins setting', () => {
+  it('has each default', () => {
+    expect(parseStoredSettings(undefined).plugins).toEqual({ files: true, radio: true, mfp: false })
   })
 
-  it('keeps a switch and falls back on a wrong one', () => {
-    expect(parseStoredSettings({ mfp: true }).mfp).toBe(true)
-    expect(parseStoredSettings({ mfp: 'yes' }).mfp).toBe(false)
+  it('keeps switches and resets only a wrong one', () => {
+    const p = parseStoredSettings({ plugins: { files: false, radio: 'yes', mfp: true } }).plugins
+    expect(p).toEqual({ files: false, radio: true, mfp: true })
   })
 
-  it('knows the field in a file', () => {
+  it('reads the old mfp field once, when plugins is missing', () => {
+    expect(parseStoredSettings({ mfp: true }).plugins.mfp).toBe(true)
+    expect(parseStoredSettings({ mfp: 'yes' }).plugins.mfp).toBe(false)
+    expect(parseStoredSettings({ mfp: true, plugins: { mfp: false } }).plugins.mfp).toBe(false)
+    expect(parseStoredSettings({ mfp: true })).not.toHaveProperty('mfp')
+  })
+
+  it('knows the old field and the new one in a file', () => {
     expect(isKnownSettingsFile({ mfp: true })).toBe(true)
     expect(isKnownSettingsFile({ mfp: 1 })).toBe(false)
+    expect(isKnownSettingsFile({ plugins: { files: true, mfp: false } })).toBe(true)
+  })
+
+  it('sets a file aside for an unknown id or a wrong value', () => {
+    expect(isKnownSettingsFile({ plugins: { jukebox: true } })).toBe(false)
+    expect(isKnownSettingsFile({ plugins: { mfp: 1 } })).toBe(false)
+    expect(isKnownSettingsFile({ plugins: [] })).toBe(false)
   })
 
   it('gives the page the field', () => {
-    expect(pageSettings(parseStoredSettings({ mfp: true })).mfp).toBe(true)
+    expect(pageSettings(parseStoredSettings({ mfp: true })).plugins.mfp).toBe(true)
   })
 })
 

@@ -9,7 +9,7 @@ import './assets/text.css'
 import './assets/controls.css'
 
 import App from './App.svelte'
-import { decodeLibrary, library } from './stores/library.svelte'
+import { files, decodeLibrary } from './plugins/files/store.svelte'
 import { LibraryFeed } from './stores/library-feed'
 import { layout } from './stores/layout.svelte'
 import { notice } from './stores/notice.svelte'
@@ -70,7 +70,7 @@ const [saved, lib, lists, lastQueue, stations, mixes] = await Promise.all([
   orFallback(() => window.settingsApi.load(), defaultSettings(), 'the settings'),
   orFallback<{ library?: Uint8Array; status: ScanStatus; moves?: IdMoves }>(
     () => window.libraryApi.load(),
-    { status: library.status },
+    { status: files.status },
     'the library'
   ),
   orFallback(() => window.playlistsApi.load(), [], 'the playlists'),
@@ -88,8 +88,8 @@ const [saved, lib, lists, lastQueue, stations, mixes] = await Promise.all([
   )
 ])
 loadSettings(saved.value, saved.ok)
-library.status = lib.value.status
-library.loadFailed = !lib.ok
+files.status = lib.value.status
+files.loadFailed = !lib.ok
 if (lib.value.library) loadLibrary(lib.value.library)
 
 // Ids that changed come just before the library that has the new ones, and
@@ -101,7 +101,7 @@ window.libraryApi.onIdsMoved((m) => (moves = moves ? mergeMoves(moves, m) : m))
 let startLists = lists.value
 let startQueue = lastQueue.value
 if (moves) {
-  const { now, later } = splitMoves(moves, (id) => library.has(id))
+  const { now, later } = splitMoves(moves, (id) => files.has(id))
   startLists = movePlaylists(startLists, now)
   startQueue = moveQueue(startQueue, now)
   moves = Object.keys(later).length ? later : undefined
@@ -122,13 +122,13 @@ function loadLibrary(bytes: Uint8Array): boolean {
   try {
     const m = decodeLibrary(bytes)
     if ('patch' in m) throw new Error('a patch, not a whole library')
-    library.load(m)
+    files.load(m)
   } catch (e) {
     console.error('Could not read the library', e)
-    library.loadFailed = true
+    files.loadFailed = true
     return false
   }
-  library.loadFailed = false
+  files.loadFailed = false
   return true
 }
 
@@ -140,19 +140,19 @@ function applyLibrary(m: LibraryMessage): void {
     playlists.moveIds(moves)
     moves = undefined
   }
-  if ('patch' in m) library.patch(m)
-  else library.load(m)
-  library.loadFailed = false
+  if ('patch' in m) files.patch(m)
+  else files.load(m)
+  files.loadFailed = false
 }
 
 // While a scan runs, main sends what changed (ticket 022).
 const feed = new LibraryFeed({
-  have: () => library.sent,
+  have: () => files.sent,
   apply: applyLibrary,
   fetch: async () => decodeLibrary(await window.libraryApi.get()),
   fail: (e) => {
     console.error('Could not get the library', e)
-    library.loadFailed = true
+    files.loadFailed = true
   }
 })
 
@@ -162,16 +162,16 @@ window.libraryApi.onChanged((bytes) => {
     m = decodeLibrary(bytes)
   } catch (e) {
     console.error('Could not read the library', e)
-    library.loadFailed = true
+    files.loadFailed = true
     return
   }
   feed.take(m)
 })
 // A failed scan or a folder not found shows only in the settings sheet, so
 // the main window says so too (ticket 045).
-const scanWatch = new ScanWatch(library.status)
+const scanWatch = new ScanWatch(files.status)
 window.libraryApi.onStatus((s) => {
-  library.status = s
+  files.status = s
   const text = scanWatch.next(s)
   if (text && !layout.settingsOpen)
     notice.show(text, { label: 'Open Settings', run: () => (layout.settingsOpen = true) })

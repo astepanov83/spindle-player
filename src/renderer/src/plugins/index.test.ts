@@ -13,6 +13,7 @@ vi.stubGlobal('window', {
 
 let p: typeof import('./index')
 let library: typeof import('../stores/library.svelte').library
+let files: typeof import('./files/store.svelte').files
 let settings: typeof import('../stores/settings.svelte').settings
 let mfp: typeof import('./mfp/store.svelte').mfp
 
@@ -82,6 +83,7 @@ beforeEach(async () => {
   vi.resetModules()
   p = await import('./index')
   library = (await import('../stores/library.svelte')).library
+  files = (await import('./files/store.svelte')).files
   settings = (await import('../stores/settings.svelte')).settings
   mfp = (await import('./mfp/store.svelte')).mfp
   settings.plugins = { files: true, radio: true, mfp: true }
@@ -89,7 +91,7 @@ beforeEach(async () => {
 
 describe('itemInfo', () => {
   it('answers a song of the library from what it holds', () => {
-    library.load(lib())
+    files.load(lib())
     const s = p.itemInfo('files:s1')
     expect(s.state).toBe('ok')
     if (s.state !== 'ok') return
@@ -103,14 +105,14 @@ describe('itemInfo', () => {
   })
 
   it('gives the same answer each time, with no new objects', () => {
-    library.load(lib())
+    files.load(lib())
     expect(p.itemInfo('files:s1')).toBe(p.itemInfo('files:s1'))
     settings.plugins.mfp = false
     expect(p.itemInfo('mfp:m1')).toBe(p.itemInfo('mfp:m2'))
   })
 
   it('says off for a plugin that is off, whatever its data', () => {
-    library.load(lib())
+    files.load(lib())
     settings.plugins.mfp = false
     expect(p.itemInfo('mfp:m1')).toEqual({ state: 'off', text: 'MFP is off' })
     expect(p.infoOf('mfp:m1')).toBeUndefined()
@@ -119,7 +121,7 @@ describe('itemInfo', () => {
 
   it('a song is loading until the first library, then gone if not in it', () => {
     expect(p.itemInfo('files:s1').state).toBe('loading')
-    library.load(lib())
+    files.load(lib())
     expect(p.itemInfo('files:s1').state).toBe('ok')
     expect(p.itemInfo('files:nope').state).toBe('missing')
   })
@@ -148,7 +150,7 @@ describe('itemInfo', () => {
   })
 
   it("a key of one plugin is not another plugin's song", () => {
-    library.load(lib())
+    files.load(lib())
     loadMfp()
     expect(p.itemInfo('mfp:s1').state).toBe('missing')
     expect(p.itemInfo('files:m1').state).toBe('missing')
@@ -206,7 +208,7 @@ describe('actOn (ticket 058)', () => {
 
 describe('playItem', () => {
   it('gives the file and the part of a disc image, for the carry-on', () => {
-    library.load(lib())
+    files.load(lib())
     expect(p.playItem('files:c1')).toEqual({
       url: 'spindle://media/disc',
       part: { file: 'disc', start: 0, end: 100 },
@@ -242,7 +244,7 @@ describe('playItem', () => {
 
 describe('links', () => {
   it('lead to the album at the song and to the artist', () => {
-    library.load(lib())
+    files.load(lib())
     library.go({ tab: 'radio' })
     const i = p.infoOf('files:s1')!
     expect(i.links?.map((l) => l.label)).toEqual(['Go to album', 'Go to artist'])
@@ -284,7 +286,7 @@ describe('tabs', () => {
   })
 
   it('open a link in the tab that shows it', () => {
-    library.load(lib())
+    files.load(lib())
     loadMfp()
     p.openPage({ plugin: 'mfp', page: 'episode/ep' })
     expect([library.tab, library.page('mfp')]).toEqual(['mfp', 'episode/ep'])
@@ -307,7 +309,7 @@ describe('pages (ticket 059)', () => {
   })
 
   it('come from the plugin of the tab shown, with the search text', () => {
-    library.load(lib())
+    files.load(lib())
     const tab = (id: string): ReturnType<typeof p.pluginTabs>[number] =>
       p.pluginTabs().find((t) => t.id === id)!
     expect(p.pageBlocks(tab('albums')).map((b) => b.kind)).toEqual(['head', 'tiles'])
@@ -318,7 +320,7 @@ describe('pages (ticket 059)', () => {
   })
 
   it('fill the search results with the groups of each plugin that is on', () => {
-    library.load(lib())
+    files.load(lib())
     loadMfp()
     const tab = p.pluginTabs().find((t) => t.id === 'albums')!
     library.query = ' song '
@@ -341,7 +343,7 @@ describe('pages (ticket 059)', () => {
   })
 
   it('put a group shown whole under the results, for the scroll places', () => {
-    library.load(lib())
+    files.load(lib())
     library.query = 'song'
     expect(p.pagePath('albums')).toEqual(['search'])
     library.showAll('files:songs')
@@ -349,7 +351,7 @@ describe('pages (ticket 059)', () => {
   })
 
   it('open a tile in its tab as a step, or as a link in the tab that shows it', () => {
-    library.load(lib())
+    files.load(lib())
     library.pickTab('artists')
     library.query = 'vale'
     p.openFrom('artists', { plugin: 'files', page: 'artist/marinavale' })
@@ -374,7 +376,7 @@ describe('pages (ticket 059)', () => {
   })
 
   it('keep the search text along a list it filters in place', () => {
-    library.load(lib())
+    files.load(lib())
     library.pickTab('folders')
     library.query = 'song'
     p.openFrom('folders', { plugin: 'files', page: 'folder/x' }, true)
@@ -382,7 +384,7 @@ describe('pages (ticket 059)', () => {
   })
 
   it('pass a block action to its plugin, not while it is off', () => {
-    library.load(lib())
+    files.load(lib())
     p.actOnPage('files', 'songs', 'sort', 't')
     expect(library.sort).toEqual({ k: 't', dir: 1 })
     settings.plugins.files = false
@@ -392,19 +394,19 @@ describe('pages (ticket 059)', () => {
 
   it("give the core's Playlists the empty library while there are no songs", () => {
     expect(p.playlistsEmpty(true)).toMatchObject({ plugin: 'files', block: { kind: 'empty' } })
-    library.load(lib())
+    files.load(lib())
     expect(p.playlistsEmpty(true)).toBeUndefined()
   })
 })
 
 describe('itemsVersion', () => {
   it('changes with a plugin turned on or off, and with new data', () => {
-    library.load(lib())
+    files.load(lib())
     const a = p.itemsVersion()
     settings.plugins.mfp = false
     const b = p.itemsVersion()
     expect(b).not.toBe(a)
-    library.load(lib())
+    files.load(lib())
     expect(p.itemsVersion()).not.toBe(b)
     settings.plugins.mfp = true
     const c = p.itemsVersion()
@@ -413,10 +415,10 @@ describe('itemsVersion', () => {
   })
 
   it('stays the same for a status that changes no answer', () => {
-    library.load(lib())
+    files.load(lib())
     loadMfp()
     const a = p.itemsVersion()
-    library.status = { ...library.status, done: 5, total: 10 }
+    files.status = { ...files.status, done: 5, total: 10 }
     mfp.status = { ...mfpOn, running: true }
     expect(p.itemsVersion()).toBe(a)
   })
@@ -430,7 +432,7 @@ describe('settings blocks (ticket 060)', () => {
   })
 
   it('give the music folders, Add folder, Rescan and the scan line', () => {
-    library.status = { ...library.status, folders: ['/m', '/gone'], missing: ['/gone'] }
+    files.status = { ...files.status, folders: ['/m', '/gone'], missing: ['/gone'] }
     const blocks = p.settingBlocks('files')
     expect(blocks.map((b) => b.kind)).toEqual(['title', 'list', 'button', 'button', 'status'])
     expect(blocks[1]).toMatchObject({
@@ -448,12 +450,12 @@ describe('settings blocks (ticket 060)', () => {
   })
 
   it('lock the folders and Rescan while settings.json is unreadable or a scan runs', () => {
-    library.status = { ...library.status, folders: ['/m'], settingsUnreadable: true }
+    files.status = { ...files.status, folders: ['/m'], settingsUnreadable: true }
     let blocks = p.settingBlocks('files')
     expect(blocks[1]).toMatchObject({ disabled: true })
     expect(blocks[2]).toMatchObject({ disabled: true })
     expect(blocks[3]).toMatchObject({ disabled: true })
-    library.status = { ...library.status, settingsUnreadable: false, phase: 'walk' }
+    files.status = { ...files.status, settingsUnreadable: false, phase: 'walk' }
     blocks = p.settingBlocks('files')
     expect(blocks[3]).toMatchObject({ id: 'rescan', disabled: true })
     expect(blocks[4]).toMatchObject({ kind: 'status', text: expect.stringContaining('Looking') })
@@ -504,7 +506,7 @@ describe('"Show all" of a plugin that went off (ticket 060)', () => {
   it('is cleared with the tabs of that plugin', () => {
     library.setTabs(p.navTabs())
     library.showIn('chips')
-    library.load(lib())
+    files.load(lib())
     loadMfp()
     library.query = 'song'
     library.showAll('mfp:mixes')

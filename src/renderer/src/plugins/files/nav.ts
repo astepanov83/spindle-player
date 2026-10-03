@@ -2,10 +2,11 @@
 // open pages with.
 import { crumbs, folderSearchText, shownFolder } from '../../library/folders'
 import { library } from '../../stores/library.svelte'
+import { files } from './store.svelte'
 import type { PageAddress, Tab } from '../types'
 import { artistPage, filesTabOf, parsePage } from './pages'
 
-const isAlbum = (id: string): boolean => !!library.findAlbum(id)
+const isAlbum = (id: string): boolean => !!files.findAlbum(id)
 
 export function filesTabs(): Tab[] {
   return [
@@ -22,7 +23,7 @@ export function filesTabs(): Tab[] {
       id: 'folders',
       label: 'Folders',
       icon: 'folder',
-      search: folderSearchText(library.folders, openFolderKey())
+      search: folderSearchText(files.folders, openFolderKey())
     }
   ]
 }
@@ -36,8 +37,8 @@ function openFolderKey(): string | null {
 export function canOpenFiles(to: PageAddress): boolean {
   const p = parsePage(to.page)
   if (p?.kind === 'album') return isAlbum(p.id)
-  if (p?.kind === 'artist') return !p.album && !!library.getArtist(p.key)
-  if (p?.kind === 'folder') return library.folders.byKey.has(p.key)
+  if (p?.kind === 'artist') return !p.album && !!files.getArtist(p.key)
+  if (p?.kind === 'folder') return files.folders.byKey.has(p.key)
   return false
 }
 
@@ -49,7 +50,7 @@ export function keepFiles(_tab: string, page: string): string {
   if (!p) return ''
   if (p.kind === 'album') return isAlbum(p.id) ? page : ''
   if (p.kind !== 'artist') return page
-  if (!library.getArtist(p.key)) return ''
+  if (!files.getArtist(p.key)) return ''
   return p.album && !isAlbum(p.album) ? artistPage(p.key) : page
 }
 
@@ -62,7 +63,7 @@ export function filesPath(tab: string, page: string): string[] {
     if (p.album) path.push(`album:${p.album}`)
   }
   if (tab === 'folders') {
-    const tree = library.folders
+    const tree = files.folders
     const i = shownFolder(tree, p?.kind === 'folder' ? p.key : null)
     if (i !== null) for (const j of crumbs(tree, i)) path.push(`folder:${tree.nodes[j].key}`)
   }

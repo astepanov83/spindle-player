@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CueSheet } from './cue'
 import { cueTracks, resolveCueFile } from './cue-tracks'
 import { buildLibrary } from './group'
-import { shortHash } from './ids'
+import { shortHash } from '../../ids'
 import { emptyIndex } from './merge'
 import type { FileEntry, LibraryIndex } from './types'
 

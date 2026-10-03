@@ -1,7 +1,7 @@
 // Name cleanup and the rules for taking a cover found online (ticket 014).
 // Strict on purpose: an album with no cover is fine, a wrong cover is not.
 
-import { various } from '../../shared/library'
+import { various } from '../../../shared/library'
 
 // An album with no picture of its own, to look up.
 export interface CoverQuery {

@@ -2,7 +2,7 @@
 // iTunes. It runs in the library process next to the album lookup and goes
 // through the same CoverHttp, so the same limiters, timeouts and image hosts
 // hold. Strict like album covers: the station's logo is fine, a wrong cover is not.
-import type { SongQuery } from '../../shared/radio-title'
+import type { SongQuery } from '../../../shared/radio-title'
 import { BusyError, NetError, type CoverHttp } from './cover-http'
 import { cleanAlbum, sameArtist, various } from './cover-match'
 import { answerError, term } from './cover-sources'

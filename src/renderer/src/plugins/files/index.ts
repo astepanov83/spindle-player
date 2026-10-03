@@ -1,15 +1,14 @@
-// The music files plugin's page half. Thin over the library store for now;
-// the store moves here in ticket 063.
-import { library } from '../../stores/library.svelte'
+// The music files plugin's page half, over its store (store.svelte.ts).
+import { files } from './store.svelte'
 import type { PageHalf } from '../types'
 import { canOpenFiles, filesPath, filesTabs, keepFiles } from './nav'
 import { filesAct, filesEmptyPlaylists, filesPage, filesSearch } from './page'
 import { filesTabOf } from './pages'
-import { filesActSetting, filesSettings } from './settings'
+import { filesActSetting, filesCoverLines, filesSettings, filesStatusLine } from './settings'
 import { trackPlayable, trackState } from './tracks'
 
 // before the first library a song is on its way, not gone
-const complete = (): boolean => library.loaded
+const complete = (): boolean => files.loaded
 
 export const filesHalf: PageHalf = {
   info: (id) => trackState(id, complete),
@@ -25,5 +24,7 @@ export const filesHalf: PageHalf = {
   act: filesAct,
   settings: filesSettings,
   actSetting: filesActSetting,
-  version: () => library.revision
+  version: () => files.revision,
+  statusLine: filesStatusLine,
+  coverLines: filesCoverLines
 }

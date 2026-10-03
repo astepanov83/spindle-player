@@ -1,10 +1,10 @@
 // Turns CUE sheets in the index into library tracks: one per cue TRACK, each
 // a stretch of a disc image. The image itself is then not listed as a song.
 import { basename, join } from 'path'
-import type { TrackPart } from '../../shared/library'
+import type { TrackPart } from '../../../shared/library'
 import type { CueSheet } from './cue'
 import { dirOf, isUnder } from './merge'
-import { cueTrackId, shortHash } from './ids'
+import { cueTrackId, shortHash } from '../../ids'
 import type { FileEntry, LibraryIndex } from './types'
 
 // One cue track, ready for grouping: `entry` looks like a file with the

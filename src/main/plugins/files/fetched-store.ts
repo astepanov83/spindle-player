@@ -2,8 +2,8 @@
 // photos it found, by artist key (ticket 021). Its own file, not
 // library.json: the index is thrown away and made again on a version change,
 // and this took up to an hour of requests to fill.
-import { coverSources, type CoverSource } from '../../shared/settings'
-import { isCoverHash } from './cover-names'
+import { coverSources, type CoverSource } from '../../../shared/settings'
+import { isCoverHash } from '../../covers/cover-names'
 
 export interface FetchedEntry {
   // the cover found; none for "not found"

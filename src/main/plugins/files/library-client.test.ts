@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ScanStatus } from '../../shared/library'
+import type { ScanStatus } from '../../../shared/library'
 import { emptyLibrary, LibraryClient } from './library-client'
 import type { WorkerIn } from './types'
 

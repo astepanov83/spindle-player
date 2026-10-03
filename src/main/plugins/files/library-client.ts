@@ -5,9 +5,9 @@
 //   - A scan cut short by a crash is asked for again once the new process runs,
 //     but only once: a scan that crashes it twice is dropped and shown as failed.
 //   - A closed app window stops the scan; it is not asked again.
-import { mergeMoves, type IdMoves } from '../../shared/id-moves'
-import type { ScanStatus } from '../../shared/library'
-import type { FullLibrary } from '../../shared/library-patch'
+import { mergeMoves, type IdMoves } from '../../../shared/id-moves'
+import type { ScanStatus } from '../../../shared/library'
+import type { FullLibrary } from '../../../shared/library-patch'
 import type { WorkerIn, WorkerOut } from './types'
 import type { AfterExit } from './library-process'
 

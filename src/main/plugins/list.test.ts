@@ -6,7 +6,7 @@ import { plugins } from '../../shared/plugins'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/nowhere' }, protocol: {}, net: {} }))
 // the real one starts a process when it is imported
-vi.mock('../library/service', () => ({ LibraryService: class {} }))
+vi.mock('./files/service', () => ({ LibraryService: class {} }))
 
 const { createPlugins } = await import('./list')
 

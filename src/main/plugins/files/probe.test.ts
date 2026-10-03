@@ -217,7 +217,7 @@ describe('stream', () => {
 })
 
 // The bundled ffprobe on a real mp3 with no Xing header, when it is there.
-const bin = (name: string): string => join(__dirname, '../../../resources/ffmpeg', name)
+const bin = (name: string): string => join(__dirname, '../../../../resources/ffmpeg', name)
 describe.skipIf(!existsSync(bin('ffmpeg')) || !existsSync(bin('ffprobe')))('probeLength', () => {
   it('counts the packets of an mp3 with no length header', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'spindle-probe-'))

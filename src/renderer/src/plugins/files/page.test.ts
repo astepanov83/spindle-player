@@ -17,6 +17,7 @@ vi.stubGlobal('window', {
 })
 
 let library: typeof import('../../stores/library.svelte').library
+let files: typeof import('./store.svelte').files
 let page: typeof import('./page')
 
 const album = (id: string, trackIds: string[], extra: Partial<Album> = {}): Album => ({
@@ -68,6 +69,7 @@ beforeEach(async () => {
   api.setArtists.mockClear()
   api.showFolder.mockClear()
   library = (await import('../../stores/library.svelte')).library
+  files = (await import('./store.svelte')).files
   page = await import('./page')
 })
 
@@ -75,7 +77,7 @@ const kinds = (blocks: Block[]): string[] => blocks.map((b) => b.kind)
 const head = (b: Block): HeadBlock => b as HeadBlock
 const tiles = (b: Block): TilesBlock => b as TilesBlock
 const songs = (b: Block): SongsBlock => b as SongsBlock
-const files = (p: string): { plugin: 'files'; page: string } => ({ plugin: 'files', page: p })
+const at = (p: string): { plugin: 'files'; page: string } => ({ plugin: 'files', page: p })
 
 describe('before there are songs', () => {
   it('shows one empty block, with the button to add a folder', () => {
@@ -90,27 +92,27 @@ describe('before there are songs', () => {
   })
 
   it('says it is looking while a scan runs', () => {
-    library.status = { ...library.status, phase: 'read', folders: ['/m'] }
+    files.status = { ...files.status, phase: 'read', folders: ['/m'] }
     expect(page.filesPage('folders', '', '')[0]).toMatchObject({ title: 'Looking for music' })
     expect(page.filesPage('folders', '', '')[0]).not.toHaveProperty('action')
   })
 
   it('leaves the Playlists page alone once there are songs', () => {
-    library.load(lib())
+    files.load(lib())
     expect(page.filesEmptyPlaylists(true)).toBeUndefined()
   })
 })
 
 describe('search (tickets 039, 059)', () => {
-  beforeEach(() => library.load(lib()))
+  beforeEach(() => files.load(lib()))
 
   it('finds songs by title or their artist, albums and artists', () => {
     const [found, albums, artists] = page.filesSearch('juno')
     expect(found).toEqual({ id: 'songs', title: 'Songs', songs: ['files:b1'] })
     expect(albums).toMatchObject({ id: 'albums', title: 'Albums' })
-    expect('tiles' in albums && albums.tiles.items).toEqual([library.album('b')])
+    expect('tiles' in albums && albums.tiles.items).toEqual([files.album('b')])
     expect('tiles' in artists && artists.tiles.round).toBe(true)
-    expect('tiles' in artists && artists.tiles.items).toEqual([library.getArtist('junopark')])
+    expect('tiles' in artists && artists.tiles.items).toEqual([files.getArtist('junopark')])
     expect(page.filesSearch('song a')[0]).toMatchObject({
       songs: ['files:a1', 'files:a2', 'files:a3']
     })
@@ -118,7 +120,7 @@ describe('search (tickets 039, 059)', () => {
 })
 
 describe('pages', () => {
-  beforeEach(() => library.load(lib()))
+  beforeEach(() => files.load(lib()))
 
   it('Albums: a head and the albums as tiles, the store array as it is', () => {
     const blocks = page.filesPage('albums', '', '')
@@ -130,9 +132,9 @@ describe('pages', () => {
       count: '2 albums'
     })
     const t = tiles(blocks[1])
-    expect(t.items).toBe(library.albums)
-    const tile = t.tile(library.albums[0])
-    expect(tile).toMatchObject({ title: 'Album a', subtitle: 'Marina Vale', to: files('album/a') })
+    expect(t.items).toBe(files.albums)
+    const tile = t.tile(files.albums[0])
+    expect(tile).toMatchObject({ title: 'Album a', subtitle: 'Marina Vale', to: at('album/a') })
     expect(tile.songs()).toEqual(['files:a1', 'files:a2', 'files:a3'])
     expect(tile.link).toEqual({ plugin: 'files', page: 'album/a' })
   })
@@ -171,14 +173,14 @@ describe('pages', () => {
       title: 'Album a',
       meta: 'Album · 2003',
       art: { src: 'C-a' },
-      back: { label: 'All albums', to: files('') }
+      back: { label: 'All albums', to: at('') }
     })
     expect(head(h).line).toEqual([
-      { text: 'Marina Vale', to: files('artist/marinavale') },
+      { text: 'Marina Vale', to: at('artist/marinavale') },
       { text: ' · 3 songs · 6 min' }
     ])
     // the songs are in two folders: the album is in the one above both
-    expect(head(h).where?.to).toEqual(files(`folder/${library.folders.nodes[1].key}`))
+    expect(head(h).where?.to).toEqual(at(`folder/${files.folders.nodes[1].key}`))
     expect(head(h).buttons?.map((b) => b.label)[0]).toBe('Play')
     expect(songs(s)).toMatchObject({
       items: ['files:a1', 'files:a2', 'files:a3'],
@@ -199,12 +201,12 @@ describe('pages', () => {
   it('Artists: round tiles, filtered by the search, with a note for none', () => {
     const blocks = page.filesPage('artists', '', '')
     expect(tiles(blocks[1]).round).toBe(true)
-    expect(tiles(blocks[1]).items).toBe(library.artists)
-    const tile = tiles(blocks[1]).tile(library.getArtist('junopark'))
+    expect(tiles(blocks[1]).items).toBe(files.artists)
+    const tile = tiles(blocks[1]).tile(files.getArtist('junopark'))
     expect(tile).toMatchObject({
       title: 'Juno Park',
       subtitle: '1 album',
-      to: files('artist/junopark')
+      to: at('artist/junopark')
     })
     expect(tile.actions).toEqual([{ id: 'edit', label: 'Edit artist' }])
     const found = page.filesPage('artists', 'artist/marinavale', 'jun')
@@ -223,13 +225,13 @@ describe('pages', () => {
     })
     expect(head(blocks[0]).line).toEqual([{ text: '1 album · 3 songs' }])
     const t = tiles(blocks[2])
-    expect(t.tile(library.album('a'))).toMatchObject({
+    expect(t.tile(files.album('a'))).toMatchObject({
       subtitle: '2003',
-      to: files('album/a/artist/marinavale')
+      to: at('album/a/artist/marinavale')
     })
     // an album opened from them goes back to them
     const [h] = page.filesPage('artists', 'album/a/artist/marinavale', '')
-    expect(head(h).back).toEqual({ label: 'Marina Vale', to: files('artist/marinavale') })
+    expect(head(h).back).toEqual({ label: 'Marina Vale', to: at('artist/marinavale') })
   })
 
   it('edits an artist: the names to save, and Cancel', () => {
@@ -239,19 +241,16 @@ describe('pages', () => {
     expect(head(h).edit?.ok(['  '])).toBe(false)
     page.filesAct('artist/junopark', 'save', JSON.stringify(['Juno', 'Park']))
     expect(api.setArtists).toHaveBeenCalledWith({ junopark: ['Juno', 'Park'] })
-    expect(library.editingArtist).toBeNull()
+    expect(files.editingArtist).toBeNull()
     page.filesAct('artist/junopark', 'edit')
     page.filesAct('artist/junopark', 'cancel')
-    expect(library.editingArtist).toBeNull()
+    expect(files.editingArtist).toBeNull()
   })
 
   it('an artist tile opens its page to edit, from the grid', () => {
     library.pickTab('artists')
     page.filesAct('artist/junopark', 'edit')
-    expect([library.page('artists'), library.editingArtist]).toEqual([
-      'artist/junopark',
-      'junopark'
-    ])
+    expect([library.page('artists'), files.editingArtist]).toEqual(['artist/junopark', 'junopark'])
   })
 
   it('Folders: the one music folder, then a folder with its path and songs', () => {
@@ -267,13 +266,13 @@ describe('pages', () => {
     const rockRow = rows.row(rows.items[0]) as PageRow
     expect(rockRow.playing?.('files:b1')).toBe(true)
     expect(rockRow.playing?.('radio:x')).toBe(false)
-    const [m, rock, live] = library.folders.nodes.map((n) => n.key)
+    const [m, rock, live] = files.folders.nodes.map((n) => n.key)
     const blocks = page.filesPage('folders', `folder/${live}`, '')
     expect(kinds(blocks)).toEqual(['tree', 'head', 'rows', 'songs'])
     expect(blocks[0].kind === 'tree' && blocks[0].path).toEqual([
-      { title: 'm', hint: m, to: files(`folder/${m}`), here: false },
-      { title: 'Rock', hint: 'Rock', to: files(`folder/${rock}`), here: false },
-      { title: 'Live', hint: 'Live', to: files(`folder/${live}`), here: true }
+      { title: 'm', hint: m, to: at(`folder/${m}`), here: false },
+      { title: 'Rock', hint: 'Rock', to: at(`folder/${rock}`), here: false },
+      { title: 'Live', hint: 'Live', to: at(`folder/${live}`), here: true }
     ])
     expect(songs(blocks[3])).toMatchObject({
       items: ['files:a3', 'files:b1'],
@@ -283,7 +282,7 @@ describe('pages', () => {
   })
 
   it('Folders: a search that finds nothing says so', () => {
-    const [, rock] = library.folders.nodes.map((n) => n.key)
+    const [, rock] = files.folders.nodes.map((n) => n.key)
     expect(kinds(page.filesPage('folders', `folder/${rock}`, 'zzz'))).toEqual([
       'tree',
       'head',
@@ -304,8 +303,8 @@ describe('pages', () => {
     // the block reads the sort when drawn: the same block has the new one
     expect(songs(s).sort).toEqual({ k: 't', dir: 1 })
     page.filesAct('folders', 'sort', 'd')
-    expect(library.folderSort).toEqual({ k: 'd', dir: 1 })
+    expect(files.folderSort).toEqual({ k: 'd', dir: 1 })
     page.filesAct('artist/junopark', 'sort', 'al')
-    expect(library.artistSort).toEqual({ k: 'al', dir: 1 })
+    expect(files.artistSort).toEqual({ k: 'al', dir: 1 })
   })
 })

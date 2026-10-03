@@ -1,7 +1,7 @@
 // Builds the albums and tracks the page shows from the index.
 import { basename } from 'path'
-import { creditOf, type ArtistOverrides } from '../../shared/artist-overrides'
-import { artistKey, listArtists, namesOf } from '../../shared/artists'
+import { creditOf, type ArtistOverrides } from '../../../shared/artist-overrides'
+import { artistKey, listArtists, namesOf } from '../../../shared/artists'
 import {
   coverUrls,
   type Album,
@@ -9,14 +9,14 @@ import {
   type LibraryData,
   type Track,
   type TrackPart
-} from '../../shared/library'
-import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../shared/palette'
+} from '../../../shared/library'
+import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../../shared/palette'
 import { checksPerArtist, lookUpArtist, type ArtistCheck, type ArtistQuery } from './artist-photo'
 import { cleanAlbum, cleanArtist, searchKey, type CoverQuery } from './cover-match'
 import { cueTracks } from './cue-tracks'
 import { fetchedCover, type Fetched } from './fetched-store'
 import { folderTable } from './folders'
-import { shortHash } from './ids'
+import { shortHash } from '../../ids'
 import { dirOf } from './merge'
 import { discFolderNumber, isDiscFolder, titleFromFileName } from './tags'
 import type { FileEntry, LibraryIndex } from './types'

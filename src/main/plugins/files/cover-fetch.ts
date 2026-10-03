@@ -1,7 +1,7 @@
 // Looks up covers online for albums with none, a few albums at a time, after
 // each scan (ticket 014), then artist photos from Deezer (ticket 021).
 // Nothing is sent before main says the setting is on.
-import type { FetchCounts, FetchStatus } from '../../shared/library'
+import type { FetchCounts, FetchStatus } from '../../../shared/library'
 import {
   artistCandidates,
   artistSearchUrl,
@@ -9,7 +9,7 @@ import {
   checkUrl,
   type ArtistQuery
 } from './artist-photo'
-import { coverSources, type CoverSource } from '../../shared/settings'
+import { coverSources, type CoverSource } from '../../../shared/settings'
 import { BusyError, NetError, type CoverHttp } from './cover-http'
 import { pickCandidates, type CoverQuery } from './cover-match'
 import { answerError, caaGroupUrl, caaReleaseUrl, parseAnswer, searchUrl } from './cover-sources'

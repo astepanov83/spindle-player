@@ -17,6 +17,7 @@ vi.stubGlobal('crypto', {
 
 const { playlists } = await import('./playlists.svelte')
 const { library, playlistPage } = await import('./library.svelte')
+const { files } = await import('../plugins/files/store.svelte')
 const { navTabs } = await import('../plugins')
 
 describe('removing a playlist', () => {
@@ -105,7 +106,7 @@ describe('a new playlist from songs (ticket 045)', () => {
   })
 
   it('is named after the album, with a number when that name is taken', () => {
-    library.load({
+    files.load({
       albums: [album('b', 'Blue Hours', ['b1', 'b2']), album('r', 'Red Desert', ['r1'])],
       tracks: [
         track('b1', 'b', 'Blue Hours', 'Marina Vale'),
@@ -142,7 +143,7 @@ describe('item keys (ticket 055)', () => {
   })
 
   it('keeps songs of any plugin as keys, and removes them by key', () => {
-    library.load({ albums: [], tracks: [song('f1')], folders: [] })
+    files.load({ albums: [], tracks: [song('f1')], folders: [] })
     const id = playlists.create(['files:f1', 'mfp:m1'])
     expect(playlists.get(id)?.items).toEqual(['files:f1', 'mfp:m1'])
     playlists.add(id, ['mfp:m1', 'files:gone'])

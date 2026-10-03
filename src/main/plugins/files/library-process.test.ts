@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LibraryProcess, type AfterExit, type Child } from './library-process'
-import { RestartBudget } from './restart'
+import { RestartBudget } from '../../restart'
 import type { WorkerIn, WorkerStart } from './types'
 
 // Stands in for Electron's UtilityProcess.

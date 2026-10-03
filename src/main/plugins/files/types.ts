@@ -1,9 +1,9 @@
 // The library index on disk, and the messages between main and the library process.
-import type { IdMoves } from '../../shared/id-moves'
-import type { ScanStatus } from '../../shared/library'
-import type { ArtistChanges } from '../../shared/artist-overrides'
-import type { CoverSource } from '../../shared/settings'
-import type { ThemePalettes } from '../../shared/palette'
+import type { IdMoves } from '../../../shared/id-moves'
+import type { ScanStatus } from '../../../shared/library'
+import type { ArtistChanges } from '../../../shared/artist-overrides'
+import type { CoverSource } from '../../../shared/settings'
+import type { ThemePalettes } from '../../../shared/palette'
 import type { CueSheet } from './cue'
 
 // One audio file. Tags are already cleaned up (see tags.ts); a missing tag is left out.

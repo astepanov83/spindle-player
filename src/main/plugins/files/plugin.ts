@@ -1,11 +1,11 @@
 // Music files: the library process and its service, with the page's library
-// requests. Wraps LibraryService where it is; ticket 063 moves it here.
+// requests.
 import { BrowserWindow } from 'electron'
 import { LibraryChannel } from '../../../shared/ipc'
 import type { PluginId } from '../../../shared/plugins'
-import { stopAllDecoders } from '../../library/decode'
-import { libraryRoutes } from '../../library/protocol'
-import { LibraryService } from '../../library/service'
+import { stopAllDecoders } from './decode'
+import { libraryRoutes } from './protocol'
+import { LibraryService } from './service'
 import { showFolder } from '../../show-folder'
 import type { MainPlugin, PluginContext } from '../types'
 

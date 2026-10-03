@@ -2,7 +2,7 @@
 // file, not library.json, so an index rebuild doesn't fetch 79 pages again.
 // Only a copy of the site, so a broken file just starts empty.
 import { parseThemePalettes } from '../../../shared/palette'
-import { isCoverHash } from '../../library/cover-names'
+import { isCoverHash } from '../../covers/cover-names'
 import type { MadeCover } from '../covers'
 import { parseEpisode, parseSlugs, type MfpEpisode, type MfpTrack } from './site'
 

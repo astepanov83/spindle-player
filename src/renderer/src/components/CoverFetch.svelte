@@ -1,9 +1,8 @@
 <!-- "Covers" in the settings sheet: the online lookup (ticket 014). Off, nothing is sent anywhere. -->
 <script lang="ts">
   import { coverSources, type CoverSource } from '../../../shared/settings'
-  import { fetchBusy, fetchLine, photoLine } from '../library/scan-text'
   import Spinner from '../ui/Spinner.svelte'
-  import { library } from '../stores/library.svelte'
+  import { coverLines } from '../plugins'
   import { settings } from '../stores/settings.svelte'
 
   const names: Record<CoverSource, string> = {
@@ -11,9 +10,7 @@
     deezer: 'Deezer',
     itunes: 'iTunes'
   }
-  const line = $derived(settings.fetchCovers ? fetchLine(library.status.fetch) : undefined)
-  const photos = $derived(settings.fetchCovers ? photoLine(library.status.fetch) : undefined)
-  const busy = $derived(fetchBusy(library.status.fetch))
+  const lines = $derived(settings.fetchCovers ? coverLines() : [])
 </script>
 
 <div class="set">
@@ -35,18 +32,12 @@
         </label>
       {/each}
     </div>
-    {#if line}
+    {#each lines as line, i (i)}
       <p class="hint status" aria-live="polite">
-        {#if busy === 'covers'}<Spinner />{/if}
-        <span>{line}</span>
+        {#if line.busy}<Spinner />{/if}
+        <span>{line.text}</span>
       </p>
-    {/if}
-    {#if photos}
-      <p class="hint status" aria-live="polite">
-        {#if busy === 'photos'}<Spinner />{/if}
-        <span>{photos}</span>
-      </p>
-    {/if}
+    {/each}
   {/if}
 </div>
 

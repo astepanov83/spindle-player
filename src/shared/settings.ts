@@ -44,7 +44,7 @@ export interface StoredSettings extends Settings {
   // none until the window was first closed or moved; then it opens there again
   windowPlace: WindowPlace | null
   // music folders, absolute paths. Only main changes them: through the folder
-  // picker, or a folder dropped on the window (checked in main/library/dropped.ts).
+  // picker, or a folder dropped on the window (checked in main/plugins/files/dropped.ts).
   folders: string[]
 }
 

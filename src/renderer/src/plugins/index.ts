@@ -150,6 +150,19 @@ export function actOnPage(
   if (pluginOn(plugin)) halves[plugin].act?.(target, actionId, value)
 }
 
+// The busy lines of the plugins that are on (a scan), in plugin order.
+export function statusLines(): string[] {
+  return plugins.flatMap((p) => {
+    const line = pluginOn(p.id) ? halves[p.id].statusLine?.() : undefined
+    return line ? [line] : []
+  })
+}
+
+// The cover lookup's lines of the plugins that are on, for Settings.
+export function coverLines(): { text: string; busy: boolean }[] {
+  return plugins.flatMap((p) => (pluginOn(p.id) ? (halves[p.id].coverLines?.() ?? []) : []))
+}
+
 // The settings blocks of a plugin that is on.
 export function settingBlocks(plugin: PluginId): SettingBlock[] {
   return pluginOn(plugin) ? (halves[plugin].settings?.() ?? []) : []

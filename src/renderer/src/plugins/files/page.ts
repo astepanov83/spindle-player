@@ -29,6 +29,7 @@ import {
 import { libraryProblem, scanLine, settingsText, stoppedText } from '../../library/scan-text'
 import { filterAlbums, nextSort, searchSongs, songRows, type SortKey } from '../../library/views'
 import { library } from '../../stores/library.svelte'
+import { files } from './store.svelte'
 import { notice } from '../../stores/notice.svelte'
 import {
   rowsBlock,
@@ -45,7 +46,7 @@ import { openArtist, showArtist, followArtist } from './nav'
 import { albumPage, artistPage, folderPage, parsePage } from './pages'
 import { trackKey, trackKeys, trackOf } from './tracks'
 
-const files = (page: string): PageAddress => ({ plugin: 'files', page })
+const at = (page: string): PageAddress => ({ plugin: 'files', page })
 
 // the act targets that are no page
 const songsTarget = 'songs'
@@ -53,7 +54,7 @@ const foldersTarget = 'folders'
 const libraryTarget = 'library'
 
 export function filesPage(tab: string, page: string, query: string): Block[] {
-  if (!library.albums.length) return [noLibrary(false)]
+  if (!files.albums.length) return [noLibrary(false)]
   if (tab === 'songs') return [songsTable(query)]
   if (tab === 'albums') return albumsPage(page, query)
   if (tab === 'artists') return artistsPage(page, query)
@@ -62,13 +63,13 @@ export function filesPage(tab: string, page: string, query: string): Block[] {
 }
 
 export function filesEmptyPlaylists(noPlaylists: boolean): EmptyBlock | undefined {
-  return library.albums.length ? undefined : noLibrary(noPlaylists)
+  return files.albums.length ? undefined : noLibrary(noPlaylists)
 }
 
 // What the library shows before there are any songs.
 export function noLibrary(noPlaylists: boolean): EmptyBlock {
-  const s = library.status
-  const problem = libraryProblem(s, library.loadFailed)
+  const s = files.status
+  const problem = libraryProblem(s, files.loadFailed)
   const add = { label: 'Add music folder', id: 'add-folder' }
   const empty = (title: string, text: string, action = true): EmptyBlock => ({
     kind: 'empty',
@@ -123,7 +124,7 @@ function songsTable(query: string): Block {
   return {
     kind: 'songs',
     id: songsTarget,
-    items: songRows(library.albums, (id) => library.track(id), query).map(trackKey),
+    items: songRows(files.albums, (id) => files.track(id), query).map(trackKey),
     from: 'Songs',
     meta: 'Library',
     get sort() {
@@ -137,11 +138,11 @@ function albumsPage(page: string, query: string): Block[] {
   if (query.trim())
     return [{ kind: 'results', empty: 'No song, album or artist has that in its name.' }]
   const p = parsePage(page)
-  if (p?.kind === 'album' && library.findAlbum(p.id))
-    return albumBlocks(library.album(p.id), { label: 'All albums', to: files('') })
+  if (p?.kind === 'album' && files.findAlbum(p.id))
+    return albumBlocks(files.album(p.id), { label: 'All albums', to: at('') })
   return [
-    listHead('Albums', fmtCount(library.albums.length, 'album', 'albums')),
-    albumTiles(library.albums)
+    listHead('Albums', fmtCount(files.albums.length, 'album', 'albums')),
+    albumTiles(files.albums)
   ]
 }
 
@@ -155,7 +156,7 @@ function albumTiles(albums: Album[], under?: { artist: string }): TilesBlock {
       title: al.title,
       subtitle: under ? (al.year ? String(al.year) : '') : al.artist,
       art: al,
-      to: files(under ? artistPage(under.artist, al.id) : albumPage(al.id)),
+      to: at(under ? artistPage(under.artist, al.id) : albumPage(al.id)),
       // the album of the song the queue plays (not while radio plays)
       playing: (key) => trackOf(key)?.albumId === al.id,
       songs: () => trackKeys(al.trackIds),
@@ -165,14 +166,14 @@ function albumTiles(albums: Album[], under?: { artist: string }): TilesBlock {
   })
 }
 
-const album = (id: string): Album => library.album(id)
-const songArt = (id: string): Art => library.art(library.track(id))
+const album = (id: string): Album => files.album(id)
+const songArt = (id: string): Art => files.art(files.track(id))
 
 // the artists of the song playing (not while radio plays): its album's and its own
 function playsArtist(item: ItemKey, key: string): boolean {
   const t = trackOf(item)
   if (!t) return false
-  return [...namesOf(library.album(t.albumId)), ...namesOf(t)].some((n) => artistKey(n) === key)
+  return [...namesOf(files.album(t.albumId)), ...namesOf(t)].some((n) => artistKey(n) === key)
 }
 
 // albums, or songs for an artist with only songs on other albums
@@ -189,9 +190,9 @@ function artistTiles(artists: Artist[]): TilesBlock {
     tile: (a) => ({
       title: a.name,
       subtitle: artistCount(a),
-      photo: library.photos[a.key]?.cover,
+      photo: files.photos[a.key]?.cover,
       covers: artistCovers(a, album, songArt),
-      to: files(artistPage(a.key)),
+      to: at(artistPage(a.key)),
       playing: (item) => playsArtist(item, a.key),
       songs: () => trackKeys(artistSongs(a, album)),
       from: a.name,
@@ -206,14 +207,14 @@ function artistTiles(artists: Artist[]): TilesBlock {
 function artistsPage(page: string, query: string): Block[] {
   const p = parsePage(page)
   const open = p?.kind === 'artist' ? p : undefined
-  const artist = open && library.getArtist(open.key)
-  if (!query.trim() && open?.album && library.findAlbum(open.album))
-    return albumBlocks(library.album(open.album), {
+  const artist = open && files.getArtist(open.key)
+  if (!query.trim() && open?.album && files.findAlbum(open.album))
+    return albumBlocks(files.album(open.album), {
       label: artist?.name ?? 'All artists',
-      to: files(artistPage(open.key))
+      to: at(artistPage(open.key))
     })
   if (!query.trim() && artist) return artistBlocks(artist)
-  const shown = filterArtists(library.artists, query)
+  const shown = filterArtists(files.artists, query)
   return [
     listHead('Artists', fmtCount(shown.length, 'artist', 'artists')),
     ...(shown.length ? [] : [noMatches('No artist has that in their name.')]),
@@ -227,15 +228,15 @@ const showFolderId = 'show-folder'
 // folderParts gives them. None while the folder table is not in yet.
 function albumFolder(al: Album): { at: number; parts: string[] } | undefined {
   const at = commonFolder(
-    library.folders,
-    al.trackIds.map((t) => library.track(t).folder)
+    files.folders,
+    al.trackIds.map((t) => files.track(t).folder)
   )
-  return at === null ? undefined : { at, parts: folderParts(library.folders, at) }
+  return at === null ? undefined : { at, parts: folderParts(files.folders, at) }
 }
 
 // "Show in file manager" in an album's song menu (ticket 050)
 async function showAlbumFolder(id: string): Promise<void> {
-  const al = library.findAlbum(id)
+  const al = files.findAlbum(id)
   const where = al && albumFolder(al)
   if (!where) return
   if (!(await window.libraryApi.showFolder(where.parts)))
@@ -244,16 +245,16 @@ async function showAlbumFolder(id: string): Promise<void> {
 
 function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
   const id = albumPage(al.id)
-  const tracks = al.trackIds.map((t) => library.track(t))
+  const tracks = al.trackIds.map((t) => files.track(t))
   const items = trackKeys(al.trackIds)
   const link = albumLink(al)
   const minutes = Math.round(tracks.reduce((s, t) => s + t.duration, 0) / 60)
   const where = albumFolder(al)
   // one link per artist of a split credit
-  const names = artistLinks(al, (key) => !!library.getArtist(key)).flatMap(
+  const names = artistLinks(al, (key) => !!files.getArtist(key)).flatMap(
     ({ name, key }, i): Piece[] => [
       ...(i ? [{ text: ', ' }] : []),
-      key ? { text: name, to: files(artistPage(key)) } : { text: name }
+      key ? { text: name, to: at(artistPage(key)) } : { text: name }
     ]
   )
   const numbers: number[] = []
@@ -297,7 +298,7 @@ function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
   if (where)
     head.where = {
       text: folderPath(where.parts),
-      to: files(folderPage(library.folders.nodes[where.at].key))
+      to: at(folderPage(files.folders.nodes[where.at].key))
     }
   return [head, { kind: 'songs', id, items, from: al.title, link, numbers, groups }]
 }
@@ -308,9 +309,9 @@ const artistPlayIds = (a: Artist): ItemKey[] =>
     artistPageSongs(
       a,
       album,
-      (id) => library.track(id),
-      library.artistSort,
-      (t) => library.order(t)
+      (id) => files.track(id),
+      files.artistSort,
+      (t) => files.order(t)
     )
   )
 
@@ -333,11 +334,11 @@ function artistBlocks(a: Artist): Block[] {
     title: a.name,
     meta: 'Artist',
     art: {
-      src: library.photos[a.key]?.coverLarge,
+      src: files.photos[a.key]?.coverLarge,
       round: true,
       covers: artistCovers(a, album, songArt)
     },
-    back: { label: 'All artists', to: files('') },
+    back: { label: 'All artists', to: at('') },
     line: [
       {
         text: [
@@ -371,7 +372,7 @@ function artistBlocks(a: Artist): Block[] {
         ...(t.names ? { action: { id: 'use-tag', label: 'Use tag', value: t.key } } : {})
       }))
     }
-  if (library.editingArtist === a.key)
+  if (files.editingArtist === a.key)
     head.edit = {
       names: [a.name],
       label: 'Artist name',
@@ -397,7 +398,7 @@ function artistBlocks(a: Artist): Block[] {
       ...(albums.length ? { label: 'Also on' } : {}),
       count: albums.length > 0,
       get sort() {
-        return library.artistSort
+        return files.artistSort
       }
     })
   return blocks
@@ -417,14 +418,14 @@ function playingIn(tree: FolderTree, i: number, item: ItemKey): boolean {
 
 // What a folder's Play plays: what is shown, with the search and the table's sort.
 function folderPlayIds(tree: FolderTree, shown: number | null): ItemKey[] {
-  return folderPlaySongs(tree, shown, library.query, library.folderSort, (t) =>
-    library.order(t)
-  ).map(trackKey)
+  return folderPlaySongs(tree, shown, library.query, files.folderSort, (t) => files.order(t)).map(
+    trackKey
+  )
 }
 
 // The Folders view: a path bar, the subfolders, then the folder's own songs.
 function foldersPage(page: string, query: string): Block[] {
-  const tree = library.folders
+  const tree = files.folders
   const shown = folderShown(tree, page)
   const node = shown === null ? undefined : tree.nodes[shown]
   const id = node ? folderPage(node.key) : foldersTarget
@@ -443,13 +444,13 @@ function foldersPage(page: string, query: string): Block[] {
       kind: 'tree',
       label: 'Folder path',
       path: [
-        ...(tree.roots.length > 1 ? [{ title: 'Folders', to: files('') }] : []),
+        ...(tree.roots.length > 1 ? [{ title: 'Folders', to: at('') }] : []),
         ...path.map((i) => {
           const n = tree.nodes[i]
           return {
             title: n.name,
             hint: n.parent < 0 ? n.key : n.name,
-            to: files(folderPage(n.key)),
+            to: at(folderPage(n.key)),
             here: i === shown
           }
         })
@@ -512,7 +513,7 @@ function foldersPage(page: string, query: string): Block[] {
           ...(f.parent < 0 ? { subtitle: f.key } : {}),
           art: f.cover,
           meta: fmtCount(f.count, 'song', 'songs'),
-          to: files(folderPage(f.key)),
+          to: at(folderPage(f.key)),
           playing: (item) => playingIn(tree, i, item),
           songs: () => folderSongs(tree, i).map(trackKey),
           from: f.name,
@@ -530,7 +531,7 @@ function foldersPage(page: string, query: string): Block[] {
       link,
       label: 'Songs in this folder',
       get sort() {
-        return library.folderSort
+        return files.folderSort
       }
     })
   return blocks
@@ -543,10 +544,10 @@ export function filesSearch(query: string): SearchGroup[] {
     {
       id: 'songs',
       title: 'Songs',
-      songs: searchSongs(library.albums, (id) => library.track(id), query).map(trackKey)
+      songs: searchSongs(files.albums, (id) => files.track(id), query).map(trackKey)
     },
-    { id: 'albums', title: 'Albums', tiles: albumTiles(filterAlbums(library.albums, query)) },
-    { id: 'artists', title: 'Artists', tiles: artistTiles(filterArtists(library.artists, query)) }
+    { id: 'albums', title: 'Albums', tiles: albumTiles(filterAlbums(files.albums, query)) },
+    { id: 'artists', title: 'Artists', tiles: artistTiles(filterArtists(files.artists, query)) }
   ]
 }
 
@@ -556,15 +557,15 @@ export function filesAct(target: string, id: string, value?: string): void {
   if (id === 'sort' && value) return sortBy(target, value as SortKey)
   const p = parsePage(target)
   if (p?.kind === 'album' && id === showFolderId) return void showAlbumFolder(p.id)
-  const a = p?.kind === 'artist' && !p.album ? library.getArtist(p.key) : undefined
+  const a = p?.kind === 'artist' && !p.album ? files.getArtist(p.key) : undefined
   if (a) artistAct(a, id, value)
 }
 
 function sortBy(target: string, k: SortKey): void {
   const p = parsePage(target)
   if (target === songsTarget) library.sort = nextSort(library.sort, k)
-  else if (target === foldersTarget || p?.kind === 'folder') library.sortFolder(k)
-  else if (p?.kind === 'artist') library.sortArtist(k)
+  else if (target === foldersTarget || p?.kind === 'folder') files.sortFolder(k)
+  else if (p?.kind === 'artist') files.sortArtist(k)
 }
 
 function artistAct(a: Artist, id: string, value?: string): void {
@@ -576,8 +577,8 @@ function artistAct(a: Artist, id: string, value?: string): void {
       !library.query.trim()
     if (!shown && library.tab === 'artists') openArtist(a.key)
     else if (!shown) showArtist(a.key)
-    library.editingArtist = a.key
-  } else if (id === 'cancel') library.editingArtist = null
+    files.editingArtist = a.key
+  } else if (id === 'cancel') files.editingArtist = null
   else if (id === 'save') saveNames(a, value)
   else if (id === 'use-tag') {
     const t = a.tags.find((t) => t.key === value)
@@ -597,7 +598,7 @@ function saveNames(a: Artist, value: string | undefined): void {
   }
   const names = cleanNames(list)
   if (!names.length) return
-  library.editingArtist = null
+  files.editingArtist = null
   const changes = editArtist(a, names)
   if (!Object.keys(changes).length) return
   window.libraryApi.setArtists(changes)

@@ -3,7 +3,7 @@
 // like a CUE track in its disc image. The site gives no times, so the songs
 // are spread evenly over the file (as in webmusicfp).
 import type { Episode, EpisodeSong } from '../../../shared/mfp'
-import { shortHash } from '../../library/ids'
+import { shortHash } from '../../ids'
 import type { MfpEpisode } from './site'
 
 // The ids are the ones episodes and songs had as library albums and tracks,

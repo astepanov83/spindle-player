@@ -3,8 +3,8 @@
 // from the source picture; a fetched cover has no file in the music folders.
 import { mkdir, readdir, readFile, rm, stat } from 'fs/promises'
 import { join } from 'path'
-import { writeFileAtomic } from '../json-file'
-import { isCoverHash } from './cover-names'
+import { writeFileAtomic } from '../../json-file'
+import { isCoverHash } from '../../covers/cover-names'
 
 const ext = '.img'
 // a temp file younger than this may still be written

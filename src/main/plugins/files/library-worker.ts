@@ -15,10 +15,10 @@ import {
   tagKeys,
   type ArtistChanges,
   type ArtistOverrides
-} from '../../shared/artist-overrides'
-import type { ScanStatus } from '../../shared/library'
-import type { CoverSource } from '../../shared/settings'
-import { JsonFileWriter, openJsonFile, readJsonFile } from '../json-file'
+} from '../../../shared/artist-overrides'
+import type { ScanStatus } from '../../../shared/library'
+import type { CoverSource } from '../../../shared/settings'
+import { JsonFileWriter, openJsonFile, readJsonFile } from '../../json-file'
 import { buildLibrary, type BuiltLibrary } from './group'
 import { Pacer, scanSlow, Turns } from './pacer'
 import { decodeCue, parseCue } from './cue'
@@ -43,14 +43,14 @@ import { pruneCoverFiles, removeOldTemp } from './cover-prune'
 import { ownCopy } from './bytes'
 import { ScanChain, Stopped } from './scan-chain'
 import { confirmMoves } from './moves'
-import { mergeMoves, type IdMoves } from '../../shared/id-moves'
+import { mergeMoves, type IdMoves } from '../../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
 import { scanLogLine } from './scan-log'
-import { markerOf, smallName } from './cover-names'
+import { markerOf, smallName } from '../../covers/cover-names'
 import { CoverFetcher } from './cover-fetch'
 import { findSongCover, stopsSongLookups } from './song-cover'
 import { PublishTimer } from './publish'
-import { diffLibrary, type LibraryMessage } from '../../shared/library-patch'
+import { diffLibrary, type LibraryMessage } from '../../../shared/library-patch'
 import { CoverHttp, defaultLimits, NetError } from './cover-http'
 import {
   dropGone,

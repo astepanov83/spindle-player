@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { albumFolder, buildLibrary, shortHash, unknownArtist, variousArtists } from './group'
-import { defaultPalettes, fallbackPalettes } from '../../shared/palette'
+import { defaultPalettes, fallbackPalettes } from '../../../shared/palette'
 import { emptyIndex } from './merge'
 import type { FileEntry, LibraryIndex } from './types'
 import { cleanArtist, searchKey } from './cover-match'
-import { artistKey } from '../../shared/artists'
+import { artistKey } from '../../../shared/artists'
 import type { Fetched } from './fetched-store'
-import type { LibraryData } from '../../shared/library'
+import type { LibraryData } from '../../../shared/library'
 import {
   applyPatch,
   diffLibrary,
   type HeldLibrary,
   type PatchBody
-} from '../../shared/library-patch'
+} from '../../../shared/library-patch'
 
 const entry = (path: string, more: Partial<FileEntry> = {}): FileEntry => ({
   path,

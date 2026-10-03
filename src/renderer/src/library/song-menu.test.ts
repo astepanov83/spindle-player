@@ -46,6 +46,7 @@ vi.stubGlobal('window', {
 const { playlistMenu, songMenu, sections } = await import('./song-menu')
 const { playlists } = await import('../stores/playlists.svelte')
 const { library } = await import('../stores/library.svelte')
+const { files } = await import('../plugins/files/store.svelte')
 const { layout } = await import('../stores/layout.svelte')
 const { settings } = await import('../stores/settings.svelte')
 
@@ -177,7 +178,7 @@ describe('Go to (ticket 040)', () => {
       codec: '',
       folder: 0
     })
-    library.load({ albums: [album], tracks: [track('s1'), track('s2')], folders: [] })
+    files.load({ albums: [album], tracks: [track('s1'), track('s2')], folders: [] })
     library.go({ tab: 'radio' })
   }
 

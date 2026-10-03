@@ -65,7 +65,7 @@ const { queue } = await import('./queue.svelte')
 const { radio } = await import('../plugins/radio/store.svelte')
 const { radioSearch } = await import('../plugins/radio/search.svelte')
 const { player } = await import('./player.svelte')
-const { library } = await import('./library.svelte')
+const { files } = await import('../plugins/files/store.svelte')
 const { settings } = await import('./settings.svelte')
 const { mfp } = await import('../plugins/mfp/store.svelte')
 
@@ -116,7 +116,7 @@ const loads = (): string[] => fake.calls.filter((c) => c.startsWith('load'))
 
 beforeEach(async () => {
   settings.plugins.radio = true
-  library.load(lib)
+  files.load(lib)
   radio.load(mine)
   await queues.backToQueue()
   queue.playList(['files:s0', 'files:s1', 'files:s2'], 1, 'Mix')
@@ -184,7 +184,7 @@ describe('queue to radio', () => {
     await playStation(mine[0])
     fake.calls = []
     const left = tracks.filter((t) => t.id !== 's1')
-    library.load({
+    files.load({
       ...lib,
       albums: [{ ...lib.albums[0], trackIds: left.map((t) => t.id) }],
       tracks: left

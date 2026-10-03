@@ -2,10 +2,10 @@
 import type { Art, Track } from '../../../../shared/library'
 import { itemKey, type ItemKey } from '../../../../shared/plugins/items'
 import { artistLinks } from '../../library/artists'
-import { library } from '../../stores/library.svelte'
+import { files } from './store.svelte'
 import type { ItemInfo, ItemState, PageAddress, Playable } from '../types'
 
-// Main serves indexed files by id (src/main/library/protocol.ts).
+// Main serves indexed files by id (src/main/plugins/files/protocol.ts).
 function mediaUrl(fileId: string): string {
   return `spindle://media/${fileId}`
 }
@@ -26,7 +26,7 @@ export function trackKeys(ids: string[]): ItemKey[] {
 
 // The library's song for a key of the files plugin.
 export function trackOf(key: ItemKey | undefined): Track | undefined {
-  return key?.startsWith(prefix) ? library.find(key.slice(prefix.length)) : undefined
+  return key?.startsWith(prefix) ? files.find(key.slice(prefix.length)) : undefined
 }
 
 // Kept by song object: the library replaces a song that changes and never
@@ -52,7 +52,7 @@ class TrackInfo implements ItemInfo {
   }
 
   get art(): Art | undefined {
-    return library.art(this.#t)
+    return files.art(this.#t)
   }
 
   get groupTo(): PageAddress {
@@ -65,7 +65,7 @@ class TrackInfo implements ItemInfo {
   }
 
   get names(): { name: string; to?: PageAddress }[] {
-    return artistLinks(this.#t, (key) => !!library.getArtist(key)).map(({ name, key }) =>
+    return artistLinks(this.#t, (key) => !!files.getArtist(key)).map(({ name, key }) =>
       key ? { name, to: { plugin: 'files', page: `artist/${key}` } } : { name }
     )
   }
@@ -85,7 +85,7 @@ class TrackInfo implements ItemInfo {
 // `complete`: the plugin's data is all there, so a song not in it is gone.
 // Asked only then, so a found song doesn't follow what it reads.
 export function trackState(id: string, complete: () => boolean): ItemState {
-  const t = library.find(id)
+  const t = files.find(id)
   if (!t) return complete() ? missing : loading
   let s = answers.get(t)
   if (!s) answers.set(t, (s = { state: 'ok', info: new TrackInfo(t) }))
@@ -93,7 +93,7 @@ export function trackState(id: string, complete: () => boolean): ItemState {
 }
 
 export function trackPlayable(id: string): Playable | undefined {
-  const t = library.find(id)
+  const t = files.find(id)
   if (!t) return undefined
   const p: Playable = { url: mediaUrl(t.part?.file ?? t.id), length: t.duration, can }
   if (t.part) p.part = t.part

@@ -5,6 +5,7 @@ import type { Album, LibraryData, Track } from '../../../../shared/library'
 import { defaultPalettes } from '../../../../shared/palette'
 
 let library: typeof import('../../stores/library.svelte').library
+let files: typeof import('./store.svelte').files
 let nav: typeof import('./nav')
 
 const album = (id: string, trackIds: string[], extra: Partial<Album> = {}): Album => ({
@@ -48,25 +49,26 @@ function lib(...ids: string[]): LibraryData {
 beforeEach(async () => {
   vi.resetModules()
   library = (await import('../../stores/library.svelte')).library
+  files = (await import('./store.svelte')).files
   nav = await import('./nav')
-  library.load(lib('a', 'b'))
+  files.load(lib('a', 'b'))
 })
 
-const files = (page: string): { plugin: 'files'; page: string } => ({ plugin: 'files', page })
+const at = (page: string): { plugin: 'files'; page: string } => ({ plugin: 'files', page })
 
 describe('files pages', () => {
   it('can open what the library has', () => {
-    expect(nav.canOpenFiles(files('album/a'))).toBe(true)
-    expect(nav.canOpenFiles(files('album/gone'))).toBe(false)
-    expect(nav.canOpenFiles(files('artist/marinavale'))).toBe(true)
-    expect(nav.canOpenFiles(files('artist/nobody'))).toBe(false)
-    const live = library.folders.nodes[2].key
-    expect(nav.canOpenFiles(files(`folder/${live}`))).toBe(true)
-    expect(nav.canOpenFiles(files('folder/nowhere'))).toBe(false)
+    expect(nav.canOpenFiles(at('album/a'))).toBe(true)
+    expect(nav.canOpenFiles(at('album/gone'))).toBe(false)
+    expect(nav.canOpenFiles(at('artist/marinavale'))).toBe(true)
+    expect(nav.canOpenFiles(at('artist/nobody'))).toBe(false)
+    const live = files.folders.nodes[2].key
+    expect(nav.canOpenFiles(at(`folder/${live}`))).toBe(true)
+    expect(nav.canOpenFiles(at('folder/nowhere'))).toBe(false)
   })
 
   it('keep what is left after a rescan', () => {
-    library.load(lib('a'))
+    files.load(lib('a'))
     expect(nav.keepFiles('albums', 'album/a')).toBe('album/a')
     expect(nav.keepFiles('albums', 'album/b')).toBe('')
     // an album under its artist shows the artist when it is gone
@@ -79,7 +81,7 @@ describe('files pages', () => {
   })
 
   it('give each page its place under the tab, for the scroll places', () => {
-    const [m, rock, live] = library.folders.nodes.map((n) => n.key)
+    const [m, rock, live] = files.folders.nodes.map((n) => n.key)
     expect(nav.filesPath('albums', '')).toEqual([])
     expect(nav.filesPath('albums', 'album/a')).toEqual(['album:a'])
     expect(nav.filesPath('artists', 'album/a/artist/marinavale')).toEqual([
@@ -103,7 +105,7 @@ describe('files pages', () => {
       ['artists', undefined],
       ['folders', undefined]
     ])
-    library.openPage('folders', `folder/${library.folders.nodes[2].key}`)
+    library.openPage('folders', `folder/${files.folders.nodes[2].key}`)
     expect(nav.filesTabs()[3].search).toBe('Search this folder')
   })
 })

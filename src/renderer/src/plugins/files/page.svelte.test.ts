@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { LibraryData } from '../../../../shared/library'
 import { defaultPalettes } from '../../../../shared/palette'
 import { library } from '../../stores/library.svelte'
+import { files } from './store.svelte'
 import type { SongsBlock } from '../types'
 import { filesPage } from './page'
 
@@ -48,7 +49,7 @@ function lib(): LibraryData {
 
 describe("Classic's Songs", () => {
   it('a sort click sorts, and does not build the list of songs again', () => {
-    library.load(lib())
+    files.load(lib())
     let builds = 0
     let block: SongsBlock | undefined
     const stop = $effect.root(() => {
@@ -67,7 +68,7 @@ describe("Classic's Songs", () => {
     expect(builds).toBe(1)
     expect(block?.sort).toEqual({ k: 't', dir: -1 })
     // new songs do
-    library.load(lib())
+    files.load(lib())
     flushSync()
     expect(builds).toBe(2)
     stop()

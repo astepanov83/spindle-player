@@ -1,21 +1,20 @@
 <!-- A scan in the main window (ticket 045): after Studio's chips, at the foot
-     of Classic's sidebar. With no songs yet, NoLibrary shows it instead. -->
+     of Classic's sidebar. The lines come from the plugins that are on. -->
 <script lang="ts">
   import Spinner from '../ui/Spinner.svelte'
-  import { library } from '../stores/library.svelte'
-  import { scanLine } from './scan-text'
+  import { statusLines } from '../plugins'
 
   // Classic's sidebar is narrow: the line wraps there
   let { wrap = false }: { wrap?: boolean } = $props()
 
-  const s = $derived(library.status)
+  const lines = $derived(statusLines())
 </script>
 
-{#if s.phase !== 'idle' && library.albums.length}
+{#each lines as line, i (i)}
   <p class="scan" class:wrap>
-    <Spinner /><span class="txt" title={scanLine(s)}>{scanLine(s)}</span>
+    <Spinner /><span class="txt" title={line}>{line}</span>
   </p>
-{/if}
+{/each}
 
 <style>
   .scan {

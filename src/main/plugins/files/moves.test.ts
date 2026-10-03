@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CueSheet } from './cue'
 import { buildLibrary } from './group'
-import { shortHash } from './ids'
+import { shortHash } from '../../ids'
 import { emptyIndex, parseIndex, serializeIndex } from './merge'
 import { confirmMoves, fileKey, findMoves, idMoves, moveEntries, movePlan } from './moves'
 import type { FileEntry, LibraryIndex } from './types'

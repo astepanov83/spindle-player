@@ -7,6 +7,7 @@ import { queueLink } from '../../../shared/saved-queue'
 import type { LibraryData } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 import { library } from '../stores/library.svelte'
+import { files } from '../plugins/files/store.svelte'
 import { openPage } from '../plugins'
 import { libraryView, scrollTopOnChange } from './scroll-top.svelte'
 
@@ -91,7 +92,7 @@ describe('where a link lands (ticket 040)', () => {
     vi.stubGlobal('requestAnimationFrame', (f: () => void) => frames.push(f))
     vi.stubGlobal('cancelAnimationFrame', () => {})
     vi.stubGlobal('CSS', { escape: (s: string) => s })
-    library.load(album)
+    files.load(album)
     box = makeBox()
     cleanup()
     cleanup = $effect.root(() =>

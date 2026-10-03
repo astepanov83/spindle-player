@@ -12,9 +12,9 @@ import type { RadioCover } from '../../../shared/ipc'
 import { songQuery, type SongQuery } from '../../../shared/radio-title'
 import type { SongCover } from '../../../shared/stations'
 import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../../json-file'
-import { cleanArtist } from '../../library/cover-match'
-import { isCoverHash } from '../../library/cover-names'
-import { cleanSong, type SongSource } from '../../library/song-cover'
+import { cleanArtist } from '../files/cover-match'
+import { isCoverHash } from '../../covers/cover-names'
+import { cleanSong, type SongSource } from '../files/song-cover'
 import { makeCover, withNewColors, type LogoCache } from '../covers'
 
 const sources = ['deezer', 'itunes'] as const

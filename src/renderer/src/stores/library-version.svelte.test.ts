@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { LibraryData, Track } from '../../../shared/library'
 import type { LibraryPatch } from '../../../shared/library-patch'
 import { defaultPalettes } from '../../../shared/palette'
-import { library } from './library.svelte'
+import { files } from '../plugins/files/store.svelte'
 
 const song = (id: string): Track => ({
   id,
@@ -50,7 +50,7 @@ const patch = (more: Partial<LibraryPatch>): LibraryPatch => ({
 })
 
 beforeEach(() => {
-  library.load({ ...data, epoch: 'e', n: 0 })
+  files.load({ ...data, epoch: 'e', n: 0 })
 })
 
 // counts how often a $derived that looks up a song runs, as the song lists do
@@ -59,7 +59,7 @@ function watchSongs(): { runs: () => number; stop: () => void } {
   const stop = $effect.root(() => {
     const rows = $derived.by(() => {
       runs++
-      return library.order(library.track('a1'))
+      return files.order(files.track('a1'))
     })
     $effect(() => void rows)
   })
@@ -71,8 +71,8 @@ describe('library versions', () => {
   it('does not redo the song lists for a patch with only photos', () => {
     const w = watchSongs()
     expect(w.runs()).toBe(1)
-    const before = library.revision
-    library.patch(
+    const before = files.revision
+    files.patch(
       patch({
         photos: { x: { cover: 'spindle://cover/small/x', coverLarge: 'spindle://cover/large/x' } }
       })
@@ -80,13 +80,13 @@ describe('library versions', () => {
     flushSync()
     expect(w.runs()).toBe(1)
     // a photo that failed to show still tries again
-    expect(library.revision).toBe(before + 1)
+    expect(files.revision).toBe(before + 1)
     w.stop()
   })
 
   it('redoes them when songs changed', () => {
     const w = watchSongs()
-    library.patch(patch({ tracks: [{ ...song('a1'), title: 'Renamed' }] }))
+    files.patch(patch({ tracks: [{ ...song('a1'), title: 'Renamed' }] }))
     flushSync()
     expect(w.runs()).toBe(2)
     w.stop()

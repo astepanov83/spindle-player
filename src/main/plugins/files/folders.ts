@@ -1,6 +1,6 @@
 // The folder table the page's Folders view is built from (ticket 020).
 import { relative, sep } from 'path'
-import type { Folder } from '../../shared/library'
+import type { Folder } from '../../../shared/library'
 import { isUnder } from './merge'
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })

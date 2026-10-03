@@ -1,7 +1,7 @@
 // Starts the library process and keeps it running: restarts it when it dies
 // (a few times), and lets quitting wait for its last save. Plain TS with the
 // process handed in, so it is tested with a fake.
-import type { RestartBudget } from './restart'
+import type { RestartBudget } from '../../restart'
 import type { WorkerIn, WorkerOut, WorkerStart } from './types'
 
 // The part of Electron's UtilityProcess used here.

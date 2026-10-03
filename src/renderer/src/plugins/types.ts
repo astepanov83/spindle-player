@@ -33,8 +33,6 @@ export interface Tab {
   search: string
   // a shorter one for Classic's narrow sidebar, when it differs
   searchShort?: string
-  // the line next to the chips: "Scanning 1,240 of 8,000"
-  status?: string
   // shown only there (Classic's Songs); none: in both
   only?: NavKind
 }
@@ -460,6 +458,13 @@ export interface PageHalf {
   actSetting?(id: string, actionId: string, value?: string): void
   // changes whenever an answer of `info` may have changed
   version(): number
+  // A line the library shows next to the chips (at the foot of Classic's
+  // sidebar) while it is busy: "Reading tags: 1,240 of 8,000". Not on its
+  // tabs: the tab list would change with each line and rebuild the page.
+  statusLine?(): string | undefined
+  // The online cover lookup's lines under "Find missing covers online" in
+  // Settings, with a spinner on the one that runs.
+  coverLines?(): { text: string; busy: boolean }[]
   // a plugin whose items are live (radio): it drives its own item
   live?: LivePlugin
   // One of the item's actions was used: a button (no value), or an option

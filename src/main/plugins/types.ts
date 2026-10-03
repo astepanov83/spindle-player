@@ -1,7 +1,7 @@
 import type { IdMoves } from '../../shared/id-moves'
 import type { PluginId } from '../../shared/plugins'
 import type { PageIpc } from '../page-ipc'
-import type { CoverCache } from '../library/cover-cache'
+import type { CoverCache } from '../covers/cover-cache'
 import type { MirrorDns } from './radio/radio-browser'
 import type { SettingsStore } from '../settings-store'
 

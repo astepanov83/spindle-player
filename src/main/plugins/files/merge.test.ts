@@ -17,7 +17,7 @@ import {
   serializeIndex,
   usedCovers
 } from './merge'
-import { fallbackPalettes, paletteVersion } from '../../shared/palette'
+import { fallbackPalettes, paletteVersion } from '../../../shared/palette'
 import type { Fetched } from './fetched-store'
 import {
   cueReaderVersion,

@@ -3,7 +3,7 @@
 import { mergeStreams, type Station, type Stream } from '../../../shared/stations'
 import { RefusedAddress } from './checked-fetch'
 import { refusedAddress } from './logo-fetch'
-import { readCapped } from '../../library/cover-http'
+import { readCapped } from '../files/cover-http'
 import { parsePls } from './pls'
 
 export interface FindOptions {

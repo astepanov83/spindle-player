@@ -2,7 +2,7 @@
 // process after a scan; the next scan waits for it, so the two never overlap.
 import { readdir, rm, stat } from 'fs/promises'
 import { join } from 'path'
-import { hashOfName, mosaicHashes } from './cover-names'
+import { hashOfName, mosaicHashes } from '../../covers/cover-names'
 
 // A temp file younger than this may still be written by main (a large cover the
 // stage asked for). Older ones were left by a crash.

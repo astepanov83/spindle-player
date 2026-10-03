@@ -1,7 +1,7 @@
 // The index in memory: reading it from disk, and folding scan results into it.
 import { sep } from 'path'
-import { paletteVersion, parseThemePalettes, type ThemePalettes } from '../../shared/palette'
-import { isCoverHash } from './cover-names'
+import { paletteVersion, parseThemePalettes, type ThemePalettes } from '../../../shared/palette'
+import { isCoverHash } from '../../covers/cover-names'
 import type { CueSheet, CueTrack } from './cue'
 import type { Fetched } from './fetched-store'
 import {

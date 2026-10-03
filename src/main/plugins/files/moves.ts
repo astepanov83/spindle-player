@@ -4,9 +4,9 @@
 // path. The entry moves with its tags, and the old track ids are mapped to the
 // new ones for playlists and the queue.
 import { cueTracks } from './cue-tracks'
-import { cueTrackId, shortHash } from './ids'
+import { cueTrackId, shortHash } from '../../ids'
 import { isUnder } from './merge'
-import type { IdMoves } from '../../shared/id-moves'
+import type { IdMoves } from '../../../shared/id-moves'
 import type { LibraryIndex } from './types'
 
 // The same for every path that reaches one file. None when the file system

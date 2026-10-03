@@ -18,7 +18,7 @@ vi.mock('electron', () => ({ app: { getPath: () => '/nowhere' } }))
 const { SettingsStore } = await import('./settings-store')
 const { isKnownSettingsFile } = await import('../shared/settings')
 const { PlaylistFile, QueueFile } = await import('./page-files')
-const { shortHash } = await import('./library/ids')
+const { shortHash } = await import('./ids')
 
 let dir: string
 beforeEach(() => {

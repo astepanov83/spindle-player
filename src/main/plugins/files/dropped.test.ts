@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { maxDropped } from '../../shared/ipc'
+import { maxDropped } from '../../../shared/ipc'
 import { addDropped, droppedFolders } from './dropped'
 
 // folders that exist on this made-up disk

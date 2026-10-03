@@ -106,8 +106,9 @@ const mine = [station('a'), station('b'), station('c')]
 
 // as the Radio view plays a station
 function playStation(s: Station): Promise<void> {
-  radio.offer(s)
-  return queues.playLive(itemKey('radio', s.id))
+  let p: Promise<void> = Promise.resolve()
+  radio.playOffered(s, () => (p = queues.playLive(itemKey('radio', s.id))))
+  return p
 }
 
 const loads = (): string[] => fake.calls.filter((c) => c.startsWith('load'))
@@ -147,6 +148,8 @@ describe('queue to radio', () => {
     // no song title yet: the station, once
     expect(queues.title).toBe('Station a')
     expect(queues.sub).toBe('Radio')
+    // the system's media controls: the station as the artist, as before 057
+    expect(queues.media).toEqual({ title: 'Station a', artist: 'Station a', album: '' })
     heard({ stationId: 'a', title: 'Iron Maiden - Powerslave * Blacky OnAir *', at: 1 })
     expect(queues.title).toBe('Iron Maiden - Powerslave')
     expect(queues.sub).toBe('Station a')
@@ -378,6 +381,15 @@ describe('radio turned off (ticket 057)', () => {
     await playStation(mine[0])
     expect(queues.active).toBe('track')
     expect(fake.calls).toEqual([])
+  })
+
+  it('a search result refused while off is not left behind as a station (fix round 1)', async () => {
+    const { itemInfo } = await import('../plugins')
+    settings.plugins.radio = false
+    await playStation(station('found'))
+    settings.plugins.radio = true
+    expect(radio.find('found')).toBeUndefined()
+    expect(itemInfo('radio:found').state).toBe('missing')
   })
 
   it('off and on again: My stations and the recent songs are all there', async () => {

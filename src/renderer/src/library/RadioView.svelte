@@ -45,8 +45,7 @@
 
   // A result that is in My stations plays as saved: its chosen stream and logo.
   function play(s: Station): void {
-    radio.offer(saved.get(s.id) ?? s)
-    void queues.playItem(itemKey('radio', s.id))
+    radio.playOffered(saved.get(s.id) ?? s, () => void queues.playItem(itemKey('radio', s.id)))
   }
 
   function star(s: Station): void {

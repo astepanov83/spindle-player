@@ -55,7 +55,8 @@ const live = vi.hoisted(() => ({
   waiting: [] as ((p: Playable | undefined) => void)[],
   events: { error: vi.fn(), paused: vi.fn() },
   // its items, in the order Next steps through
-  ids: ['one', 'two', 'three']
+  ids: ['one', 'two', 'three'],
+  songsLater: false
 }))
 
 const playable = (id: string, n = 1): Playable => ({
@@ -105,14 +106,17 @@ vi.mock('../plugins', () => {
       const a = key ? itemInfo(key) : undefined
       return a?.state === 'ok' ? a.info : undefined
     },
-    playItem: (key: string): Playable | undefined =>
-      songs[key]
+    playItem: (key: string): Playable | undefined | Promise<Playable | undefined> => {
+      const p: Playable | undefined = songs[key]
         ? {
             url: `media/${key.slice(6)}`,
             length: 100,
             can: { seek: true, pause: true, next: true, previous: true }
           }
-        : undefined,
+        : undefined
+      // a song's playable that comes later
+      return live.songsLater ? new Promise((done) => live.waiting.push(() => done(p))) : p
+    },
     isLive: (key: string) => key.startsWith('radio:'),
     liveOf: (key: string) => (key.startsWith('radio:') ? { plugin, id: key.slice(6) } : undefined)
   }
@@ -147,6 +151,7 @@ async function playLive(key: ItemKey, id = key.slice(6)): Promise<void> {
 
 beforeEach(async () => {
   live.on = true
+  live.songsLater = false
   queues.backToQueue()
   await answer(() => undefined)
   queue.playList(['files:s0', 'files:s1'], 1, 'Mix')
@@ -292,6 +297,30 @@ describe('Play and Pause', () => {
     await p
     expect(fake.calls).toEqual([])
     expect(player.playing).toBe(false)
+  })
+
+  it('the button shows the wish while a clicked song is on its way (fix round 1)', async () => {
+    live.songsLater = true
+    queue.jump(0)
+    expect(player.playing).toBe(false)
+    expect(queues.wantsSound).toBe(true)
+    // pressed as it shows: Pause
+    queues.togglePlay()
+    expect(queues.wantsSound).toBe(false)
+    fake.calls = []
+    await answer(() => undefined)
+    expect(fake.calls).toEqual(['load media/s0 at 0'])
+    expect(queues.wantsSound).toBe(false)
+  })
+
+  it('the button shows the wish while a live item connects', async () => {
+    const p = queues.playLive(one)
+    expect(queues.wantsSound).toBe(true)
+    queues.togglePlay()
+    expect(queues.wantsSound).toBe(false)
+    await answer(() => playable('one'))
+    await p
+    expect(fake.calls).toEqual([])
   })
 
   it('seek does nothing to the track queue’s place', async () => {

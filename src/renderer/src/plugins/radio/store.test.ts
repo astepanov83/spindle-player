@@ -114,8 +114,9 @@ const { notice } = await import('../../stores/notice.svelte')
 
 // as the Radio view plays a station: that copy, through the live queue
 function playStation(s: Station): Promise<void> {
-  radio.offer(s)
-  return queues.playLive(itemKey('radio', s.id))
+  let p: Promise<void> = Promise.resolve()
+  radio.playOffered(s, () => (p = queues.playLive(itemKey('radio', s.id))))
+  return p
 }
 // the play button after a pause
 const resume = async (): Promise<void> => await queues.play()

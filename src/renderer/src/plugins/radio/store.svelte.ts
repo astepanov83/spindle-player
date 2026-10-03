@@ -179,10 +179,16 @@ class RadioStore {
     )
   }
 
-  // The Radio view plays this copy next (a search result, or a saved one
-  // with its chosen stream), not the one find gives.
-  offer(station: Station): void {
+  // The Radio view plays this copy (a search result, or a saved one with its
+  // chosen stream), not the one find gives. It counts only while `play`
+  // starts: a play refused (radio off) leaves no station behind.
+  playOffered(station: Station, play: () => void): void {
     this.#offered = station
+    try {
+      play()
+    } finally {
+      this.#offered = undefined
+    }
   }
 
   // What play takes for an id: the offered copy once, else find's.
@@ -387,12 +393,14 @@ class RadioStore {
   }
 
   // What is on air, for Now Playing, the media session and the colors. Before
-  // a song title comes the title is the station, so it isn't said twice.
+  // a song title comes the title is the station, so Now Playing doesn't say
+  // it twice; the media controls' artist is always the station.
   #onAir(s: Station): ItemInfo {
     const track = this.now.track
+    const on = { art: this.art, mediaArtist: s.name }
     return track
-      ? { title: track, subtitle: s.name, art: this.art, names: [{ name: s.name, to: radioPage }] }
-      : { title: s.name, subtitle: 'Radio', art: this.art, titleTo: radioPage }
+      ? { title: track, subtitle: s.name, names: [{ name: s.name, to: radioPage }], ...on }
+      : { title: s.name, subtitle: 'Radio', titleTo: radioPage, ...on }
   }
 
   // The core hears what is on air and the recent songs after each change to

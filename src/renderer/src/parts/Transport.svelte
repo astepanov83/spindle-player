@@ -19,8 +19,8 @@
     onclick={() => queues.prev()}
   />
   <PlayButton
-    icon={player.playing ? 'pause' : 'play'}
-    label={player.playing ? 'Pause' : 'Play'}
+    icon={queues.wantsSound ? 'pause' : 'play'}
+    label={queues.wantsSound ? 'Pause' : 'Play'}
     disabled={queues.nothing}
     onclick={() => queues.togglePlay()}
   />

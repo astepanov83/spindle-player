@@ -77,10 +77,31 @@ class TrackQueue {
   #loaded: { key: ItemKey; p: Playable } | undefined
   // The current song could not load: its plugin has no data for it yet, or
   // it is off with no other song to go on to. It loads once it can.
-  #waiting: { andPlay: boolean; at: number } | undefined
+  get #waiting(): { andPlay: boolean; at: number } | undefined {
+    return this.#waitingNow
+  }
+  set #waiting(w: { andPlay: boolean; at: number } | undefined) {
+    this.#waitingNow = w
+    this.#wish()
+  }
+  #waitingNow: { andPlay: boolean; at: number } | undefined
   // The current song's playable is on its way (its plugin asks first). Play
   // or Pause pressed meanwhile decides whether it plays when it comes.
-  #pending: { andPlay: boolean } | undefined
+  get #pending(): { andPlay: boolean } | undefined {
+    return this.#pendingNow
+  }
+  set #pending(p: { andPlay: boolean } | undefined) {
+    this.#pendingNow = p
+    this.#wish()
+  }
+  #pendingNow: { andPlay: boolean } | undefined
+  // The song waits (above) and is to play once it loads: the play button
+  // shows Pause then, so pressing it says "not now".
+  wantsPlay = $state(false)
+
+  #wish(): void {
+    this.wantsPlay = !!(this.#waitingNow ?? this.#pendingNow)?.andPlay
+  }
   // counts loads, so an answer that comes late for an older song is dropped
   #loads = 0
 
@@ -380,6 +401,7 @@ class TrackQueue {
     const w = this.#waiting ?? this.#pending
     if (!w) return false
     w.andPlay = on ?? !w.andPlay
+    this.#wish()
     return true
   }
 

@@ -897,12 +897,16 @@ describe('a playable that comes later (ticket 056)', () => {
     expect(fake.calls).toEqual(['load media/a1', 'play'])
   })
 
-  it('Pause pressed while it is on its way loads it paused', async () => {
+  it('a clicked song on its way shows as wanted; the button then says not now (fix round 1)', async () => {
     plugin.later = true
     queue.jump(2)
     fake.reset()
-    // the play button turns it over
+    // the button shows Pause: the click asked for sound
+    expect(player.playing).toBe(false)
+    expect(queue.wantsPlay).toBe(true)
+    // pressed as shown: Pause
     expect(queue.playWhenReady()).toBe(true)
+    expect(queue.wantsPlay).toBe(false)
     for (const done of plugin.pending) done()
     await Promise.resolve()
     await Promise.resolve()
@@ -910,6 +914,21 @@ describe('a playable that comes later (ticket 056)', () => {
     expect(player.playing).toBe(false)
     // nothing waits any more
     expect(queue.playWhenReady(true)).toBe(false)
+    expect(queue.wantsPlay).toBe(false)
+  })
+
+  it('the button pressed twice while it is on its way still plays it', async () => {
+    plugin.later = true
+    queue.jump(2)
+    fake.reset()
+    queue.playWhenReady()
+    queue.playWhenReady()
+    expect(queue.wantsPlay).toBe(true)
+    for (const done of plugin.pending) done()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(fake.calls).toEqual(['load media/a2', 'play'])
+    expect(queue.wantsPlay).toBe(false)
   })
 
   it('a failed answer is logged, and the song waits to be tried again', async () => {

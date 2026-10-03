@@ -44,7 +44,7 @@
       currentAlbum: trackOf(queue.current)?.albumId,
       ended: queue.ended,
       queuePlays: queues.active === 'track',
-      sounding: player.playing
+      sounding: queues.wantsSound
     })
   )
 

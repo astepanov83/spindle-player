@@ -29,6 +29,9 @@ export interface ItemInfo {
   groupTo?: PageAddress
   // the song menu's "Go to ..." items
   links?: { label: string; to: PageAddress }[]
+  // the system's media controls' artist, when it is not the subtitle (a
+  // station's name, also before its first song title)
+  mediaArtist?: string
 }
 
 export type ItemState =

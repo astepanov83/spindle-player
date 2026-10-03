@@ -65,6 +65,11 @@ class Queues {
   art: Art | undefined = $derived(this.info?.art)
   // Nothing picked: Play, Previous and Next have nothing to act on.
   nothing: boolean = $derived(this.active === 'live' ? !this.live.current : !queue.current)
+  // Sound is wanted: the play buttons show Pause (Stop for a live item). Also
+  // while a song waits to load and is to play then, so pressing the button
+  // says "not now" and doesn't turn the wish around unseen. A live item's
+  // player.playing is its wish already, also while its plugin connects.
+  wantsSound: boolean = $derived(player.playing || (this.active === 'track' && queue.wantsPlay))
   // A song sounds: the queue's playing marks (the bouncing bars) follow this,
   // not player.playing, which is the live item's wish for sound while it plays.
   songPlaying: boolean = $derived(this.active === 'track' && player.playing)
@@ -74,7 +79,7 @@ class Queues {
   media: MediaText | undefined = $derived(
     this.info && {
       title: this.info.title,
-      artist: this.info.subtitle ?? '',
+      artist: this.info.mediaArtist ?? this.info.subtitle ?? '',
       album: this.info.group ?? ''
     }
   )

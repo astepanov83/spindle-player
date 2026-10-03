@@ -2,7 +2,7 @@
 // or at once on Enter, and only the newest answer is shown.
 import { flushSync } from 'svelte'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RadioSearch } from '../../../../shared/ipc'
+import type { RadioSearch } from '../../../../shared/plugins/radio/ipc'
 import type { Station } from '../../../../shared/plugins/radio/stations'
 
 const answers = new Map<string, (r: RadioSearch) => void>()

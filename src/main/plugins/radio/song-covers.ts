@@ -8,7 +8,7 @@
 // kept by artist and song in radio-covers.json, misses too, so a song or a
 // jingle played again is not looked up again.
 import { parseThemePalettes } from '../../../shared/palette'
-import type { RadioCover } from '../../../shared/ipc'
+import type { RadioCover } from '../../../shared/plugins/radio/ipc'
 import { songQuery, type SongQuery } from '../../../shared/plugins/radio/radio-title'
 import type { SongCover } from '../../../shared/plugins/radio/stations'
 import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../../json-file'

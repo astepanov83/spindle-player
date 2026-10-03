@@ -3,7 +3,7 @@
 // spindle://mfp/<episode id> for the audio. Off means no network and no
 // change to mfp.json; what it has stays, and the handlers answer from it.
 import { join } from 'path'
-import { MfpChannel } from '../../../shared/ipc'
+import { MfpChannel } from '../../../shared/plugins/mfp/ipc'
 import type { Episode, MfpEpisodes, MfpStatus } from '../../../shared/plugins/mfp/mfp'
 import type { PluginId } from '../../../shared/plugins'
 import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../../json-file'

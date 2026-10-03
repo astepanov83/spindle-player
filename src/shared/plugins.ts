@@ -1,3 +1,7 @@
+import type { FilesChannels } from './plugins/files/ipc'
+import type { MfpChannels } from './plugins/mfp/ipc'
+import type { RadioChannels } from './plugins/radio/ipc'
+
 // What kind of thing a plugin plays. Moves to shared/plugins/ with the item types.
 export type ItemKind = 'track' | 'live'
 
@@ -50,3 +54,6 @@ export const switchablePlugins: PluginId[] = ['files', 'radio', 'mfp']
 export function isPluginId(v: unknown): v is PluginId {
   return plugins.some((p) => p.id === v)
 }
+
+// Each plugin's page-to-main channels (see PageChannels in ipc.ts).
+export type PluginChannels = FilesChannels & RadioChannels & MfpChannels

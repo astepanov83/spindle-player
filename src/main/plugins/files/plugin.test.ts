@@ -2,7 +2,7 @@
 // stops (scans, folder and artist changes, audio, large covers), what goes on
 // (the library for the page, the radio's song lookup), and turning it on again.
 import { describe, expect, it, vi } from 'vitest'
-import { LibraryChannel } from '../../../shared/ipc'
+import { LibraryChannel } from '../../../shared/plugins/files/ipc'
 import type { CoverHelper, PluginContext } from '../types'
 import type { WorkerIn, WorkerOut } from './types'
 

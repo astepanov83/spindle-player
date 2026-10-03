@@ -7,7 +7,7 @@ import {
   type Station,
   type Stream
 } from '../../../../shared/plugins/radio/stations'
-import type { LastAnswer } from '../../../../shared/ipc'
+import type { LastAnswer } from '../../../../shared/plugins/radio/ipc'
 import { parseTitle } from '../../../../shared/plugins/radio/radio-title'
 import type { HistoryEntry as LiveEntry } from '../types'
 

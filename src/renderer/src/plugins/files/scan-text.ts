@@ -1,5 +1,5 @@
 // The scan status lines for the settings sheet and the empty library.
-import type { DropResult } from '../../../../shared/ipc'
+import type { DropResult } from '../../../../shared/plugins/files/ipc'
 import type { FetchStatus, ScanStatus } from '../../../../shared/library'
 import { rootName } from './folders'
 import { pathEnds } from '../../ui/path-ends'

@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, expect, it, vi, type Mock } from 'vitest'
 import { fallbackPalettes, paletteVersion } from '../../../shared/palette'
-import type { RadioCover } from '../../../shared/ipc'
+import type { RadioCover } from '../../../shared/plugins/radio/ipc'
 import {
   notFoundMs,
   openSongCovers,

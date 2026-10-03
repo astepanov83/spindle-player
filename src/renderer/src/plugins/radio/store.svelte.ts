@@ -3,7 +3,7 @@
 // functions in logic.ts. The core plays what this loads through the handle it
 // gives (index.ts is the LivePlugin over this store).
 import type { Art } from '../../../../shared/library'
-import type { RadioCover, RadioLogo, RadioTitle } from '../../../../shared/ipc'
+import type { RadioCover, RadioLogo, RadioTitle } from '../../../../shared/plugins/radio/ipc'
 import {
   addEntry,
   historyTitle,

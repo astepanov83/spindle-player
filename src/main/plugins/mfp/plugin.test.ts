@@ -2,7 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'f
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MfpChannel } from '../../../shared/ipc'
+import { MfpChannel } from '../../../shared/plugins/mfp/ipc'
 import type { MfpEpisodes } from '../../../shared/plugins/mfp/mfp'
 import { defaultPalettes } from '../../../shared/palette'
 import type { PluginContext } from '../types'

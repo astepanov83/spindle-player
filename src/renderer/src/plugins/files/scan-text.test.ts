@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DropResult } from '../../../../shared/ipc'
+import type { DropResult } from '../../../../shared/plugins/files/ipc'
 import type { ScanStatus } from '../../../../shared/library'
 import {
   canRescan,

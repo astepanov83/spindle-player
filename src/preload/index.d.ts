@@ -1,21 +1,11 @@
-import type {
-  LibraryApi,
-  MfpApi,
-  PlaybackApi,
-  PlaylistsApi,
-  RadioApi,
-  SettingsApi,
-  WinApi
-} from '../shared/ipc'
+import type { PlaybackApi, PlaylistsApi, SettingsApi, WinApi } from '../shared/ipc'
 
+// The core's APIs. Each plugin declares its own next to its page half (window.d.ts).
 declare global {
   interface Window {
     win: WinApi
     settingsApi: SettingsApi
-    libraryApi: LibraryApi
     playlistsApi: PlaylistsApi
-    radioApi: RadioApi
-    mfpApi: MfpApi
     playbackApi: PlaybackApi
   }
 }

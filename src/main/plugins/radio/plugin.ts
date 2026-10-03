@@ -2,7 +2,12 @@
 // the page's radio requests. Off means no network and no file changes; the
 // handlers stay and answer "off" (spec "What off means").
 import { join } from 'path'
-import { RadioChannel, type RadioCover, type RadioLogo, type RadioTitle } from '../../../shared/ipc'
+import {
+  RadioChannel,
+  type RadioCover,
+  type RadioLogo,
+  type RadioTitle
+} from '../../../shared/plugins/radio/ipc'
 import type { PluginId } from '../../../shared/plugins'
 import {
   parseStation,

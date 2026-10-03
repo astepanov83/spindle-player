@@ -4,7 +4,7 @@
 import { stat } from 'fs/promises'
 import { join } from 'path'
 import { app, dialog, utilityProcess, type BrowserWindow } from 'electron'
-import { LibraryChannel, type DropResult } from '../../../shared/ipc'
+import { LibraryChannel, type DropResult } from '../../../shared/plugins/files/ipc'
 import type { IdMoves } from '../../../shared/id-moves'
 import type { ScanStatus } from '../../../shared/library'
 import { parseChanges } from '../../../shared/plugins/files/artist-overrides'

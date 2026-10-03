@@ -3,7 +3,7 @@
 // which knows only files dragged in from the system. Main still checks every
 // path, since a message from the page can't be trusted: only absolute paths to
 // folders that exist are added.
-import { maxDropped, type DropResult } from '../../../shared/ipc'
+import { maxDropped, type DropResult } from '../../../shared/plugins/files/ipc'
 import { parseFolders } from '../../../shared/settings'
 
 // `folders` are the music folders now; `isDir` asks the disk (fs.stat in main).

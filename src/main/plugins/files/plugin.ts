@@ -1,7 +1,7 @@
 // Music files: the library process and its service, with the page's library
 // requests.
 import { BrowserWindow } from 'electron'
-import { LibraryChannel } from '../../../shared/ipc'
+import { LibraryChannel } from '../../../shared/plugins/files/ipc'
 import type { PluginId } from '../../../shared/plugins'
 import { stopAllDecoders } from './decode'
 import { libraryRoutes } from './protocol'

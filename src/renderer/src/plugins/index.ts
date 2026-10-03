@@ -19,7 +19,8 @@ import type {
   LivePlugin,
   PageAddress,
   PageHalf,
-  Playable
+  Playable,
+  SettingBlock
 } from './types'
 
 const halves: Record<PluginId, PageHalf> = { files: filesHalf, radio: radioHalf, mfp: mfpHalf }
@@ -138,6 +139,21 @@ export function actOnPage(
   if (pluginOn(plugin)) halves[plugin].act?.(target, actionId, value)
 }
 
+// The settings blocks of a plugin that is on.
+export function settingBlocks(plugin: PluginId): SettingBlock[] {
+  return pluginOn(plugin) ? (halves[plugin].settings?.() ?? []) : []
+}
+
+// A settings block's button, row or switch was used. Not while its plugin is off.
+export function actOnSetting(
+  plugin: PluginId,
+  target: string,
+  actionId: string,
+  value?: string
+): void {
+  if (pluginOn(plugin)) halves[plugin].actSetting?.(target, actionId, value)
+}
+
 // A tile, row or back link on a page of `tab`. A page of that tab opens in
 // it, as a step; one that another tab shows is a link there. `keepQuery`: a
 // step along a list the search filters in place (Folders).
@@ -184,7 +200,12 @@ export function pluginTabs(): ShownTab[] {
 export function navTabs(): NavTab[] {
   return pluginTabs().map((t) => {
     const keep = t.plugin === 'core' ? undefined : halves[t.plugin].keep
-    return { id: t.id, ...(t.only ? { only: t.only } : {}), ...(keep ? { keep } : {}) }
+    return {
+      id: t.id,
+      plugin: t.plugin,
+      ...(t.only ? { only: t.only } : {}),
+      ...(keep ? { keep } : {})
+    }
   })
 }
 

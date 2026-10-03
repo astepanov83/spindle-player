@@ -269,6 +269,30 @@ export interface ViewBlock {
   view: 'radio' | 'mfp'
 }
 
+// What a plugin shows in Settings: data again, drawn by the core
+// (components/SettingBlocks.svelte). Spec "Settings".
+export type SettingBlock =
+  // a small heading over the blocks of a section
+  | { kind: 'title'; text: string }
+  // a line of text; `busy`: with a spinner
+  | { kind: 'status'; text: string; busy?: boolean }
+  // `remove` is the button's label on each row; `confirm`, when there, asks
+  // first with that label. `paths`: the titles are paths, cut in the middle.
+  // act: `remove` with the row's id.
+  | {
+      kind: 'list'
+      id: string
+      rows: { id: string; title: string; note?: string }[]
+      remove?: string
+      confirm?: string
+      paths?: boolean
+      disabled?: boolean
+    }
+  // buttons side by side when they follow each other. act: `press`
+  | { kind: 'button'; id: string; label: string; disabled?: boolean }
+  // act: `set` with 'true' or 'false'
+  | { kind: 'switch'; id: string; label: string; on: boolean }
+
 // A list block for a plugin's own array: its tiles and rows are typed by it.
 export const tilesBlock = <T>(b: Omit<TilesBlock<T>, 'kind'>): TilesBlock =>
   ({ kind: 'tiles', ...b }) as TilesBlock
@@ -384,13 +408,21 @@ export interface PageHalf {
   // a page of one of its tabs, with the search box's text
   page(tab: string, page: string, query: string): Block[]
   // What it finds for the search box's text (trimmed, not empty), at once
-  // and with no network, in the order shown. A group with nothing in it is
-  // not listed.
+  // and with no network, in the order shown. It always returns its groups,
+  // even empty ones (one shown whole stays while the text changes); the core
+  // hides the empty ones.
   search?(query: string): SearchGroup[]
   // What the core's Playlists page shows while this plugin has found no
   // songs at all: none once it has some. `noPlaylists`: Studio's list of
   // playlists with none in it, which says what playlists are for.
   emptyPlaylists?(noPlaylists: boolean): EmptyBlock | undefined
+  // Its blocks in Settings, asked while it is on: under its switch, or in a
+  // section of their own while it has none (files, until ticket 063).
+  settings?(): SettingBlock[]
+  // A settings block was used: a button (`press`), a row of a list (`remove`,
+  // with the row's id), a switch (`set`, with 'true' or 'false'). `id` is the
+  // block's. Apart from `act`, whose ids belong to the pages.
+  actSetting?(id: string, actionId: string, value?: string): void
   // changes whenever an answer of `info` may have changed
   version(): number
   // a plugin whose items are live (radio): it drives its own item

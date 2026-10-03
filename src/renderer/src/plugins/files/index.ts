@@ -5,6 +5,7 @@ import type { PageHalf } from '../types'
 import { canOpenFiles, filesPath, filesTabs, keepFiles } from './nav'
 import { filesAct, filesEmptyPlaylists, filesPage, filesSearch } from './page'
 import { filesTabOf } from './pages'
+import { filesActSetting, filesSettings } from './settings'
 import { trackPlayable, trackState } from './tracks'
 
 // before the first library a song is on its way, not gone
@@ -22,5 +23,7 @@ export const filesHalf: PageHalf = {
   search: filesSearch,
   emptyPlaylists: filesEmptyPlaylists,
   act: filesAct,
+  settings: filesSettings,
+  actSetting: filesActSetting,
   version: () => library.revision
 }

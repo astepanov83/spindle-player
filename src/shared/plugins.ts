@@ -35,7 +35,8 @@ export const plugins: PluginInfo[] = [
   {
     id: 'mfp',
     name: 'Music For Programming',
-    about: 'Mixes from musicforprogramming.net.',
+    about:
+      'Mixes from musicforprogramming.net, in the MFP tab. Song times inside a mix are guessed: the site gives none.',
     defaultOn: false,
     itemKind: 'track',
     offText: 'MFP is off'

@@ -62,6 +62,8 @@ export interface NavTab {
   id: string
   only?: NavKind
   keep?: (tab: string, page: string) => string
+  // the plugin it belongs to: a search group of one with no tab is gone
+  plugin?: string
 }
 
 // A renamed page to follow (see LibraryStore.follow). `to` gets the old page;
@@ -278,10 +280,15 @@ class LibraryStore {
     }
     const shown = (id: string): boolean => this.#shows(id, pages[id] ?? '')
     const tab = shown(nav.tab) ? nav.tab : (tabs.find((t) => shown(t.id))?.id ?? '')
+    // a group of a plugin that is off is gone, so "Show all" has nothing to show
+    const gone =
+      nav.searchAll !== null &&
+      tabs.some((t) => t.plugin) &&
+      !tabs.some((t) => t.plugin === nav.searchAll!.split(':')[0])
     const out: Nav = {
       tab,
       pages: samePages(pages, nav.pages) ? nav.pages : pages,
-      searchAll: tab === nav.tab ? nav.searchAll : null
+      searchAll: tab === nav.tab && !gone ? nav.searchAll : null
     }
     return sameNav(out, nav) ? nav : out
   }

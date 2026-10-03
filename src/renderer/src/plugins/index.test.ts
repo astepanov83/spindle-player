@@ -364,3 +364,89 @@ describe('itemsVersion', () => {
     expect(p.itemsVersion()).toBe(a)
   })
 })
+
+describe('settings blocks (ticket 060)', () => {
+  const api = { addFolder: vi.fn(), removeFolder: vi.fn(), rescan: vi.fn() }
+  beforeEach(() => {
+    Object.values(api).forEach((f) => f.mockClear())
+    vi.stubGlobal('window', { ...window, libraryApi: api })
+  })
+
+  it('give the music folders, Add folder, Rescan and the scan line', () => {
+    library.status = { ...library.status, folders: ['/m', '/gone'], missing: ['/gone'] }
+    const blocks = p.settingBlocks('files')
+    expect(blocks.map((b) => b.kind)).toEqual(['title', 'list', 'button', 'button', 'status'])
+    expect(blocks[1]).toMatchObject({
+      kind: 'list',
+      rows: [
+        { id: '/m', title: '/m' },
+        { id: '/gone', title: '/gone', note: 'not found' }
+      ],
+      remove: 'Remove',
+      confirm: 'Remove folder',
+      disabled: false
+    })
+    expect(blocks[2]).toMatchObject({ id: 'add', disabled: false })
+    expect(blocks[3]).toMatchObject({ id: 'rescan', disabled: false })
+  })
+
+  it('lock the folders and Rescan while settings.json is unreadable or a scan runs', () => {
+    library.status = { ...library.status, folders: ['/m'], settingsUnreadable: true }
+    let blocks = p.settingBlocks('files')
+    expect(blocks[1]).toMatchObject({ disabled: true })
+    expect(blocks[2]).toMatchObject({ disabled: true })
+    expect(blocks[3]).toMatchObject({ disabled: true })
+    library.status = { ...library.status, settingsUnreadable: false, phase: 'walk' }
+    blocks = p.settingBlocks('files')
+    expect(blocks[3]).toMatchObject({ id: 'rescan', disabled: true })
+    expect(blocks[4]).toMatchObject({ kind: 'status', text: expect.stringContaining('Looking') })
+  })
+
+  it('send add, remove and Rescan to the plugin', () => {
+    p.actOnSetting('files', 'add', 'press')
+    p.actOnSetting('files', 'folders', 'remove', '/m')
+    p.actOnSetting('files', 'rescan', 'press')
+    expect(api.addFolder).toHaveBeenCalledTimes(1)
+    expect(api.removeFolder).toHaveBeenCalledWith('/m')
+    expect(api.rescan).toHaveBeenCalledTimes(1)
+    // a remove with no row does nothing
+    p.actOnSetting('files', 'folders', 'remove')
+    expect(api.removeFolder).toHaveBeenCalledTimes(1)
+  })
+
+  it("give MFP's status line only while it is on, and Radio nothing", () => {
+    expect(p.settingBlocks('mfp')).toEqual([])
+    library.status = { ...library.status, mfp: { ...mfpOn, running: true } }
+    expect(p.settingBlocks('mfp')).toEqual([
+      { kind: 'status', text: '1 episode, looking for new ones…', busy: true }
+    ])
+    expect(p.settingBlocks('radio')).toEqual([])
+    settings.plugins.mfp = false
+    expect(p.settingBlocks('mfp')).toEqual([])
+  })
+
+  it('do not act for a plugin that is off', () => {
+    settings.plugins.files = false
+    p.actOnSetting('files', 'add', 'press')
+    expect(api.addFolder).not.toHaveBeenCalled()
+  })
+})
+
+describe('"Show all" of a plugin that went off (ticket 060)', () => {
+  it('is cleared with the tabs of that plugin', () => {
+    library.setTabs(p.navTabs())
+    library.showIn('chips')
+    library.load(lib())
+    library.query = 'song'
+    library.showAll('mfp:mixes')
+    expect(library.searchAll).toBe('mfp:mixes')
+    settings.plugins.mfp = false
+    library.setTabs(p.navTabs())
+    expect(library.searchAll).toBeNull()
+    // a group of a plugin still on stays
+    library.showAll('files:songs')
+    settings.plugins.radio = false
+    library.setTabs(p.navTabs())
+    expect(library.searchAll).toBe('files:songs')
+  })
+})

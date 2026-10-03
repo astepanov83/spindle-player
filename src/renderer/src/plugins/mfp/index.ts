@@ -4,6 +4,7 @@ import { searchSongs } from '../../library/views'
 import { library } from '../../stores/library.svelte'
 import { trackKey, trackPlayable, trackState } from '../files/tracks'
 import type { PageHalf } from '../types'
+import { mfpSettings } from './settings'
 import { canOpenMfp, keepMfp, mfpPath, mfpTabOf, mfpTabs } from './nav'
 
 // The episodes are all there once main says MFP is on (its status) and the
@@ -31,5 +32,6 @@ export const mfpHalf: PageHalf = {
       songs: searchSongs(library.mfpAlbums, (id) => library.track(id), query).map(trackKey)
     }
   ],
+  settings: () => mfpSettings(),
   version: () => library.revision * 2 + (complete() ? 1 : 0)
 }

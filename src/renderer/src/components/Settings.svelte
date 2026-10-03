@@ -1,8 +1,7 @@
 <!-- The settings sheet under the gear. Main saves every choice (see App.svelte). -->
 <script lang="ts">
   import CoverFetch from './CoverFetch.svelte'
-  import MusicFolders from './MusicFolders.svelte'
-  import OnlineMusic from './OnlineMusic.svelte'
+  import SettingBlocks from './SettingBlocks.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Seg from '../ui/Seg.svelte'
   import type { QueueMode, TemplateId } from '../../../shared/layout'
@@ -14,7 +13,9 @@
     type ThemeChoice,
     type VisualizerStyle
   } from '../../../shared/settings'
+  import { plugins, switchablePlugins } from '../../../shared/plugins'
   import { templateIds, templates } from '../../../shared/templates'
+  import { settingBlocks } from '../plugins'
   import { layout } from '../stores/layout.svelte'
   import { settings } from '../stores/settings.svelte'
   import { vzNames } from '../visualizer/names'
@@ -36,6 +37,11 @@
     minimize: 'Closing the window minimizes it, and the music keeps playing.',
     quit: 'Closing the window quits Spindle.'
   }
+
+  // A plugin with a switch has its blocks under it; one without (files, until
+  // ticket 063) has a section of its own, where Music folders always was.
+  const switchable = plugins.filter((p) => switchablePlugins.includes(p.id))
+  const sections = plugins.filter((p) => !switchablePlugins.includes(p.id))
 
   let el: HTMLDivElement | undefined = $state()
 
@@ -121,8 +127,25 @@
     <p class="hint">{closeHints[settings.closeAction]}</p>
   </div>
   <CoverFetch />
-  <MusicFolders />
-  <OnlineMusic />
+  {#each sections as p (p.id)}
+    {@const blocks = settingBlocks(p.id)}
+    {#if blocks.length}
+      <div class="set"><SettingBlocks plugin={p.id} {blocks} /></div>
+    {/if}
+  {/each}
+  <div class="set">
+    <span class="section-label">Plugins</span>
+    {#each switchable as p (p.id)}
+      <label class="check">
+        <input type="checkbox" bind:checked={settings.plugins[p.id]} />
+        {p.name}
+      </label>
+      {#if settings.plugins[p.id]}
+        <p class="hint">{p.about}</p>
+        <SettingBlocks plugin={p.id} blocks={settingBlocks(p.id)} />
+      {/if}
+    {/each}
+  </div>
 </div>
 
 <style>
@@ -186,5 +209,16 @@
     font-size: var(--text-s);
     line-height: 1.45;
     color: var(--ink-2);
+  }
+  .check {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: var(--text-s);
+    cursor: pointer;
+  }
+  .check input {
+    margin: 0;
+    accent-color: var(--c2);
   }
 </style>

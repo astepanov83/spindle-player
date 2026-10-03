@@ -47,17 +47,12 @@ const track = (id: string, albumId: string, extra: Partial<Track> = {}): Track =
 
 function lib(): LibraryData {
   return {
-    albums: [
-      album('a', ['a1', 'a2', 'a3']),
-      album('b', ['b1'], { artist: 'Juno Park' }),
-      album('ep', ['m1'], { online: 'mfp', artist: 'Mixer' })
-    ],
+    albums: [album('a', ['a1', 'a2', 'a3']), album('b', ['b1'], { artist: 'Juno Park' })],
     tracks: [
       track('a1', 'a', { no: 1, disc: 1 }),
       track('a2', 'a', { no: 2, disc: 1 }),
       track('a3', 'a', { no: 1, disc: 2, folder: 2 }),
-      track('b1', 'b', { artist: 'Juno Park', folder: 2 }),
-      track('m1', 'ep', { online: 'mfp', folder: -1 })
+      track('b1', 'b', { artist: 'Juno Park', folder: 2 })
     ],
     folders: [
       { name: '/m', parent: -1 },
@@ -109,14 +104,13 @@ describe('before there are songs', () => {
 describe('search (tickets 039, 059)', () => {
   beforeEach(() => library.load(lib()))
 
-  it('finds songs by title or their artist, albums and artists, not MFP songs', () => {
+  it('finds songs by title or their artist, albums and artists', () => {
     const [found, albums, artists] = page.filesSearch('juno')
     expect(found).toEqual({ id: 'songs', title: 'Songs', songs: ['files:b1'] })
     expect(albums).toMatchObject({ id: 'albums', title: 'Albums' })
     expect('tiles' in albums && albums.tiles.items).toEqual([library.album('b')])
     expect('tiles' in artists && artists.tiles.round).toBe(true)
     expect('tiles' in artists && artists.tiles.items).toEqual([library.getArtist('junopark')])
-    expect(page.filesSearch('song m1')[0]).toMatchObject({ songs: [] })
     expect(page.filesSearch('song a')[0]).toMatchObject({
       songs: ['files:a1', 'files:a2', 'files:a3']
     })

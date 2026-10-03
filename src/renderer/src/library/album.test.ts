@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { queueLink } from '../../../shared/saved-queue'
 import type { Track } from '../../../shared/library'
-import { albumButton, albumLabel, albumLines } from './album'
+import { albumLabel, albumLines } from './album'
 
 const track = (id: string, no: number, disc = 1): Track => ({
   id,
@@ -71,42 +70,5 @@ describe('albumLabel', () => {
     expect(albumLabel({ artist: 'Summer DJs', artistTag: 'Various Artists', year: 0 })).toBe(
       'Compilation'
     )
-  })
-})
-
-describe('albumButton', () => {
-  const link = queueLink('album', 'al')
-  // the queue came from this album, its song is on, radio is off, nothing ended
-  const q = {
-    link,
-    currentAlbum: 'al',
-    ended: false,
-    queuePlays: true,
-    sounding: true
-  }
-
-  it('plays the album from the start when the queue came from elsewhere', () => {
-    expect(albumButton('al', { ...q, link: undefined })).toBe('play')
-    expect(albumButton('al', { ...q, link: queueLink('album', 'other') })).toBe('play')
-    expect(albumButton('al', { ...q, link: queueLink('playlist', 'al') })).toBe('play')
-  })
-
-  it('pauses and resumes while the queue is this album', () => {
-    expect(albumButton('al', q)).toBe('pause')
-    expect(albumButton('al', { ...q, sounding: false })).toBe('resume')
-  })
-
-  it('plays the album again while radio has the player', () => {
-    expect(albumButton('al', { ...q, queuePlays: false })).toBe('play')
-  })
-
-  it('plays the album again once the queue ran out', () => {
-    expect(albumButton('al', { ...q, sounding: false, ended: true })).toBe('play')
-  })
-
-  it('plays the album when a song added from another album is on', () => {
-    // Add to queue keeps the old link
-    expect(albumButton('al', { ...q, currentAlbum: 'b' })).toBe('play')
-    expect(albumButton('al', { ...q, currentAlbum: undefined })).toBe('play')
   })
 })

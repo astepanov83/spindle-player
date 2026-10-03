@@ -22,7 +22,6 @@ export class FilesPlugin implements MainPlugin {
     }
   ) {}
 
-  // For the MFP plugin, until it has its own code (061).
   get library(): LibraryService {
     if (!this.#library) throw new Error('The files plugin has not started')
     return this.#library

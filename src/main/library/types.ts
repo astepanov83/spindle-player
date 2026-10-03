@@ -5,7 +5,6 @@ import type { ArtistChanges } from '../../shared/artist-overrides'
 import type { CoverSource } from '../../shared/settings'
 import type { ThemePalettes } from '../../shared/palette'
 import type { CueSheet } from './cue'
-import type { OnlineFile } from './mfp-library'
 
 // One audio file. Tags are already cleaned up (see tags.ts); a missing tag is left out.
 export interface FileEntry {
@@ -108,8 +107,6 @@ export interface WorkerStart {
   userAgent: string
   // covers main uses that the index does not know: station logos (ticket 030)
   keepCovers: string[]
-  // Music For Programming (ticket 052): the setting, and where its episodes are kept
-  mfp: { on: boolean; path: string }
 }
 
 // What main needs to serve a file: its path, and for a file ffmpeg decodes,
@@ -166,8 +163,6 @@ export type WorkerIn =
   | { type: 'song-cover'; req: number; artist: string; song: string }
   // main gave up on an ask (a new title came): stop it
   | { type: 'cancel'; req: number }
-  // the Music For Programming setting changed (ticket 052)
-  | { type: 'mfp'; on: boolean }
 
 // the library process to main
 export type WorkerOut =
@@ -182,8 +177,6 @@ export type WorkerOut =
       type: 'reply'
       req: number
       media?: MediaInfo
-      // a 'find-track' for an online mp3 (ticket 052)
-      online?: OnlineFile
       data?: Uint8Array
       song?: 'found' | 'none' | 'later'
     }

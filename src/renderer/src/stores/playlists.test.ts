@@ -128,7 +128,7 @@ describe('a new playlist from songs (ticket 045)', () => {
 })
 
 describe('item keys (ticket 055)', () => {
-  const song = (id: string, online?: 'mfp'): Track => ({
+  const song = (id: string): Track => ({
     id,
     title: id,
     duration: 60,
@@ -138,12 +138,11 @@ describe('item keys (ticket 055)', () => {
     no: 1,
     disc: 1,
     codec: '',
-    folder: online ? -1 : 0,
-    ...(online ? { online } : {})
+    folder: 0
   })
 
   it('keeps songs of any plugin as keys, and removes them by key', () => {
-    library.load({ albums: [], tracks: [song('f1'), song('m1', 'mfp')], folders: [] })
+    library.load({ albums: [], tracks: [song('f1')], folders: [] })
     const id = playlists.create(['files:f1', 'mfp:m1'])
     expect(playlists.get(id)?.items).toEqual(['files:f1', 'mfp:m1'])
     playlists.add(id, ['mfp:m1', 'files:gone'])

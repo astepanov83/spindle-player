@@ -3,7 +3,6 @@
 <script lang="ts">
   import type { PluginId } from '../../../shared/plugins'
   import Empty from '../library/Empty.svelte'
-  import MfpView from '../library/MfpView.svelte'
   import RadioView from '../library/RadioView.svelte'
   import type { Block, NavKind } from '../plugins/types'
   import Head from './Head.svelte'
@@ -70,11 +69,9 @@
       <h3 class="part section-label">{b.text}</h3>
     {:else if b.kind === 'results'}
       <Results block={b} {scrollEl} />
-    {:else if b.view === 'radio'}
-      <!-- the old views, until blocks draw them (tickets 061, 062) -->
-      <RadioView {nav} />
     {:else}
-      <MfpView />
+      <!-- radio's old view, until blocks draw it (ticket 062) -->
+      <RadioView {nav} />
     {/if}
   {/each}
 {/if}

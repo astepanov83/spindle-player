@@ -7,7 +7,6 @@ import { cleanArtist, searchKey } from './cover-match'
 import { artistKey } from '../../shared/artists'
 import type { Fetched } from './fetched-store'
 import type { LibraryData } from '../../shared/library'
-import type { MfpEpisode } from './mfp'
 import {
   applyPatch,
   diffLibrary,
@@ -541,82 +540,5 @@ describe('library patches (ticket 022)', () => {
         }
       }
     })
-  })
-})
-
-describe('buildLibrary with Music For Programming episodes', () => {
-  const ep = (slug: string, number: number): MfpEpisode => ({
-    slug,
-    number,
-    title: `${number}: Mixer ${number}`,
-    artist: `Mixer ${number}`,
-    url: `https://datashat.net/${slug}.mp3`,
-    bytes: 1000,
-    duration: 600,
-    date: '2020-05-01T00:00:00Z',
-    tracks: [
-      { artist: 'QH', title: 'Mixed One' },
-      { artist: 'Zed', title: 'Mixed Two' }
-    ],
-    link: `https://musicforprogramming.net/${slug}`
-  })
-  const cover = 'c'.repeat(40)
-
-  function withMfp(
-    files: FileEntry[],
-    mfp: { episodes: MfpEpisode[]; cover?: string },
-    has: (hash: string) => boolean = () => true
-  ): ReturnType<typeof buildLibrary> {
-    const ix = emptyIndex()
-    for (const f of files) ix.files.set(f.path, f)
-    ix.palettes.set(cover, { dark: ['#111', '#222', '#333'], light: ['#444', '#555', '#666'] })
-    return buildLibrary(ix, has, undefined, ['/m'], undefined, undefined, mfp)
-  }
-
-  const local = [entry('/m/nb/1.mp3', { album: 'Night Bus', artist: 'QH', title: 'Route' })]
-
-  it('adds the episodes after the local albums and songs', () => {
-    const { data } = withMfp(local, { episodes: [ep('two', 2), ep('one', 1)] })
-    expect(data.albums.map((a) => a.title)).toEqual(['Night Bus', '2: Mixer 2', '1: Mixer 1'])
-    expect(data.tracks.map((t) => t.title)).toEqual([
-      'Route',
-      'Mixed One',
-      'Mixed Two',
-      'Mixed One',
-      'Mixed Two'
-    ])
-    expect(data.tracks.slice(1).every((t) => t.online === 'mfp' && t.folder === -1)).toBe(true)
-  })
-
-  it('keeps episode artists out of the Artists lookup and the folder table', () => {
-    const b = withMfp(local, { episodes: [ep('one', 1)] })
-    expect(b.artists.map((a) => a.name)).toEqual(['QH'])
-    expect(b.data.folders.map((f) => f.name)).toEqual(['/m', 'nb'])
-    expect(b.queries.map((q) => q.album)).toEqual(['Night Bus'])
-  })
-
-  it('lists the mp3s by file id, apart from the files on disk', () => {
-    const b = withMfp(local, { episodes: [ep('one', 1)] })
-    const file = b.data.tracks[1].part!.file
-    expect(b.urls.get(file)).toEqual({ url: 'https://datashat.net/one.mp3', duration: 600 })
-    expect(b.paths.has(file)).toBe(false)
-  })
-
-  it('gives every episode the site picture and its colors once it is cached', () => {
-    const al = withMfp([], { episodes: [ep('one', 1)], cover }).data.albums[0]
-    expect(al.cover).toBe(`spindle://cover/small/${cover}`)
-    expect(al.palette.dark).toEqual(['#111', '#222', '#333'])
-  })
-
-  it('shows no picture before it is cached', () => {
-    const al = withMfp([], { episodes: [ep('one', 1)], cover }, (h) => h !== cover).data.albums[0]
-    expect(al.cover).toBe('')
-    expect(al.palette).toEqual(fallbackPalettes(al.id))
-  })
-
-  it('adds nothing with no episodes', () => {
-    const b = withMfp(local, { episodes: [] })
-    expect(b.data.albums).toHaveLength(1)
-    expect(b.urls.size).toBe(0)
   })
 })

@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { queueLink } from '../../../shared/saved-queue'
 import type { LibraryData, Track } from '../../../shared/library'
+import type { MfpEpisodes } from '../../../shared/mfp'
 import { defaultPalettes } from '../../../shared/palette'
 import { albumPage, artistPage, folderPage, parsePage } from '../plugins/files/pages'
 
@@ -24,7 +25,9 @@ let files: FilesNav & {
   openFolder(key: string | null): void
   showFolder(key: string): void
 }
-let mfp: typeof import('../plugins/mfp/nav')
+// the MFP tab's open episode, and its data as main sends it
+let mfp: { openEpisode(id: string | null): void; shownEpisode(): string | null }
+let mfpStore: typeof import('../plugins/mfp/store.svelte').mfp
 
 function lib(...ids: string[]): LibraryData {
   const albums = ids.map((id) => ({
@@ -92,7 +95,12 @@ beforeEach(async () => {
   settings = (await import('./settings.svelte')).settings
   p = await import('../plugins')
   files = filesHelpers(await import('../plugins/files/nav'))
-  mfp = await import('../plugins/mfp/nav')
+  const mfpNav = await import('../plugins/mfp/nav')
+  mfp = {
+    openEpisode: (id) => library.openPage('mfp', id ? mfpNav.episodePage(id) : ''),
+    shownEpisode: () => mfpNav.episodeOf(library.page('mfp'))
+  }
+  mfpStore = (await import('../plugins/mfp/store.svelte')).mfp
   settings.plugins = { files: true, radio: true, mfp: true }
   library.load(lib('a', 'b'))
   tabsChanged()
@@ -635,43 +643,29 @@ describe('links from what plays (ticket 040)', () => {
   })
 })
 
-describe('Music For Programming (ticket 052)', () => {
-  // local album 'a' with song a1, and episode 'e' with songs e1 and e2
-  function withMfp(): LibraryData {
-    const base = lib('a')
-    const album = (
-      id: string,
-      trackIds: string[],
-      online?: 'mfp'
-    ): LibraryData['albums'][number] => ({
-      ...base.albums[0],
+describe('Music For Programming (tickets 052, 061)', () => {
+  // episode 'e' with songs e1 and e2
+  const episodes = (...ids: string[]): MfpEpisodes => ({
+    episodes: ids.map((id) => ({
       id,
-      title: `Album ${id}`,
-      artist: online ? 'Mixer' : 'X',
-      trackIds,
-      ...(online ? { online } : {})
-    })
-    const song = (id: string, albumId: string, online?: 'mfp'): Track => ({
-      ...track(id, online ? -1 : 0),
-      albumId,
-      artist: online ? 'Guest' : 'X',
-      ...(online ? { online } : {})
-    })
-    return {
-      albums: [album('a', ['a1']), album('e', ['e1', 'e2'], 'mfp')],
-      tracks: [song('a1', 'a'), song('e1', 'e', 'mfp'), song('e2', 'e', 'mfp')],
-      folders: [{ name: '/m', parent: -1 }]
-    }
-  }
+      title: `Episode ${id}`,
+      artist: 'Mixer',
+      year: 0,
+      link: '',
+      length: 2,
+      songs: [1, 2].map((n) => ({
+        id: `${id}${n}`,
+        title: 'S',
+        artist: 'G',
+        start: n - 1,
+        length: 1
+      }))
+    }))
+  })
 
-  beforeEach(() => library.load(withMfp()))
-
-  it('keeps episodes out of the albums list and the artists, but finds them by id', () => {
-    expect(library.albums.map((a) => a.id)).toEqual(['a'])
-    expect(library.mfpAlbums.map((a) => a.id)).toEqual(['e'])
-    expect(library.artists.map((a) => a.name)).toEqual(['X'])
-    expect(library.album('e').title).toBe('Album e')
-    expect(library.track('e2').albumId).toBe('e')
+  beforeEach(() => {
+    library.load(lib('a'))
+    mfpStore.load(episodes('e'))
   })
 
   it('opens an episode in the MFP chip, and Back goes to the list', () => {
@@ -701,37 +695,28 @@ describe('Music For Programming (ticket 052)', () => {
     expect(mfp.shownEpisode()).toBeNull()
   })
 
-  it('closes an episode that is gone (the setting turned off)', () => {
+  it('closes an episode that is gone once MFP has new data', () => {
     library.pickTab('mfp')
     mfp.openEpisode('e')
-    library.load(lib('a'))
-    expect(mfp.shownEpisode()).toBeNull()
-    expect(library.mfpAlbums).toEqual([])
+    mfpStore.load(episodes('x'))
+    expect(mfp.shownEpisode()).toBe('e')
+    library.pagesChanged()
+    expect([library.tab, mfp.shownEpisode()]).toEqual(['mfp', null])
   })
 
-  it('keeps the same albums list when only episodes change', () => {
-    const before = library.albums
-    const next = withMfp()
-    next.albums[1] = { ...next.albums[1], title: 'Renamed' }
-    library.patch({
-      patch: true,
-      epoch: 'x',
-      from: 0,
-      n: 1,
-      albums: [next.albums[1]],
-      tracks: [],
-      goneTracks: []
-    })
-    expect(library.albums).toBe(before)
-    expect(library.mfpAlbums[0].title).toBe('Renamed')
+  it('keeps its episodes out of the library', () => {
+    expect(library.albums.map((a) => a.id)).toEqual(['a'])
+    expect(library.findAlbum('e')).toBeUndefined()
   })
 })
 
 describe('tabs from the plugins that are on (ticket 059)', () => {
   function withEpisode(): void {
-    const d = lib('a', 'e')
-    d.albums[1] = { ...d.albums[1], online: 'mfp' }
-    library.load(d)
+    library.load(lib('a'))
+    const songs = [{ id: 'e1', title: 'S', artist: 'G', start: 0, length: 1 }]
+    mfpStore.load({
+      episodes: [{ id: 'e', title: 'E', artist: 'M', year: 0, link: '', length: 1, songs }]
+    })
   }
 
   it('goes back and forward across two plugins tabs, each keeping its page', () => {

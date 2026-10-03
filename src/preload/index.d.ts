@@ -1,5 +1,6 @@
 import type {
   LibraryApi,
+  MfpApi,
   PlaybackApi,
   PlaylistsApi,
   RadioApi,
@@ -14,6 +15,7 @@ declare global {
     libraryApi: LibraryApi
     playlistsApi: PlaylistsApi
     radioApi: RadioApi
+    mfpApi: MfpApi
     playbackApi: PlaybackApi
   }
 }

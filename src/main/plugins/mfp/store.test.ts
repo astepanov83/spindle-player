@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { MfpEpisode } from './mfp'
-import { isStale, parseMfp, refreshEpisodes, serializeMfp, type MfpData } from './mfp-store'
+import type { ThemePalettes } from '../../../shared/palette'
+import type { MfpEpisode } from './site'
+import { isStale, parseMfp, refreshEpisodes, serializeMfp, type MfpData } from './store'
 
 const site = 'https://musicforprogramming.net'
 
@@ -143,9 +144,13 @@ describe('refreshEpisodes', () => {
 })
 
 describe('mfp.json', () => {
+  const palette: ThemePalettes = {
+    dark: ['#111111', '#222222', '#333333'],
+    light: ['#444444', '#555555', '#666666']
+  }
   const data: MfpData = {
     fetchedAt: 1700000000000,
-    cover: 'a'.repeat(40),
+    cover: { hash: 'a'.repeat(40), palette, v: 3, small: true },
     episodes: [episode('two', 2), episode('one', 1)]
   }
 
@@ -168,8 +173,16 @@ describe('mfp.json', () => {
     expect(parseMfp(raw).episodes.map((e) => e.slug)).toEqual(['two', 'one'])
   })
 
-  it('drops a cover that is not a hash', () => {
-    expect(parseMfp({ ...(serializeMfp(data) as object), cover: '../x' }).cover).toBeUndefined()
+  it('drops a cover that is not a hash, or has no colors', () => {
+    const read = (cover: unknown): MfpData => parseMfp({ ...(serializeMfp(data) as object), cover })
+    expect(read({ ...data.cover, hash: '../x' }).cover).toBeUndefined()
+    expect(read({ ...data.cover, palette: undefined }).cover).toBeUndefined()
+  })
+
+  it('drops a hash alone, as written before MFP had its own cover: it is fetched again', () => {
+    expect(
+      parseMfp({ ...(serializeMfp(data) as object), cover: 'a'.repeat(40) }).cover
+    ).toBeUndefined()
   })
 })
 

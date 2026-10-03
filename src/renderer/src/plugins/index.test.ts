@@ -1,7 +1,8 @@
 // The core's questions to plugins, answered by the files and mfp page halves
 // from a small made-up library, and by radio's from My stations.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Album, LibraryData, MfpStatus, Track } from '../../../shared/library'
+import type { Album, LibraryData, Track } from '../../../shared/library'
+import type { MfpEpisodes, MfpStatus } from '../../../shared/mfp'
 import { defaultPalettes } from '../../../shared/palette'
 import type { Station } from '../../../shared/stations'
 
@@ -13,6 +14,7 @@ vi.stubGlobal('window', {
 let p: typeof import('./index')
 let library: typeof import('../stores/library.svelte').library
 let settings: typeof import('../stores/settings.svelte').settings
+let mfp: typeof import('./mfp/store.svelte').mfp
 
 const track = (id: string, albumId: string, extra: Partial<Track> = {}): Track => ({
   id,
@@ -40,31 +42,48 @@ const album = (id: string, trackIds: string[], extra: Partial<Album> = {}): Albu
   ...extra
 })
 
-// a files album, a disc image's two parts, and an MFP episode
+// a files album and a disc image's two parts
 function lib(): LibraryData {
   return {
-    albums: [
-      album('al', ['s1']),
-      album('img', ['c1', 'c2']),
-      album('ep', ['m1'], { online: 'mfp' })
-    ],
+    albums: [album('al', ['s1']), album('img', ['c1', 'c2'])],
     tracks: [
       track('s1', 'al'),
       track('c1', 'img', { part: { file: 'disc', start: 0, end: 100 } }),
-      track('c2', 'img', { part: { file: 'disc', start: 100 } }),
-      track('m1', 'ep', { online: 'mfp', folder: -1, artist: 'Mixer' })
+      track('c2', 'img', { part: { file: 'disc', start: 100 } })
     ],
     folders: [{ name: '/m', parent: -1 }]
   }
 }
 
+// an MFP episode of one song, as main sends it
+const mixes = (): MfpEpisodes => ({
+  episodes: [
+    {
+      id: 'ep',
+      title: '1: Mixer',
+      artist: 'Mixer',
+      year: 2020,
+      link: 'https://musicforprogramming.net/one',
+      length: 100,
+      songs: [{ id: 'm1', title: 'Song m1', artist: 'Mixer', start: 0, length: 100 }]
+    }
+  ]
+})
+
 const mfpOn: MfpStatus = { episodes: 1, fetchedAt: 1, running: false }
+
+// main said MFP is on, with its episodes
+function loadMfp(): void {
+  mfp.load(mixes())
+  mfp.status = mfpOn
+}
 
 beforeEach(async () => {
   vi.resetModules()
   p = await import('./index')
   library = (await import('../stores/library.svelte')).library
   settings = (await import('../stores/settings.svelte')).settings
+  mfp = (await import('./mfp/store.svelte')).mfp
   settings.plugins = { files: true, radio: true, mfp: true }
 })
 
@@ -106,19 +125,31 @@ describe('itemInfo', () => {
   })
 
   it('an MFP song is loading until main says MFP is on and its episodes are in', () => {
-    library.load({ ...lib(), albums: lib().albums.slice(0, 2), tracks: lib().tracks.slice(0, 3) })
-    // the library has no episodes yet: MFP was just turned on
+    // no episodes yet: MFP was just turned on
     expect(p.itemInfo('mfp:m1').state).toBe('loading')
-    library.status = { ...library.status, mfp: mfpOn }
+    mfp.status = mfpOn
     expect(p.itemInfo('mfp:m1').state).toBe('loading')
-    library.load(lib())
+    mfp.load(mixes())
     expect(p.itemInfo('mfp:m1').state).toBe('ok')
     expect(p.itemInfo('mfp:gone').state).toBe('missing')
   })
 
+  it('answers an MFP song from its episode, with no music library', () => {
+    settings.plugins.files = false
+    loadMfp()
+    const s = p.itemInfo('mfp:m1')
+    expect(
+      s.state === 'ok' && [s.info.title, s.info.subtitle, s.info.group, s.info.length]
+    ).toEqual(['Song m1', 'Mixer', '1: Mixer', 100])
+    expect(s.state === 'ok' && s.info.names).toEqual([{ name: 'Mixer' }])
+    // no picture yet: colors of its own
+    expect(s.state === 'ok' && s.info.art?.cover).toBe('')
+    expect(p.itemInfo('mfp:m1')).toBe(s)
+  })
+
   it("a key of one plugin is not another plugin's song", () => {
     library.load(lib())
-    library.status = { ...library.status, mfp: mfpOn }
+    loadMfp()
     expect(p.itemInfo('mfp:s1').state).toBe('missing')
     expect(p.itemInfo('files:m1').state).toBe('missing')
   })
@@ -186,6 +217,27 @@ describe('playItem', () => {
     expect(p.playItem('files:s1')).toMatchObject({ url: 'spindle://media/s1' })
     expect(p.playItem('files:nope')).toBeUndefined()
   })
+
+  it("gives an MFP song as a stretch of its episode's mp3, which main serves", () => {
+    const two = mixes()
+    two.episodes[0].songs = [
+      { id: 'm1', title: 'One', artist: 'A', start: 0, end: 50, length: 50 },
+      { id: 'm2', title: 'Two', artist: 'B', start: 50, length: 50 }
+    ]
+    mfp.load(two)
+    const url = 'spindle://mfp/ep'
+    const can = { seek: true, pause: true, next: true, previous: true }
+    expect(p.playItem('mfp:m1')).toEqual({
+      url,
+      part: { file: url, start: 0, end: 50 },
+      length: 50,
+      can,
+      codec: 'MPEG 1 Layer 3'
+    })
+    // the next song starts where it ends, in the same file: the player carries on
+    expect(p.playItem('mfp:m2')).toMatchObject({ url, part: { file: url, start: 50 } })
+    expect(p.playItem('mfp:gone')).toBeUndefined()
+  })
 })
 
 describe('links', () => {
@@ -208,8 +260,7 @@ describe('links', () => {
   })
 
   it("an MFP song's lead to its episode only", () => {
-    library.load(lib())
-    library.status = { ...library.status, mfp: mfpOn }
+    loadMfp()
     const i = p.infoOf('mfp:m1')!
     expect(i.links).toEqual([
       { label: 'Go to album', to: { plugin: 'mfp', page: 'episode/ep', item: 'm1' } }
@@ -234,11 +285,12 @@ describe('tabs', () => {
 
   it('open a link in the tab that shows it', () => {
     library.load(lib())
+    loadMfp()
     p.openPage({ plugin: 'mfp', page: 'episode/ep' })
     expect([library.tab, library.page('mfp')]).toEqual(['mfp', 'episode/ep'])
     p.openPage({ plugin: 'radio', page: '' })
     expect(library.tab).toBe('radio')
-    // a files link to an episode is no page of files
+    // an episode is no page of files
     p.openPage({ plugin: 'files', page: 'album/ep' })
     expect(library.tab).toBe('radio')
     settings.plugins.radio = false
@@ -267,6 +319,7 @@ describe('pages (ticket 059)', () => {
 
   it('fill the search results with the groups of each plugin that is on', () => {
     library.load(lib())
+    loadMfp()
     const tab = p.pluginTabs().find((t) => t.id === 'albums')!
     library.query = ' song '
     const [b] = p.pageBlocks(tab)
@@ -353,14 +406,18 @@ describe('itemsVersion', () => {
     expect(b).not.toBe(a)
     library.load(lib())
     expect(p.itemsVersion()).not.toBe(b)
+    settings.plugins.mfp = true
+    const c = p.itemsVersion()
+    mfp.load(mixes())
+    expect(p.itemsVersion()).not.toBe(c)
   })
 
-  it("stays the same for a scan's status that changes no answer", () => {
+  it('stays the same for a status that changes no answer', () => {
     library.load(lib())
-    library.status = { ...library.status, mfp: mfpOn }
+    loadMfp()
     const a = p.itemsVersion()
     library.status = { ...library.status, done: 5, total: 10 }
-    library.status = { ...library.status, mfp: { ...mfpOn, running: true } }
+    mfp.status = { ...mfpOn, running: true }
     expect(p.itemsVersion()).toBe(a)
   })
 })
@@ -414,15 +471,26 @@ describe('settings blocks (ticket 060)', () => {
     expect(api.removeFolder).toHaveBeenCalledTimes(1)
   })
 
-  it("give MFP's status line only while it is on, and Radio nothing", () => {
+  it("give MFP's status line and its own button only while it is on, and Radio nothing", () => {
     expect(p.settingBlocks('mfp')).toEqual([])
-    library.status = { ...library.status, mfp: { ...mfpOn, running: true } }
+    mfp.status = { ...mfpOn, running: true }
     expect(p.settingBlocks('mfp')).toEqual([
-      { kind: 'status', text: '1 episode, looking for new ones…', busy: true }
+      { kind: 'status', text: '1 episode, looking for new ones…', busy: true },
+      { kind: 'button', id: 'refresh', label: 'Check for new episodes', disabled: true }
     ])
     expect(p.settingBlocks('radio')).toEqual([])
     settings.plugins.mfp = false
     expect(p.settingBlocks('mfp')).toEqual([])
+  })
+
+  it("send MFP's button to main, not while it is off", () => {
+    const refresh = vi.fn()
+    vi.stubGlobal('window', { ...window, mfpApi: { refresh } })
+    p.actOnSetting('mfp', 'refresh', 'press')
+    expect(refresh).toHaveBeenCalledTimes(1)
+    settings.plugins.mfp = false
+    p.actOnSetting('mfp', 'refresh', 'press')
+    expect(refresh).toHaveBeenCalledTimes(1)
   })
 
   it('do not act for a plugin that is off', () => {
@@ -437,6 +505,7 @@ describe('"Show all" of a plugin that went off (ticket 060)', () => {
     library.setTabs(p.navTabs())
     library.showIn('chips')
     library.load(lib())
+    loadMfp()
     library.query = 'song'
     library.showAll('mfp:mixes')
     expect(library.searchAll).toBe('mfp:mixes')

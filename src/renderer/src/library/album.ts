@@ -1,9 +1,9 @@
-// The album page's rows, label and Play button. No DOM.
+// The album page's rows and label. No DOM.
 import { isVarious, type Album, type Track } from '../../../shared/library'
-import { linkTarget, queueLink, type QueueLink } from '../../../shared/saved-queue'
+import { queueLink, type QueueLink } from '../../../shared/saved-queue'
 
-// A "Disc 2" label, or a song with its place in the album (`at`, for
-// playAlbum) and the number shown (0: none).
+// A "Disc 2" label, or a song with its place in the album (`at`) and the
+// number shown (0: none).
 export type AlbumLine = { disc: number } | { track: Track; at: number; no: number }
 
 // Songs come sorted by disc and number (main's group.ts). Disc rows only when
@@ -35,34 +35,7 @@ export function albumLabel(al: Pick<Album, 'artist' | 'artistTag' | 'year'>): st
   return al.year ? `${kind} · ${al.year}` : kind
 }
 
-// What "From" opens for an album's songs: an MFP album is an episode, with its own page.
-export function albumLink(al: Pick<Album, 'id' | 'online'>): QueueLink {
-  return queueLink(al.online === 'mfp' ? 'episode' : 'album', al.id)
-}
-
-// What the queue says, for the album page's Play button.
-export interface QueueSide {
-  link: QueueLink | undefined
-  // the album of the queue's current song
-  currentAlbum: string | undefined
-  // the queue ran out: its last song waits at 0:00
-  ended: boolean
-  // the queue has the player, not radio
-  queuePlays: boolean
-  sounding: boolean
-}
-
-// What the page's Play button does. While the queue came from this album
-// (its link), one of its songs is on and the queue has not run out, it pauses
-// and resumes. Else it plays the album from the start: after the end, Play
-// would only replay the last song. Add to queue keeps the old link, so the
-// song on must be from this album too.
-export function albumButton(albumId: string, q: QueueSide): 'play' | 'pause' | 'resume' {
-  const to = q.link && linkTarget(q.link)
-  const ours =
-    (to?.kind === 'album' || to?.kind === 'episode') &&
-    to.id === albumId &&
-    q.currentAlbum === albumId
-  if (!q.queuePlays || !ours || q.ended) return 'play'
-  return q.sounding ? 'pause' : 'resume'
+// What "From" opens for an album's songs.
+export function albumLink(al: Pick<Album, 'id'>): QueueLink {
+  return queueLink('album', al.id)
 }

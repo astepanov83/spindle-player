@@ -1,5 +1,5 @@
 // The files plugin's tabs and pages, for a small made-up library: two
-// albums by one artist in a folder two deep, and an MFP episode.
+// albums by one artist in a folder two deep.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Album, LibraryData, Track } from '../../../../shared/library'
 import { defaultPalettes } from '../../../../shared/palette'
@@ -35,14 +35,8 @@ const track = (id: string, albumId: string, extra: Partial<Track> = {}): Track =
 
 function lib(...ids: string[]): LibraryData {
   return {
-    albums: [
-      ...ids.map((id) => album(id, [`${id}1`])),
-      album('ep', ['m1'], { online: 'mfp', artist: 'Mixer' })
-    ],
-    tracks: [
-      ...ids.map((id) => track(`${id}1`, id)),
-      track('m1', 'ep', { online: 'mfp', folder: -1 })
-    ],
+    albums: ids.map((id) => album(id, [`${id}1`])),
+    tracks: ids.map((id) => track(`${id}1`, id)),
     folders: [
       { name: '/m', parent: -1 },
       { name: 'Rock', parent: 0 },
@@ -61,12 +55,11 @@ beforeEach(async () => {
 const files = (page: string): { plugin: 'files'; page: string } => ({ plugin: 'files', page })
 
 describe('files pages', () => {
-  it('can open what the library has, and not an MFP episode', () => {
+  it('can open what the library has', () => {
     expect(nav.canOpenFiles(files('album/a'))).toBe(true)
-    expect(nav.canOpenFiles(files('album/ep'))).toBe(false)
     expect(nav.canOpenFiles(files('album/gone'))).toBe(false)
     expect(nav.canOpenFiles(files('artist/marinavale'))).toBe(true)
-    expect(nav.canOpenFiles(files('artist/mixer'))).toBe(false)
+    expect(nav.canOpenFiles(files('artist/nobody'))).toBe(false)
     const live = library.folders.nodes[2].key
     expect(nav.canOpenFiles(files(`folder/${live}`))).toBe(true)
     expect(nav.canOpenFiles(files('folder/nowhere'))).toBe(false)

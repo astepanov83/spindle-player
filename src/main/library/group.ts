@@ -17,8 +17,6 @@ import { cueTracks } from './cue-tracks'
 import { fetchedCover, type Fetched } from './fetched-store'
 import { folderTable } from './folders'
 import { shortHash } from './ids'
-import type { MfpEpisode } from './mfp'
-import { mfpLibrary, type OnlineFile } from './mfp-library'
 import { dirOf } from './merge'
 import { discFolderNumber, isDiscFolder, titleFromFileName } from './tags'
 import type { FileEntry, LibraryIndex } from './types'
@@ -28,8 +26,6 @@ export interface BuiltLibrary {
   // file id -> file path, for the media protocol. Every file has one, also a
   // disc image that is listed as its cue tracks (they play it by its id).
   paths: Map<string, string>
-  // file id -> an online mp3 (ticket 052)
-  urls: Map<string, OnlineFile>
   // albums with no picture of their own and an album tag, in library order,
   // for the online lookup (ticket 014)
   queries: CoverQuery[]
@@ -202,17 +198,14 @@ function artistsOf(
 // `roots` are the music folders, for the Folders view. `photos` are the
 // artist photos found online, by artist key. `overrides` change the artist
 // names shown (ticket 024); albums are still grouped and looked up online
-// by the tags. `mfp` are the Music For Programming episodes and the site's
-// picture (ticket 052): they come after the local music, with no folder and
-// no artist lookup.
+// by the tags.
 export function buildLibrary(
   ix: LibraryIndex,
   hasCover: (hash: string) => boolean,
   fetched: Fetched = new Map(),
   roots: string[] = [],
   photos: Fetched = new Map(),
-  overrides: ArtistOverrides = new Map(),
-  mfp: { episodes: MfpEpisode[]; cover?: string } = { episodes: [] }
+  overrides: ArtistOverrides = new Map()
 ): BuiltLibrary {
   const groups = new Map<string, Group>()
   const paths = new Map<string, string>()
@@ -320,20 +313,9 @@ export function buildLibrary(
   queries.sort((a, b) => order.get(a.albumId)! - order.get(b.albumId)!)
   const shown = albums.map(withoutTracks)
   const { artists, artistPhotos } = artistsOf(shown, tracks, photos, hasCover)
-  const cover = mfp.cover && hasCover(mfp.cover) ? mfp.cover : undefined
-  const online = mfpLibrary(mfp.episodes, (id) => ({
-    palette: paletteOf(ix, cover, id),
-    ...(cover ? coverUrls(cover) : { cover: '', coverLarge: '' })
-  }))
   return {
-    data: {
-      albums: [...shown, ...online.albums],
-      tracks: [...tracks, ...online.tracks],
-      folders,
-      artistPhotos
-    },
+    data: { albums: shown, tracks, folders, artistPhotos },
     paths,
-    urls: online.urls,
     queries,
     artists
   }

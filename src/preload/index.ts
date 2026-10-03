@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   LibraryChannel,
   maxDropped,
+  MfpChannel,
   PlaybackChannel,
   PlaylistChannel,
   RadioChannel,
@@ -9,6 +10,7 @@ import {
   WinChannel,
   type InvokeChannel,
   type LibraryApi,
+  type MfpApi,
   type PageChannels,
   type PlaybackApi,
   type PlaylistsApi,
@@ -23,6 +25,7 @@ import {
 import { mergeMoves, type IdMoves } from '../shared/id-moves'
 import { keepEarly } from './early'
 import type { ScanStatus } from '../shared/library'
+import type { MfpEpisodes, MfpStatus } from '../shared/mfp'
 
 // The window is sandboxed, so this file may only use contextBridge, ipcRenderer
 // and webUtils.
@@ -157,7 +160,23 @@ const radioApi: RadioApi = {
   }
 }
 
+const mfpApi: MfpApi = {
+  get: () => invoke(MfpChannel.get),
+  refresh: () => send(MfpChannel.refresh),
+  onEpisodes: (listener) => {
+    const handler = (_: Electron.IpcRendererEvent, data: MfpEpisodes): void => listener(data)
+    ipcRenderer.on(MfpChannel.episodes, handler)
+    return () => ipcRenderer.off(MfpChannel.episodes, handler)
+  },
+  onStatus: (listener) => {
+    const handler = (_: Electron.IpcRendererEvent, s: MfpStatus | undefined): void => listener(s)
+    ipcRenderer.on(MfpChannel.status, handler)
+    return () => ipcRenderer.off(MfpChannel.status, handler)
+  }
+}
+
 contextBridge.exposeInMainWorld('win', win)
+contextBridge.exposeInMainWorld('mfpApi', mfpApi)
 contextBridge.exposeInMainWorld('playlistsApi', playlistsApi)
 contextBridge.exposeInMainWorld('playbackApi', playbackApi)
 contextBridge.exposeInMainWorld('radioApi', radioApi)

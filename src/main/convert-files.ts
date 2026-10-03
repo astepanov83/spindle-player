@@ -1,7 +1,6 @@
 // queue.json and playlists.json from before item keys (ticket 055) held bare
 // library track ids. They are turned into keys once at start: an id of a
 // Music For Programming song becomes "mfp:<id>", any other "files:<id>".
-import { defaultPalettes } from '../shared/palette'
 import { parsePlaylists, type Playlist } from '../shared/playlists'
 import { itemKey } from '../shared/plugins/items'
 import {
@@ -13,8 +12,8 @@ import {
 } from '../shared/saved-queue'
 import { isStationId } from '../shared/stations'
 import { readJsonFile } from './json-file'
-import { mfpLibrary } from './library/mfp-library'
-import { parseMfp } from './library/mfp-store'
+import { pageEpisode } from './plugins/mfp/episodes'
+import { parseMfp } from './plugins/mfp/store'
 
 // The ids Music For Programming gives its songs and episodes.
 export interface MfpIds {
@@ -22,16 +21,14 @@ export interface MfpIds {
   albums: ReadonlySet<string>
 }
 
-// From mfp.json, with no network. The library makes the ids from it, so they
-// come out the same. A missing or broken file knows no ids: all are files'.
+// From mfp.json, with no network. The MFP plugin makes the ids from it, so
+// they come out the same. A missing or broken file knows no ids: all are files'.
 export function readMfpIds(path: string): MfpIds {
   const read = readJsonFile(path)
-  const episodes = read.kind === 'ok' ? parseMfp(read.value).episodes : []
-  const noArt = { palette: defaultPalettes, cover: '', coverLarge: '' }
-  const lib = mfpLibrary(episodes, () => noArt)
+  const episodes = (read.kind === 'ok' ? parseMfp(read.value).episodes : []).map(pageEpisode)
   return {
-    tracks: new Set(lib.tracks.map((t) => t.id)),
-    albums: new Set(lib.albums.map((a) => a.id))
+    tracks: new Set(episodes.flatMap((e) => e.songs.map((s) => s.id))),
+    albums: new Set(episodes.map((e) => e.id))
   }
 }
 

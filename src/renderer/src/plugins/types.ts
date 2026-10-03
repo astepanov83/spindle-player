@@ -278,10 +278,10 @@ export interface FoundGroup {
 }
 
 // Temporary: a plugin's old view, which the core draws as it is until blocks
-// draw it. Radio's goes in ticket 062, MFP's in 061; then this kind goes.
+// draw it. Radio's goes in ticket 062; then this kind goes.
 export interface ViewBlock {
   kind: 'view'
-  view: 'radio' | 'mfp'
+  view: 'radio'
 }
 
 // What a plugin shows in Settings: data again, drawn by the core

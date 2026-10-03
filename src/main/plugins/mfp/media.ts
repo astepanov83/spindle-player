@@ -1,6 +1,6 @@
-// spindle://media for an online mp3 (ticket 052): main fetches it and passes
-// the page's Range on, so seeking works and the page never loads an outside
-// URL (the CSP stays closed, as for radio, decision 149).
+// spindle://mfp for an episode's mp3 (tickets 052, 061): main fetches it and
+// passes the page's Range on, so seeking works and the page never loads an
+// outside URL (the CSP stays closed, as for radio, decision 149).
 
 export interface OnlineMediaOptions {
   // net.fetch in the app

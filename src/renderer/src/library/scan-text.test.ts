@@ -7,7 +7,6 @@ import {
   fetchBusy,
   fetchLine,
   libraryProblem,
-  mfpLine,
   photoLine,
   notLoadedText,
   pathEnds,
@@ -305,43 +304,5 @@ describe('dropText', () => {
 
   it('says nothing when nothing came', () => {
     expect(dropText(r({}))).toBeUndefined()
-  })
-})
-
-describe('mfpLine (ticket 052)', () => {
-  const day = 24 * 3600 * 1000
-  // noon on 1 Oct 2026, local time
-  const now = new Date(2026, 9, 1, 12).getTime()
-
-  it('shows nothing while the setting is off', () => {
-    expect(mfpLine(undefined, now)).toBeUndefined()
-  })
-
-  it('says when the episodes were last read', () => {
-    const s = { episodes: 79, running: false }
-    expect(mfpLine({ ...s, fetchedAt: now - 3600 * 1000 }, now)).toBe('79 episodes, updated today')
-    expect(mfpLine({ ...s, fetchedAt: now - day }, now)).toBe('79 episodes, updated yesterday')
-    expect(mfpLine({ ...s, fetchedAt: now - 5 * day }, now)).toBe('79 episodes, updated 5 days ago')
-    expect(mfpLine({ episodes: 1, running: false, fetchedAt: now }, now)).toBe(
-      '1 episode, updated today'
-    )
-  })
-
-  it('says it is reading the site', () => {
-    expect(mfpLine({ episodes: 0, fetchedAt: 0, running: true }, now)).toBe(
-      'Reading musicforprogramming.net…'
-    )
-    expect(mfpLine({ episodes: 79, fetchedAt: now, running: true }, now)).toBe(
-      '79 episodes, looking for new ones…'
-    )
-  })
-
-  it('says why the last read failed, keeping what it has', () => {
-    expect(mfpLine({ episodes: 0, fetchedAt: 0, running: false, error: 'timeout' }, now)).toBe(
-      'Could not read musicforprogramming.net: timeout'
-    )
-    expect(
-      mfpLine({ episodes: 79, fetchedAt: now - day, running: false, error: 'timeout' }, now)
-    ).toBe('79 episodes, updated yesterday · Could not read musicforprogramming.net: timeout')
   })
 })

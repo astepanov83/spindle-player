@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseDuration, parseEpisode, parseSlugs, parseTracklist, readEntry } from './mfp'
+import { parseDuration, parseEpisode, parseSlugs, parseTracklist, readEntry } from './site'
 
 const site = 'https://musicforprogramming.net'
 

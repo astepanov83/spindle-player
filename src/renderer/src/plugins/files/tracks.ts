@@ -1,13 +1,11 @@
-// Answers about songs of the library store. MFP songs are library tracks too
-// until ticket 061, so the mfp page half uses this as well.
+// Answers about songs of the library store.
 import type { Art, Track } from '../../../../shared/library'
-import type { PluginId } from '../../../../shared/plugins'
 import { itemKey, type ItemKey } from '../../../../shared/plugins/items'
 import { artistLinks } from '../../library/artists'
 import { library } from '../../stores/library.svelte'
 import type { ItemInfo, ItemState, PageAddress, Playable } from '../types'
 
-// Main serves indexed files by id (src/main/library/protocol.ts), MFP's mp3s too.
+// Main serves indexed files by id (src/main/library/protocol.ts).
 function mediaUrl(fileId: string): string {
   return `spindle://media/${fileId}`
 }
@@ -16,34 +14,19 @@ const missing: ItemState = { state: 'missing' }
 const loading: ItemState = { state: 'loading' }
 const can = { seek: true, pause: true, next: true, previous: true }
 
-export function pluginOf(t: Track): PluginId {
-  return t.online === 'mfp' ? 'mfp' : 'files'
-}
+const prefix = 'files:'
 
 export function trackKey(t: Track): ItemKey {
-  return itemKey(pluginOf(t), t.id)
+  return itemKey('files', t.id)
 }
 
-// A song the library doesn't have counts as a file's.
 export function trackKeys(ids: string[]): ItemKey[] {
-  return ids.map((id) => {
-    const t = library.find(id)
-    return itemKey(t ? pluginOf(t) : 'files', id)
-  })
+  return ids.map((id) => itemKey('files', id))
 }
 
-// The library's song for a key of the files or mfp plugin.
+// The library's song for a key of the files plugin.
 export function trackOf(key: ItemKey | undefined): Track | undefined {
-  if (!key) return undefined
-  const at = key.indexOf(':')
-  const t = library.find(key.slice(at + 1))
-  return t && pluginOf(t) === key.slice(0, at) ? t : undefined
-}
-
-// The library's song for an id of `plugin`.
-function find(plugin: PluginId, id: string): Track | undefined {
-  const t = library.find(id)
-  return t && pluginOf(t) === plugin ? t : undefined
+  return key?.startsWith(prefix) ? library.find(key.slice(prefix.length)) : undefined
 }
 
 // Kept by song object: the library replaces a song that changes and never
@@ -73,8 +56,7 @@ class TrackInfo implements ItemInfo {
   }
 
   get groupTo(): PageAddress {
-    const plugin = pluginOf(this.#t)
-    return { plugin, page: `${plugin === 'mfp' ? 'episode' : 'album'}/${this.#t.albumId}` }
+    return { plugin: 'files', page: `album/${this.#t.albumId}` }
   }
 
   // the album, at the song
@@ -88,9 +70,8 @@ class TrackInfo implements ItemInfo {
     )
   }
 
-  // an MFP song's artists are not in Artists (ticket 052)
   get links(): { label: string; to: PageAddress }[] {
-    const artists = pluginOf(this.#t) === 'mfp' ? [] : this.names
+    const artists = this.names
     const many = artists.length > 1
     return [
       { label: 'Go to album', to: this.titleTo },
@@ -103,16 +84,16 @@ class TrackInfo implements ItemInfo {
 
 // `complete`: the plugin's data is all there, so a song not in it is gone.
 // Asked only then, so a found song doesn't follow what it reads.
-export function trackState(plugin: PluginId, id: string, complete: () => boolean): ItemState {
-  const t = find(plugin, id)
+export function trackState(id: string, complete: () => boolean): ItemState {
+  const t = library.find(id)
   if (!t) return complete() ? missing : loading
   let s = answers.get(t)
   if (!s) answers.set(t, (s = { state: 'ok', info: new TrackInfo(t) }))
   return s
 }
 
-export function trackPlayable(plugin: PluginId, id: string): Playable | undefined {
-  const t = find(plugin, id)
+export function trackPlayable(id: string): Playable | undefined {
+  const t = library.find(id)
   if (!t) return undefined
   const p: Playable = { url: mediaUrl(t.part?.file ?? t.id), length: t.duration, can }
   if (t.part) p.part = t.part

@@ -66,6 +66,7 @@ const { radio } = await import('../plugins/radio/store.svelte')
 const { player } = await import('./player.svelte')
 const { library } = await import('./library.svelte')
 const { settings } = await import('./settings.svelte')
+const { mfp } = await import('../plugins/mfp/store.svelte')
 
 const tracks: Track[] = ['s0', 's1', 's2'].map((id, i) => ({
   id,
@@ -251,14 +252,13 @@ describe('Play while the song waits for its plugin (ticket 056)', () => {
     fake.calls = []
     queues.togglePlay()
     expect(fake.calls).toEqual([])
-    library.status = { ...library.status, mfp: { episodes: 1, fetchedAt: 1, running: false } }
-    library.load({
-      ...lib,
-      albums: [...lib.albums, { ...lib.albums[0], id: 'ep', online: 'mfp', trackIds: ['m1'] }],
-      tracks: [...tracks, { ...tracks[0], id: 'm1', albumId: 'ep', online: 'mfp', folder: -1 }]
+    mfp.status = { episodes: 1, fetchedAt: 1, running: false }
+    const songs = [{ id: 'm1', title: 'M', artist: 'X', start: 0, length: 100 }]
+    mfp.load({
+      episodes: [{ id: 'ep', title: 'E', artist: 'X', year: 0, link: '', length: 100, songs }]
     })
     queue.refresh()
-    expect(fake.calls).toEqual(['load spindle://media/m1 at 0', 'play'])
+    expect(fake.calls).toEqual(['load spindle://mfp/ep at 0', 'play'])
     settings.plugins.mfp = false
   })
 })

@@ -222,38 +222,19 @@ describe('Go to (ticket 040)', () => {
     expect(library.page('artists')).toBe('artist/b')
   })
 
-  it('an MFP song goes to its episode, and not to an artist (ticket 052)', () => {
-    const base = {
-      year: 0,
-      palette: defaultPalettes,
-      cover: '',
-      coverLarge: ''
-    }
-    const t = (id: string, albumId: string, online?: 'mfp'): Track => ({
-      id,
-      title: id,
-      duration: 1,
-      albumId,
-      artist: 'Marina Vale',
-      album: albumId,
-      no: 1,
-      disc: 1,
-      codec: '',
-      folder: online ? -1 : 0,
-      ...(online ? { online } : {})
-    })
-    library.load({
-      albums: [
-        { ...base, id: 'al', title: 'Blue Hours', artist: 'Marina Vale', trackIds: ['s1'] },
-        { ...base, id: 'ep', title: '01: Mixer', artist: 'Mixer', trackIds: ['m1'], online: 'mfp' }
-      ],
-      tracks: [t('s1', 'al'), t('m1', 'ep', 'mfp')],
-      folders: []
+  it('an MFP song goes to its episode, and not to an artist (ticket 052)', async () => {
+    const { mfp } = await import('../plugins/mfp/store.svelte')
+    const songs = [{ id: 'm1', title: 'M', artist: 'Marina Vale', start: 0, length: 1 }]
+    mfp.load({
+      episodes: [
+        { id: 'ep', title: '01: Mixer', artist: 'Mixer', year: 0, link: '', length: 1, songs }
+      ]
     })
     settings.plugins.mfp = true
     const m = songMenu(['mfp:m1'])
     expect(labels(m)).toContain('Go to album')
     expect(labels(m)).not.toContain('Go to artist')
+    expect(labels(m)).not.toContain('Show in file manager')
     pick(m, 'Go to album')
     expect([library.tab, library.page('mfp'), library.landing]).toEqual([
       'mfp',

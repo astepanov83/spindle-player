@@ -17,6 +17,7 @@ import { playlists } from './stores/playlists.svelte'
 import { queues } from './stores/queues.svelte'
 import { queue } from './stores/queue.svelte'
 import { radio } from './plugins/radio/store.svelte'
+import { mfp } from './plugins/mfp/store.svelte'
 import { loadSettings } from './stores/settings.svelte'
 import { dropText, ScanWatch } from './library/scan-text'
 import { orFallback } from './start'
@@ -50,11 +51,22 @@ window.addEventListener('drop', (e) => {
   })
 })
 
+// MFP's news from main, also while the page waits for its first answer.
+const mfpHeard = { episodes: false, status: false }
+window.mfpApi.onEpisodes((d) => {
+  mfpHeard.episodes = true
+  mfp.load(d)
+})
+window.mfpApi.onStatus((s) => {
+  mfpHeard.status = true
+  mfp.status = s
+})
+
 // Settings and the library first, so the first paint already shows the saved
 // template and the albums. The window stays hidden until then, so the wait doesn't show.
 // A failed ask shows the app with defaults. Settings and playlists that failed
 // to load are not saved this run, so the defaults can't replace the user's files.
-const [saved, lib, lists, lastQueue, stations] = await Promise.all([
+const [saved, lib, lists, lastQueue, stations, mixes] = await Promise.all([
   orFallback(() => window.settingsApi.load(), defaultSettings(), 'the settings'),
   orFallback<{ library?: Uint8Array; status: ScanStatus; moves?: IdMoves }>(
     () => window.libraryApi.load(),
@@ -63,7 +75,17 @@ const [saved, lib, lists, lastQueue, stations] = await Promise.all([
   ),
   orFallback(() => window.playlistsApi.load(), [], 'the playlists'),
   orFallback(() => window.playbackApi.loadQueue(), emptyQueues(), 'the queue'),
-  orFallback(() => window.radioApi.stations(), [], 'the radio stations')
+  orFallback(() => window.radioApi.stations(), [], 'the radio stations'),
+  orFallback(
+    () =>
+      window.mfpApi.get().then((d) => {
+        // news from before the answer is in it
+        mfpHeard.episodes = mfpHeard.status = false
+        return d
+      }),
+    { episodes: [] },
+    'the MFP episodes'
+  )
 ])
 loadSettings(saved.value, saved.ok)
 library.status = lib.value.status
@@ -88,6 +110,9 @@ playlists.load(startLists, lists.ok)
 // My stations that could not be read stay not loaded: a saved station is
 // then not taken for gone (queues.restore).
 if (stations.ok) radio.load(stations.value)
+// news that came after main's answer is newer than it
+if (!mfpHeard.episodes) mfp.load(mixes.value)
+if (!mfpHeard.status) mfp.status = mixes.value.status
 // paused where it was; songs their plugin says are gone leave the queue.
 // A live item (a station) comes back picked, paused.
 queues.restore(startQueue)

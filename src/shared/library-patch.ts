@@ -166,8 +166,7 @@ function renumber(tracks: Map<string, Track>, p: PatchBody): Track[] {
   const sent = new Set([...p.goneTracks, ...p.tracks.map((t) => t.id)])
   const out: Track[] = []
   for (const t of tracks.values()) {
-    // an online song is in no folder
-    if (sent.has(t.id) || t.folder < 0) continue
+    if (sent.has(t.id)) continue
     const to = moves[t.folder] ?? -1
     if (to < 0) throw new Error(`the library patch drops the folder of song ${t.id}`)
     if (to !== t.folder) out.push({ ...t, folder: to })

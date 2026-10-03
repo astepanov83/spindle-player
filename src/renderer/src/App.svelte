@@ -54,14 +54,17 @@
   )
 
   // New data in a plugin, or one turned on or off: songs that are gone leave
-  // the queue, a song that waited for its plugin loads, and a live item whose
-  // plugin went off gives the player back to the queue.
-  // A $derived, so a read that changes without changing the version (MFP's
-  // status, every 100 ms in a scan) doesn't run the refresh.
+  // the queue, a song that waited for its plugin loads, a live item whose
+  // plugin went off gives the player back to the queue, and pages that are
+  // gone close. A $derived, so a read that changes without changing the
+  // version (the scan status, every 100 ms in a scan) doesn't run them.
   const version = $derived(itemsVersion())
   $effect(() => {
     void version
-    untrack(() => queues.refresh())
+    untrack(() => {
+      queues.refresh()
+      library.pagesChanged()
+    })
   })
 
   // The library's tabs follow the plugins that are on: one turned off takes

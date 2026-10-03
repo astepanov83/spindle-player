@@ -17,7 +17,6 @@ import { LibraryClient } from './library-client'
 import { LibraryProcess } from './library-process'
 import { RestartBudget } from './restart'
 import libraryProcessPath from './library-worker?modulePath'
-import type { OnlineFile } from './mfp-library'
 import type { MediaInfo, WorkerIn, WorkerOut } from './types'
 
 // At quit, main waits this long at most for the library process to save the index.
@@ -47,7 +46,7 @@ export class LibraryService {
     // (false when a write failed, so the library process keeps the map)
     readonly idsMoved: (moves: IdMoves) => boolean,
     coverPreload: string,
-    // covers main uses that the index does not know (station logos), for the prune
+    // covers other plugins keep that the index does not know (station logos), for the prune
     readonly keepCovers: () => string[] = () => [],
     readonly dir = app.getPath('userData')
   ) {
@@ -84,8 +83,7 @@ export class LibraryService {
         fetchedPath: join(this.dir, 'fetched-covers.json'),
         overridesPath: join(this.dir, 'artist-overrides.json'),
         userAgent: this.userAgent,
-        keepCovers: this.keepCovers(),
-        mfp: { on: this.store.live().plugins.mfp, path: join(this.dir, 'mfp.json') }
+        keepCovers: this.keepCovers()
       }),
       // a library process that dies is started again a few times, then left dead
       new RestartBudget(3, 60000),
@@ -187,11 +185,6 @@ export class LibraryService {
     this.#post({ type: 'fetch-covers', on, sources })
   }
 
-  // The Music For Programming setting changed (ticket 052).
-  setMfp(on: boolean): void {
-    this.#post({ type: 'mfp', on })
-  }
-
   resume(): void {
     this.covers.allow()
     // the online lookup was held when the window closed (macOS keeps the app)
@@ -243,9 +236,8 @@ export class LibraryService {
   }
 
   // Only files in the index are served, by id; never a path from the page.
-  async mediaInfo(id: string): Promise<MediaInfo | OnlineFile | undefined> {
-    const r = await this.#client.ask({ type: 'find-track', id })
-    return r.online ?? r.media
+  async mediaInfo(id: string): Promise<MediaInfo | undefined> {
+    return (await this.#client.ask({ type: 'find-track', id })).media
   }
 
   // A radio song's cover from the online lookup (ticket 032): the picture,

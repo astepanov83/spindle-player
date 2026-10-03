@@ -1,6 +1,7 @@
 import type { ArtistChanges } from './artist-overrides'
 import type { IdMoves } from './id-moves'
 import type { ScanStatus } from './library'
+import type { MfpEpisodes, MfpStatus } from './mfp'
 import type { Playlist } from './playlists'
 import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
 import type { Settings } from './settings'
@@ -239,6 +240,26 @@ export interface RadioApi {
   onCover(listener: (cover: RadioCover) => void): () => void
 }
 
+export const MfpChannel = {
+  get: 'mfp:get',
+  refresh: 'mfp:refresh',
+  // main to page: new episodes or a new picture
+  episodes: 'mfp:episodes',
+  // main to page: the status line changed
+  status: 'mfp:status'
+} as const
+
+// What the preload exposes to the page as `window.mfpApi` (ticket 061).
+export interface MfpApi {
+  // what main has, on or off (no network for it); status only while on
+  get(): Promise<MfpEpisodes & { status?: MfpStatus }>
+  // reads the site for new episodes, while MFP is on
+  refresh(): void
+  // Returns a function that stops listening.
+  onEpisodes(listener: (data: MfpEpisodes) => void): () => void
+  onStatus(listener: (status: MfpStatus | undefined) => void): () => void
+}
+
 // Which API method each page-to-main channel carries. The preload's calls and
 // main's handlers are both typed from this, so a change on one side and not
 // the other is a type error.
@@ -273,6 +294,8 @@ export interface PageChannels {
   [RadioChannel.lastAnswer]: RadioApi['lastAnswer']
   [RadioChannel.stop]: RadioApi['stop']
   [RadioChannel.search]: RadioApi['search']
+  [MfpChannel.get]: MfpApi['get']
+  [MfpChannel.refresh]: MfpApi['refresh']
   [PlaybackChannel.loadQueue]: PlaybackApi['loadQueue']
   [PlaybackChannel.saveQueue]: PlaybackApi['saveQueue']
   [PlaybackChannel.savePlace]: PlaybackApi['savePlace']

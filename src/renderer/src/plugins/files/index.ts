@@ -12,8 +12,8 @@ import { trackPlayable, trackState } from './tracks'
 const complete = (): boolean => library.loaded
 
 export const filesHalf: PageHalf = {
-  info: (id) => trackState('files', id, complete),
-  play: (id) => trackPlayable('files', id),
+  info: (id) => trackState(id, complete),
+  play: (id) => trackPlayable(id),
   tabs: filesTabs,
   tabOf: filesTabOf,
   canOpen: canOpenFiles,

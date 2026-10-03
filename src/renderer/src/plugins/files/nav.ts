@@ -5,11 +5,7 @@ import { library } from '../../stores/library.svelte'
 import type { PageAddress, Tab } from '../types'
 import { artistPage, filesTabOf, parsePage } from './pages'
 
-// the music folders' albums, not MFP's episodes
-function localAlbum(id: string): boolean {
-  const al = library.findAlbum(id)
-  return !!al && !al.online
-}
+const isAlbum = (id: string): boolean => !!library.findAlbum(id)
 
 export function filesTabs(): Tab[] {
   return [
@@ -39,7 +35,7 @@ function openFolderKey(): string | null {
 
 export function canOpenFiles(to: PageAddress): boolean {
   const p = parsePage(to.page)
-  if (p?.kind === 'album') return localAlbum(p.id)
+  if (p?.kind === 'album') return isAlbum(p.id)
   if (p?.kind === 'artist') return !p.album && !!library.getArtist(p.key)
   if (p?.kind === 'folder') return library.folders.byKey.has(p.key)
   return false
@@ -51,10 +47,10 @@ export function canOpenFiles(to: PageAddress): boolean {
 export function keepFiles(_tab: string, page: string): string {
   const p = parsePage(page)
   if (!p) return ''
-  if (p.kind === 'album') return localAlbum(p.id) ? page : ''
+  if (p.kind === 'album') return isAlbum(p.id) ? page : ''
   if (p.kind !== 'artist') return page
   if (!library.getArtist(p.key)) return ''
-  return p.album && !localAlbum(p.album) ? artistPage(p.key) : page
+  return p.album && !isAlbum(p.album) ? artistPage(p.key) : page
 }
 
 export function filesPath(tab: string, page: string): string[] {

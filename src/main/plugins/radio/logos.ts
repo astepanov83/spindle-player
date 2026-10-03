@@ -2,9 +2,8 @@
 // main makes its logo into a cover in the cover cache, with a palette from the
 // cover window, so the app colors, the stage and the media controls work as
 // for an album. Main owns the station's `logo`; the page only shows it.
-import { hash } from 'crypto'
-import { sameLogo, smallLogoSide, type Station, type StationLogo } from '../../../shared/stations'
-import { paletteVersion, type ThemePalettes } from '../../../shared/palette'
+import { sameLogo, type Station, type StationLogo } from '../../../shared/stations'
+import { makeCover, withNewColors, type LogoCache } from '../covers'
 import { localAddress } from './logo-fetch'
 
 // Metal Only's logo comes with the app (resources/metal-only.png), so the
@@ -47,55 +46,6 @@ export function onLocalNetwork(s: Station): boolean {
 // the first run): made at start from the file, with no request.
 export function needsBundledLogo(s: Station): boolean {
   return !s.logo && logoSource(s) === metalOnlyLogo
-}
-
-// What this needs of CoverCache.
-export interface LogoCache {
-  addLogo(
-    hash: string,
-    data: Uint8Array
-  ): Promise<{ palette: ThemePalettes; side: number } | undefined>
-  hasLogo(hash: string, large: boolean): Promise<boolean>
-  // new colors from the small cover, for colors picked by an older paletteVersion
-  logoPalette(hash: string): Promise<ThemePalettes | undefined>
-}
-
-// A picture made into the cover cache: its hash, colors, small below
-// smallLogoSide, and the paletteVersion that picked the colors.
-export interface MadeCover {
-  hash: string
-  palette: ThemePalettes
-  small?: boolean
-  v: number
-}
-
-// Makes a picture into the cover cache with its colors, for a station logo or
-// a song cover. `keep` hears the hash before the files exist, so a prune
-// running now does not take them. Undefined when the cover window failed.
-export async function makeCover(
-  cache: LogoCache,
-  data: Uint8Array,
-  keep: (hash: string) => void
-): Promise<MadeCover | undefined> {
-  const h = hash('sha1', data)
-  keep(h)
-  const done = await cache.addLogo(h, data)
-  if (!done) return undefined
-  const out: MadeCover = { hash: h, palette: done.palette, v: paletteVersion }
-  if (done.side < smallLogoSide) out.small = true
-  return out
-}
-
-// Colors picked by an older paletteVersion, picked again from the small cover
-// with no new fetch. The same object when they are current; undefined when
-// the new ones could not be picked.
-export async function withNewColors<T extends { hash: string; palette: ThemePalettes; v?: number }>(
-  cache: LogoCache,
-  c: T
-): Promise<T | undefined> {
-  if (c.v === paletteVersion) return c
-  const palette = await cache.logoPalette(c.hash)
-  return palette && { ...c, palette, v: paletteVersion }
 }
 
 export interface LogoDeps {

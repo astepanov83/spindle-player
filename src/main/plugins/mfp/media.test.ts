@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { onlineMedia, type OnlineMediaOptions } from './online-media'
+import { onlineMedia, type OnlineMediaOptions } from './media'
 
 const url = 'https://datashat.net/x.mp3'
 

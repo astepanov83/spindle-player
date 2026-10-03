@@ -26,6 +26,6 @@ export function createPlugins(env: PluginEnv): MainPlugin[] {
     keptByOthers: () => list.flatMap((p) => p.keptCovers()),
     coverPreload: env.coverPreload
   })
-  list.push(files, radio, new MfpPlugin(() => files.library))
+  list.push(files, radio, new MfpPlugin(env.userData, { log: env.log }))
   return list
 }

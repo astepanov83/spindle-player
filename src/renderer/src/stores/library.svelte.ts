@@ -109,12 +109,8 @@ function keepSame(old: Album[], next: Album[]): Album[] {
 
 class LibraryStore {
   // plain arrays, not deep proxies: they can hold 50k+ songs
-  // the albums of the music folders; every view but MFP lists only these
+  // in the order main sent them
   albums: Album[] = $state.raw([])
-  // Music For Programming episodes, newest first (ticket 052)
-  mfpAlbums: Album[] = $state.raw([])
-  // both, in the order main sent them; patches and lookups by id use it
-  #allAlbums: Album[] = []
   #tracks = new Map<string, Track>()
   #order = new Map<string, number>()
   #albumIndex = new Map<string, number>()
@@ -198,7 +194,7 @@ class LibraryStore {
   // whether songs left the library.
   patch(p: LibraryPatch): boolean {
     const held = applyPatch(
-      { albums: this.#allAlbums, folders: this.#folderTable, photos: this.photos },
+      { albums: this.albums, folders: this.#folderTable, photos: this.photos },
       this.#tracks,
       p
     )
@@ -206,7 +202,7 @@ class LibraryStore {
     const songs =
       p.tracks.length > 0 ||
       p.goneTracks.length > 0 ||
-      held.albums !== this.#allAlbums ||
+      held.albums !== this.albums ||
       held.folders !== this.#folderTable
     this.#show(held, songs)
     this.sent = { epoch: p.epoch, n: p.n }
@@ -223,25 +219,15 @@ class LibraryStore {
       const ids = albums.flatMap((a) => a.trackIds)
       this.#order = new Map(ids.map((id, i) => [id, i]))
       this.#albumIndex = new Map(albums.map((a, i) => [a.id, i]))
-      this.#allAlbums = albums
-      const local = keepSame(
-        this.albums,
-        albums.filter((a) => !a.online)
-      )
-      const online = keepSame(
-        this.mfpAlbums,
-        albums.filter((a) => a.online === 'mfp')
-      )
-      if (local !== this.albums) this.albums = local
-      if (online !== this.mfpAlbums) this.mfpAlbums = online
+      const kept = keepSame(this.albums, albums)
+      if (kept !== this.albums) this.albums = kept
       this.#folderTable = held.folders
-      // online songs are in no folder
-      const tracks = local.flatMap((a) => a.trackIds).map((id) => this.#tracks.get(id)!)
+      const tracks = ids.map((id) => this.#tracks.get(id)!)
       this.folders = folderTree(held.folders, tracks, (id) => {
         const i = this.#albumIndex.get(id)
         return i === undefined ? '' : albums[i].cover
       })
-      this.artists = listArtists(local, (id) => this.#tracks.get(id)!)
+      this.artists = listArtists(albums, (id) => this.#tracks.get(id)!)
       this.#artistIndex = new Map(this.artists.map((a, i) => [a.key, i]))
     }
     if (songs) this.#version++
@@ -317,6 +303,12 @@ class LibraryStore {
     if (old && old.length === list.length && old.every(same)) return
     this.#tabs = list
     this.#refit()
+  }
+
+  // A plugin has new data: its pages that are gone close, in the view and in
+  // every step of history.
+  pagesChanged(): void {
+    if (this.#tabs) this.#refit()
   }
 
   // The library on screen: Studio's chips or Classic's sidebar. A tab the
@@ -558,13 +550,13 @@ class LibraryStore {
 
   album(id: string): Album {
     void this.#version
-    return this.#allAlbums[this.#albumIndex.get(id)!]
+    return this.albums[this.#albumIndex.get(id)!]
   }
 
   findAlbum(id: string): Album | undefined {
     void this.#version
     const i = this.#albumIndex.get(id)
-    return i === undefined ? undefined : this.#allAlbums[i]
+    return i === undefined ? undefined : this.albums[i]
   }
 
   // the song's own picture, else its album's

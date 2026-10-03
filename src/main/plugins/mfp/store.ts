@@ -1,14 +1,17 @@
 // The Music For Programming episodes, kept in mfp.json (ticket 052). Its own
 // file, not library.json, so an index rebuild doesn't fetch 79 pages again.
 // Only a copy of the site, so a broken file just starts empty.
-import { isCoverHash } from './cover-names'
-import { parseEpisode, parseSlugs, type MfpEpisode, type MfpTrack } from './mfp'
+import { parseThemePalettes } from '../../../shared/palette'
+import { isCoverHash } from '../../library/cover-names'
+import type { MadeCover } from '../covers'
+import { parseEpisode, parseSlugs, type MfpEpisode, type MfpTrack } from './site'
 
 export interface MfpData {
   // when the site was last read, ms; 0 for never
   fetchedAt: number
-  // the site's picture in the cover cache, shared by every episode
-  cover?: string
+  // the site's picture in the cover cache, shared by every episode. Before
+  // ticket 061 a hash alone, which is dropped: the picture is fetched again.
+  cover?: MadeCover
   // newest first
   episodes: MfpEpisode[]
 }
@@ -26,6 +29,15 @@ const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isF
 function parseTrack(v: unknown): MfpTrack | undefined {
   if (!isObject(v) || !isText(v.artist) || !isText(v.title)) return undefined
   return { artist: v.artist, title: v.title }
+}
+
+function parseCover(v: unknown): MadeCover | undefined {
+  if (!isObject(v) || !isText(v.hash) || !isCoverHash(v.hash)) return undefined
+  const palette = parseThemePalettes(v.palette)
+  if (!palette || typeof v.v !== 'number') return undefined
+  const out: MadeCover = { hash: v.hash, palette, v: v.v }
+  if (v.small === true) out.small = true
+  return out
 }
 
 function parseStoredEpisode(v: unknown): MfpEpisode | undefined {
@@ -57,7 +69,8 @@ export function parseMfp(raw: unknown): MfpData {
   const out: MfpData = { fetchedAt: 0, episodes: [] }
   if (!isObject(raw) || raw.version !== version || !Array.isArray(raw.episodes)) return out
   if (isCount(raw.fetchedAt)) out.fetchedAt = raw.fetchedAt
-  if (isText(raw.cover) && isCoverHash(raw.cover)) out.cover = raw.cover
+  const cover = parseCover(raw.cover)
+  if (cover) out.cover = cover
   for (const v of raw.episodes) {
     const e = parseStoredEpisode(v)
     if (e) out.episodes.push(e)

@@ -1,7 +1,7 @@
 // The library process with Music files off: it reads the index and answers,
 // but scans nothing and writes none of its files. Run in this process on a
 // fake parent port, with the online lookup off.
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -88,5 +88,35 @@ describe('the library process', () => {
     scan(2)
     await until(() => scanned(2))
     expect(scanned(2)).toBe(true)
+  })
+
+  describe('a "not found" mark dropped while off', () => {
+    const fetchedPath = (): string => join(dir, 'fetched-covers.json')
+    const marks = (): string[] =>
+      Object.keys(JSON.parse(readFileSync(fetchedPath(), 'utf8')).albums)
+
+    // A source turned on drops the marks, so the album is looked up again.
+    async function dropMarkWhileOff(): Promise<void> {
+      const albums = { a1: { source: 'none', at: Date.now(), key: 'k' } }
+      writeFileSync(fetchedPath(), JSON.stringify({ version: 1, albums, artists: {} }))
+      start(false)
+      send({ type: 'get-library', req: 1 })
+      await until(() => heard.some((m) => m.type === 'reply' && m.req === 1))
+      const sources = { musicbrainz: true, deezer: true, itunes: true }
+      send({ type: 'fetch-covers', on: false, sources })
+    }
+
+    it('is not written while off', async () => {
+      await dropMarkWhileOff()
+      send({ type: 'flush' })
+      expect(marks()).toEqual(['a1'])
+    })
+
+    it('is written once turned on', async () => {
+      await dropMarkWhileOff()
+      send({ type: 'set-on', on: true })
+      send({ type: 'flush' })
+      expect(marks()).toEqual([])
+    })
   })
 })

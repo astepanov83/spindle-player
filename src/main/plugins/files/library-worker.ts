@@ -192,9 +192,13 @@ let pruned = false
 // the setting from main; a change can come before the fetcher is made
 let fetchSetting: { on: boolean; sources: Record<CoverSource, boolean> } | undefined
 
+// a change made while off (a source turned on drops "not found" marks), written once on
+let fetchedChangedOff = false
+
 function saveFetched(): void {
   fetchedEdits++
   if (on) fetchedWriter?.schedule(serializeFetched(fetched, photos))
+  else fetchedChangedOff = true
 }
 
 const abortableSleep = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -641,6 +645,10 @@ function setOn(next: boolean): void {
     overridesWriter?.flushSync()
   }
   on = next
+  if (on && fetchedChangedOff) {
+    fetchedChangedOff = false
+    saveFetched()
+  }
 }
 
 // Old id -> new id of songs whose path moved this run, so a song that was

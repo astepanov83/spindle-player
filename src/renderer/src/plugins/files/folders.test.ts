@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Folder, Track } from '../../../shared/library'
+import type { Folder, Track } from '../../../../shared/library'
 import {
   commonFolder,
   crumbs,

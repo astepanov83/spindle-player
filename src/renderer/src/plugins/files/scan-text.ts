@@ -1,7 +1,8 @@
 // The scan status lines for the settings sheet and the empty library.
-import type { DropResult } from '../../../shared/ipc'
-import type { FetchStatus, ScanStatus } from '../../../shared/library'
+import type { DropResult } from '../../../../shared/ipc'
+import type { FetchStatus, ScanStatus } from '../../../../shared/library'
 import { rootName } from './folders'
+import { pathEnds } from '../../ui/path-ends'
 
 const n = (x: number): string => x.toLocaleString('en-US')
 const plural = (x: number, one: string, many: string): string => `${n(x)} ${x === 1 ? one : many}`
@@ -122,13 +123,6 @@ export class ScanWatch {
     if (gone.length) return `${n(gone.length)} music folders not found`
     return undefined
   }
-}
-
-// A path as [everything before the last folder, the last folder with its
-// slash], so a long one can be cut in the middle and still show its own name.
-export function pathEnds(path: string): [string, string] {
-  const m = /^(.*?)([/\\]?[^/\\]+[/\\]?|[/\\])$/.exec(path)
-  return m ? [m[1], m[2]] : ['', path]
 }
 
 // The last folder of a path, for a line too short for all of it.

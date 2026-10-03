@@ -13,9 +13,13 @@ import { mkdirSync } from 'fs'
 import { readFile, rm, stat } from 'fs/promises'
 import { join } from 'path'
 import { BrowserWindow, ipcMain } from 'electron'
-import { CoverChannel, type CoverJob, type CoverResult } from '../../shared/cover-job'
+import {
+  CoverChannel,
+  smallLogoSide,
+  type CoverJob,
+  type CoverResult
+} from '../../shared/cover-job'
 import type { ThemePalettes } from '../../shared/palette'
-import { smallLogoSide } from '../../shared/stations'
 import { writeFileAtomic } from '../json-file'
 import { blockNavigation } from '../web-guard'
 import { badName, largeName, mosaicName, smallName } from './cover-names'

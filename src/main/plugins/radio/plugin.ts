@@ -4,7 +4,11 @@
 import { join } from 'path'
 import { RadioChannel, type RadioCover, type RadioLogo, type RadioTitle } from '../../../shared/ipc'
 import type { PluginId } from '../../../shared/plugins'
-import { parseStation, type Station, type StationLogo } from '../../../shared/stations'
+import {
+  parseStation,
+  type Station,
+  type StationLogo
+} from '../../../shared/plugins/radio/stations'
 import { notFound } from '../../protocol'
 import type { MainPlugin, PluginContext } from '../types'
 import { checkedFetch } from './checked-fetch'

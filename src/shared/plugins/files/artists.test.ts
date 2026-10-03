@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { creditOf, type ArtistOverrides } from './artist-overrides'
 import { artistKey, listArtists } from './artists'
-import type { Album, Track } from './library'
-import { defaultPalettes } from './palette'
+import type { Album, Track } from '../../library'
+import { defaultPalettes } from '../../palette'
 
 const tracks = new Map<string, Track>()
 

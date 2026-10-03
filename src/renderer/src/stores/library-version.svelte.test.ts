@@ -4,7 +4,7 @@
 import { flushSync } from 'svelte'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { LibraryData, Track } from '../../../shared/library'
-import type { LibraryPatch } from '../../../shared/library-patch'
+import type { LibraryPatch } from '../../../shared/plugins/files/library-patch'
 import { defaultPalettes } from '../../../shared/palette'
 import { files } from '../plugins/files/store.svelte'
 

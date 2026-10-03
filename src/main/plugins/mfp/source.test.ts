@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MfpStatus } from '../../../shared/mfp'
+import type { MfpStatus } from '../../../shared/plugins/mfp/mfp'
 import { defaultPalettes, fallbackPalettes } from '../../../shared/palette'
 import type { MadeCover } from '../../covers/covers'
 import type { MfpEpisode } from './site'

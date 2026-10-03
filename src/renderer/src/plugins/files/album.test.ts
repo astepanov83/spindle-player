@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Track } from '../../../shared/library'
+import type { Track } from '../../../../shared/library'
 import { albumLabel, albumLines } from './album'
 
 const track = (id: string, no: number, disc = 1): Track => ({

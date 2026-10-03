@@ -4,7 +4,7 @@
 <script lang="ts">
   import Cover from '../ui/Cover.svelte'
   import { mosaicUrl } from '../../../shared/library'
-  import type { CoverArt } from './artists'
+  import type { CoverArt } from '../plugins/types'
   import { itemsVersion } from '../plugins'
   import { theme } from '../stores/theme.svelte'
 

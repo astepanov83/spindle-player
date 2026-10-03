@@ -1,7 +1,7 @@
 // Builds the albums and tracks the page shows from the index.
 import { basename } from 'path'
-import { creditOf, type ArtistOverrides } from '../../../shared/artist-overrides'
-import { artistKey, listArtists, namesOf } from '../../../shared/artists'
+import { creditOf, type ArtistOverrides } from '../../../shared/plugins/files/artist-overrides'
+import { artistKey, listArtists, namesOf } from '../../../shared/plugins/files/artists'
 import {
   coverUrls,
   type Album,

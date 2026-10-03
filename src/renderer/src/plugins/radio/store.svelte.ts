@@ -13,7 +13,7 @@ import {
   type HistoryEntry,
   type Station,
   type StationLogo
-} from '../../../../shared/stations'
+} from '../../../../shared/plugins/radio/stations'
 import type { EngineEvents } from '../../audio/engine'
 import { notice } from '../../stores/notice.svelte'
 import type { Action, ItemInfo, LiveHandle, PageAddress, Playable } from '../types'

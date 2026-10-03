@@ -1,14 +1,7 @@
 // The files plugin's blocks in Settings: the music folders, Add folder and
 // Rescan, and what the scan says. Main owns the list; this only asks. Also
 // its lines next to the chips and under the cover lookup setting.
-import {
-  canRescan,
-  fetchBusy,
-  fetchLine,
-  photoLine,
-  scanLine,
-  statusLines
-} from '../../library/scan-text'
+import { canRescan, fetchBusy, fetchLine, photoLine, scanLine, statusLines } from './scan-text'
 import { files } from './store.svelte'
 import type { SettingBlock } from '../types'
 

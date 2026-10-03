@@ -1,20 +1,23 @@
 // The files plugin's pages as blocks (ticket 059): Songs, Albums, Artists,
 // Folders and their pages, from the library store. The core draws them; what
 // their buttons do comes back through filesAct.
-import { artistKey, namesOf, type Artist, type ArtistTag } from '../../../../shared/artists'
-import { cleanNames, editArtist, maxNameLength } from '../../../../shared/artist-overrides'
+import {
+  artistKey,
+  namesOf,
+  type Artist,
+  type ArtistTag
+} from '../../../../shared/plugins/files/artists'
+import {
+  cleanNames,
+  editArtist,
+  maxNameLength
+} from '../../../../shared/plugins/files/artist-overrides'
 import type { Album, Art } from '../../../../shared/library'
 import type { ItemKey } from '../../../../shared/plugins/items'
 import { queueLink } from '../../../../shared/saved-queue'
 import { fmtCount } from '../../format'
-import { albumLabel, albumLines, albumLink } from '../../library/album'
-import {
-  artistCovers,
-  artistLinks,
-  artistPageSongs,
-  artistSongs,
-  filterArtists
-} from '../../library/artists'
+import { albumLabel, albumLines, albumLink } from './album'
+import { artistCovers, artistLinks, artistPageSongs, artistSongs, filterArtists } from './artists'
 import {
   commonFolder,
   crumbs,
@@ -25,8 +28,8 @@ import {
   folderSongs,
   shownFolder,
   type FolderTree
-} from '../../library/folders'
-import { libraryProblem, scanLine, settingsText, stoppedText } from '../../library/scan-text'
+} from './folders'
+import { libraryProblem, scanLine, settingsText, stoppedText } from './scan-text'
 import { filterAlbums, nextSort, searchSongs, songRows, type SortKey } from '../../library/views'
 import { library } from '../../stores/library.svelte'
 import { files } from './store.svelte'

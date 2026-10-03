@@ -22,7 +22,7 @@ import {
   type Station,
   type StationLogo,
   type Stream
-} from '../../../shared/stations'
+} from '../../../shared/plugins/radio/stations'
 import { JsonFileWriter, openJsonFile, readJsonFile, removeStrayTmp } from '../../json-file'
 
 // Comes with the app. Its logo is resources/metal-only.png, so the first start needs no request.

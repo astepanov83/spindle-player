@@ -6,7 +6,7 @@ import type { EngineEvents } from '../audio/engine'
 import type { LibraryData, Track } from '../../../shared/library'
 import type { RadioTitle } from '../../../shared/ipc'
 import { itemKey } from '../../../shared/plugins/items'
-import type { Station } from '../../../shared/stations'
+import type { Station } from '../../../shared/plugins/radio/stations'
 import { defaultPalettes } from '../../../shared/palette'
 
 const fake = vi.hoisted(() => ({

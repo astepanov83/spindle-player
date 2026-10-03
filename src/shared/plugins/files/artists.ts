@@ -2,7 +2,7 @@
 // already reads, after the artist overrides (ticket 024). The page lists them
 // and the library process looks up their photos with the same list, so both
 // use the same keys.
-import type { Album, ArtistCredit, Track } from './library'
+import type { Album, ArtistCredit, Track } from '../../library'
 
 // A tag an artist comes from, spelled as it was first seen. names: what an
 // override made of it; none when the tag is used as it is.

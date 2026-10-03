@@ -1,6 +1,6 @@
 import { hash } from 'crypto'
 import { paletteVersion, type ThemePalettes } from '../../shared/palette'
-import { smallLogoSide } from '../../shared/stations'
+import { smallLogoSide } from '../../shared/cover-job'
 import type { CoverHelper, CoverProvider, CoverService } from '../plugins/types'
 import type { CoverCache } from './cover-cache'
 

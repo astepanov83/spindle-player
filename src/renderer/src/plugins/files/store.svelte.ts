@@ -3,7 +3,7 @@
 // and the scan status. Also the view state of its own pages (folder and
 // artist sorts, the artist being edited). Where the library is (tabs, pages,
 // history, search text) is the core's: stores/library.svelte.ts.
-import { listArtists, type Artist } from '../../../../shared/artists'
+import { listArtists, type Artist } from '../../../../shared/plugins/files/artists'
 import type {
   Album,
   Art,
@@ -19,9 +19,9 @@ import {
   type LibraryMessage,
   type LibraryPatch,
   type LibraryVersion
-} from '../../../../shared/library-patch'
+} from '../../../../shared/plugins/files/library-patch'
 import { nextPlaylistSort, type Sort, type SortKey } from '../../library/views'
-import { emptyTree, folderTree, type FolderTree } from '../../library/folders'
+import { emptyTree, folderTree, type FolderTree } from './folders'
 import { library } from '../../stores/library.svelte'
 
 // The same list when every album in it is the same object, so views made
@@ -40,7 +40,7 @@ class FilesStore {
   // the folder table main sent, which folderTree is built from
   #folderTable: Folder[] = []
   folders: FolderTree = $state.raw(emptyTree())
-  // name order (see shared/artists.ts)
+  // name order (see shared/plugins/files/artists.ts)
   artists: Artist[] = $state.raw([])
   #artistIndex = new Map<string, number>()
   // artist key -> photo found online

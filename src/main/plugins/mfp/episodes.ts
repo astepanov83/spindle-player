@@ -2,7 +2,7 @@
 // 052, 061). Each tracklist row is a song: a stretch of the episode's mp3,
 // like a CUE track in its disc image. The site gives no times, so the songs
 // are spread evenly over the file (as in webmusicfp).
-import type { Episode, EpisodeSong } from '../../../shared/mfp'
+import type { Episode, EpisodeSong } from '../../../shared/plugins/mfp/mfp'
 import { shortHash } from '../../ids'
 import type { MfpEpisode } from './site'
 

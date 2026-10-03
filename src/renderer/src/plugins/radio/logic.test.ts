@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Station, Stream } from '../../../../shared/stations'
+import type { Station, Stream } from '../../../../shared/plugins/radio/stations'
 import {
   bitrateLine,
   searchRows,

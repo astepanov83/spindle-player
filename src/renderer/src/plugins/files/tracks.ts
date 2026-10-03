@@ -1,7 +1,7 @@
 // Answers about songs of the library store.
 import type { Art, Track } from '../../../../shared/library'
 import { itemKey, type ItemKey } from '../../../../shared/plugins/items'
-import { artistLinks } from '../../library/artists'
+import { artistLinks } from './artists'
 import { files } from './store.svelte'
 import type { ItemInfo, ItemState, PageAddress, Playable } from '../types'
 

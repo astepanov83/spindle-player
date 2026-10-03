@@ -2,7 +2,7 @@
 // a row's star and menu reaching the plugin.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultPalettes } from '../../../../shared/palette'
-import type { Station } from '../../../../shared/stations'
+import type { Station } from '../../../../shared/plugins/radio/stations'
 import type { Block, EmptyBlock, HeadBlock, ItemRow, RowsBlock } from '../types'
 
 vi.stubGlobal('window', { radioApi: { search: vi.fn(() => new Promise(() => {})) } })

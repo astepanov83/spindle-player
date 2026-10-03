@@ -3,7 +3,7 @@
 // CSP stays closed and the visualizer gets sound, since most radio servers send
 // no CORS headers (decision 149). The ICY titles are taken out on the way.
 import type { LastAnswer } from '../../../shared/ipc'
-import type { Station } from '../../../shared/stations'
+import type { Station } from '../../../shared/plugins/radio/stations'
 import { IcySplitter, readIcyHead } from './icy'
 
 export interface RadioOptions {

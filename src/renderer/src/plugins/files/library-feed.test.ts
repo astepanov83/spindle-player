@@ -4,7 +4,7 @@ import type {
   LibraryMessage,
   LibraryPatch,
   LibraryVersion
-} from '../../../shared/library-patch'
+} from '../../../../shared/plugins/files/library-patch'
 import { LibraryFeed } from './library-feed'
 
 const full = (n: number, epoch = 'a'): FullLibrary => ({

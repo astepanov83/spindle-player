@@ -3,7 +3,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fallbackPalettes } from '../../../shared/palette'
-import type { Station } from '../../../shared/stations'
+import type { Station } from '../../../shared/plugins/radio/stations'
 import { metalOnly, RadioHistoryStore, StationsStore } from './stations-store'
 
 let dir: string

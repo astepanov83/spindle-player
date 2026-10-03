@@ -1,6 +1,6 @@
 // What an MFP song is and how it plays: a stretch of its episode's mp3, which
 // main serves at spindle://mfp/<episode id> (src/main/plugins/mfp/plugin.ts).
-import type { EpisodeSong } from '../../../../shared/mfp'
+import type { EpisodeSong } from '../../../../shared/plugins/mfp/mfp'
 import { itemKey, type ItemKey } from '../../../../shared/plugins/items'
 import type { ItemInfo, ItemState, PageAddress, Playable } from '../types'
 import { episodePage } from './nav'

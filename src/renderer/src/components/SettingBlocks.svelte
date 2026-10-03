@@ -2,7 +2,7 @@
      The blocks sit in the parent's column, so its gap spaces them. -->
 <script lang="ts">
   import type { PluginId } from '../../../shared/plugins'
-  import { pathEnds } from '../library/scan-text'
+  import { pathEnds } from '../ui/path-ends'
   import { actOnSetting } from '../plugins'
   import type { SettingBlock } from '../plugins/types'
   import Icon from '../ui/Icon.svelte'

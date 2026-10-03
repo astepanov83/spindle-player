@@ -3,7 +3,7 @@
 // file once at start (main/convert-files.ts).
 import type { PluginId } from './plugins'
 import { isKeyOfKind, splitKey, type ItemKey } from './plugins/items'
-import { isStationId } from './stations'
+import { isStationId } from './plugins/radio/stations'
 
 // What "From <from>" opens (ticket 040): a page of a plugin, or of the core
 // for a playlist. None for a list with no page of its own (a search, Classic's Songs).

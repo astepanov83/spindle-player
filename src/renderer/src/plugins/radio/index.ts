@@ -1,6 +1,6 @@
 // Radio's page half: stations are live items. The store does the playing
 // (reconnects, streams, titles); this answers the core's questions from it.
-import { stationArt, type Station } from '../../../../shared/stations'
+import { stationArt, type Station } from '../../../../shared/plugins/radio/stations'
 import type { ItemState, LivePlugin, PageHalf } from '../types'
 import { stationLine, stepStation } from './logic'
 import { actOnStation, radioBlocks } from './page'

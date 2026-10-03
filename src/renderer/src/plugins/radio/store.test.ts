@@ -6,7 +6,7 @@ import type { EngineError, EngineEvents } from '../../audio/engine'
 import { itemKey } from '../../../../shared/plugins/items'
 import type { LastAnswer, RadioCover, RadioLogo, RadioTitle } from '../../../../shared/ipc'
 import { defaultPalettes, fallbackPalettes } from '../../../../shared/palette'
-import type { HistoryEntry, Station } from '../../../../shared/stations'
+import type { HistoryEntry, Station } from '../../../../shared/plugins/radio/stations'
 
 const fake = vi.hoisted(() => ({
   on: {} as Partial<EngineEvents>,

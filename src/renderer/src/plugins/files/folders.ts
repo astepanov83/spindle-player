@@ -1,7 +1,7 @@
 // The Folders view (ticket 020): the folder tree from main's folder table,
 // search, and what Play plays. No DOM.
-import type { Folder, Track } from '../../../shared/library'
-import { foldedName, foldQuery, songOrAlbumHas, sortRows, type Sort } from './views'
+import type { Folder, Track } from '../../../../shared/library'
+import { foldedName, foldQuery, songOrAlbumHas, sortRows, type Sort } from '../../library/views'
 
 export interface FolderNode {
   // shown name: a music folder's last part

@@ -4,7 +4,7 @@
 // change to mfp.json; what it has stays, and the handlers answer from it.
 import { join } from 'path'
 import { MfpChannel } from '../../../shared/ipc'
-import type { Episode, MfpEpisodes, MfpStatus } from '../../../shared/mfp'
+import type { Episode, MfpEpisodes, MfpStatus } from '../../../shared/plugins/mfp/mfp'
 import type { PluginId } from '../../../shared/plugins'
 import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../../json-file'
 import { makeCover, withNewColors } from '../../covers/covers'

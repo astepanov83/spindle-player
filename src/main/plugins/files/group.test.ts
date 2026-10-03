@@ -5,7 +5,7 @@ import { emptyIndex } from './merge'
 import type { FileEntry, LibraryIndex } from './types'
 import { cleanArtist } from '../../covers/clean-names'
 import { searchKey } from './cover-match'
-import { artistKey } from '../../../shared/artists'
+import { artistKey } from '../../../shared/plugins/files/artists'
 import type { Fetched } from './fetched-store'
 import type { LibraryData } from '../../../shared/library'
 import {
@@ -13,7 +13,7 @@ import {
   diffLibrary,
   type HeldLibrary,
   type PatchBody
-} from '../../../shared/library-patch'
+} from '../../../shared/plugins/files/library-patch'
 
 const entry = (path: string, more: Partial<FileEntry> = {}): FileEntry => ({
   path,

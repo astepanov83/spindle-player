@@ -2,9 +2,9 @@
 // from a small made-up library, and by radio's from My stations.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Album, LibraryData, Track } from '../../../shared/library'
-import type { MfpEpisodes, MfpStatus } from '../../../shared/mfp'
+import type { MfpEpisodes, MfpStatus } from '../../../shared/plugins/mfp/mfp'
 import { defaultPalettes } from '../../../shared/palette'
-import type { Station } from '../../../shared/stations'
+import type { Station } from '../../../shared/plugins/radio/stations'
 
 // radio's page half hears main from the start
 vi.stubGlobal('window', {

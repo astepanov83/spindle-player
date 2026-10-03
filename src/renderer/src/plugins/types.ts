@@ -8,6 +8,9 @@ import type { EngineEvents } from '../audio/engine'
 import type { IconName } from '../ui/icons'
 import type { Sort } from '../library/views'
 
+// A cover and its colors, for a picture made from covers (an artist's round tile).
+export type CoverArt = Pick<Art, 'cover' | 'palette'>
+
 export type { ItemKind } from '../../../shared/plugins'
 
 // A page of a plugin. Only that plugin reads `page`. `item`: the row to show
@@ -118,7 +121,7 @@ export interface HeadBlock {
   // where it is, under that, cut at its start: "/music/Rock/Album"
   where?: Piece
   // the big picture: a cover, or a round photo made from `covers` when there is none
-  art?: { src: string | undefined; round?: boolean; covers?: Pick<Art, 'cover' | 'palette'>[] }
+  art?: { src: string | undefined; round?: boolean; covers?: CoverArt[] }
   // the link back over it: "All albums"
   back?: { label: string; to: PageAddress }
   // a small line, of names with a button each: "From tags: X (renamed) [Use
@@ -151,7 +154,7 @@ export interface Tile {
   art?: Art
   // a round tile's photo, else its picture from these covers
   photo?: string
-  covers?: Pick<Art, 'cover' | 'palette'>[]
+  covers?: CoverArt[]
   to: PageAddress
   // whether the item playing is one of its songs (marked)
   playing?: (item: ItemKey) => boolean

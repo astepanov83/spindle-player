@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Station } from '../../../shared/stations'
+import type { Station } from '../../../shared/plugins/radio/stations'
 import { RadioStreams, radioStream, type RadioOptions } from './stream'
 
 const station: Station = {

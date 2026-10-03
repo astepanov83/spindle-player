@@ -1,8 +1,8 @@
 // Radio stations: My stations (stations.json) and the titles heard on each
 // station (radio-history.json). Main checks both files and what the page sends.
-import { coverUrls, type Art } from './library'
-import { defaultPalettes, parseThemePalettes, type ThemePalettes } from './palette'
-import { cleanName } from './playlists'
+import { coverUrls, type Art } from '../../library'
+import { defaultPalettes, parseThemePalettes, type ThemePalettes } from '../../palette'
+import { cleanName } from '../../playlists'
 
 export interface Stream {
   url: string
@@ -42,9 +42,6 @@ export interface StationLogo {
   // the paletteVersion the colors were picked with
   v?: number
 }
-
-// Logos under this many px on their shorter side show as a tile on the stage.
-export const smallLogoSide = 64
 
 export interface SavedStations {
   version: 1

@@ -15,7 +15,7 @@ import {
   tagKeys,
   type ArtistChanges,
   type ArtistOverrides
-} from '../../../shared/artist-overrides'
+} from '../../../shared/plugins/files/artist-overrides'
 import type { ScanStatus } from '../../../shared/library'
 import type { CoverSource } from '../../../shared/settings'
 import { JsonFileWriter, openJsonFile, readJsonFile } from '../../json-file'
@@ -50,7 +50,7 @@ import { markerOf, smallName } from '../../covers/cover-names'
 import { CoverFetcher } from './cover-fetch'
 import { findSongCover, stopsSongLookups } from './song-cover'
 import { PublishTimer } from './publish'
-import { diffLibrary, type LibraryMessage } from '../../../shared/library-patch'
+import { diffLibrary, type LibraryMessage } from '../../../shared/plugins/files/library-patch'
 import { CoverHttp, defaultLimits, NetError } from './cover-http'
 import {
   dropGone,

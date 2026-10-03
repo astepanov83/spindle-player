@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { queueLink } from '../../../shared/saved-queue'
 import type { LibraryData, Track } from '../../../shared/library'
-import type { MfpEpisodes } from '../../../shared/mfp'
+import type { MfpEpisodes } from '../../../shared/plugins/mfp/mfp'
 import { defaultPalettes } from '../../../shared/palette'
 import { albumPage, artistPage, folderPage, parsePage } from '../plugins/files/pages'
 

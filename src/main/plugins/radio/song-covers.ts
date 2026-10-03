@@ -9,8 +9,8 @@
 // jingle played again is not looked up again.
 import { parseThemePalettes } from '../../../shared/palette'
 import type { RadioCover } from '../../../shared/ipc'
-import { songQuery, type SongQuery } from '../../../shared/radio-title'
-import type { SongCover } from '../../../shared/stations'
+import { songQuery, type SongQuery } from '../../../shared/plugins/radio/radio-title'
+import type { SongCover } from '../../../shared/plugins/radio/stations'
 import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../../json-file'
 import { cleanArtist, cleanSong } from '../../covers/clean-names'
 import { isCoverHash } from '../../covers/cover-names'

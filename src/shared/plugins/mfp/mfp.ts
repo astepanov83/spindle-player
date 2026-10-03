@@ -1,6 +1,6 @@
 // Music For Programming as main sends it to its page half (tickets 052, 061).
 // Main reads the site and keeps mfp.json; the page only shows and plays.
-import type { ThemePalettes } from './palette'
+import type { ThemePalettes } from '../../palette'
 
 // For the line in Settings. Main sends none while MFP is off.
 export interface MfpStatus {

@@ -2,7 +2,11 @@
 // page shows (ticket 022). A patch that doesn't fit it (one was missed, or
 // the library process started again) makes the page ask for the whole
 // library once; what comes while it waits is put on top after it.
-import { patchStep, type LibraryMessage, type LibraryVersion } from '../../../shared/library-patch'
+import {
+  patchStep,
+  type LibraryMessage,
+  type LibraryVersion
+} from '../../../../shared/plugins/files/library-patch'
 
 export interface FeedDeps {
   // the version of the library shown

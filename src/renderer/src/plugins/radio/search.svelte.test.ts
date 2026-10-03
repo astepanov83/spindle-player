@@ -3,7 +3,7 @@
 import { flushSync } from 'svelte'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RadioSearch } from '../../../../shared/ipc'
-import type { Station } from '../../../../shared/stations'
+import type { Station } from '../../../../shared/plugins/radio/stations'
 
 const answers = new Map<string, (r: RadioSearch) => void>()
 const search = vi.fn(

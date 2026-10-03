@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Album, LibraryData, Track } from './library'
-import type { ThemePalettes } from './palette'
+import type { Album, LibraryData, Track } from '../../library'
+import type { ThemePalettes } from '../../palette'
 import {
   applyPatch,
   diffLibrary,

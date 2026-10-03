@@ -1,8 +1,9 @@
 // The Artists view (ticket 021): search, what Play plays and the covers for
-// an artist's picture. No DOM. Who counts as an artist is in shared/artists.ts.
-import { artistKey, namesOf, type Artist } from '../../../shared/artists'
-import type { Art, ArtistCredit, Track } from '../../../shared/library'
-import { foldedName, foldQuery, sortRows, type Sort } from './views'
+// an artist's picture. No DOM. Who counts as an artist is in shared/plugins/files/artists.ts.
+import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
+import type { ArtistCredit, Track } from '../../../../shared/library'
+import { foldedName, foldQuery, sortRows, type Sort } from '../../library/views'
+import type { CoverArt } from '../types'
 
 export function filterArtists(artists: Artist[], q: string): Artist[] {
   const s = foldQuery(q)
@@ -43,8 +44,6 @@ export function artistPageSongs(
 // Up to 4 different covers for the picture made from covers: their albums
 // first, then the pictures of their songs on other albums. With their colors,
 // shown while the picture loads.
-export type CoverArt = Pick<Art, 'cover' | 'palette'>
-
 export function artistCovers(
   a: Artist,
   album: (id: string) => CoverArt,

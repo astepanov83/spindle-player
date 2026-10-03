@@ -1,11 +1,11 @@
-import type { ArtistChanges } from './artist-overrides'
+import type { ArtistChanges } from './plugins/files/artist-overrides'
 import type { IdMoves } from './id-moves'
 import type { ScanStatus } from './library'
-import type { MfpEpisodes, MfpStatus } from './mfp'
+import type { MfpEpisodes, MfpStatus } from './plugins/mfp/mfp'
 import type { Playlist } from './playlists'
 import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
 import type { Settings } from './settings'
-import type { HistoryEntry, SongCover, Station, StationLogo } from './stations'
+import type { HistoryEntry, SongCover, Station, StationLogo } from './plugins/radio/stations'
 
 // Channel names used by both main and preload, so a typo is a type error.
 export const WinChannel = {

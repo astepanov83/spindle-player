@@ -6,13 +6,13 @@ import {
   type HistoryEntry,
   type Station,
   type Stream
-} from '../../../../shared/stations'
+} from '../../../../shared/plugins/radio/stations'
 import type { LastAnswer } from '../../../../shared/ipc'
-import { parseTitle } from '../../../../shared/radio-title'
+import { parseTitle } from '../../../../shared/plugins/radio/radio-title'
 import type { HistoryEntry as LiveEntry } from '../types'
 
 // in shared/, since main looks song covers up by the same parts (ticket 032)
-export { parseTitle, type RadioTitleParts } from '../../../../shared/radio-title'
+export { parseTitle, type RadioTitleParts } from '../../../../shared/plugins/radio/radio-title'
 
 // aac, opus and vorbis sound like mp3 at about 1.5 times the bitrate
 const codecWeight: Record<string, number> = { aac: 1.5, opus: 1.6, vorbis: 1.3 }

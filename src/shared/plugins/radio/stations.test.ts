@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultPalettes, type ThemePalettes } from './palette'
+import { defaultPalettes, type ThemePalettes } from '../../palette'
 import {
   addEntry,
   addTitle,

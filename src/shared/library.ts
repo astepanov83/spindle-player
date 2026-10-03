@@ -110,7 +110,7 @@ export interface LibraryData {
   albums: Album[]
   tracks: Track[]
   folders: Folder[]
-  // artist key (see shared/artists.ts) -> photo; only artists with one
+  // artist key (see shared/plugins/files/artists.ts) -> photo; only artists with one
   artistPhotos?: Record<string, ArtistPhoto>
 }
 

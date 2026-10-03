@@ -7,7 +7,7 @@
 //   - A closed app window stops the scan; it is not asked again.
 import { mergeMoves, type IdMoves } from '../../../shared/id-moves'
 import type { ScanStatus } from '../../../shared/library'
-import type { FullLibrary } from '../../../shared/library-patch'
+import type { FullLibrary } from '../../../shared/plugins/files/library-patch'
 import type { WorkerIn, WorkerOut } from './types'
 import type { AfterExit } from './library-process'
 

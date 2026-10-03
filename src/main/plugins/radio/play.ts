@@ -9,7 +9,7 @@ import {
   type Station,
   type StationLogo,
   type Stream
-} from '../../../shared/stations'
+} from '../../../shared/plugins/radio/stations'
 
 // What this needs of StationsStore.
 export interface SavedStationsLike {

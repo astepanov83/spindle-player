@@ -2,7 +2,7 @@
 // after typing stops, or at once on Enter; My stations are filtered at once
 // by the page. Kept here, not in the page, so a layout rebuild keeps the results.
 import type { RadioSearch } from '../../../../shared/ipc'
-import type { Station } from '../../../../shared/stations'
+import type { Station } from '../../../../shared/plugins/radio/stations'
 import { radio } from './store.svelte'
 
 const waitMs = 400

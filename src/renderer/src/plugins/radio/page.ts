@@ -2,7 +2,7 @@
 // by the search box, then Radio Browser's stations for it. A row plays its
 // station; its star saves or removes it; My stations' menu moves and removes.
 import { itemKey } from '../../../../shared/plugins/items'
-import { stationArt, type Station } from '../../../../shared/stations'
+import { stationArt, type Station } from '../../../../shared/plugins/radio/stations'
 import { fmtCount } from '../../format'
 import { rowsBlock, type Block, type ItemRow } from '../types'
 import { bitrateLine, searchRows, stationLine, stationMatches } from './logic'

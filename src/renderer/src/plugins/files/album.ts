@@ -1,6 +1,6 @@
 // The album page's rows and label. No DOM.
-import { isVarious, type Album, type Track } from '../../../shared/library'
-import { queueLink, type QueueLink } from '../../../shared/saved-queue'
+import { isVarious, type Album, type Track } from '../../../../shared/library'
+import { queueLink, type QueueLink } from '../../../../shared/saved-queue'
 
 // A "Disc 2" label, or a song with its place in the album (`at`) and the
 // number shown (0: none).

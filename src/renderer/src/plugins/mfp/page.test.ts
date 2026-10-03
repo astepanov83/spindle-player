@@ -1,7 +1,7 @@
 // The MFP tab's pages and its search group, from made-up episodes as main
 // sends them (ticket 061).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Episode, MfpEpisodes } from '../../../../shared/mfp'
+import type { Episode, MfpEpisodes } from '../../../../shared/plugins/mfp/mfp'
 import { defaultPalettes } from '../../../../shared/palette'
 import type { Block, HeadBlock, PageRow, RowsBlock, SongsBlock } from '../types'
 

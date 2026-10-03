@@ -10,7 +10,7 @@ import {
   type QueueLink,
   type SavedQueues
 } from '../shared/saved-queue'
-import { isStationId } from '../shared/stations'
+import { isStationId } from '../shared/plugins/radio/stations'
 import { readJsonFile } from './json-file'
 import { pageEpisode } from './plugins/mfp/episodes'
 import { parseMfp } from './plugins/mfp/store'

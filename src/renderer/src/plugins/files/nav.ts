@@ -1,6 +1,6 @@
 // The files plugin's tabs and their open pages, with the helpers its actions
 // open pages with.
-import { crumbs, folderSearchText, shownFolder } from '../../library/folders'
+import { crumbs, folderSearchText, shownFolder } from './folders'
 import { library } from '../../stores/library.svelte'
 import { files } from './store.svelte'
 import type { PageAddress, Tab } from '../types'

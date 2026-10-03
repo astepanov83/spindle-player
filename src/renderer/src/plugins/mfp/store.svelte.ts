@@ -1,7 +1,12 @@
 // Music For Programming's data on the page (ticket 061): the episodes and the
 // status main sends. Main reads the site; this only holds what came.
 import { coverUrls, type Art } from '../../../../shared/library'
-import type { Episode, EpisodeSong, MfpEpisodes, MfpStatus } from '../../../../shared/mfp'
+import type {
+  Episode,
+  EpisodeSong,
+  MfpEpisodes,
+  MfpStatus
+} from '../../../../shared/plugins/mfp/mfp'
 import { fallbackPalettes } from '../../../../shared/palette'
 
 export interface SongPlace {

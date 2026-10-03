@@ -25,7 +25,7 @@ import {
 import { mergeMoves, type IdMoves } from '../shared/id-moves'
 import { keepEarly } from './early'
 import type { ScanStatus } from '../shared/library'
-import type { MfpEpisodes, MfpStatus } from '../shared/mfp'
+import type { MfpEpisodes, MfpStatus } from '../shared/plugins/mfp/mfp'
 
 // The window is sandboxed, so this file may only use contextBridge, ipcRenderer
 // and webUtils.

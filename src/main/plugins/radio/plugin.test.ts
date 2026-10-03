@@ -4,7 +4,7 @@ import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RadioChannel } from '../../../shared/ipc'
 import { fallbackPalettes } from '../../../shared/palette'
-import { stationsFile, type Station } from '../../../shared/stations'
+import { stationsFile, type Station } from '../../../shared/plugins/radio/stations'
 import type { PluginContext } from '../types'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/nowhere' }, protocol: {}, net: {} }))

@@ -1,6 +1,6 @@
 // MFP's blocks in Settings: the status line (the episodes and when they came,
 // or what went wrong), and a button that reads the site again.
-import type { MfpStatus } from '../../../../shared/mfp'
+import type { MfpStatus } from '../../../../shared/plugins/mfp/mfp'
 import type { SettingBlock } from '../types'
 import { mfp } from './store.svelte'
 

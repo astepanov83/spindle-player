@@ -3,7 +3,7 @@
 // tags and library.json never change. The library process applies them when
 // it groups albums. New names are not looked up again, so there are no chains.
 import { artistKey, tagOf, type Artist } from './artists'
-import type { ArtistCredit } from './library'
+import type { ArtistCredit } from '../../library'
 
 // tag key -> the names to show instead
 export type ArtistOverrides = Map<string, string[]>

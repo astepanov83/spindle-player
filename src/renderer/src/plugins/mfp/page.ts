@@ -1,7 +1,7 @@
 // The MFP tab's pages as blocks (ticket 061): the episodes, newest first, and
 // an episode with its songs at their guessed times. The search box filters
 // the list in place; a song match shows under its episode.
-import type { Episode, EpisodeSong } from '../../../../shared/mfp'
+import type { Episode, EpisodeSong } from '../../../../shared/plugins/mfp/mfp'
 import type { ItemKey } from '../../../../shared/plugins/items'
 import { queueLink, type QueueLink } from '../../../../shared/saved-queue'
 import { fmtCount, fmtLength } from '../../format'

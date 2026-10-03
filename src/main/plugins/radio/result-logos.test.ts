@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Station } from '../../../shared/stations'
+import type { Station } from '../../../shared/plugins/radio/stations'
 import { logoType, ResultLogos } from './result-logos'
 
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0])

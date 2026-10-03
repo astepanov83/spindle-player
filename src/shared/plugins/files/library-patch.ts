@@ -3,7 +3,7 @@
 // page would parse all of it and redo every lookup each few seconds.
 // The library process makes the patch, the page applies it; main passes the
 // bytes on without reading them.
-import type { Album, ArtistPhoto, Folder, LibraryData, Track } from './library'
+import type { Album, ArtistPhoto, Folder, LibraryData, Track } from '../../library'
 
 // Which library the page has. `epoch` is new each time the library process
 // starts, and `n` counts the libraries it sent since.

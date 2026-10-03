@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { Artist } from '../../../shared/artists'
-import type { Track } from '../../../shared/library'
-import { fallbackPalettes, type ThemePalettes } from '../../../shared/palette'
+import type { Artist } from '../../../../shared/plugins/files/artists'
+import type { Track } from '../../../../shared/library'
+import { fallbackPalettes, type ThemePalettes } from '../../../../shared/palette'
 import { artistLinks, artistCovers, artistPageSongs, artistSongs, filterArtists } from './artists'
-import type { Sort } from './views'
+import type { Sort } from '../../library/views'
 
 const artist = (name: string, albums: string[] = [], also: string[] = []): Artist => ({
   key: name.toLowerCase(),

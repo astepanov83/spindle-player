@@ -41,11 +41,49 @@ const entities: Record<string, string> = {
   mdash: '—'
 }
 
-function decodeEntities(s: string): string {
+// Letters of names like "&Oacute;lafur Arnalds": case counts here.
+const letters: Record<string, string> = {
+  szlig: 'ß',
+  aelig: 'æ',
+  AElig: 'Æ',
+  oelig: 'œ',
+  OElig: 'Œ',
+  oslash: 'ø',
+  Oslash: 'Ø',
+  eth: 'ð',
+  ETH: 'Ð',
+  thorn: 'þ',
+  THORN: 'Þ'
+}
+
+// The rest are a letter and its mark: &auml; is a with the umlaut.
+const marks: Record<string, string> = {
+  acute: '\u0301',
+  grave: '\u0300',
+  circ: '\u0302',
+  uml: '\u0308',
+  tilde: '\u0303',
+  ring: '\u030a',
+  cedil: '\u0327',
+  caron: '\u030c'
+}
+
+function accented(n: string): string | undefined {
+  const m = /^([a-z])([a-z]+)$/i.exec(n)
+  const mark = m && marks[m[2]]
+  if (!mark) return undefined
+  const c = (m[1] + mark).normalize('NFC')
+  return c.length === 1 ? c : undefined
+}
+
+export function decodeEntities(s: string): string {
   return s
     .replace(/&#x([0-9a-f]+);/gi, (m, h) => fromCode(parseInt(h, 16), m))
     .replace(/&#(\d+);/g, (m, d) => fromCode(Number(d), m))
-    .replace(/&([a-z]+);/gi, (m, n: string) => entities[n.toLowerCase()] ?? m)
+    .replace(
+      /&([a-z]+);/gi,
+      (m, n: string) => letters[n] ?? accented(n) ?? entities[n.toLowerCase()] ?? m
+    )
 }
 
 function fromCode(n: number, fallback: string): string {

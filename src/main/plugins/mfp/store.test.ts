@@ -158,6 +158,21 @@ describe('mfp.json', () => {
     expect(parseMfp(JSON.parse(JSON.stringify(serializeMfp(data))))).toEqual(data)
   })
 
+  it('decodes names a file from before kept raw', () => {
+    const raw = serializeMfp(data) as { episodes: MfpEpisode[] }
+    raw.episodes[0] = {
+      ...episode('two', 2),
+      artist: 'K&ouml;ln',
+      tracks: [{ artist: 'Steinbr&uuml;chel', title: 'K&ouml;ln Concert' }]
+    }
+    const e = parseMfp(JSON.parse(JSON.stringify(raw))).episodes[0]
+    expect([e.artist, e.tracks[0].artist, e.tracks[0].title]).toEqual([
+      'Köln',
+      'Steinbrüchel',
+      'Köln Concert'
+    ])
+  })
+
   it('starts empty for a missing, broken or other-version file', () => {
     const empty = { fetchedAt: 0, episodes: [] }
     expect(parseMfp(undefined)).toEqual(empty)

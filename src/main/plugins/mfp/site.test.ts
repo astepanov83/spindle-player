@@ -58,6 +58,14 @@ describe('parseTracklist', () => {
     ])
   })
 
+  it('decodes accented letters by their case, and leaves unknown names as they are', () => {
+    const row =
+      '&Oacute;lafur Arnalds - N&auml;kinkeng&auml;t &Oslash; &szlig; &Ccedil;a &zwj;x&qacute;<br>'
+    expect(parseTracklist(row)).toEqual([
+      { artist: 'Ólafur Arnalds', title: 'Näkinkengät Ø ß Ça &zwj;x&qacute;' }
+    ])
+  })
+
   it('keeps a row with no " - " as a title with no artist', () => {
     expect(parseTracklist('Untitled field recording<br>')).toEqual([
       { artist: '', title: 'Untitled field recording' }

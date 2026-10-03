@@ -4,7 +4,7 @@
 import { parseThemePalettes } from '../../../shared/palette'
 import { isCoverHash } from '../../covers/cover-names'
 import type { MadeCover } from '../../covers/covers'
-import { parseEpisode, parseSlugs, type MfpEpisode, type MfpTrack } from './site'
+import { decodeEntities, parseEpisode, parseSlugs, type MfpEpisode, type MfpTrack } from './site'
 
 export interface MfpData {
   // when the site was last read, ms; 0 for never
@@ -26,9 +26,11 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 const isText = (v: unknown): v is string => typeof v === 'string'
 const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
 
+// Names read before accented letters were decoded (&ouml;) are decoded here:
+// a known episode is not read from the site again.
 function parseTrack(v: unknown): MfpTrack | undefined {
   if (!isObject(v) || !isText(v.artist) || !isText(v.title)) return undefined
-  return { artist: v.artist, title: v.title }
+  return { artist: decodeEntities(v.artist), title: decodeEntities(v.title) }
 }
 
 function parseCover(v: unknown): MadeCover | undefined {
@@ -54,8 +56,8 @@ function parseStoredEpisode(v: unknown): MfpEpisode | undefined {
   return {
     slug,
     number,
-    title,
-    artist,
+    title: decodeEntities(title),
+    artist: decodeEntities(artist),
     url,
     bytes,
     duration,

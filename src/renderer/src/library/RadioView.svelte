@@ -15,9 +15,11 @@
   import { library } from '../stores/library.svelte'
   import { menu, type MenuEntry } from '../stores/menu.svelte'
   import { queues } from '../stores/queues.svelte'
+  import type { NavKind } from '../plugins/types'
 
-  // where the search box is, for the hint under the title
-  let { searchAt }: { searchAt: 'above' | 'left' } = $props()
+  // where the search box is, for the hint under the title: over the chips,
+  // or in Classic's sidebar
+  let { nav }: { nav: NavKind } = $props()
 
   const q = $derived(library.query.trim())
   const mine = $derived(radio.stations.filter((s) => stationMatches(s, q)))
@@ -121,7 +123,7 @@
   title="Radio"
   meta="Internet radio"
   count={fmtCount(radio.stations.length, 'station', 'stations')}
-  hint="Find stations with the search box {searchAt === 'above' ? 'above' : 'on the left'}."
+  hint="Find stations with the search box {nav === 'chips' ? 'above' : 'on the left'}."
 />
 <div class="radio">
   <h3 class="section-label">My stations</h3>

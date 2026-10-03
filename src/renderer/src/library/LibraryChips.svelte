@@ -22,7 +22,7 @@
   import { library } from '../stores/library.svelte'
   import { pluginTabs } from '../plugins'
   import { tabsIn } from '../plugins/tabs'
-  import { shownAlbum, showArtist } from '../plugins/files/nav'
+  import { shownAlbum } from '../plugins/files/nav'
 
   // the tabs of the plugins that are on (ticket 059)
   const tabs = $derived(tabsIn(pluginTabs(), 'chips'))
@@ -67,7 +67,7 @@
     {#if !tabs.length}
       <div class="fill"><NoPlugins /></div>
     {:else if shown?.plugin === 'radio'}
-      <RadioView searchAt="above" />
+      <RadioView nav="chips" />
     {:else if shown?.plugin === 'mfp'}
       <MfpView />
     {:else if !library.albums.length}
@@ -87,7 +87,7 @@
       <ArtistView {scrollEl} />
     {:else if shown?.id === 'albums'}
       {#if searching}
-        <SearchResults {scrollEl} onartist={showArtist} />
+        <SearchResults {scrollEl} />
       {:else if open}
         <AlbumPage albumId={open} />
       {:else}

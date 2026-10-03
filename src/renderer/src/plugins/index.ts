@@ -10,7 +10,9 @@ import { radioHalf } from './radio'
 import { orderTabs, type ShownTab } from './tabs'
 import type {
   Action,
+  Block,
   Can,
+  EmptyBlock,
   ItemAnswer,
   ItemInfo,
   LivePlugin,
@@ -100,6 +102,44 @@ export function canOpen(to: PageAddress): boolean {
 export function openPage(to: PageAddress): void {
   const tab = canOpen(to) ? halves[to.plugin].tabOf(to.page) : undefined
   if (tab) library.link(tab, to.page, to.item ?? null)
+}
+
+// A tab's open page as blocks, from its plugin. The core's Playlists has none:
+// it draws its own.
+export function pageBlocks(tab: ShownTab): Block[] {
+  if (tab.plugin === 'core') return []
+  return halves[tab.plugin].page(tab.id, library.page(tab.id), library.query)
+}
+
+// A block's button, tile or row was used. Not while its plugin is off.
+export function actOnPage(
+  plugin: PluginId,
+  target: string,
+  actionId: string,
+  value?: string
+): void {
+  if (pluginOn(plugin)) halves[plugin].act?.(target, actionId, value)
+}
+
+// A tile, row or back link on a page of `tab`. A page of that tab opens in
+// it, as a step; one that another tab shows is a link there. `keepQuery`: a
+// step along a list the search filters in place (Folders).
+export function openFrom(tab: string, to: PageAddress, keepQuery = false): void {
+  const other = halves[to.plugin].tabOf(to.page)
+  if (other && other !== tab) openPage(to)
+  else library.openPage(tab, to.page, keepQuery)
+}
+
+// What the core's Playlists page shows while a plugin that is on has found no
+// songs yet ("No music yet"), with the plugin to act on its button.
+export function playlistsEmpty(
+  noPlaylists: boolean
+): { plugin: PluginId; block: EmptyBlock } | undefined {
+  for (const p of plugins) {
+    const block = pluginOn(p.id) ? halves[p.id].emptyPlaylists?.(noPlaylists) : undefined
+    if (block) return { plugin: p.id, block }
+  }
+  return undefined
 }
 
 // The core's tab. Classic lists each playlist in its sidebar instead.

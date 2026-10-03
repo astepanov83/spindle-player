@@ -14,7 +14,7 @@
   import Icon from '../ui/Icon.svelte'
   import { artistCovers, artistPageSongs, artistSongs } from './artists'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
-  import { trackKeys } from '../plugins/files/views'
+  import { trackKeys } from '../plugins/files/tracks'
   import { followArtist, openArtist, openArtistAlbum } from '../plugins/files/nav'
   import type { ItemKey } from '../../../shared/plugins/items'
   import { library } from '../stores/library.svelte'

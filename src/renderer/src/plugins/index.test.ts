@@ -248,6 +248,72 @@ describe('tabs', () => {
   })
 })
 
+describe('pages (ticket 059)', () => {
+  beforeEach(() => {
+    library.setTabs(p.navTabs())
+    library.showIn('chips')
+  })
+
+  it('come from the plugin of the tab shown, with the search text', () => {
+    library.load(lib())
+    const tab = (id: string): ReturnType<typeof p.pluginTabs>[number] =>
+      p.pluginTabs().find((t) => t.id === id)!
+    expect(p.pageBlocks(tab('albums')).map((b) => b.kind)).toEqual(['head', 'tiles'])
+    library.query = 'vale'
+    expect(p.pageBlocks(tab('albums'))).toEqual([{ kind: 'view', view: 'search' }])
+    expect(p.pageBlocks(tab('radio'))).toEqual([{ kind: 'view', view: 'radio' }])
+    expect(p.pageBlocks(tab('playlists'))).toEqual([])
+  })
+
+  it('open a tile in its tab as a step, or as a link in the tab that shows it', () => {
+    library.load(lib())
+    library.pickTab('artists')
+    library.query = 'vale'
+    p.openFrom('artists', { plugin: 'files', page: 'artist/marinavale' })
+    expect([library.tab, library.page('artists'), library.query]).toEqual([
+      'artists',
+      'artist/marinavale',
+      ''
+    ])
+    // an album opened from the artist stays under them
+    p.openFrom('artists', { plugin: 'files', page: 'album/al/artist/marinavale' })
+    expect(library.page('artists')).toBe('album/al/artist/marinavale')
+    // the search results' artist, from Albums
+    library.pickTab('albums')
+    library.openPage('artists', '')
+    library.pickTab('albums')
+    p.openFrom('albums', { plugin: 'files', page: 'artist/marinavale' })
+    expect([library.tab, library.page('artists'), library.landing]).toEqual([
+      'artists',
+      'artist/marinavale',
+      { song: null }
+    ])
+  })
+
+  it('keep the search text along a list it filters in place', () => {
+    library.load(lib())
+    library.pickTab('folders')
+    library.query = 'song'
+    p.openFrom('folders', { plugin: 'files', page: 'folder/x' }, true)
+    expect([library.page('folders'), library.query]).toEqual(['folder/x', 'song'])
+  })
+
+  it('pass a block action to its plugin, not while it is off', () => {
+    library.load(lib())
+    p.actOnPage('files', 'songs', 'sort', 't')
+    expect(library.sort).toEqual({ k: 't', dir: 1 })
+    settings.plugins.files = false
+    p.actOnPage('files', 'songs', 'sort', 't')
+    expect(library.sort).toEqual({ k: 't', dir: 1 })
+  })
+
+  it("give the core's Playlists the empty library while there are no songs", () => {
+    expect(p.playlistsEmpty(true)).toMatchObject({ plugin: 'files', block: { kind: 'empty' } })
+    library.load(lib())
+    expect(p.playlistsEmpty(true)).toBeUndefined()
+  })
+})
+
 describe('itemsVersion', () => {
   it('changes with a plugin turned on or off, and with new data', () => {
     library.load(lib())

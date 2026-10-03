@@ -106,11 +106,17 @@ export function openArtistAlbum(id: string | null): void {
 // The open artist is renamed or split: show `key` once it is in the library,
 // with the album opened from it, if any.
 export function followArtist(key: string): void {
+  const was = shownArtist().key
   library.follow({
     tab: 'artists',
     to: (page) => {
       const p = parsePage(page)
       return p?.kind === 'artist' ? artistPage(key, p.album) : ''
+    },
+    // their page and their albums' still follow; another artist or the grid not
+    keeps: (page) => {
+      const p = parsePage(page)
+      return p?.kind === 'artist' && p.key === was
     }
   })
 }

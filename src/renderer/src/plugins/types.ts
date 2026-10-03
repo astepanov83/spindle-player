@@ -2,8 +2,11 @@
 // work/specs/plugins.md, "Items". Plain data: the core draws it.
 import type { Art } from '../../../shared/library'
 import type { PluginId } from '../../../shared/plugins'
+import type { ItemKey } from '../../../shared/plugins/items'
+import type { QueueLink } from '../../../shared/saved-queue'
 import type { EngineEvents } from '../audio/engine'
 import type { IconName } from '../ui/icons'
+import type { Sort } from '../library/views'
 
 export type { ItemKind } from '../../../shared/plugins'
 
@@ -35,6 +38,209 @@ export interface Tab {
   // shown only there (Classic's Songs); none: in both
   only?: NavKind
 }
+
+// A page is a list of blocks: the plugin gives the data, the core draws each
+// kind of block one way (src/renderer/src/blocks). Spec "Pages and tabs".
+// Lists hold the plugin's arrays as they are and make a tile or row only when
+// it is drawn, so a 50k list costs what it costs to keep.
+export type Block =
+  HeadBlock | TilesBlock | SongsBlock | RowsBlock | TreeBlock | EmptyBlock | TextBlock | ViewBlock
+
+// A piece of a line: plain text, or a name that opens its page.
+export interface Piece {
+  text: string
+  to?: PageAddress
+}
+
+// A button in a head: Play or Shuffle (the core plays the songs), a core menu
+// for the songs, or one the plugin acts on.
+export type HeadButton =
+  | {
+      play: 'all' | 'shuffle'
+      label: string
+      // asked when it is clicked
+      songs: () => ItemKey[]
+      from: string
+      link?: QueueLink
+      // the filled one
+      primary?: boolean
+      // Pause while the queue plays these songs from this link (an album's)
+      pauses?: boolean
+      disabled?: boolean
+    }
+  | {
+      // "Add to playlist" (the playlists) or "More" (the whole song menu)
+      menu: 'playlist' | 'songs'
+      // the label; More shows an icon and this as its tooltip
+      label: string
+      songs: () => ItemKey[]
+      // the song menu's "From", and the folder for "Show in file manager"
+      from?: string
+      link?: QueueLink
+      folder?: string[]
+      disabled?: boolean
+    }
+  | {
+      // act(head id, id)
+      id: string
+      label: string
+      disabled?: boolean
+    }
+
+// The top of a page or list. Drawn by what it holds: a square picture as an
+// album's page, a round one as an artist's, buttons and no picture as a
+// folder's, else as a list's title with its count.
+export interface HeadBlock {
+  kind: 'head'
+  // act's target for its buttons
+  id: string
+  title: string
+  // the line over the title: "Library", "Album · 2003"
+  meta?: string
+  // a list's count, on the right: "8 albums"
+  count?: string
+  // the line under the title: "Marina Vale · 9 songs · 41 min"
+  line?: Piece[]
+  // where it is, under that, cut at its start: "/music/Rock/Album"
+  where?: Piece
+  // the big picture: a cover, or a round photo made from `covers` when there is none
+  art?: { src: string | undefined; round?: boolean; covers?: Pick<Art, 'cover' | 'palette'>[] }
+  // the link back over it: "All albums"
+  back?: { label: string; to: PageAddress }
+  // a line of names with a button each: "From tags: X (renamed) [Use tag]"
+  note?: {
+    text: string
+    items: { text: string; action?: { id: string; label: string; value: string } }[]
+  }
+  buttons?: HeadButton[]
+  // Names to edit in place of the title (an artist's rename or split). Save
+  // acts with the names as a JSON list, Cancel and Escape with "cancel".
+  edit?: {
+    names: string[]
+    // each field's label, with its number
+    label: string
+    max: number
+    // the button that adds a field, the one that takes one away
+    add: string
+    remove: string
+    hint: string
+    // whether Save is on for these names
+    ok: (names: string[]) => boolean
+  }
+}
+
+export interface Tile {
+  title: string
+  subtitle?: string
+  // a square tile's cover and its colors
+  art?: Art
+  // a round tile's photo, else its picture from these covers
+  photo?: string
+  covers?: Pick<Art, 'cover' | 'palette'>[]
+  to: PageAddress
+  // whether the item playing is one of its songs (marked)
+  playing?: (item: ItemKey) => boolean
+  // its songs, asked for the play button and the song menu
+  songs: () => ItemKey[]
+  from: string
+  link?: QueueLink
+  // more entries in its song menu: act(the tile's key, id)
+  actions?: { id: string; label: string }[]
+}
+
+// Albums, Artists. Only the rows on screen are drawn.
+export interface TilesBlock<T = unknown> {
+  kind: 'tiles'
+  items: readonly T[]
+  key(item: T): string
+  tile(item: T): Tile
+  // artists' round pictures
+  round?: boolean
+}
+
+// A list of songs. With `sort` (null: in the order given) it is the sortable
+// table, with only the rows on screen drawn; without, an album's numbered list.
+export interface SongsBlock {
+  kind: 'songs'
+  // act's target for the sort
+  id: string
+  items: ItemKey[]
+  // names the songs when they start the queue, and the title shown with `meta`
+  from: string
+  link?: QueueLink
+  // the table's title: `meta` over `from`; else `label`, a small heading
+  meta?: string
+  label?: string
+  // the song count on the right; off where the head says it already
+  count?: boolean
+  // a column head was clicked: act(id, 'sort', its key)
+  sort?: Sort | null
+  // an album's list: each song's number (0: none), and "Disc 2" before a song
+  numbers?: number[]
+  groups?: { at: number; label: string }[]
+}
+
+export interface Row {
+  title: string
+  // under the title (a music folder's path), and its tooltip
+  subtitle?: string
+  art?: string
+  // on the right: "12 songs"
+  meta?: string
+  to: PageAddress
+  playing?: (item: ItemKey) => boolean
+  songs: () => ItemKey[]
+  from: string
+  link?: QueueLink
+}
+
+// Folders. Only the rows on screen are drawn.
+export interface RowsBlock<T = unknown> {
+  kind: 'rows'
+  items: readonly T[]
+  key(item: T): string
+  row(item: T): Row
+  // the search text filters the list in place, and stays when a row opens,
+  // so a match further down can be followed to
+  filtered?: boolean
+}
+
+// The path bar of a tree (Folders). A step along it keeps the search text.
+export interface TreeBlock {
+  kind: 'tree'
+  path: { title: string; hint?: string; to: PageAddress; here?: boolean }[]
+}
+
+// Nothing to show. Alone on a page it fills it ("No music yet"); among other
+// blocks it is a short note ("No matches").
+export interface EmptyBlock {
+  kind: 'empty'
+  // act's target for the button
+  id: string
+  title: string
+  text: string
+  action?: { label: string; id: string }
+}
+
+// A small heading between blocks: "Albums" on an artist's page.
+export interface TextBlock {
+  kind: 'text'
+  text: string
+}
+
+// Temporary: a plugin's old view, which the core draws as it is until blocks
+// draw it. Radio's goes in ticket 062, MFP's in 061, the search results in
+// 059 part C; then this kind goes.
+export interface ViewBlock {
+  kind: 'view'
+  view: 'radio' | 'mfp' | 'search'
+}
+
+// A list block for a plugin's own array: its tiles and rows are typed by it.
+export const tilesBlock = <T>(b: Omit<TilesBlock<T>, 'kind'>): TilesBlock =>
+  ({ kind: 'tiles', ...b }) as TilesBlock
+export const rowsBlock = <T>(b: Omit<RowsBlock<T>, 'kind'>): RowsBlock =>
+  ({ kind: 'rows', ...b }) as RowsBlock
 
 export interface ItemInfo {
   title: string
@@ -142,11 +348,18 @@ export interface PageHalf {
   // The page's place under its tab, top first, for the scroll places: a
   // move up this path shows where the view was left (ticket 042).
   path?(tab: string, page: string): string[]
+  // a page of one of its tabs, with the search box's text
+  page(tab: string, page: string, query: string): Block[]
+  // What the core's Playlists page shows while this plugin has found no
+  // songs at all: none once it has some. `noPlaylists`: Studio's list of
+  // playlists with none in it, which says what playlists are for.
+  emptyPlaylists?(noPlaylists: boolean): EmptyBlock | undefined
   // changes whenever an answer of `info` may have changed
   version(): number
   // a plugin whose items are live (radio): it drives its own item
   live?: LivePlugin
-  // one of the item's actions was used: a button (no value), or an option picked
+  // One of the item's actions was used: a button (no value), or an option
+  // picked. Also a block's button, tile or row: `id` is then the block's.
   act?(id: string, actionId: string, value?: string): void
   // A track item's can and actions now, read by the bar as they change (a
   // button turned on). Undefined: the Playable's. Live items use their handle.

@@ -3,6 +3,7 @@
 import { library } from '../../stores/library.svelte'
 import type { PageHalf } from '../types'
 import { canOpenFiles, filesPath, filesTabs, keepFiles } from './nav'
+import { filesAct, filesEmptyPlaylists, filesPage } from './page'
 import { filesTabOf } from './pages'
 import { trackPlayable, trackState } from './tracks'
 
@@ -17,5 +18,8 @@ export const filesHalf: PageHalf = {
   canOpen: canOpenFiles,
   keep: keepFiles,
   path: filesPath,
+  page: filesPage,
+  emptyPlaylists: filesEmptyPlaylists,
+  act: filesAct,
   version: () => library.revision
 }

@@ -18,7 +18,8 @@
   import { player } from '../stores/player.svelte'
   import { queue } from '../stores/queue.svelte'
   import { sections, songMenu } from './song-menu'
-  import { playingTrack, trackKeys } from '../plugins/files/views'
+  import { playingTrack } from '../plugins/files/views'
+  import { trackKeys } from '../plugins/files/tracks'
   import { openArtist } from '../plugins/files/nav'
 
   let {

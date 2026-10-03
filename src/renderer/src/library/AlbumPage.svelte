@@ -14,7 +14,8 @@
   import { artistLinks } from './artists'
   import { commonFolder, folderParts, folderPath } from './folders'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
-  import { isPlaying, playAlbum, trackKey, trackKeys, trackOf } from '../plugins/files/views'
+  import { isPlaying, playAlbum } from '../plugins/files/views'
+  import { trackKey, trackKeys, trackOf } from '../plugins/files/tracks'
   import { openAlbum, showArtist, showFolder } from '../plugins/files/nav'
 
   // back: the label of the link back (an artist's name when opened from them)

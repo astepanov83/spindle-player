@@ -268,6 +268,24 @@ describe('Artists', () => {
     library.load(d)
     expect(files.shownArtist().key).toBeNull()
   })
+
+  it('follows from an album of the artist opened meanwhile, not from the grid', () => {
+    const named = (artist: string): LibraryData => {
+      const d = lib('a')
+      d.albums[0].artist = artist
+      return d
+    }
+    files.openArtist('x')
+    files.followArtist('кино')
+    library.openPage('artists', 'album/a/artist/x')
+    library.load(named('Кино'))
+    expect(files.shownArtist()).toEqual({ key: 'кино', album: 'a' })
+    files.followArtist('y')
+    library.openPage('artists', '')
+    library.openPage('artists', 'album/a/artist/кино')
+    library.load(named('Y'))
+    expect(files.shownArtist().key).toBeNull()
+  })
 })
 
 describe('patches while a scan runs', () => {

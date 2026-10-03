@@ -19,17 +19,11 @@
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
   import type { Track } from '../../../shared/library'
-  import { isPlaying, trackKey } from '../plugins/files/views'
-  import { openAlbum } from '../plugins/files/nav'
+  import { isPlaying } from '../plugins/files/views'
+  import { trackKey } from '../plugins/files/tracks'
+  import { openAlbum, showArtist } from '../plugins/files/nav'
 
-  let {
-    scrollEl,
-    onartist
-  }: {
-    scrollEl: HTMLElement | undefined
-    // opens the artist's page in this template's Artists view
-    onartist: (key: string) => void
-  } = $props()
+  let { scrollEl }: { scrollEl: HTMLElement | undefined } = $props()
 
   const TOP_SONGS = 8
   // 2, 3, 4 or 6 columns fill their rows
@@ -112,7 +106,7 @@
     {#if library.searchAll === 'albums'}
       <AlbumGrid {scrollEl} items={albums} onopen={openAlbum} />
     {:else}
-      <ArtistGrid {scrollEl} items={artists} onopen={onartist} />
+      <ArtistGrid {scrollEl} items={artists} onopen={showArtist} />
     {/if}
   {/if}
 {:else if !songs.length && !albums.length && !artists.length && !mixes.length}
@@ -130,7 +124,7 @@
   {#if artists.length}
     <section>
       {@render more('artists', artists.length, TOP_TILES)}
-      <ArtistGrid {scrollEl} items={artists.slice(0, TOP_TILES)} onopen={onartist} />
+      <ArtistGrid {scrollEl} items={artists.slice(0, TOP_TILES)} onopen={showArtist} />
     </section>
   {/if}
   {#if mixes.length}

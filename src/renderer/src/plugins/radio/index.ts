@@ -56,6 +56,8 @@ export const radioHalf: PageHalf = {
   tabs: () => [{ id: 'radio', label: 'Radio', icon: 'radio', search: 'Search stations' }],
   tabOf: (page) => (page === '' ? 'radio' : undefined),
   canOpen: (to) => to.page === '',
+  // its old view until blocks draw it (ticket 062)
+  page: () => [{ kind: 'view', view: 'radio' }],
   version: () => (radio.loaded ? 1 : 0),
   live,
   // the bar's actions are the playing station's (store.svelte.ts, #actions)

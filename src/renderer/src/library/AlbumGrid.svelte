@@ -13,7 +13,8 @@
   import { player } from '../stores/player.svelte'
   import { theme } from '../stores/theme.svelte'
   import { openSongMenu } from './song-menu'
-  import { playAlbum, playingTrack, trackKeys } from '../plugins/files/views'
+  import { playAlbum, playingTrack } from '../plugins/files/views'
+  import { trackKeys } from '../plugins/files/tracks'
   import { openAlbum } from '../plugins/files/nav'
 
   let {

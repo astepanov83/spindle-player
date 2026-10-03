@@ -2,6 +2,7 @@
 // until ticket 061, so the mfp page half uses this as well.
 import type { Art, Track } from '../../../../shared/library'
 import type { PluginId } from '../../../../shared/plugins'
+import { itemKey, type ItemKey } from '../../../../shared/plugins/items'
 import { artistLinks } from '../../library/artists'
 import { library } from '../../stores/library.svelte'
 import type { ItemInfo, ItemState, PageAddress, Playable } from '../types'
@@ -17,6 +18,26 @@ const can = { seek: true, pause: true, next: true, previous: true }
 
 export function pluginOf(t: Track): PluginId {
   return t.online === 'mfp' ? 'mfp' : 'files'
+}
+
+export function trackKey(t: Track): ItemKey {
+  return itemKey(pluginOf(t), t.id)
+}
+
+// A song the library doesn't have counts as a file's.
+export function trackKeys(ids: string[]): ItemKey[] {
+  return ids.map((id) => {
+    const t = library.find(id)
+    return itemKey(t ? pluginOf(t) : 'files', id)
+  })
+}
+
+// The library's song for a key of the files or mfp plugin.
+export function trackOf(key: ItemKey | undefined): Track | undefined {
+  if (!key) return undefined
+  const at = key.indexOf(':')
+  const t = library.find(key.slice(at + 1))
+  return t && pluginOf(t) === key.slice(0, at) ? t : undefined
 }
 
 // The library's song for an id of `plugin`.

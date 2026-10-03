@@ -65,6 +65,15 @@ export interface NavTab {
   keep?: (tab: string, page: string) => string
 }
 
+// A renamed page to follow (see LibraryStore.follow). `to` gets the old page;
+// `keeps`: pages of the tab that may open meanwhile and still follow (an
+// album opened from the renamed artist).
+export interface Follow {
+  tab: string
+  to: (page: string) => string
+  keeps?: (page: string) => boolean
+}
+
 // A step of history: the place and the search text it had, so Back to a
 // search's results shows them again.
 export interface Step {
@@ -161,8 +170,8 @@ class LibraryStore {
   // the artist whose names are being edited (ticket 024)
   editingArtist: string | null = $state(null)
   // After an edit, the page the open one is now in the library that comes
-  // back: a rename or split changes an artist's key. `to` gets the old page.
-  #follow: { tab: string; to: (page: string) => string } | null = null
+  // back: a rename or split changes an artist's key (see follow).
+  #follow: Follow | null = null
   // A link just opened a page (ticket 040): it starts at the top, also when
   // it was open already, or at `song`'s row. The library part's scroll code
   // takes it once.
@@ -441,6 +450,9 @@ class LibraryStore {
   // is the tab's top. The search text stays when `keepQuery` (a folder
   // opened while its search filters, so a match deeper down can be followed).
   openPage(tab: string, page: string, keepQuery = false): void {
+    // another page picked in a renamed one's tab: it is not followed there
+    const f = this.#follow
+    if (f?.tab === tab && page !== this.page(tab) && !f.keeps?.(page)) this.#follow = null
     this.go({ tab, pages: withPage(this.#nav.pages, tab, page), searchAll: null }, keepQuery)
   }
 
@@ -456,7 +468,7 @@ class LibraryStore {
   // The open page of `tab` is renamed (an artist's names were edited): once
   // the library has the page `to` gives for the old one, it shows that. Null
   // forgets it.
-  follow(f: { tab: string; to: (page: string) => string } | null): void {
+  follow(f: Follow | null): void {
     this.#follow = f
   }
 

@@ -20,5 +20,7 @@ export const mfpHalf: PageHalf = {
   canOpen: canOpenMfp,
   keep: keepMfp,
   path: mfpPath,
+  // its old view until blocks draw it (ticket 061)
+  page: () => [{ kind: 'view', view: 'mfp' }],
   version: () => library.revision * 2 + (complete() ? 1 : 0)
 }

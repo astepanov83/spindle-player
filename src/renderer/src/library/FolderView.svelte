@@ -16,7 +16,8 @@
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
   import { queue } from '../stores/queue.svelte'
-  import { playingTrack, trackKey } from '../plugins/files/views'
+  import { playingTrack } from '../plugins/files/views'
+  import { trackKey } from '../plugins/files/tracks'
   import { openFolder, shownFolderKey } from '../plugins/files/nav'
 
   let { scrollEl }: { scrollEl: HTMLElement | undefined } = $props()

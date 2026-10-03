@@ -26,8 +26,8 @@
   import { playlists } from '../stores/playlists.svelte'
   import { pluginTabs } from '../plugins'
   import { tabsIn } from '../plugins/tabs'
-  import { trackKey } from '../plugins/files/views'
-  import { shownAlbum, showArtist } from '../plugins/files/nav'
+  import { trackKey } from '../plugins/files/tracks'
+  import { shownAlbum } from '../plugins/files/nav'
 
   // the tabs of the plugins that are on (ticket 059); playlists are listed
   // under their own heading
@@ -101,7 +101,7 @@
     {#if !tabs.length}
       <div class="fill"><NoPlugins /></div>
     {:else if shown?.plugin === 'radio'}
-      <RadioView searchAt="left" />
+      <RadioView nav="sidebar" />
     {:else if shown?.plugin === 'mfp'}
       <MfpView />
     {:else if !library.albums.length}
@@ -111,7 +111,7 @@
       <SongTable title="Songs" meta="Library" items={songs} {scrollEl} />
     {:else if shown?.id === 'albums'}
       {#if searching}
-        <SearchResults {scrollEl} onartist={showArtist} />
+        <SearchResults {scrollEl} />
       {:else if open}
         <AlbumPage albumId={open} />
       {:else}

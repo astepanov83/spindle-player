@@ -3,13 +3,7 @@
 // the browser only when they are https.
 import type { WebContents } from 'electron'
 
-export function canOpenExternal(url: string): boolean {
-  try {
-    return new URL(url).protocol === 'https:'
-  } catch {
-    return false
-  }
-}
+export { canOpenExternal } from '../shared/web-link'
 
 export function blockNavigation(contents: WebContents): void {
   const block = (e: Electron.Event, url: string): void => {

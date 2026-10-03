@@ -14,7 +14,7 @@ export interface OnlineMediaOptions {
 const common = { 'Access-Control-Allow-Origin': '*' }
 
 // The page tells a 404 ("gone or can't be read") from a format it can't play (decision 105).
-const notFound = (): Response => new Response('Not found', { status: 404, headers: common })
+export const notFound = (): Response => new Response('Not found', { status: 404, headers: common })
 
 function audioType(type: string | null): string {
   const t = type?.split(';')[0].trim().toLowerCase()

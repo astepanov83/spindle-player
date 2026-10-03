@@ -4,6 +4,7 @@
 <script lang="ts">
   import { untrack } from 'svelte'
   import type { PluginId } from '../../../shared/plugins'
+  import { canOpenExternal } from '../../../shared/web-link'
   import ArtistPic from '../library/ArtistPic.svelte'
   import ViewHead from '../library/ViewHead.svelte'
   import { openPlaylistMenu, openSongMenu } from '../library/song-menu'
@@ -20,6 +21,9 @@
   let { block: b, tab, plugin }: { block: HeadBlock; tab: string; plugin: PluginId } = $props()
 
   const act = (id: string, value?: string): void => actOnPage(plugin, b.id, id, value)
+
+  // a link main would not open is not drawn
+  const link = $derived(b.link && canOpenExternal(b.link.url) ? b.link : undefined)
 
   // in the markup it would lose its spaces next to a block
   const dot = ' · '
@@ -89,14 +93,14 @@
 {/snippet}
 
 {#snippet line()}
-  {#if b.line || b.link}
+  {#if b.line || link}
     <div class="page-meta">
       {#each b.line ?? [] as p, i (i)}{#if p.to}<GoLink go={() => openPage(p.to!)}>{p.text}</GoLink
-          >{:else}{p.text}{/if}{/each}{#if b.link}{b.line ? dot : ''}<a
+          >{:else}{p.text}{/if}{/each}{#if link}{b.line ? dot : ''}<a
           class="site"
-          href={b.link.url}
+          href={link.url}
           target="_blank"
-          rel="noreferrer">{b.link.label}</a
+          rel="noreferrer">{link.label}</a
         >{/if}
     </div>
   {/if}

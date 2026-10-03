@@ -1,17 +1,16 @@
 // Music For Programming (tickets 052, 061): mfp.json, reading the site, the
 // site's picture in the cover cache, the episodes for the page, and
-// spindle://mfp/<episode id> for the audio. Off means no network and no file
-// changes; what it has stays, and the handlers answer from it.
+// spindle://mfp/<episode id> for the audio. Off means no network and no
+// change to mfp.json; what it has stays, and the handlers answer from it.
 import { join } from 'path'
 import { MfpChannel } from '../../../shared/ipc'
 import type { Episode, MfpEpisodes, MfpStatus } from '../../../shared/mfp'
 import type { PluginId } from '../../../shared/plugins'
-import { JsonFileWriter, readJsonFile } from '../../json-file'
-import { notFound } from '../../library/protocol'
+import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../../json-file'
 import { makeCover, withNewColors } from '../covers'
 import type { CoverService, MainPlugin, PluginContext } from '../types'
 import { pageEpisode } from './episodes'
-import { onlineMedia } from './media'
+import { notFound, onlineMedia } from './media'
 import { MfpSource } from './source'
 
 export const mfpSite = 'https://musicforprogramming.net'
@@ -40,6 +39,8 @@ export class MfpPlugin implements MainPlugin {
   ) {
     // opened here, not in start: the library's first prune asks for its cover
     const path = join(userData, 'mfp.json')
+    // a write cut off by a quit or crash: the app's own leftovers, on or off
+    removeStrayTmp(path)
     const r = readJsonFile(path)
     if (r.kind === 'broken' || r.kind === 'unreadable')
       o.log(`Music For Programming file is ${r.kind}: ${path}`)

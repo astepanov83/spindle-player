@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -129,6 +129,15 @@ describe('MfpPlugin off', () => {
     expect(m.fetched).toEqual([])
     m.plugin.flushSync()
     expect(readFileSync(join(dir, 'mfp.json'), 'utf8')).toBe(before)
+  })
+
+  it('removes the temp files of a write cut off last run, on or off', () => {
+    writeFile(1)
+    writeFileSync(join(dir, 'mfp.json.123.4.tmp'), '{')
+    writeFileSync(join(dir, 'other.json.123.5.tmp'), '{')
+    const m = setup()
+    m.plugin.setOn(false)
+    expect(readdirSync(dir).sort()).toEqual(['mfp.json', 'other.json.123.5.tmp'])
   })
 
   it('keeps its picture from the cover prune, on or off', () => {

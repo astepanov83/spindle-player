@@ -62,8 +62,10 @@ class FilesStore {
     failed: 0,
     missing: []
   })
-  // A library came from main this run: a song not in it is gone, not on its way.
+  // A library came from main this run: a song not in it is gone, not on its
+  // way, unless it is `partial` (its first scan has not ended).
   loaded = $state(false)
+  partial = $state(false)
   // The page could not get or read a library from main. Kept apart from the
   // status, which main sends often, so the next status doesn't hide it.
   loadFailed = $state(false)
@@ -77,9 +79,10 @@ class FilesStore {
   // which library main sent last, so a patch is only put on the one it was made from
   sent: LibraryVersion | undefined
 
-  load(data: LibraryData & Partial<LibraryVersion>): void {
+  load(data: LibraryData & Partial<LibraryVersion> & { partial?: true }): void {
     this.#tracks = new Map(data.tracks.map((t) => [t.id, t]))
     this.loaded = true
+    this.partial = !!data.partial
     this.#show(
       { albums: data.albums, folders: data.folders ?? [], photos: data.artistPhotos ?? {} },
       true
@@ -105,6 +108,7 @@ class FilesStore {
       p.goneTracks.length > 0 ||
       held.albums !== this.albums ||
       held.folders !== this.#folderTable
+    this.partial = !!p.partial
     this.#show(held, songs)
     this.sent = { epoch: p.epoch, n: p.n }
     return p.goneTracks.length > 0

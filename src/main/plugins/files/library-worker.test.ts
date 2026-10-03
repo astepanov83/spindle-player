@@ -92,6 +92,35 @@ describe('the library process', () => {
     expect(scanned(2)).toBe(true)
   })
 
+  describe('a library from an empty index', () => {
+    const decode = (b: Uint8Array): { partial?: true } => JSON.parse(new TextDecoder().decode(b))
+    async function library(req: number): Promise<{ partial?: true }> {
+      send({ type: 'get-library', req })
+      await until(() => heard.some((m) => m.type === 'reply' && m.req === req))
+      const m = heard.find((m) => m.type === 'reply' && m.req === req)
+      return decode((m as { data: Uint8Array }).data)
+    }
+
+    it('is partial until the first scan ended, which says so in a patch', async () => {
+      start(true)
+      expect((await library(1)).partial).toBe(true)
+      scan(2)
+      await until(() => scanned(2))
+      const sent = heard.filter((m) => m.type === 'library')
+      expect(decode((sent.at(-1) as { bytes: Uint8Array }).bytes).partial).toBeUndefined()
+      expect((await library(3)).partial).toBeUndefined()
+    })
+
+    it('is not partial when library.json had songs', async () => {
+      const ix = emptyIndex()
+      const path = join(music, 'a.mp3')
+      ix.files.set(path, { path, mtime: 1, size: 1, duration: 0 })
+      writeFileSync(join(dir, 'library.json'), JSON.stringify(serializeIndex(ix)))
+      start(true)
+      expect((await library(1)).partial).toBeUndefined()
+    })
+  })
+
   describe('a "not found" mark dropped while off', () => {
     const fetchedPath = (): string => join(dir, 'fetched-covers.json')
     const marks = (): string[] =>

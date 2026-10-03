@@ -346,9 +346,20 @@ let libraries = 0
 
 const encode = (m: LibraryMessage): Uint8Array => new TextEncoder().encode(JSON.stringify(m))
 
+// The index started empty (no library.json yet, or a broken one) and no scan
+// has ended since: the page counts no song as gone until one has (see
+// FullLibrary), so an upgrade's first scan doesn't drop the queue's songs.
+let partial = false
+// what the page was last told
+let sentPartial = false
+const partialPart = (): { partial?: true } => {
+  sentPartial = partial
+  return partial ? { partial: true } : {}
+}
+
 // The whole library, for a page load or a page that missed a patch.
 function encodeLibrary(): Uint8Array {
-  return encode({ epoch, n: libraries, ...built.data })
+  return encode({ epoch, n: libraries, ...built.data, ...partialPart() })
 }
 
 // Groups albums and sends the page what changed since the last library it got.
@@ -356,10 +367,18 @@ function publish(): void {
   const old = built.data
   build()
   const d = diffLibrary(old, built.data)
-  if (!d) return
+  if (!d && sentPartial === partial) return
+  const body = d ?? { albums: [], tracks: [], goneTracks: [] }
   post({
     type: 'library',
-    bytes: encode({ patch: true, epoch, from: libraries, n: libraries + 1, ...d })
+    bytes: encode({
+      patch: true,
+      epoch,
+      from: libraries,
+      n: libraries + 1,
+      ...body,
+      ...partialPart()
+    })
   })
   libraries++
   firstSent ??= Math.round(performance.now() - scanStart)
@@ -776,7 +795,10 @@ async function scan(
   } finally {
     clearInterval(saving)
   }
-  if (dirty) publisher.now()
+  // a stopped scan threw above, so it leaves the library partial
+  const ended = partial
+  partial = false
+  if (dirty || ended) publisher.now()
   saveIndex()
   // results of albums and artists that are gone; a failed scan may have missed some
   if (!failed) {
@@ -986,6 +1008,7 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   if (r.kind === 'broken' || r.kind === 'unreadable')
     log(`Library index is ${r.kind}, scanning again: ${start.indexPath}`)
   ix = parseIndex(r.kind === 'ok' ? r.value : undefined)
+  partial = ix.files.size === 0
   ixEdits++
   aliases = mergeMoves(s.aliases ?? {}, ix.pendingMoves)
   // a quit or crash came before main saved them: send them again

@@ -126,6 +126,19 @@ describe('itemInfo', () => {
     expect(p.itemInfo('files:nope').state).toBe('missing')
   })
 
+  it('a song is loading while the first scan of an empty index runs, gone once it ended', () => {
+    const empty = { albums: [], tracks: [], folders: [] }
+    files.load({ ...empty, epoch: 'e', n: 0, partial: true })
+    expect(p.itemInfo('files:s1').state).toBe('loading')
+    // the scan sent its songs, then ended with a patch that drops the mark
+    const patch = { patch: true as const, epoch: 'e', albums: [], goneTracks: [] }
+    files.patch({ ...patch, from: 0, n: 1, tracks: [track('s1', 'al')], partial: true })
+    expect(p.itemInfo('files:nope').state).toBe('loading')
+    files.patch({ ...patch, from: 1, n: 2, tracks: [] })
+    expect(p.itemInfo('files:s1').state).toBe('ok')
+    expect(p.itemInfo('files:nope').state).toBe('missing')
+  })
+
   it('an MFP song is loading until main says MFP is on and its episodes are in', () => {
     // no episodes yet: MFP was just turned on
     expect(p.itemInfo('mfp:m1').state).toBe('loading')

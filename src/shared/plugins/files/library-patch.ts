@@ -12,7 +12,10 @@ export interface LibraryVersion {
   n: number
 }
 
-export type FullLibrary = LibraryData & LibraryVersion
+// `partial`: the index was empty when the library process started (no
+// library.json yet) and no scan has ended since, so a song not in it may still
+// come: the page counts none as gone until a library comes without it.
+export type FullLibrary = LibraryData & LibraryVersion & { partial?: true }
 
 export interface PatchBody {
   // new and changed albums, whole
@@ -34,7 +37,13 @@ export interface PatchBody {
   gonePhotos?: string[]
 }
 
-export type LibraryPatch = PatchBody & { patch: true; epoch: string; from: number; n: number }
+export type LibraryPatch = PatchBody & {
+  patch: true
+  epoch: string
+  from: number
+  n: number
+  partial?: true
+}
 
 // What main sends the page as UTF-8 JSON bytes.
 export type LibraryMessage = FullLibrary | LibraryPatch

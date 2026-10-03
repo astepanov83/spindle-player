@@ -15,6 +15,7 @@
   import { albumButton } from './album'
   import { songMatches } from './views'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
+  import { isPlaying, playAlbum, trackKey, trackKeys, trackOf } from '../plugins/files/views'
 
   let { albumId }: { albumId: string } = $props()
 
@@ -34,7 +35,7 @@
   const btn = $derived(
     albumButton(albumId, {
       link: queue.link,
-      currentAlbum: queue.current?.albumId,
+      currentAlbum: trackOf(queue.current)?.albumId,
       ended: queue.ended,
       queuePlays: playing.kind === 'queue',
       sounding: player.playing
@@ -42,18 +43,18 @@
   )
 
   function playOrPause(): void {
-    if (btn === 'play') queue.playAlbum(al.id, 0)
+    if (btn === 'play') playAlbum(al.id, 0)
     else playing.togglePlay()
   }
 
   function shufflePlay(): void {
     player.shuffle = true
-    queue.playAlbum(al.id, Math.floor(Math.random() * tracks.length))
+    playAlbum(al.id, Math.floor(Math.random() * tracks.length))
   }
 
   // the whole episode is the queue, from this song on
   function play(id: string): void {
-    queue.playAlbum(al.id, al.trackIds.indexOf(id))
+    playAlbum(al.id, al.trackIds.indexOf(id))
   }
 </script>
 
@@ -77,14 +78,14 @@
       <button
         class="pill ghost"
         aria-haspopup="menu"
-        onclick={(e) => openPlaylistMenu(e, al.trackIds)}>Add to playlist</button
+        onclick={(e) => openPlaylistMenu(e, trackKeys(al.trackIds))}>Add to playlist</button
       >
       <button
         class="pill ghost more"
         aria-haspopup="menu"
         aria-label="More"
         title="Play next, add to the queue or a playlist"
-        onclick={(e) => openSongMenu(e, al.trackIds, { from: al.title, link })}
+        onclick={(e) => openSongMenu(e, trackKeys(al.trackIds), { from: al.title, link })}
         ><Icon name="more" size={18} /></button
       >
     </div>
@@ -92,7 +93,7 @@
 </div>
 <div class="lines" use:roving={{ rows: shown }}>
   {#each shown as t (t.id)}
-    {@const cur = playing.isSong(t.id)}
+    {@const cur = isPlaying(t)}
     <button
       class="srow row"
       data-song={t.id}
@@ -100,7 +101,7 @@
       data-row
       aria-current={cur ? 'true' : undefined}
       onclick={() => play(t.id)}
-      oncontextmenu={(e) => openSongMenu(e, [t.id], { from: al.title, link })}
+      oncontextmenu={(e) => openSongMenu(e, [trackKey(t)], { from: al.title, link })}
     >
       <span class="n"
         >{#if cur && playing.songPlaying}<Eq />{:else}{t.no}{/if}</span

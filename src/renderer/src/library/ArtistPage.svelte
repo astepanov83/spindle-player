@@ -14,6 +14,8 @@
   import Icon from '../ui/Icon.svelte'
   import { artistCovers, artistPageSongs, artistSongs } from './artists'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
+  import { trackKeys } from '../plugins/files/views'
+  import type { ItemKey } from '../../../shared/plugins/items'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
   import { queue } from '../stores/queue.svelte'
@@ -22,18 +24,20 @@
 
   const album = (id: string): Album => library.album(id)
   const albums = $derived(a.albums.map((id) => library.album(id)))
-  const also = $derived(a.also.map((id) => library.track(id)))
+  const also = $derived(trackKeys(a.also))
   const songs = $derived(artistSongs(a, album))
   const covers = $derived(artistCovers(a, album, (id) => library.art(library.track(id))))
 
   // their albums in order, then the "Also on" songs as sorted
-  const playIds = (): string[] =>
-    artistPageSongs(
-      a,
-      album,
-      (id) => library.track(id),
-      library.artistSort,
-      (t) => library.order(t)
+  const playIds = (): ItemKey[] =>
+    trackKeys(
+      artistPageSongs(
+        a,
+        album,
+        (id) => library.track(id),
+        library.artistSort,
+        (t) => library.order(t)
+      )
     )
 
   function play(shuffle: boolean): void {

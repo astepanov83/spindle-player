@@ -13,8 +13,8 @@
   import { episodeRows } from './views'
   import { library } from '../stores/library.svelte'
   import { playing } from '../stores/playing.svelte'
-  import { queue } from '../stores/queue.svelte'
   import { pluginOn } from '../stores/settings.svelte'
+  import { isPlaying, playAlbum } from '../plugins/files/views'
 
   const rows = $derived(episodeRows(library.mfpAlbums, (id) => library.track(id), library.query))
   const status = $derived(mfpLine(library.status.mfp, Date.now()))
@@ -26,7 +26,7 @@
 
   // the episode is the queue, from this song on
   function play(albumId: string, id: string): void {
-    queue.playAlbum(albumId, library.album(albumId).trackIds.indexOf(id))
+    playAlbum(albumId, library.album(albumId).trackIds.indexOf(id))
   }
 </script>
 
@@ -65,7 +65,7 @@
           <span class="d">{fmtLength(length(al.trackIds))}</span>
         </button>
         {#each r.songs as t (t.id)}
-          {@const cur = playing.isSong(t.id)}
+          {@const cur = isPlaying(t)}
           <button
             class="song row"
             class:cur-row={cur}

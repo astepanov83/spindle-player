@@ -11,11 +11,12 @@
   import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
   import { queueLink, type QueueLink } from '../../../shared/saved-queue'
+  import type { ItemKey } from '../../../shared/plugins/items'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
-  import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { playingTrack, trackKey } from '../plugins/files/views'
 
   let { scrollEl }: { scrollEl: HTMLElement | undefined } = $props()
 
@@ -33,11 +34,10 @@
   // only when there is a folder above to go to
   const showPath = $derived(shown !== null && (path.length > 1 || tree.roots.length > 1))
   // the folders the playing song is in, marked in the list (not while radio plays)
-  const playingIn = $derived(
-    new Set(
-      playing.song && tree.nodes[playing.song.folder] ? crumbs(tree, playing.song.folder) : []
-    )
-  )
+  const playingIn = $derived.by(() => {
+    const t = playingTrack()
+    return new Set(t && tree.nodes[t.folder] ? crumbs(tree, t.folder) : [])
+  })
 
   let list: HTMLDivElement | undefined = $state()
   const v = virtualList(() => ({ count: view.folders.length, scrollEl, list, size: ROW }), 6)
@@ -52,13 +52,14 @@
     source: library.revision
   }))
 
-  const songIds = (i: number | null): string[] => folderSongs(tree, i).map((t) => t.id)
+  const songIds = (i: number | null): ItemKey[] => folderSongs(tree, i).map(trackKey)
 
   // what is shown: search and the table's sort
-  const playIds = (): string[] =>
+  const playIds = (): ItemKey[] =>
     folderPlaySongs(tree, shown, library.query, library.folderSort, (t) => library.order(t)).map(
-      (t) => t.id
+      trackKey
     )
+  const songKeys = $derived(view.songs.map(trackKey))
 
   // the top list of music folders has no key to open again
   const link = $derived<QueueLink | undefined>(node && queueLink('folder', node.key))
@@ -156,7 +157,7 @@
   <SongTable
     {title}
     meta="Folder"
-    items={view.songs}
+    items={songKeys}
     {scrollEl}
     sort={library.folderSort}
     onsort={(k) => library.sortFolder(k)}

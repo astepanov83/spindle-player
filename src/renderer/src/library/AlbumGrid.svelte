@@ -11,10 +11,9 @@
   import { keepPlace } from '../ui/keep-place.svelte'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
-  import { playing } from '../stores/playing.svelte'
-  import { queue } from '../stores/queue.svelte'
   import { theme } from '../stores/theme.svelte'
   import { openSongMenu } from './song-menu'
+  import { playAlbum, playingTrack, trackKeys } from '../plugins/files/views'
 
   let {
     scrollEl,
@@ -38,6 +37,8 @@
   const albums = $derived(items ?? filterAlbums(library.albums, library.query))
   const cols = $derived(gridColumns(width, 140, GAP))
   const rows = $derived(chunk(albums, cols))
+  // the album of the song the queue plays (not while radio plays)
+  const playingAlbum = $derived(playingTrack()?.albumId)
   // cover + title + artist, measured for real once drawn
   const estimate = $derived((width - GAP * (cols - 1)) / cols + 44 + ROW_GAP)
 
@@ -85,7 +86,7 @@
           class="card"
           role="group"
           oncontextmenu={(e) =>
-            openSongMenu(e, al.trackIds, {
+            openSongMenu(e, trackKeys(al.trackIds), {
               from: al.title,
               link: albumLink(al)
             })}
@@ -98,17 +99,13 @@
                 lazy={false}
               /></button
             >
-            <button
-              class="qp"
-              aria-label="Play {al.title}"
-              onclick={() => queue.playAlbum(al.id, 0)}
-            >
+            <button class="qp" aria-label="Play {al.title}" onclick={() => playAlbum(al.id, 0)}>
               <Icon name="play" />
             </button>
           </div>
           <div class="t">
-            {#if al.id === playing.song?.albumId}<Eq paused={!player.playing} />{/if}<span
-              title={al.title}>{al.title}</span
+            {#if al.id === playingAlbum}<Eq paused={!player.playing} />{/if}<span title={al.title}
+              >{al.title}</span
             >
           </div>
           <div class="a">{sub === 'year' ? al.year || '' : al.artist}</div>

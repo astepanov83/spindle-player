@@ -16,7 +16,9 @@
   import { radio } from '../stores/radio.svelte'
   import { openSongMenu } from '../library/song-menu'
   import { linkTarget } from '../../../shared/saved-queue'
-  import { trackIdOf } from '../stores/item-tracks'
+  import type { ItemKey } from '../../../shared/plugins/items'
+  import type { ItemAnswer } from '../plugins/types'
+  import { canOpen, itemInfo, openPage } from '../plugins'
 
   // header and close are set by the container, not by templates
   let { header = false, close = false }: { header?: boolean; close?: boolean } = $props()
@@ -55,23 +57,36 @@
     seen = currentKey()
   }
 
-  const total = $derived(
-    queue.items.reduce((s, key) => s + library.track(trackIdOf(key)).duration, 0)
-  )
+  // 50k songs: itemInfo is a lookup that makes no objects
+  const total = $derived(queue.items.reduce((s, key) => s + lengthOf(key), 0))
+
+  function lengthOf(key: ItemKey): number {
+    const s = itemInfo(key)
+    return s.state === 'ok' ? (s.info.length ?? 0) : 0
+  }
   const sum = $derived(
     `${queue.items.length.toLocaleString()} ${queue.items.length === 1 ? 'song' : 'songs'}` +
       ` · ${fmtLength(total)}`
   )
-  // "From" opens the album, artist, folder or playlist, while it is still there
+  // "From" opens a playlist, or the plugin's page (an album, artist, folder),
+  // while it is still there
   const openFrom = $derived.by(() => {
     const link = queue.link
-    if (!link || !library.canShow(link)) return undefined
-    const to = linkTarget(link)
-    if (to?.kind === 'playlist' && !playlists.get(to.id)) return undefined
+    if (!link) return undefined
+    let show: () => void
+    if (link.plugin === 'core') {
+      const to = linkTarget(link)
+      if (to?.kind !== 'playlist' || !playlists.get(to.id)) return undefined
+      show = () => library.showPlaylist(to.id)
+    } else {
+      const to = { plugin: link.plugin, page: link.page }
+      if (!canOpen(to)) return undefined
+      show = () => openPage(to)
+    }
     return () => {
       // the drawer would cover the page opened
       layout.showQueue = false
-      library.showFrom(link)
+      show()
     }
   })
 
@@ -173,6 +188,25 @@
   const dot = ' · '
 </script>
 
+<!-- A song its plugin can't give now is greyed: off says so, loading says
+     nothing yet. -->
+{#snippet words(s: ItemAnswer, eq: boolean)}
+  {#if s.state === 'ok'}
+    <Thumb src={s.info.art?.cover} {eq} />
+    <span class="qt"
+      ><span class="nm" title={s.info.title}>{s.info.title}</span><span
+        class="ar"
+        title={s.info.subtitle}>{s.info.subtitle ?? ''}</span
+      ></span
+    >
+    <span class="d">{s.info.length === undefined ? '' : fmtTime(s.info.length)}</span>
+  {:else}
+    <Thumb src={undefined} />
+    <span class="qt"><span class="nm">{s.state === 'off' ? s.text : ''}</span></span>
+    <span class="d"></span>
+  {/if}
+{/snippet}
+
 <svelte:window
   {onpointermove}
   {onpointerup}
@@ -234,13 +268,14 @@
         }}
       >
         {#each v.items as item (item.key)}
-          {@const id = trackIdOf(queue.items[item.index])}
-          {@const t = library.track(id)}
+          {@const key = queue.items[item.index]}
+          {@const s = itemInfo(key)}
           {@const cur = item.index === queue.index}
           <button
             class="qrow row"
             class:cur-row={cur}
             class:past={item.index < queue.index}
+            class:dim={s.state !== 'ok'}
             class:lifted={drag?.from === item.index}
             data-row
             data-index={item.index}
@@ -249,30 +284,20 @@
             onclick={() => playRow(item.index)}
             onpointerdown={(e) => onrowdown(e, item.index)}
             onkeydown={(e) => onrowkey(e, item.index)}
-            oncontextmenu={(e) => openSongMenu(e, [id], { queueRow: item.index })}
+            oncontextmenu={(e) => openSongMenu(e, [key], { queueRow: item.index })}
           >
-            <Thumb src={library.art(t).cover} eq={cur && playing.songPlaying} />
-            <span class="qt"
-              ><span class="nm" title={t.title}>{t.title}</span><span class="ar" title={t.artist}
-                >{t.artist}</span
-              ></span
-            >
-            <span class="d">{fmtTime(t.duration)}</span>
+            {@render words(s, cur && playing.songPlaying)}
           </button>
         {/each}
         {#if drag}
-          {@const t = library.track(trackIdOf(queue.items[drag.from]))}
           <div
             class="qrow ghost"
             class:cur-row={drag.from === queue.index}
+            class:dim={itemInfo(queue.items[drag.from]).state !== 'ok'}
             aria-hidden="true"
             style:transform="translateY({drag.y - drag.grab}px)"
           >
-            <Thumb src={library.art(t).cover} />
-            <span class="qt"
-              ><span class="nm">{t.title}</span><span class="ar">{t.artist}</span></span
-            >
-            <span class="d">{fmtTime(t.duration)}</span>
+            {@render words(itemInfo(queue.items[drag.from]), false)}
           </div>
         {/if}
       </div>
@@ -418,6 +443,13 @@
   }
   .past {
     opacity: var(--past);
+  }
+  /* its plugin is off, or its data is not in yet */
+  .dim .nm {
+    color: var(--ink-3);
+  }
+  .dim :global(.mini) {
+    opacity: 0.5;
   }
   /* a played row with focus shows its mark at full strength */
   .past:hover {

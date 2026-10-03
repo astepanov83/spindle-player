@@ -16,9 +16,9 @@
   import { library } from '../stores/library.svelte'
   import { menu } from '../stores/menu.svelte'
   import { player } from '../stores/player.svelte'
-  import { playing as nowPlaying } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
   import { sections, songMenu } from './song-menu'
+  import { playingTrack, trackKeys } from '../plugins/files/views'
 
   let {
     scrollEl,
@@ -69,7 +69,7 @@
 
   // the artists of the song playing (not while radio plays): its album's and its own
   const playing = $derived.by(() => {
-    const t = nowPlaying.song
+    const t = playingTrack()
     if (!t) return new Set<string>()
     return new Set([...namesOf(library.album(t.albumId)), ...namesOf(t)].map(artistKey))
   })
@@ -114,7 +114,7 @@
             menu.showFor(
               e,
               sections(
-                songMenu(artistSongs(a, album), {
+                songMenu(trackKeys(artistSongs(a, album)), {
                   from: a.name,
                   link: queueLink('artist', a.key)
                 }),
@@ -133,7 +133,12 @@
               class="qp"
               aria-label="Play {a.name}"
               onclick={() =>
-                queue.playList(artistSongs(a, album), 0, a.name, queueLink('artist', a.key))}
+                queue.playList(
+                  trackKeys(artistSongs(a, album)),
+                  0,
+                  a.name,
+                  queueLink('artist', a.key)
+                )}
             >
               <Icon name="play" />
             </button>

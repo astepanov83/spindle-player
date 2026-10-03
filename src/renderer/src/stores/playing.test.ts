@@ -14,7 +14,6 @@ const fake = vi.hoisted(() => ({
 }))
 
 vi.mock('../audio/engine', () => ({
-  mediaUrl: (id: string) => `media/${id}`,
   engine: {
     on: (e: Partial<EngineEvents>) => Object.assign(fake.on, e),
     get loaded() {
@@ -103,7 +102,7 @@ beforeEach(async () => {
   library.load(lib)
   radio.load(mine)
   await playing.backToQueue()
-  queue.playList(['s0', 's1', 's2'], 1, 'Mix')
+  queue.playList(['files:s0', 'files:s1', 'files:s2'], 1, 'Mix')
   fake.on.time!(42)
   fake.calls = []
   savePlace.mockClear()
@@ -148,7 +147,7 @@ describe('queue to radio', () => {
       albums: [{ ...lib.albums[0], trackIds: left.map((t) => t.id) }],
       tracks: left
     })
-    queue.prune()
+    queue.refresh()
     expect(fake.calls).toEqual([])
     expect(playing.kind).toBe('radio')
   })
@@ -167,14 +166,14 @@ describe('queue to radio', () => {
 
 describe('playing marks', () => {
   it('mark the queue’s song only while the queue plays', async () => {
-    expect(playing.song?.id).toBe('s1')
-    expect(playing.isSong('s1')).toBe(true)
-    expect(playing.isSong('s0')).toBe(false)
+    expect(playing.item).toBe('files:s1')
+    expect(playing.isItem('files:s1')).toBe(true)
+    expect(playing.isItem('files:s0')).toBe(false)
     await playing.playStation(mine[0])
     // the queue keeps its place, but radio sounds
-    expect(queue.current?.id).toBe('s1')
-    expect(playing.song).toBeUndefined()
-    expect(playing.isSong('s1')).toBe(false)
+    expect(queue.current).toBe('files:s1')
+    expect(playing.item).toBeUndefined()
+    expect(playing.isItem('files:s1')).toBe(false)
   })
 })
 
@@ -185,7 +184,7 @@ describe('back to the queue', () => {
     await playing.backToQueue()
     expect(playing.kind).toBe('queue')
     expect(savePlaying).toHaveBeenLastCalledWith({ kind: 'queue' })
-    expect(fake.calls).toEqual(['pause', 'load media/s1 at 42'])
+    expect(fake.calls).toEqual(['pause', 'load spindle://media/s1 at 42'])
     expect(player.playing).toBe(false)
   })
 
@@ -194,12 +193,12 @@ describe('back to the queue', () => {
     fake.calls = []
     queue.jump(2)
     expect(playing.kind).toBe('queue')
-    expect(fake.calls).toEqual(['pause', 'load media/s2 at 0', 'play'])
+    expect(fake.calls).toEqual(['pause', 'load spindle://media/s2 at 0', 'play'])
     await playing.playStation(mine[0])
     fake.calls = []
-    queue.playList(['s0'], 0, 'One')
+    queue.playList(['files:s0'], 0, 'One')
     expect(playing.kind).toBe('queue')
-    expect(loads()).toEqual(['load media/s0 at 0'])
+    expect(loads()).toEqual(['load spindle://media/s0 at 0'])
   })
 })
 
@@ -225,14 +224,14 @@ describe('after a restart', () => {
     // the queue waits at its place
     expect(queue.index).toBe(2)
     await playing.backToQueue()
-    expect(loads()).toEqual(['load media/s2 at 30'])
+    expect(loads()).toEqual(['load spindle://media/s2 at 30'])
   })
 
   it('the queue comes back paused where it was', async () => {
     fake.calls = []
     playing.restore(saved)
     expect(playing.kind).toBe('queue')
-    expect(fake.calls).toEqual(['load media/s2 at 30'])
+    expect(fake.calls).toEqual(['load spindle://media/s2 at 30'])
   })
 
   it('when My stations could not be read, the queue plays but radio stays saved', async () => {
@@ -241,7 +240,7 @@ describe('after a restart', () => {
     // the stations list is empty then, so the station is not found
     playing.restore(onRadio('gone'), false)
     expect(playing.kind).toBe('queue')
-    expect(fake.calls).toEqual(['load media/s2 at 30'])
+    expect(fake.calls).toEqual(['load spindle://media/s2 at 30'])
     expect(savePlaying).not.toHaveBeenCalled()
   })
 
@@ -259,7 +258,7 @@ describe('after a restart', () => {
     fake.calls = []
     playing.restore(onRadio('gone'))
     expect(playing.kind).toBe('queue')
-    expect(fake.calls).toEqual(['load media/s2 at 30'])
+    expect(fake.calls).toEqual(['load spindle://media/s2 at 30'])
     expect(savePlaying).toHaveBeenLastCalledWith({ kind: 'queue' })
   })
 })

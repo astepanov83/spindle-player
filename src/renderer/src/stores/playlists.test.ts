@@ -100,12 +100,12 @@ describe('a new playlist from songs (ticket 045)', () => {
       ],
       folders: []
     })
-    const a = playlists.create(['b1', 'b2'])
-    const b = playlists.create(['b1'])
+    const a = playlists.create(['files:b1', 'files:b2'])
+    const b = playlists.create(['files:b1'])
     expect(playlists.get(a)?.name).toBe('Blue Hours')
     expect(playlists.get(b)?.name).toBe('Blue Hours 2')
     // songs of two albums: the first song's artist
-    expect(playlists.get(playlists.create(['r1', 'b1']))?.name).toBe('Ochre')
+    expect(playlists.get(playlists.create(['files:r1', 'files:b1']))?.name).toBe('Ochre')
   })
 
   it('is New playlist with no songs, ready to type over', () => {
@@ -128,14 +128,13 @@ describe('item keys (ticket 055)', () => {
     ...(online ? { online } : {})
   })
 
-  it('keeps songs as keys of their plugin, and removes them by their track id', () => {
+  it('keeps songs of any plugin as keys, and removes them by key', () => {
     library.load({ albums: [], tracks: [song('f1'), song('m1', 'mfp')], folders: [] })
-    const id = playlists.create(['f1', 'm1'])
+    const id = playlists.create(['files:f1', 'mfp:m1'])
     expect(playlists.get(id)?.items).toEqual(['files:f1', 'mfp:m1'])
-    playlists.add(id, ['m1', 'gone'])
-    // a song the library doesn't know counts as a file's
+    playlists.add(id, ['mfp:m1', 'files:gone'])
     expect(playlists.get(id)?.items).toEqual(['files:f1', 'mfp:m1', 'files:gone'])
-    playlists.removeTracks(id, ['m1', 'gone'])
+    playlists.removeItems(id, ['mfp:m1', 'files:gone'])
     expect(playlists.get(id)?.items).toEqual(['files:f1'])
   })
 

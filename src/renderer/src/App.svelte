@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import { defaultPalettes } from '../../shared/palette'
   import TitleBar from './components/TitleBar.svelte'
   import Settings from './components/Settings.svelte'
@@ -27,6 +28,7 @@
     showSeekInMediaSession,
     showStateInMediaSession
   } from './stores/media-session'
+  import { itemsVersion } from './plugins'
   import { player } from './stores/player.svelte'
   import { playing } from './stores/playing.svelte'
   import { queue } from './stores/queue.svelte'
@@ -49,6 +51,13 @@
       playing: player.playing
     })
   )
+
+  // New data in a plugin, or one turned on or off: songs that are gone leave
+  // the queue, and a song that waited for its plugin loads.
+  $effect(() => {
+    void itemsVersion()
+    untrack(() => queue.refresh())
+  })
 
   // The library scan slows down while a song plays, so the audio gets the disk first.
   $effect(() => window.playbackApi.playing(player.playing))

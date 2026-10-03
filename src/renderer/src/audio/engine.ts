@@ -49,11 +49,6 @@ export interface LoadOptions {
 
 import { gain } from './volume'
 
-// Song URLs: main serves indexed files by id (src/main/library/protocol.ts).
-export function mediaUrl(fileId: string): string {
-  return `spindle://media/${fileId}`
-}
-
 // True when main has no readable file for a song URL (404), or doesn't answer
 // within 5s (a NAS that dropped out). Any other answer counts as there: the
 // error is then about the format.

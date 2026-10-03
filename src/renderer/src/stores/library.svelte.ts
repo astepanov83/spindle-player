@@ -130,6 +130,8 @@ class LibraryStore {
     failed: 0,
     missing: []
   })
+  // A library came from main this run: a song not in it is gone, not on its way.
+  loaded = $state(false)
   // The page could not get or read a library from main. Kept apart from the
   // status, which main sends often, so the next status doesn't hide it.
   loadFailed = $state(false)
@@ -163,6 +165,7 @@ class LibraryStore {
 
   load(data: LibraryData & Partial<LibraryVersion>): void {
     this.#tracks = new Map(data.tracks.map((t) => [t.id, t]))
+    this.loaded = true
     this.#show(
       { albums: data.albums, folders: data.folders ?? [], photos: data.artistPhotos ?? {} },
       true
@@ -542,6 +545,12 @@ class LibraryStore {
   track(id: string): Track {
     void this.#version
     return this.#tracks.get(id)!
+  }
+
+  // one lookup for "has" and "track": the queue asks for 50k songs
+  find(id: string): Track | undefined {
+    void this.#version
+    return this.#tracks.get(id)
   }
 
   album(id: string): Album {

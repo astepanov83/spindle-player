@@ -17,8 +17,12 @@ import {
   searchSongs,
   filterSongs,
   filterPlaylists,
-  episodeRows
+  episodeRows,
+  filterItems,
+  sortItems
 } from './views'
+import type { ItemKey } from '../../../shared/plugins/items'
+import type { ItemInfo } from '../plugins/types'
 
 function lib(): { albums: Album[]; tracks: Map<string, Track> } {
   const tracks = new Map<string, Track>()
@@ -322,14 +326,12 @@ describe('playlist views', () => {
     expect(withPlaylistSort(two, 'p1', null)).toEqual({ p2: { k: 'd', dir: -1 } })
   })
 
-  it('leaves out songs that are not in the library and counts them', () => {
-    const { tracks } = lib()
-    const r = playlistRows(
-      ['b/0', 'gone', 'a/1', 'gone2'],
-      (id) => tracks.has(id),
-      (id) => tracks.get(id)!
+  it('leaves out songs that are gone and counts them; off ones stay', () => {
+    const gone = new Set(['files:gone', 'files:gone2'])
+    const r = playlistRows(['files:b/0', 'files:gone', 'mfp:off', 'files:gone2'], (k) =>
+      gone.has(k)
     )
-    expect(r.rows.map((t) => t.id)).toEqual(['b/0', 'a/1'])
+    expect(r.rows).toEqual(['files:b/0', 'mfp:off'])
     expect(r.missing).toBe(2)
   })
 })
@@ -359,5 +361,38 @@ describe('episodeRows (ticket 052)', () => {
 
   it('shows nothing when nothing matches', () => {
     expect(episodeRows(albums, track, 'zzz')).toEqual([])
+  })
+})
+
+describe('songs as items (ticket 056)', () => {
+  const infos = new Map<string, ItemInfo>([
+    ['files:1', { title: 'Kite String', subtitle: 'Ochre', group: 'Red', length: 200 }],
+    ['mfp:2', { title: 'Terminus', subtitle: 'Anna', group: 'Episode 1', length: 90 }],
+    ['files:3', { title: 'Kite String', subtitle: 'Björk', group: 'Blue', length: 120 }]
+  ])
+  const info = (k: ItemKey): ItemInfo | undefined => infos.get(k)
+  const keys: ItemKey[] = ['files:1', 'mfp:off', 'mfp:2', 'files:3']
+
+  it('sort by what each plugin says; ties and greyed ones keep their order', () => {
+    expect(sortItems(keys, { k: 't', dir: 1 }, info)).toEqual([
+      'mfp:off',
+      'files:1',
+      'files:3',
+      'mfp:2'
+    ])
+    expect(sortItems(keys, { k: 'd', dir: -1 }, info)).toEqual([
+      'files:1',
+      'files:3',
+      'mfp:2',
+      'mfp:off'
+    ])
+    expect(sortItems(keys, null, info)).toBe(keys)
+  })
+
+  it('filter by title, artist or album, without accents; greyed ones never match', () => {
+    expect(filterItems(keys, 'bjork', info)).toEqual(['files:3'])
+    expect(filterItems(keys, 'episode', info)).toEqual(['mfp:2'])
+    expect(filterItems(keys, 'kite', info)).toEqual(['files:1', 'files:3'])
+    expect(filterItems(keys, '', info)).toBe(keys)
   })
 })

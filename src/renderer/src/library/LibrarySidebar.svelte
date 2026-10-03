@@ -24,6 +24,7 @@
   import { library, type Section } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
   import { pluginOn } from '../stores/settings.svelte'
+  import { trackKey } from '../plugins/files/views'
 
   const allSections: [Section, IconName, string][] = [
     ['songs', 'note', 'Songs'],
@@ -42,7 +43,9 @@
     library.section.startsWith('pl:') ? playlists.get(library.section.slice(3)) : undefined
   )
 
-  const songs = $derived(songRows(library.albums, (id) => library.track(id), library.query))
+  const songs = $derived(
+    songRows(library.albums, (id) => library.track(id), library.query).map(trackKey)
+  )
 
   const searching = $derived(!!library.query.trim())
 

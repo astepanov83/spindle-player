@@ -1,7 +1,9 @@
-<!-- Sortable song table. Only the rows on screen are drawn. -->
+<!-- Sortable song table. Only the rows on screen are drawn. Songs are item
+     keys; each row shows what the song's plugin says (ticket 056), greyed
+     while its plugin is off or its data is not in yet. -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import type { Track } from '../../../shared/library'
+  import type { ItemKey } from '../../../shared/plugins/items'
   import type { QueueLink } from '../../../shared/saved-queue'
   import Eq from '../ui/Eq.svelte'
   import Thumb from '../ui/Thumb.svelte'
@@ -9,7 +11,8 @@
   import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
   import { roving } from '../ui/roving'
-  import { nextSort, sortRows, type Sort, type SortKey } from './views'
+  import { nextSort, sortItems, type Sort, type SortKey } from './views'
+  import { infoOf, itemInfo, itemsVersion } from '../plugins'
   import { library } from '../stores/library.svelte'
   import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
@@ -29,7 +32,7 @@
   }: {
     title: string
     meta: string
-    items: Track[]
+    items: ItemKey[]
     scrollEl: HTMLElement | undefined
     // the library's sort unless given; a playlist has its own
     sort?: Sort | null
@@ -53,7 +56,8 @@
   ]
 
   const sort = $derived(given === undefined ? library.sort : given)
-  const rows = $derived(sortRows(items, sort, (t) => library.order(t)))
+  // ties keep the order given
+  const rows = $derived(sortItems(items, sort, infoOf))
   let list: HTMLDivElement | undefined = $state()
 
   const v = virtualList(() => ({ count: rows.length, scrollEl, list, size: ROW }), 10)
@@ -63,18 +67,15 @@
     items: rows,
     per: 1,
     rowSize: ROW,
-    key: (t: Track) => t.id,
-    source: library.revision
+    key: (k: ItemKey) => k,
+    source: itemsVersion()
   }))
 
-  // playing from the table makes the sorted list the queue
+  // Playing from the table makes the sorted list the queue. A greyed row
+  // can't play.
   function play(i: number): void {
-    queue.playList(
-      rows.map((t) => t.id),
-      i,
-      title,
-      link
-    )
+    if (itemInfo(rows[i]).state !== 'ok') return
+    queue.playList(rows, i, title, link)
   }
 </script>
 
@@ -115,33 +116,45 @@
     use:roving={{ rows, count: rows.length, scrollTo: (i) => v.scrollToIndex(i) }}
   >
     {#each v.items as item (item.key)}
-      {@const t = rows[item.index]}
-      {@const cur = playing.isSong(t.id)}
+      {@const key = rows[item.index]}
+      {@const s = itemInfo(key)}
+      {@const cur = playing.isItem(key)}
       <button
         class="tr row"
         class:cur-row={cur}
+        class:dim={s.state !== 'ok'}
         data-row
         data-index={item.index}
         aria-current={cur ? 'true' : undefined}
         style:transform="translateY({v.offset(item)}px)"
         onclick={() => play(item.index)}
-        oncontextmenu={(e) =>
-          openSongMenu(e, [t.id], { inPlaylist: playlistId, from: title, link })}
+        oncontextmenu={(e) => openSongMenu(e, [key], { inPlaylist: playlistId, from: title, link })}
       >
         <span class="n"
           >{#if cur && playing.songPlaying}<Eq />{:else}{item.index + 1}{/if}</span
         >
-        <span class="tt">
-          <Thumb src={library.art(t).cover} size={36} radius={4} />
-          <span class="words">
-            <span class="nm" title={t.title}>{t.title}</span>
-            <!-- shown only when the Artist column is gone -->
-            <span class="sub" title={t.artist}>{t.artist}</span>
+        {#if s.state === 'ok'}
+          {@const t = s.info}
+          <span class="tt">
+            <Thumb src={t.art?.cover} size={36} radius={4} />
+            <span class="words">
+              <span class="nm" title={t.title}>{t.title}</span>
+              <!-- shown only when the Artist column is gone -->
+              <span class="sub" title={t.subtitle}>{t.subtitle ?? ''}</span>
+            </span>
           </span>
-        </span>
-        <span class="o ar" title={t.artist}>{t.artist}</span>
-        <span class="o al" title={t.album}>{t.album}</span>
-        <span class="d">{fmtTime(t.duration)}</span>
+          <span class="o ar" title={t.subtitle}>{t.subtitle ?? ''}</span>
+          <span class="o al" title={t.group}>{t.group ?? ''}</span>
+          <span class="d">{t.length === undefined ? '' : fmtTime(t.length)}</span>
+        {:else}
+          <span class="tt">
+            <Thumb src={undefined} size={36} radius={4} />
+            <span class="words"><span class="nm">{s.state === 'off' ? s.text : ''}</span></span>
+          </span>
+          <span class="o ar"></span>
+          <span class="o al"></span>
+          <span class="d"></span>
+        {/if}
       </button>
     {/each}
   </div>
@@ -282,5 +295,12 @@
   }
   .cur-row .nm {
     font-weight: 600;
+  }
+  /* its plugin is off, or its data is not in yet */
+  .dim .nm {
+    color: var(--ink-3);
+  }
+  .dim :global(.mini) {
+    opacity: 0.5;
   }
 </style>

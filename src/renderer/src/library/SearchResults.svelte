@@ -19,6 +19,7 @@
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
   import type { Track } from '../../../shared/library'
+  import { isPlaying, trackKey } from '../plugins/files/views'
 
   let {
     scrollEl,
@@ -35,10 +36,12 @@
 
   const q = $derived(library.query.trim())
   const songs = $derived(searchSongs(library.albums, (id) => library.track(id), q))
+  const songKeys = $derived(songs.map(trackKey))
   const albums = $derived(filterAlbums(library.albums, q))
   const artists = $derived(filterArtists(library.artists, q))
   // none while the setting is off: there are no episodes then
   const mixes = $derived(searchSongs(library.mfpAlbums, (id) => library.track(id), q))
+  const mixKeys = $derived(mixes.map(trackKey))
   const from = $derived(`search "${q}"`)
   const titles: Record<SearchGroup, string> = {
     songs: 'Songs',
@@ -49,11 +52,7 @@
 
   // the clicked song, with every song of its group found after it as the queue
   function play(rows: Track[], i: number): void {
-    queue.playList(
-      rows.map((t) => t.id),
-      i,
-      from
-    )
+    queue.playList(rows.map(trackKey), i, from)
   }
 
   function openAlbum(id: string): void {
@@ -75,14 +74,14 @@
     {@render more(group, rows.length, TOP_SONGS)}
     <div class="lines" use:roving={{ rows }}>
       {#each rows.slice(0, TOP_SONGS) as t, i (t.id)}
-        {@const cur = playing.isSong(t.id)}
+        {@const cur = isPlaying(t)}
         <button
           class="srow row"
           class:cur-row={cur}
           data-row
           aria-current={cur ? 'true' : undefined}
           onclick={() => play(rows, i)}
-          oncontextmenu={(e) => openSongMenu(e, [t.id], { from })}
+          oncontextmenu={(e) => openSongMenu(e, [trackKey(t)], { from })}
         >
           <span class="tt">
             <Thumb src={library.art(t).cover} size={36} radius={4} />
@@ -105,9 +104,9 @@
     ><Icon name="back" size={16} />All results</button
   >
   {#if library.searchAll === 'songs'}
-    <SongTable title="Songs" meta={`Search "${q}"`} items={songs} {scrollEl} />
+    <SongTable title="Songs" meta={`Search "${q}"`} items={songKeys} {scrollEl} />
   {:else if library.searchAll === 'mfp'}
-    <SongTable title={titles.mfp} meta={`Search "${q}"`} items={mixes} {scrollEl} />
+    <SongTable title={titles.mfp} meta={`Search "${q}"`} items={mixKeys} {scrollEl} />
   {:else}
     <div class="allhead">
       <div class="page-meta">Search "{q}"</div>

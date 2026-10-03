@@ -86,7 +86,7 @@ if (moves) {
 }
 playlists.load(startLists, lists.ok)
 radio.load(stations.value)
-// paused where it was; songs no longer in the library leave the queue.
+// paused where it was; songs their plugin says are gone leave the queue.
 // Radio comes back with its station, paused.
 playing.restore(startQueue, stations.ok)
 
@@ -105,16 +105,17 @@ function loadLibrary(bytes: Uint8Array): boolean {
   return true
 }
 
-// Ids that changed are renamed as the library with the new ones loads.
+// Ids that changed are renamed as the library with the new ones loads, before
+// the queue drops songs that are gone (queue.refresh, from App.svelte).
 function applyLibrary(m: LibraryMessage): void {
   if (moves) {
     queue.moveIds(moves)
     playlists.moveIds(moves)
     moves = undefined
   }
-  const gone = 'patch' in m ? library.patch(m) : (library.load(m), true)
+  if ('patch' in m) library.patch(m)
+  else library.load(m)
   library.loadFailed = false
-  if (gone) queue.prune()
 }
 
 // While a scan runs, main sends what changed (ticket 022).

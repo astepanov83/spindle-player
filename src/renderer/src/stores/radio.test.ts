@@ -15,7 +15,6 @@ const fake = vi.hoisted(() => ({
 }))
 
 vi.mock('../audio/engine', () => ({
-  mediaUrl: (id: string) => `media/${id}`,
   engine: {
     on: (e: Partial<EngineEvents>) => Object.assign(fake.on, e),
     get loaded() {

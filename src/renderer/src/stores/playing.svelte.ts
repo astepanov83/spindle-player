@@ -1,7 +1,8 @@
 // What plays: the queue or a radio station (decision 142). This store owns the
 // engine's events and passes them to the side that plays. NowPlaying, the
 // controls, the media session and the app colors read title, sub and art here.
-import type { Art, Track } from '../../../shared/library'
+import type { Art } from '../../../shared/library'
+import type { ItemKey } from '../../../shared/plugins/items'
 import { savedStation, type SavedPlaying, type SavedQueues } from '../../../shared/saved-queue'
 import type { Station } from '../../../shared/stations'
 import { engine, type EngineEvents } from '../audio/engine'
@@ -11,6 +12,11 @@ import { queue } from './queue.svelte'
 import { radio } from './radio.svelte'
 
 export type PlayingKind = 'queue' | 'radio'
+
+// "Artist · Album", or the one of them there is
+function subLine(subtitle: string | undefined, group: string | undefined): string {
+  return [subtitle, group].filter(Boolean).join(' · ')
+}
 
 // What the system's media controls show.
 export interface MediaText {
@@ -35,38 +41,38 @@ class PlayingStore {
   kind: PlayingKind = $state('queue')
 
   title: string | undefined = $derived(
-    this.kind === 'radio' ? radio.now.track || radio.station?.name : queue.current?.title
+    this.kind === 'radio' ? radio.now.track || radio.station?.name : queue.currentInfo?.title
   )
   // Radio: the station under the song; before a song title comes, the title
   // is the station, so it isn't said twice.
   sub: string | undefined = $derived(
     this.kind === 'radio'
       ? radio.station && (radio.now.track ? radio.station.name : 'Radio')
-      : queue.current && `${queue.current.artist} · ${queue.current.album}`
+      : queue.currentInfo && subLine(queue.currentInfo.subtitle, queue.currentInfo.group)
   )
-  art: Art | undefined = $derived(this.kind === 'radio' ? radio.art : queue.currentArt)
+  art: Art | undefined = $derived(this.kind === 'radio' ? radio.art : queue.currentInfo?.art)
   // No song and no station: Play, Previous and Next have nothing to act on.
   nothing: boolean = $derived(this.kind === 'radio' ? !radio.station : !queue.current)
   // A song sounds: the queue's playing marks (the bouncing bars) follow this,
   // not player.playing, which is the radio's while radio plays.
   songPlaying: boolean = $derived(this.kind === 'queue' && player.playing)
-  // The queue's song, only while the queue plays: the library's playing marks
+  // The queue's song, only while the queue plays: the playing marks in lists
   // (the row tint, the bars on a tile) follow this, so none show for radio.
-  song: Track | undefined = $derived(this.kind === 'queue' ? queue.current : undefined)
+  item: ItemKey | undefined = $derived(this.kind === 'queue' ? queue.current : undefined)
   // Radio: the title is the song, the artist the station.
   media: MediaText | undefined = $derived.by(() => {
     if (this.kind === 'radio') {
       const s = radio.station
       return s && { title: radio.now.track || s.name, artist: s.name, album: '' }
     }
-    const t = queue.current
-    return t && { title: t.title, artist: t.artist, album: t.album }
+    const i = queue.currentInfo
+    return i && { title: i.title, artist: i.subtitle ?? '', album: i.group ?? '' }
   })
 
   #saved = ''
 
-  isSong(id: string): boolean {
-    return this.song?.id === id
+  isItem(key: ItemKey): boolean {
+    return this.item === key
   }
 
   constructor() {

@@ -1,8 +1,8 @@
 // Queue moves as plain functions. See work/specs/queue.md.
 // stores/queue.svelte.ts plays what they pick.
-import type { Track } from '../../../shared/library'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
+import type { PlayablePart } from '../plugins/types'
 
 export interface QueueState {
   items: ItemKey[]
@@ -174,8 +174,8 @@ export function back(q: QueueState, pos: number): { state: QueueState; restart: 
   return { state: withNext({ ...q, index: q.index - 1 }, next), restart: false }
 }
 
-// After a rescan: drops songs that left the library. The current song stays
-// current; if it is gone, the next song still there takes its place.
+// Drops songs their plugin says are gone. The current song stays current; if
+// it is gone, the next song still there takes its place.
 export function prune(q: QueueState, has: (key: ItemKey) => boolean): QueueState {
   const items: ItemKey[] = []
   const marks: boolean[] = []
@@ -194,7 +194,10 @@ export function prune(q: QueueState, has: (key: ItemKey) => boolean): QueueState
 
 // `b` starts where `a` ends in the same file (the next track of a disc image),
 // so playback can run on from one to the other without a reload.
-export function follows(a: Track | undefined, b: Track | undefined): boolean {
+export function follows(
+  a: { part?: PlayablePart } | undefined,
+  b: { part?: PlayablePart } | undefined
+): boolean {
   const pa = a?.part
   const pb = b?.part
   return (
@@ -204,4 +207,21 @@ export function follows(a: Track | undefined, b: Track | undefined): boolean {
     pa.end !== undefined &&
     Math.abs(pb.start - pa.end) < 0.001
   )
+}
+
+// A song that can't play now (its plugin is off) is passed over as a failed
+// song is: `step` goes on from it (Next, or Previous) until one that can, at
+// most once round the list. The same state when none can.
+export function passOver(
+  q: QueueState,
+  blocked: (key: ItemKey) => boolean,
+  step: (q: QueueState) => QueueState
+): QueueState {
+  let s = q
+  for (let n = 0; n < q.items.length && blocked(s.items[s.index]); n++) {
+    const next = step(s)
+    if (next === s) break
+    s = next
+  }
+  return s.items.length && blocked(s.items[s.index]) ? q : s
 }

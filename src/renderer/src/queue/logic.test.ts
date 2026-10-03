@@ -12,6 +12,7 @@ import {
   jump,
   moveRow,
   onEnded,
+  passOver,
   prune,
   queueNotice,
   removeRow,
@@ -443,5 +444,25 @@ describe('queueNotice', () => {
     expect(queueNotice('add', ['files:x', 'files:y', 'files:z'], 'Song')).toBe(
       'Added 3 songs to the queue'
     )
+  })
+})
+
+describe('passOver (ticket 056)', () => {
+  const items: ItemKey[] = ['files:a', 'mfp:b', 'mfp:c', 'files:d']
+  const off = (k: ItemKey): boolean => k.startsWith('mfp:')
+  const next = (s: QueueState): QueueState => advance(s, { shuffle: false })
+
+  it('goes on to the next song that can play', () => {
+    expect(passOver(q(1, items), off, next).index).toBe(3)
+  })
+
+  it('leaves a song that can play where it is', () => {
+    const s = q(0, items)
+    expect(passOver(s, off, next)).toBe(s)
+  })
+
+  it('gives the same state when none after can play', () => {
+    const s = q(1, ['files:a', 'mfp:b', 'mfp:c'])
+    expect(passOver(s, off, next)).toBe(s)
   })
 })

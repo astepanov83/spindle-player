@@ -10,6 +10,8 @@ export interface PluginInfo {
   about: string
   defaultOn: boolean
   itemKind: ItemKind
+  // what the queue and playlists show on its items while it is off
+  offText: string
 }
 
 // Also the order of the switches and tabs.
@@ -19,21 +21,24 @@ export const plugins: PluginInfo[] = [
     name: 'Music files',
     about: 'Music in folders on this computer.',
     defaultOn: true,
-    itemKind: 'track'
+    itemKind: 'track',
+    offText: 'Music files are off'
   },
   {
     id: 'radio',
     name: 'Radio',
     about: 'Search and play internet radio stations.',
     defaultOn: true,
-    itemKind: 'live'
+    itemKind: 'live',
+    offText: 'Radio is off'
   },
   {
     id: 'mfp',
     name: 'Music For Programming',
     about: 'Mixes from musicforprogramming.net.',
     defaultOn: false,
-    itemKind: 'track'
+    itemKind: 'track',
+    offText: 'MFP is off'
   }
 ]
 

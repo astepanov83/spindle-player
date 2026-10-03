@@ -1,10 +1,11 @@
-// The queue store with a fake engine: what it plays after an end, a failure,
-// Previous and a rescan.
+// The queue store with a fake engine and a fake plugin: what it plays after
+// an end, a failure, Previous and a change in the plugin's data. It knows
+// songs only by what plugins/index.ts answers (ticket 056).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EngineError, EngineEvents } from '../audio/engine'
-import type { Album, LibraryData, Track } from '../../../shared/library'
-import { defaultPalettes } from '../../../shared/palette'
+import type { ItemKey } from '../../../shared/plugins/items'
 import { queueLink } from '../../../shared/saved-queue'
+import type { ItemAnswer, ItemInfo, Playable, PlayablePart } from '../plugins/types'
 
 const fake = vi.hoisted(() => ({
   on: {} as Partial<EngineEvents>,
@@ -16,7 +17,6 @@ const fake = vi.hoisted(() => ({
 }))
 
 vi.mock('../audio/engine', () => ({
-  mediaUrl: (id: string) => `media/${id}`,
   engine: {
     on: (e: Partial<EngineEvents>) => Object.assign(fake.on, e),
     get loaded() {
@@ -39,6 +39,49 @@ vi.mock('../audio/engine', () => ({
   }
 }))
 
+// The fake plugins: songs by key, plugins that are off, plugins whose data is
+// not in yet (a song they don't have is loading then, not missing).
+const plugin = vi.hoisted(() => ({
+  songs: new Map<string, { info: ItemInfo; part?: PlayablePart }>(),
+  off: new Set<string>(),
+  loading: new Set<string>(),
+  // answers come later, as radio's will
+  later: false,
+  pending: [] as (() => void)[]
+}))
+
+vi.mock('../plugins', () => {
+  const answer = (key: string): ItemAnswer => {
+    const p = key.slice(0, key.indexOf(':'))
+    if (plugin.off.has(p)) return { state: 'off', text: `${p} is off` }
+    const s = plugin.songs.get(key)
+    if (s) return { state: 'ok', info: s.info }
+    return { state: plugin.loading.has(p) ? 'loading' : 'missing' }
+  }
+  const playable = (key: string): Playable | undefined => {
+    const s = answer(key).state === 'ok' ? plugin.songs.get(key) : undefined
+    if (!s) return undefined
+    const p: Playable = {
+      url: `media/${s.part?.file ?? key.slice(key.indexOf(':') + 1)}`,
+      length: s.info.length ?? 0,
+      can: { seek: true, pause: true, next: true, previous: true }
+    }
+    if (s.part) p.part = s.part
+    return p
+  }
+  return {
+    itemInfo: answer,
+    infoOf: (key: string | undefined) => {
+      const a = key ? answer(key) : undefined
+      return a?.state === 'ok' ? a.info : undefined
+    },
+    playItem: (key: string) => {
+      if (!plugin.later) return playable(key)
+      return new Promise((done) => plugin.pending.push(() => done(playable(key))))
+    }
+  }
+})
+
 const log = vi.fn()
 const saveQueue = vi.fn()
 const savePlace = vi.fn()
@@ -48,56 +91,47 @@ const { queue } = await import('./queue.svelte')
 // playing.svelte.ts passes the engine's events on; here they go to the queue straight
 Object.assign(fake.on, queue.events)
 const { player } = await import('./player.svelte')
-const { library } = await import('./library.svelte')
 const { notice } = await import('./notice.svelte')
 
-function album(id: string, n: number): { album: Album; tracks: Track[] } {
-  const tracks = Array.from({ length: n }, (_, i) => ({
-    id: `${id}${i}`,
-    title: `${id.toUpperCase()} ${i}`,
-    duration: 100,
-    albumId: id,
-    artist: 'X',
-    album: id,
-    no: i + 1,
-    disc: 1,
-    codec: '',
-    folder: 0
-  }))
-  return {
-    album: {
-      id,
-      title: `Album ${id}`,
-      artist: 'X',
-      year: 0,
-      palette: defaultPalettes,
-      cover: '',
-      coverLarge: '',
-      trackIds: tracks.map((t) => t.id)
-    },
-    tracks
-  }
+// Albums of `n` songs, keys "<plugin>:<album><i>", titles "<ALBUM> <i>".
+function songs(album: string, n: number, of = 'files'): ItemKey[] {
+  return Array.from({ length: n }, (_, i) => {
+    const key = `${of}:${album}${i}` as ItemKey
+    plugin.songs.set(key, { info: { title: `${album.toUpperCase()} ${i}`, length: 100 } })
+    return key
+  })
 }
 
-function lib(...albums: [string, number][]): LibraryData {
-  const made = albums.map(([id, n]) => album(id, n))
-  return {
-    albums: made.map((m) => m.album),
-    tracks: made.flatMap((m) => m.tracks),
-    folders: [{ name: '/m', parent: -1 }]
-  }
+const albums: Record<string, ItemKey[]> = {}
+
+function setSongs(...list: [string, number, string?][]): void {
+  plugin.songs.clear()
+  for (const [a, n, of] of list) albums[a] = songs(a, n, of)
 }
+
+function playAlbum(a: string, index: number): void {
+  queue.playList(albums[a], index, `Album ${a}`, queueLink('album', a))
+}
+
+const k = (...ids: string[]): ItemKey[] => ids.map((id) => `files:${id}` as ItemKey)
+
+// a song leaves the plugin's data
+const drop = (key: string): boolean => plugin.songs.delete(key)
 
 const bad: EngineError = { code: 4, message: 'no supported streams', gone: false }
-const playing = (): string | undefined => queue.current?.id
+const playing = (): string | undefined => queue.current?.slice(queue.current.indexOf(':') + 1)
 
 beforeEach(() => {
-  library.load(lib(['a', 3], ['b', 2]))
+  plugin.off.clear()
+  plugin.loading.clear()
+  plugin.later = false
+  plugin.pending = []
+  setSongs(['a', 3], ['b', 2])
   player.repeat = false
   player.shuffle = false
   player.pos = 0
   notice.text = ''
-  queue.playAlbum('a', 0)
+  playAlbum('a', 0)
   fake.reset()
   log.mockClear()
   saveQueue.mockClear()
@@ -156,11 +190,11 @@ describe('a song ends', () => {
 
     queue.jump(2)
     queue.next()
-    queue.append(['b0'])
+    queue.append(k('b0'))
     expect(queue.ended).toBe(false)
 
     queue.next()
-    queue.playAlbum('a', 0)
+    playAlbum('a', 0)
     expect(queue.ended).toBe(false)
   })
 
@@ -180,7 +214,7 @@ describe('a song ends', () => {
     queue.jump(2)
     fake.on.ended!()
     fake.reset()
-    queue.append(['b0', 'b1'])
+    queue.append(k('b0', 'b1'))
     expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:a2', 'files:b0', 'files:b1'])
     expect(playing()).toBe('b0')
     expect(queue.ended).toBe(false)
@@ -193,7 +227,7 @@ describe('a song ends', () => {
     queue.jump(2)
     fake.on.ended!()
     fake.reset()
-    queue.playNext(['b0', 'b1'])
+    queue.playNext(k('b0', 'b1'))
     expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:a2', 'files:b0', 'files:b1'])
     expect(playing()).toBe('b0')
     expect(queue.ended).toBe(false)
@@ -264,7 +298,7 @@ describe('a song fails', () => {
   })
 
   it('stops at the end of the queue when every song fails', () => {
-    queue.playAlbum('a', 0)
+    playAlbum('a', 0)
     for (let i = 0; i < 3; i++) fake.on.error!(bad)
     expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:a2'])
     expect(player.playing).toBe(false)
@@ -272,8 +306,8 @@ describe('a song fails', () => {
   })
 
   it('stops after 20 failures in a row', () => {
-    library.load(lib(['x', 30]))
-    queue.playAlbum('x', 0)
+    setSongs(['x', 30])
+    playAlbum('x', 0)
     for (let i = 0; i < 20; i++) fake.on.error!(bad)
     expect(player.playing).toBe(false)
     expect(notice.text).toBe('Could not play 20 songs in a row. Stopped.')
@@ -302,22 +336,16 @@ describe('a rescan', () => {
   it('moves on to the next song when the current one is gone, still playing', () => {
     queue.jump(1)
     fake.reset()
-    const l = lib(['a', 3], ['b', 2])
-    l.tracks = l.tracks.filter((t) => t.id !== 'a1')
-    l.albums[0].trackIds = ['a0', 'a2']
-    library.load(l)
-    queue.prune()
+    drop('files:a1')
+    queue.refresh()
     expect(queue.items).toEqual(['files:a0', 'files:a2'])
     expect(playing()).toBe('a2')
     expect(fake.calls).toEqual(['load media/a2', 'play'])
   })
 
   it('leaves the current song alone when others go', () => {
-    const l = lib(['a', 3], ['b', 2])
-    l.tracks = l.tracks.filter((t) => t.id !== 'a2')
-    l.albums[0].trackIds = ['a0', 'a1']
-    library.load(l)
-    queue.prune()
+    drop('files:a2')
+    queue.refresh()
     expect(queue.items).toEqual(['files:a0', 'files:a1'])
     expect(fake.calls).toEqual([])
   })
@@ -329,11 +357,10 @@ describe('ids that changed', () => {
     fake.reset()
     saveQueue.mockClear()
     queue.moveIds({ a0: 'n0', a1: 'n1' })
-    const l = lib(['a', 3], ['b', 2])
-    for (const t of l.tracks) if (t.id === 'a0' || t.id === 'a1') t.id = t.id.replace('a', 'n')
-    l.albums[0].trackIds = ['n0', 'n1', 'a2']
-    library.load(l)
-    queue.prune()
+    setSongs(['a', 3], ['b', 2], ['n', 2])
+    drop('files:a0')
+    drop('files:a1')
+    queue.refresh()
     expect(queue.items).toEqual(['files:n0', 'files:n1', 'files:a2'])
     expect(playing()).toBe('n1')
     expect(fake.calls).toEqual([])
@@ -361,7 +388,7 @@ describe('saving', () => {
     savePlace.mockClear()
     queue.next()
     expect(savePlace.mock.calls).toEqual([[{ index: 2, pos: 0 }]])
-    queue.playAlbum('b', 1)
+    playAlbum('b', 1)
     expect(saveQueue).toHaveBeenCalledTimes(1)
     expect(saveQueue).toHaveBeenLastCalledWith({
       items: ['files:b0', 'files:b1'],
@@ -375,37 +402,33 @@ describe('saving', () => {
   it('sends the whole list with the new index when a rescan drops songs', () => {
     queue.jump(2)
     savePlace.mockClear()
-    const l = lib(['a', 3], ['b', 2])
-    l.tracks = l.tracks.filter((t) => t.id !== 'a0')
-    l.albums[0].trackIds = ['a1', 'a2']
-    library.load(l)
-    queue.prune()
+    drop('files:a0')
+    queue.refresh()
     expect(saveQueue).toHaveBeenLastCalledWith(expect.objectContaining({ index: 1 }))
   })
 })
 
-// A disc image with a cue sheet: three tracks of one file, then a normal album.
-function imageLib(): LibraryData {
-  const l = lib(['c', 3], ['d', 1])
+// A disc image with a cue sheet: three parts of one file, then a normal album.
+// The carry-on comes from the playables' parts alone.
+function imageSongs(): void {
+  setSongs(['c', 3], ['d', 1])
   const bounds = [0, 100, 250]
-  l.tracks.forEach((t) => {
-    if (t.albumId !== 'c') return
-    const i = t.no - 1
-    t.part = { file: 'img', start: bounds[i], end: bounds[i + 1] }
-    if (t.part.end === undefined) delete t.part.end
+  albums.c.forEach((key, i) => {
+    const part: PlayablePart = { file: 'img', start: bounds[i] }
+    if (bounds[i + 1] !== undefined) part.end = bounds[i + 1]
+    plugin.songs.get(key)!.part = part
   })
-  return l
 }
 
 describe('tracks of a disc image', () => {
   beforeEach(() => {
-    library.load(imageLib())
-    queue.playAlbum('c', 0)
+    imageSongs()
+    playAlbum('c', 0)
     fake.reset()
   })
 
   it('load the image by its id, at the track', () => {
-    queue.playAlbum('c', 1)
+    playAlbum('c', 1)
     expect(fake.calls).toEqual(['load media/img 100-250 at 0', 'play'])
   })
 
@@ -461,7 +484,7 @@ describe('tracks of a disc image', () => {
 
 describe('queue actions (ticket 037)', () => {
   it('Play next puts songs right after the current one, with nothing reloaded', () => {
-    queue.playNext(['b0', 'b1'])
+    queue.playNext(k('b0', 'b1'))
     expect(queue.items).toEqual(['files:a0', 'files:b0', 'files:b1', 'files:a1', 'files:a2'])
     expect(playing()).toBe('a0')
     expect(fake.calls).toEqual([])
@@ -470,7 +493,7 @@ describe('queue actions (ticket 037)', () => {
   })
 
   it('Add to queue puts songs at the end', () => {
-    queue.append(['b1'])
+    queue.append(k('b1'))
     expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:a2', 'files:b1'])
     expect(fake.calls).toEqual([])
     expect(notice.text).toBe('Added to the queue: "B 1"')
@@ -480,7 +503,7 @@ describe('queue actions (ticket 037)', () => {
     queue.clear()
     queue.clear()
     fake.reset()
-    queue.append(['b0', 'b1'], 'Album b')
+    queue.append(k('b0', 'b1'), 'Album b')
     expect(queue.items).toEqual(['files:b0', 'files:b1'])
     expect(queue.from).toBe('Album b')
     expect(playing()).toBe('b0')
@@ -490,11 +513,11 @@ describe('queue actions (ticket 037)', () => {
 
   it('keeps what "From" opens, from a list, a menu and the last run (ticket 040)', () => {
     expect(queue.link).toEqual(queueLink('album', 'a'))
-    queue.playList(['b0'], 0, 'search "b"')
+    queue.playList(k('b0'), 0, 'search "b"')
     expect(queue.link).toBeUndefined()
     queue.clear()
     queue.clear()
-    queue.playNext(['b0'], 'Mix', queueLink('playlist', 'p1'))
+    queue.playNext(k('b0'), 'Mix', queueLink('playlist', 'p1'))
     expect(queue.link).toEqual(queueLink('playlist', 'p1'))
     expect(saveQueue).toHaveBeenLastCalledWith(
       expect.objectContaining({ from: 'Mix', link: queueLink('playlist', 'p1') })
@@ -509,24 +532,19 @@ describe('queue actions (ticket 037)', () => {
     expect(queue.link).toEqual(queueLink('artist', 'x'))
   })
 
-  it('plays an MFP album as mfp items, its "From" opening the episode (ticket 055)', () => {
-    const l = lib(['a', 3], ['e', 2])
-    l.albums[1].online = 'mfp'
-    for (const t of l.tracks) if (t.albumId === 'e') t.online = 'mfp'
-    library.load(l)
-    queue.playAlbum('e', 1)
+  it('mixes songs of two plugins (ticket 055)', () => {
+    setSongs(['a', 3], ['e', 2, 'mfp'])
+    playAlbum('e', 1)
     expect(queue.items).toEqual(['mfp:e0', 'mfp:e1'])
-    expect(queue.link).toEqual(queueLink('episode', 'e'))
     expect(playing()).toBe('e1')
-    queue.append(['a0'])
+    queue.append(k('a0'))
     expect(queue.items).toEqual(['mfp:e0', 'mfp:e1', 'files:a0'])
+    fake.on.ended!()
+    expect(queue.current).toBe('files:a0')
   })
 
   it('moves only files keys when ids change', () => {
-    const l = lib(['a', 3], ['e', 2])
-    l.albums[1].online = 'mfp'
-    for (const t of l.tracks) if (t.albumId === 'e') t.online = 'mfp'
-    library.load(l)
+    setSongs(['a', 3], ['e', 2, 'mfp'])
     queue.restore({ items: ['files:a0', 'mfp:e0', 'files:a2'], index: 0, from: 'X', pos: 0 })
     // the same ids from a files rescan: only the files key moves
     queue.moveIds({ a0: 'n0', e0: 'n1' })
@@ -568,7 +586,7 @@ describe('queue actions (ticket 037)', () => {
   })
 
   it('removing the last song left stops and empties the player', () => {
-    queue.playList(['b0'], 0, 'B')
+    queue.playList(k('b0'), 0, 'B')
     fake.reset()
     queue.remove(0)
     expect(queue.items).toEqual([])
@@ -624,8 +642,8 @@ describe('queue actions (ticket 037)', () => {
 
   it('shuffle plays Play next songs first, in order', () => {
     player.shuffle = true
-    queue.playNext(['b1'])
-    queue.playNext(['b0'])
+    queue.playNext(k('b1'))
+    queue.playNext(k('b0'))
     fake.on.ended!()
     expect(playing()).toBe('b0')
     queue.next()
@@ -635,7 +653,7 @@ describe('queue actions (ticket 037)', () => {
 
   it('repeat replays the current song; Play next songs wait for Next', () => {
     player.repeat = true
-    queue.playNext(['b0'])
+    queue.playNext(k('b0'))
     fake.reset()
     fake.on.ended!()
     expect(playing()).toBe('a0')
@@ -645,7 +663,7 @@ describe('queue actions (ticket 037)', () => {
   })
 
   it('sends the Play next count with the place', () => {
-    queue.playNext(['b0', 'b1'])
+    queue.playNext(k('b0', 'b1'))
     queue.next()
     expect(savePlace).toHaveBeenLastCalledWith({ index: 1, pos: 0, next: 1 })
   })
@@ -665,7 +683,7 @@ describe('queue actions (ticket 037)', () => {
 
   it('counts a new song start, not an edit, for the queue to scroll to', () => {
     const before = queue.starts
-    queue.playNext(['b0'])
+    queue.playNext(k('b0'))
     queue.move(2, 0)
     queue.remove(0)
     expect(queue.starts).toBe(before)
@@ -678,9 +696,119 @@ describe('queue actions (ticket 037)', () => {
     queue.clear()
     fake.reset()
     queue.active = false
-    queue.append(['b0'])
+    queue.append(k('b0'))
     queue.active = true
     expect(queue.items).toEqual(['files:b0'])
     expect(fake.calls).toEqual([])
+  })
+})
+
+describe('songs of a plugin that is off (ticket 056)', () => {
+  beforeEach(() => {
+    setSongs(['a', 2], ['e', 2, 'mfp'])
+    queue.playList([albums.a[0], ...albums.e, albums.a[1]], 0, 'Mix')
+    plugin.off.add('mfp')
+    fake.reset()
+  })
+
+  it('are passed over at the end of a song and by Next, and stay in the queue', () => {
+    fake.on.ended!()
+    expect(queue.current).toBe('files:a1')
+    expect(fake.calls).toEqual(['load media/a1', 'play'])
+    queue.jump(0)
+    queue.next()
+    expect(queue.current).toBe('files:a1')
+    queue.refresh()
+    expect(queue.items).toEqual(['files:a0', 'mfp:e0', 'mfp:e1', 'files:a1'])
+  })
+
+  it('are passed over going back too', () => {
+    queue.jump(3)
+    fake.reset()
+    queue.prev()
+    expect(queue.current).toBe('files:a0')
+    expect(fake.calls).toEqual(['load media/a0', 'play'])
+  })
+
+  it('do nothing when clicked', () => {
+    queue.jump(1)
+    expect(queue.current).toBe('files:a0')
+    expect(fake.calls).toEqual([])
+  })
+
+  it('are passed over by a restore, the next song loaded paused', () => {
+    queue.restore({ items: ['mfp:e0', 'files:a1'], index: 0, from: 'Mix', pos: 30 })
+    expect(queue.current).toBe('files:a1')
+    expect(fake.calls.at(-1)).toBe('load media/a1')
+    expect(player.playing).toBe(false)
+  })
+
+  it('a song playing when its plugin goes off is passed over, still playing', () => {
+    plugin.off.clear()
+    queue.jump(1)
+    fake.reset()
+    plugin.off.add('mfp')
+    queue.refresh()
+    expect(queue.current).toBe('files:a1')
+    expect(fake.calls).toEqual(['load media/a1', 'play'])
+    expect(queue.items).toHaveLength(4)
+  })
+
+  it('with nothing else to play, waits and loads when the plugin is on again', () => {
+    queue.playList(albums.e, 0, 'Episode')
+    expect(queue.current).toBe('mfp:e0')
+    expect(fake.calls).toEqual(['clear'])
+    expect(notice.text).toBe('mfp is off: nothing to play')
+    fake.reset()
+    plugin.off.clear()
+    queue.refresh()
+    expect(fake.calls).toEqual(['load media/e0', 'play'])
+  })
+})
+
+describe('songs whose plugin has no data yet (ticket 056)', () => {
+  it('stay in the queue; the current one loads once the data is in', () => {
+    setSongs(['a', 2])
+    plugin.songs.clear()
+    plugin.loading.add('mfp')
+    plugin.loading.add('files')
+    queue.restore({ items: ['files:a0', 'mfp:e0', 'files:a1'], index: 0, from: 'X', pos: 30 })
+    queue.refresh()
+    expect(queue.items).toEqual(['files:a0', 'mfp:e0', 'files:a1'])
+    expect(fake.loaded).toBe(false)
+    // the music files are in; MFP (just turned on) still has none
+    setSongs(['a', 2])
+    plugin.loading.delete('files')
+    fake.reset()
+    queue.refresh()
+    expect(queue.items).toEqual(['files:a0', 'mfp:e0', 'files:a1'])
+    expect(fake.calls).toEqual(['load media/a0'])
+    expect(player.pos).toBe(30)
+    // MFP's episodes came, without that one: only now it is gone
+    plugin.loading.delete('mfp')
+    queue.refresh()
+    expect(queue.items).toEqual(['files:a0', 'files:a1'])
+  })
+
+  it('only gone songs leave the queue, not off or loading ones', () => {
+    setSongs(['a', 3])
+    queue.playList(['files:a0', 'mfp:x', 'radio:y', 'files:gone', 'files:a1'] as ItemKey[], 0, 'X')
+    plugin.off.add('mfp')
+    plugin.loading.add('radio')
+    queue.refresh()
+    expect(queue.items).toEqual(['files:a0', 'mfp:x', 'radio:y', 'files:a1'])
+  })
+})
+
+describe('a playable that comes later (ticket 056)', () => {
+  it('loads when it comes, unless another song was picked meanwhile', async () => {
+    plugin.later = true
+    queue.jump(1)
+    queue.jump(2)
+    expect(fake.calls).toEqual(['clear', 'clear'])
+    for (const done of plugin.pending) done()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(fake.calls).toEqual(['clear', 'clear', 'load media/a2', 'play'])
   })
 })

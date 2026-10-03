@@ -1,5 +1,7 @@
 // Search, sort and grid math for the library views. No DOM.
 import type { Album, Track } from '../../../shared/library'
+import type { ItemKey } from '../../../shared/plugins/items'
+import type { ItemInfo } from '../plugins/types'
 
 export type SortKey = 't' | 'a' | 'al' | 'd'
 export interface Sort {
@@ -168,15 +170,48 @@ export function withPlaylistSort(
   return next
 }
 
-// A playlist's songs that are in the library. The others stay in the file
-// (a rescan may find them again) but are not shown or played.
+// A playlist's songs that are not gone. Gone ones stay in the file (a rescan
+// may find them again) but are not shown or played. Songs whose plugin is off
+// or still loading are shown, greyed.
 export function playlistRows(
-  ids: string[],
-  has: (id: string) => boolean,
-  track: (id: string) => Track
-): { rows: Track[]; missing: number } {
-  const rows = ids.filter(has).map(track)
-  return { rows, missing: ids.length - rows.length }
+  keys: ItemKey[],
+  gone: (key: ItemKey) => boolean
+): { rows: ItemKey[]; missing: number } {
+  const rows = keys.filter((k) => !gone(k))
+  return { rows, missing: keys.length - rows.length }
+}
+
+// Items by what their plugin says, for the songs table (ticket 056). `info`
+// is undefined for one that can't be drawn as itself (off, loading).
+type InfoOf = (key: ItemKey) => ItemInfo | undefined
+
+const itemText = foldedBy((i: ItemInfo) => `${i.title}\n${i.subtitle ?? ''}\n${i.group ?? ''}`)
+
+// A playlist's rows by title, artist or album, as in Folders.
+export function filterItems(keys: ItemKey[], q: string, info: InfoOf): ItemKey[] {
+  const s = foldQuery(q)
+  if (!s) return keys
+  return keys.filter((k) => {
+    const i = info(k)
+    return !!i && itemText(i).includes(s)
+  })
+}
+
+const itemField: Record<SortKey, (i: ItemInfo | undefined) => string | number> = {
+  t: (i) => i?.title ?? '',
+  a: (i) => i?.subtitle ?? '',
+  al: (i) => i?.group ?? '',
+  d: (i) => i?.length ?? 0
+}
+
+// Ties keep the order given (library order in the library's lists). Each
+// item is asked once, not in every compare: a list can hold 50k songs.
+export function sortItems(keys: ItemKey[], sort: Sort | null, info: InfoOf): ItemKey[] {
+  if (!sort) return keys
+  const field = itemField[sort.k]
+  const rows = keys.map((key, i) => ({ key, i, v: field(info(key)) }))
+  rows.sort((x, y) => (x.v > y.v ? 1 : x.v < y.v ? -1 : 0) * sort.dir || x.i - y.i)
+  return rows.map((r) => r.key)
 }
 
 // Columns in the cover grid: tiles of at least `min` px with `gap` between them.

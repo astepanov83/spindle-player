@@ -1,5 +1,5 @@
-<!-- A rows block (Folders): a row each, only the rows on screen drawn. A row
-     is made only when it is drawn. -->
+<!-- A rows block (Folders, MFP's episodes): a row each, only the rows on
+     screen drawn. A row is made only when it is drawn. -->
 <script lang="ts">
   import { openSongMenu } from '../library/song-menu'
   import Eq from '../ui/Eq.svelte'
@@ -40,8 +40,12 @@
 <div class="rows lines" bind:this={list} style:height="{v.total}px">
   {#each v.items as item (item.key)}
     {@const r = b.row(items[item.index])}
+    {@const more = r.details ?? []}
     <button
       class="row"
+      style:grid-template-columns={more.length
+        ? `40px minmax(0, 1fr) repeat(${more.length}, auto) 5.5em 16px`
+        : undefined}
       style:transform="translateY({v.offset(item)}px)"
       onclick={() => openFrom(tab, r.to, b.filtered)}
       oncontextmenu={(e) => openSongMenu(e, r.songs(), { from: r.from, link: r.link })}
@@ -54,7 +58,8 @@
         >
         {#if r.subtitle}<span class="where" title={r.subtitle}>{r.subtitle}</span>{/if}
       </span>
-      <span class="n">{r.meta ?? ''}</span>
+      {#each more as d, i (i)}<span class="n">{d}</span>{/each}
+      <span class="n" class:end={more.length > 0}>{r.meta ?? ''}</span>
       <span class="go"><Icon name="back" size={16} /></span>
     </button>
   {/each}
@@ -102,6 +107,11 @@
     color: var(--ink-3);
     font-size: var(--text-s);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  /* with more columns, the last one lines up from row to row */
+  .end {
+    text-align: right;
   }
   /* the back arrow turned around */
   .go {

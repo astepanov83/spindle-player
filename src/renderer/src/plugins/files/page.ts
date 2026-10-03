@@ -110,6 +110,7 @@ const noMatches = (text: string): EmptyBlock => ({
 
 const listHead = (title: string, count: string): HeadBlock => ({
   kind: 'head',
+  look: 'list',
   id: '',
   title,
   meta: 'Library',
@@ -263,6 +264,7 @@ function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
   }
   const head: HeadBlock = {
     kind: 'head',
+    look: 'album',
     id,
     title: al.title,
     meta: albumLabel(al),
@@ -326,6 +328,7 @@ function artistBlocks(a: Artist): Block[] {
   const playIds = (): ItemKey[] => artistPlayIds(a)
   const head: HeadBlock = {
     kind: 'head',
+    look: 'artist',
     id,
     title: a.name,
     meta: 'Artist',
@@ -454,6 +457,7 @@ function foldersPage(page: string, query: string): Block[] {
     })
   blocks.push({
     kind: 'head',
+    look: 'folder',
     id,
     title,
     meta: node ? (node.parent < 0 ? 'Music folder' : 'Folder') : 'Music folders',

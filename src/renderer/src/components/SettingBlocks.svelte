@@ -11,18 +11,35 @@
   let { plugin, blocks }: { plugin: PluginId; blocks: SettingBlock[] } = $props()
 
   type Button = Extract<SettingBlock, { kind: 'button' }>
-  type Part = Exclude<SettingBlock, Button> | { kind: 'buttons'; buttons: Button[] }
+  type Status = Extract<SettingBlock, { kind: 'status' }>
+  type Part =
+    | Exclude<SettingBlock, Button | Status>
+    | { kind: 'buttons'; buttons: Button[] }
+    | { kind: 'statuses'; lines: Status[] }
 
-  // buttons that follow each other sit side by side
+  // Buttons that follow each other sit side by side, and status lines share
+  // one live region. It is there with no lines too (at the end), so a screen
+  // reader hears the first line that comes.
   const parts = $derived.by(() => {
     const out: Part[] = []
     for (const b of blocks) {
       const last = out[out.length - 1]
-      if (b.kind !== 'button') out.push(b)
-      else if (last?.kind === 'buttons') last.buttons.push(b)
-      else out.push({ kind: 'buttons', buttons: [b] })
+      if (b.kind === 'button')
+        if (last?.kind === 'buttons') last.buttons.push(b)
+        else out.push({ kind: 'buttons', buttons: [b] })
+      else if (b.kind === 'status')
+        if (last?.kind === 'statuses') last.lines.push(b)
+        else out.push({ kind: 'statuses', lines: [b] })
+      else out.push(b)
     }
+    if (!out.some((p) => p.kind === 'statuses')) out.push({ kind: 'statuses', lines: [] })
     return out
+  })
+
+  // by kind and count, so the live region stays while its lines change
+  const keys = $derived.by(() => {
+    const seen: Record<string, number> = {}
+    return parts.map((p) => `${p.kind} ${(seen[p.kind] = (seen[p.kind] ?? -1) + 1)}`)
   })
 
   // The row that is asked to confirm its removal, one at a time.
@@ -37,14 +54,18 @@
   }
 </script>
 
-{#each parts as b, i (i)}
+{#each parts as b, i (keys[i])}
   {#if b.kind === 'title'}
     <span class="section-label">{b.text}</span>
-  {:else if b.kind === 'status'}
-    <p class="hint status" aria-live="polite">
-      {#if b.busy}<Spinner />{/if}
-      <span>{b.text}</span>
-    </p>
+  {:else if b.kind === 'statuses'}
+    <div class="lines" aria-live="polite">
+      {#each b.lines as line, j (j)}
+        <p class="hint status">
+          {#if line.busy}<Spinner />{/if}
+          <span>{line.text}</span>
+        </p>
+      {/each}
+    </div>
   {:else if b.kind === 'list'}
     {#if b.rows.length}
       <ul>
@@ -111,6 +132,10 @@
     font-size: var(--text-s);
     line-height: 1.45;
     color: var(--ink-2);
+  }
+  /* an empty region takes no gap in the parent's column */
+  .lines:empty {
+    position: absolute;
   }
   .status {
     display: flex;

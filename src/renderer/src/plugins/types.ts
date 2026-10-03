@@ -96,11 +96,12 @@ export type HeadButton =
       disabled?: boolean
     }
 
-// The top of a page or list. Drawn by what it holds: a square picture as an
-// album's page, a round one as an artist's, buttons and no picture as a
-// folder's, else as a list's title with its count.
+// The top of a page or list. `look` says what it heads: an album's page (a
+// square picture), an artist's (a round one, the names editor), a folder's
+// (no picture), or a list's title with its count.
 export interface HeadBlock {
   kind: 'head'
+  look: 'album' | 'artist' | 'folder' | 'list'
   // act's target for its buttons
   id: string
   title: string
@@ -108,15 +109,20 @@ export interface HeadBlock {
   meta?: string
   // a list's count, on the right: "8 albums"
   count?: string
+  // a list's line under its title: "Reading musicforprogramming.net…"
+  hint?: string
   // the line under the title: "Marina Vale · 9 songs · 41 min"
   line?: Piece[]
+  // a web page, after the line; it opens in the browser (an https address)
+  link?: { label: string; url: string }
   // where it is, under that, cut at its start: "/music/Rock/Album"
   where?: Piece
   // the big picture: a cover, or a round photo made from `covers` when there is none
   art?: { src: string | undefined; round?: boolean; covers?: Pick<Art, 'cover' | 'palette'>[] }
   // the link back over it: "All albums"
   back?: { label: string; to: PageAddress }
-  // a line of names with a button each: "From tags: X (renamed) [Use tag]"
+  // a small line, of names with a button each: "From tags: X (renamed) [Use
+  // tag]", or only text: "Song times are guessed"
   note?: {
     text: string
     items: { text: string; action?: { id: string; label: string; value: string } }[]
@@ -188,6 +194,13 @@ export interface SongsBlock {
   // an album's list: each song's number (0: none), and "Disc 2" before a song
   numbers?: number[]
   groups?: { at: number; label: string }[]
+  // An album's list: where each song starts in its file, shown in place of
+  // its length (MFP's guessed times); `hint` is the column's tooltip.
+  starts?: { at: number[]; hint: string }
+  // What a click plays, from the song clicked: these in place of `items`
+  // (all of an episode's songs, while the search shows a few). Must hold
+  // every item.
+  queue?: ItemKey[]
 }
 
 export interface Row {
@@ -197,6 +210,8 @@ export interface Row {
   art?: string
   // on the right: "12 songs"
   meta?: string
+  // more on the right, a column each before `meta`: "2026", "22 songs"
+  details?: string[]
   to: PageAddress
   playing?: (item: ItemKey) => boolean
   songs: () => ItemKey[]

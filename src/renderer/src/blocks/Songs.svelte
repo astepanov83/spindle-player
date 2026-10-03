@@ -1,11 +1,12 @@
 <!-- A songs block. With a sort it is the sortable song table; without, an
-     album's numbered list, with a label row ("Disc 2") where one starts. -->
+     album's numbered list, with a label row ("Disc 2") where one starts, and
+     each song's length or where it starts in its file. -->
 <script lang="ts">
   import type { PluginId } from '../../../shared/plugins'
   import { splitKey, type ItemKey } from '../../../shared/plugins/items'
   import SongTable from '../library/SongTable.svelte'
   import { openSongMenu } from '../library/song-menu'
-  import { fmtTime } from '../format'
+  import { fmtClock, fmtTime } from '../format'
   import Eq from '../ui/Eq.svelte'
   import { roving } from '../ui/roving'
   import { actOnPage, itemInfo } from '../plugins'
@@ -32,6 +33,12 @@
     })
     return out
   })
+
+  // the queue a click starts: the block's songs, or all of them while a few show
+  function play(key: ItemKey, at: number): void {
+    const list = b.queue ?? b.items
+    queue.playList(list, b.queue ? Math.max(0, list.indexOf(key)) : at, b.from, b.link)
+  }
 </script>
 
 {#snippet label()}
@@ -66,7 +73,7 @@
           class:cur-row={cur}
           data-row
           aria-current={cur ? 'true' : undefined}
-          onclick={() => queue.playList(b.items, line.at, b.from, b.link)}
+          onclick={() => play(line.key, line.at)}
           oncontextmenu={(e) => openSongMenu(e, [line.key], { from: b.from, link: b.link })}
         >
           <span class="n"
@@ -74,7 +81,11 @@
           >
           <span class="nm" title={t?.title}>{t?.title ?? ''}</span>
           <span class="ar" title={t?.subtitle}>{t?.subtitle ?? ''}</span>
-          <span class="d">{t?.length === undefined ? '' : fmtTime(t.length)}</span>
+          {#if b.starts}
+            <span class="d" title={b.starts.hint}>{fmtClock(b.starts.at[line.at] ?? 0)}</span>
+          {:else}
+            <span class="d">{t?.length === undefined ? '' : fmtTime(t.length)}</span>
+          {/if}
         </button>
       {/if}
     {/each}

@@ -129,7 +129,12 @@ describe('pages', () => {
   it('Albums: a head and the albums as tiles, the store array as it is', () => {
     const blocks = page.filesPage('albums', '', '')
     expect(kinds(blocks)).toEqual(['head', 'tiles'])
-    expect(head(blocks[0])).toMatchObject({ title: 'Albums', meta: 'Library', count: '2 albums' })
+    expect(head(blocks[0])).toMatchObject({
+      look: 'list',
+      title: 'Albums',
+      meta: 'Library',
+      count: '2 albums'
+    })
     const t = tiles(blocks[1])
     expect(t.items).toBe(library.albums)
     const tile = t.tile(library.albums[0])
@@ -168,6 +173,7 @@ describe('pages', () => {
   it('an album: its head with links, and its songs with discs', () => {
     const [h, s] = page.filesPage('albums', 'album/a', '')
     expect(head(h)).toMatchObject({
+      look: 'album',
       title: 'Album a',
       meta: 'Album · 2003',
       art: { src: 'C-a' },
@@ -216,6 +222,7 @@ describe('pages', () => {
     const blocks = page.filesPage('artists', 'artist/marinavale', '')
     expect(kinds(blocks)).toEqual(['head', 'text', 'tiles'])
     expect(head(blocks[0])).toMatchObject({
+      look: 'artist',
       title: 'Marina Vale',
       meta: 'Artist',
       art: { round: true }
@@ -256,7 +263,7 @@ describe('pages', () => {
   it('Folders: the one music folder, then a folder with its path and songs', () => {
     const top = page.filesPage('folders', '', '')
     expect(kinds(top)).toEqual(['head', 'rows'])
-    expect(head(top[0])).toMatchObject({ title: 'm', meta: 'Music folder' })
+    expect(head(top[0])).toMatchObject({ look: 'folder', title: 'm', meta: 'Music folder' })
     expect(head(top[0]).line).toEqual([{ text: '1 folder · 4 songs' }])
     const rows = top[1] as RowsBlock
     expect(rows.filtered).toBe(true)

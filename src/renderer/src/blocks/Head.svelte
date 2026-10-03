@@ -1,6 +1,6 @@
-<!-- A head block: the top of a page. Drawn by what it holds: a square picture
-     as an album's page, a round one as an artist's (with the names editor),
-     buttons and no picture as a folder's, else as a list's title. -->
+<!-- A head block: the top of a page, drawn by its look: an album's page with
+     a square picture, an artist's with a round one (and the names editor), a
+     folder's with none, or a list's title. -->
 <script lang="ts">
   import { untrack } from 'svelte'
   import type { PluginId } from '../../../shared/plugins'
@@ -19,11 +19,10 @@
 
   let { block: b, tab, plugin }: { block: HeadBlock; tab: string; plugin: PluginId } = $props()
 
-  const look = $derived(
-    b.art ? (b.art.round ? 'round' : 'square') : b.buttons?.length ? 'folder' : 'list'
-  )
-
   const act = (id: string, value?: string): void => actOnPage(plugin, b.id, id, value)
+
+  // in the markup it would lose its spaces next to a block
+  const dot = ' · '
 
   type Play = Extract<HeadButton, { play: string }>
 
@@ -90,12 +89,28 @@
 {/snippet}
 
 {#snippet line()}
-  {#if b.line}
+  {#if b.line || b.link}
     <div class="page-meta">
-      {#each b.line as p, i (i)}{#if p.to}<GoLink go={() => openPage(p.to!)}>{p.text}</GoLink
-          >{:else}{p.text}{/if}{/each}
+      {#each b.line ?? [] as p, i (i)}{#if p.to}<GoLink go={() => openPage(p.to!)}>{p.text}</GoLink
+          >{:else}{p.text}{/if}{/each}{#if b.link}{b.line ? dot : ''}<a
+          class="site"
+          href={b.link.url}
+          target="_blank"
+          rel="noreferrer">{b.link.label}</a
+        >{/if}
     </div>
   {/if}
+{/snippet}
+
+{#snippet noteItems(n: NonNullable<HeadBlock['note']>)}
+  {n.text}
+  {#each n.items as t, i (i)}
+    {@const a = t.action}
+    {#if i > 0}<span class="dot">·</span>{/if}<span>{t.text}</span>
+    {#if a}
+      <button class="use" onclick={() => act(a.id, a.value)}>{a.label}</button>
+    {/if}
+  {/each}
 {/snippet}
 
 {#snippet acts()}
@@ -144,9 +159,9 @@
   </div>
 {/snippet}
 
-{#if look === 'list'}
-  <ViewHead title={b.title} meta={b.meta} count={b.count ?? ''} />
-{:else if look === 'square'}
+{#if b.look === 'list'}
+  <ViewHead title={b.title} meta={b.meta} count={b.count ?? ''} hint={b.hint} />
+{:else if b.look === 'album'}
   {@render back()}
   <div class="albhead">
     <div class="cv"><Cover src={b.art?.src} /></div>
@@ -154,6 +169,7 @@
       <div class="page-meta">{b.meta}</div>
       <h2 class="page-title clamp" title={b.title}>{b.title}</h2>
       {@render line()}
+      {#if b.note}<div class="page-meta">{@render noteItems(b.note)}</div>{/if}
       {#if b.where}
         {@const w = b.where}
         {@const to = w.to}
@@ -164,7 +180,7 @@
       {@render acts()}
     </div>
   </div>
-{:else if look === 'round'}
+{:else if b.look === 'artist'}
   {@render back()}
   <div class="arthead">
     <div class="pic"><ArtistPic photo={b.art?.src} covers={b.art?.covers ?? []} /></div>
@@ -201,18 +217,7 @@
       {:else}
         <h2 class="page-title" title={b.title}>{b.title}</h2>
       {/if}
-      {#if b.note}
-        <div class="tags">
-          {b.note.text}
-          {#each b.note.items as t, i (i)}
-            {@const a = t.action}
-            {#if i > 0}<span class="dot">·</span>{/if}<span>{t.text}</span>
-            {#if a}
-              <button class="use" onclick={() => act(a.id, a.value)}>{a.label}</button>
-            {/if}
-          {/each}
-        </div>
-      {/if}
+      {#if b.note}<div class="tags">{@render noteItems(b.note)}</div>{/if}
       {@render line()}
       {@render acts()}
     </div>
@@ -236,6 +241,12 @@
     margin-top: 4px;
   }
   .back:hover {
+    color: var(--ink);
+  }
+  .site {
+    color: inherit;
+  }
+  .site:hover {
     color: var(--ink);
   }
   .acts {

@@ -78,7 +78,8 @@ class TrackQueue {
   // and the player bar
   #loaded: { key: ItemKey; p: Playable } | undefined = $state.raw()
   // The current song could not load: its plugin has no data for it yet, or
-  // it is off with no other song to go on to. It loads once it can.
+  // it is off while nothing plays, or off with no other song to go on to. It
+  // loads once it can.
   get #waiting(): { andPlay: boolean; at: number } | undefined {
     return this.#waitingNow
   }
@@ -176,7 +177,7 @@ class TrackQueue {
       return
     }
     if (!key || !s) return this.#unload()
-    if (s.state === 'off') return this.#passOver(andPlay, at)
+    if (s.state === 'off') return andPlay ? this.#passOver(at) : this.#hold(at)
     const p = playItem(key)
     if (!p) {
       // loading (or missing, until the next refresh drops it)
@@ -221,21 +222,34 @@ class TrackQueue {
     engine.clear()
   }
 
-  // The current song's plugin is off (a list that starts on it, a restore): it
-  // is passed over as a failed song is, to the next one that can play. With
-  // none, it waits for its plugin, paused: sound starts only if Play is
-  // pressed in the wait (playWhenReady).
-  #passOver(andPlay: boolean, at: number): void {
+  // The current song's plugin is off and sound is wanted (a list that starts
+  // on it, Play): it is passed over as a failed song is, to the next one that
+  // can play. With none, it waits for its plugin, paused: sound starts only if
+  // Play is pressed in the wait (playWhenReady).
+  #passOver(at: number): void {
+    const q = this.#moveOff()
+    if (q) {
+      this.#set(q)
+      return this.#start()
+    }
+    this.#hold(at)
+    const st = itemInfo(this.items[this.index])
+    if (st.state === 'off') notice.show(`${st.text}: nothing to play`)
+  }
+
+  // The queue past an off current song, or none when nothing after it can play.
+  #moveOff(): QueueState | undefined {
     const q = this.#state()
     const s = passOver(q, isOff, (x) => advance(x, this.#nextOptions()))
-    if (s !== q) {
-      this.#set(s)
-      return this.#start(andPlay)
-    }
+    return s === q ? undefined : s
+  }
+
+  // The current song's plugin is off and nothing plays (a restore, paused): it
+  // stays, at its place, and loads there once its plugin is on again. Moving
+  // on would lose the place in a long mix.
+  #hold(at: number): void {
     this.#unload()
     this.#waiting = { andPlay: false, at }
-    const st = itemInfo(q.items[q.index])
-    if (andPlay && st.state === 'off') notice.show(`${st.text}: nothing to play`)
   }
 
   // The new current song is the next part of the file playing (the next
@@ -410,7 +424,13 @@ class TrackQueue {
     const w = this.#waiting ?? this.#pending
     if (!w) return false
     w.andPlay = on ?? !w.andPlay
-    this.#wish()
+    // Play on a held song whose plugin is off: the next one that can play
+    const key = this.current
+    const next = w.andPlay && key && isOff(key) ? this.#moveOff() : undefined
+    if (next) {
+      this.#set(next)
+      this.#start()
+    } else this.#wish()
     return true
   }
 
@@ -467,7 +487,7 @@ class TrackQueue {
   // A plugin's data changed, or one was turned on or off (App.svelte calls
   // this on itemsVersion). Songs their plugin says are gone leave the queue.
   // A current song that waited loads once it can; one whose plugin went off
-  // is passed over.
+  // is passed over while it plays, and held at its place while paused.
   refresh(): void {
     const before = this.current
     const waiting = this.#waiting

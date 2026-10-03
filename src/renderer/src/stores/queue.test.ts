@@ -740,11 +740,41 @@ describe('songs of a plugin that is off (ticket 056)', () => {
     expect(fake.calls).toEqual([])
   })
 
-  it('are passed over by a restore, the next song loaded paused', () => {
-    queue.restore({ items: ['mfp:e0', 'files:a1'], index: 0, from: 'Mix', pos: 30 })
-    expect(queue.current).toBe('files:a1')
-    expect(fake.calls.at(-1)).toBe('load media/a1')
+  it('stay current in a restore, held at their place until the plugin is on', () => {
+    queue.restore({ items: ['mfp:e0', 'files:a1'], index: 0, from: 'Mix', pos: 3000 })
+    expect(queue.current).toBe('mfp:e0')
+    expect(fake.calls).toEqual(['clear'])
+    expect(savePlace).toHaveBeenLastCalledWith({ index: 0, pos: 3000 })
+    fake.reset()
+    plugin.off.clear()
+    queue.refresh()
+    expect(fake.calls).toEqual(['load media/e0'])
+    expect(player.pos).toBe(3000)
     expect(player.playing).toBe(false)
+  })
+
+  it('a paused song whose plugin goes off stays current at its place', () => {
+    plugin.off.clear()
+    queue.jump(1)
+    fake.on.time!(3000)
+    queue.events.paused!()
+    fake.reset()
+    plugin.off.add('mfp')
+    queue.refresh()
+    expect(queue.current).toBe('mfp:e0')
+    expect(fake.calls).toEqual(['clear'])
+    plugin.off.clear()
+    queue.refresh()
+    expect(fake.calls).toEqual(['clear', 'load media/e0'])
+    expect(player.pos).toBe(3000)
+    expect(player.playing).toBe(false)
+  })
+
+  it('Play on a held song goes on to the next one that can play', () => {
+    queue.restore({ items: ['mfp:e0', 'files:a1'], index: 0, from: 'Mix', pos: 3000 })
+    expect(queue.playWhenReady()).toBe(true)
+    expect(queue.current).toBe('files:a1')
+    expect(fake.calls.slice(-2)).toEqual(['load media/a1', 'play'])
   })
 
   it('a song playing when its plugin goes off is passed over, still playing', () => {
@@ -793,6 +823,21 @@ describe('songs of a plugin that is off (ticket 056)', () => {
     queue.refresh()
     expect(fake.calls).toEqual([])
     expect(queue.playWhenReady()).toBe(false)
+  })
+
+  it('a queue that ran out on an MFP song starts nothing when MFP goes off and on', () => {
+    plugin.off.clear()
+    queue.playList(albums.e, 1, 'Episode')
+    fake.on.ended!()
+    expect(queue.ended).toBe(true)
+    fake.reset()
+    plugin.off.add('mfp')
+    queue.refresh()
+    plugin.off.clear()
+    queue.refresh()
+    expect(queue.current).toBe('mfp:e1')
+    expect(fake.calls).toEqual(['clear', 'load media/e1'])
+    expect(player.playing).toBe(false)
   })
 
   it('Next with only off songs after stops the same way', () => {

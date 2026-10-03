@@ -71,9 +71,8 @@ export class FilesPlugin implements MainPlugin {
     if (!on) stopAllDecoders()
   }
 
-  // None to list: the only prune runs in the library process, which keeps the
-  // covers of the index and the lookup itself, and it runs only after a scan,
-  // so never while off.
+  // None to list: the prune runs in the library process, which keeps the
+  // covers of the index and the lookup itself, on or off.
   keptCovers(): string[] {
     return []
   }

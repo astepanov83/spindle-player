@@ -5,12 +5,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { emptyIndex, serializeIndex } from './merge'
 import type { WorkerIn, WorkerOut, WorkerStart } from './types'
 
 let dir: string
 let music: string
 let heard: WorkerOut[]
 let send: (m: WorkerIn) => void
+let offPruneMs: number
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'spindle-worker-'))
@@ -26,13 +28,13 @@ beforeEach(async () => {
   }
   vi.stubGlobal('process', Object.assign(Object.create(process), { parentPort: port }))
   vi.resetModules()
-  await import('./library-worker')
+  ;({ offPruneMs } = await import('./library-worker'))
   vi.unstubAllGlobals()
   send = (m) => listener!({ data: m })
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-function start(on: boolean): void {
+function start(on: boolean, keepCovers: string[] = []): void {
   const s: WorkerStart = {
     indexPath: join(dir, 'library.json'),
     coversDir: join(dir, 'covers'),
@@ -41,7 +43,7 @@ function start(on: boolean): void {
     fetchedPath: join(dir, 'fetched-covers.json'),
     overridesPath: join(dir, 'artist-overrides.json'),
     userAgent: 'test',
-    keepCovers: [],
+    keepCovers,
     on
   }
   send({ type: 'start', start: s })
@@ -117,6 +119,60 @@ describe('the library process', () => {
       send({ type: 'set-on', on: true })
       send({ type: 'flush' })
       expect(marks()).toEqual([])
+    })
+  })
+
+  describe('the cover cache while off', () => {
+    const covers = (): string => join(dir, 'covers')
+    const cover = (c: string): string => join(covers(), `${c.repeat(40)}.jpg`)
+    const has = (c: string): boolean => existsSync(cover(c))
+
+    // a for the index, b kept by another plugin, c used by nothing
+    beforeEach(() => {
+      mkdirSync(covers())
+      for (const c of 'abc') writeFileSync(cover(c), 'jpg')
+      const ix = emptyIndex()
+      const path = join(music, 'a.mp3')
+      ix.files.set(path, { path, mtime: 1, size: 1, duration: 0, cover: 'a'.repeat(40) })
+      writeFileSync(join(dir, 'library.json'), JSON.stringify(serializeIndex(ix)))
+    })
+    afterEach(() => vi.useRealTimers())
+
+    // Fakes only the timer of the wait, then lets the prune run.
+    async function wait(): Promise<void> {
+      await vi.advanceTimersByTimeAsync(offPruneMs)
+      vi.useRealTimers()
+    }
+
+    it('is pruned a while after the start, keeping the index and kept covers', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      start(false, ['b'.repeat(40)])
+      await vi.advanceTimersByTimeAsync(offPruneMs - 1000)
+      expect(has('c')).toBe(true)
+      await wait()
+      await until(() => !has('c'))
+      expect([has('a'), has('b'), has('c')]).toEqual([true, true, false])
+    })
+
+    it('is pruned again after the kept covers change', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      start(false, ['b'.repeat(40), 'c'.repeat(40)])
+      await wait()
+      await settle()
+      expect(has('c')).toBe(true)
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      send({ type: 'keep-covers', hashes: ['b'.repeat(40)] })
+      await wait()
+      await until(() => !has('c'))
+      expect([has('a'), has('b'), has('c')]).toEqual([true, true, false])
+    })
+
+    it('is not pruned on its own while on', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      start(true)
+      await wait()
+      await settle()
+      expect(has('c')).toBe(true)
     })
   })
 })

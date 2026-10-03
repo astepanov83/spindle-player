@@ -1,5 +1,6 @@
 // Deletes cached covers nothing points at any more. Runs in the library
-// process after a scan; the next scan waits for it, so the two never overlap.
+// process after a scan (or alone while Music files is off); the next scan waits
+// for it, so the two never overlap.
 import { readdir, rm, stat } from 'fs/promises'
 import { join } from 'path'
 import { hashOfName, mosaicHashes } from '../../covers/cover-names'

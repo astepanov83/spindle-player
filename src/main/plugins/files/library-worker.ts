@@ -649,6 +649,25 @@ function setOn(next: boolean): void {
     fetchedChangedOff = false
     saveFetched()
   }
+  if (on) {
+    clearTimeout(offPrune)
+    offPrune = undefined
+  } else pruneWhileOff()
+}
+
+// While off no scan runs, and so no prune after one: covers other plugins drop
+// (radio song covers) would stay on disk for good. So the prune runs alone, a
+// while after the start and after the kept covers change; one wait covers a
+// run of changes. The index's covers stay in use, so files' own are kept.
+export const offPruneMs = 30_000
+let offPrune: ReturnType<typeof setTimeout> | undefined
+function pruneWhileOff(): void {
+  if (on || closing || offPrune) return
+  offPrune = setTimeout(() => {
+    offPrune = undefined
+    // a scan of nothing: the chain keeps it apart from a scan asked for later
+    if (!on && !closing) void chain.request(async () => {})
+  }, offPruneMs)
 }
 
 // Old id -> new id of songs whose path moved this run, so a song that was
@@ -814,10 +833,12 @@ port.on('message', (e: Electron.MessageEvent) => {
       keptEdits++
       on = m.start.on
       started(m.start)
+      pruneWhileOff()
       break
     case 'keep-covers':
       keptCovers = m.hashes
       keptEdits++
+      pruneWhileOff()
       break
     case 'scan':
       // main asks for none while off
@@ -909,6 +930,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       fetchedWriter?.flushSync()
       overridesWriter?.flushSync()
       closing = true
+      clearTimeout(offPrune)
       chain.close()
       post({ type: 'flushed' })
       break
@@ -979,7 +1001,8 @@ const chain = new ScanChain(ready, {
     if (chain.stale(gen)) return
     await pruneSources(sourcesDir, (h) => liveUsed().has(h))
     sources = await listSources(sourcesDir)
-    if (chain.stale(gen)) return
+    // the lookup stays held while off (a prune with no scan)
+    if (chain.stale(gen) || !on) return
     pruned = true
     fetcher?.release()
   },

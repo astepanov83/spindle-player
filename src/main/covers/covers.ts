@@ -1,23 +1,39 @@
 import { hash } from 'crypto'
 import { paletteVersion, type ThemePalettes } from '../../shared/palette'
 import { smallLogoSide } from '../../shared/stations'
-import type { CoverProvider, CoverService } from './types'
+import type { CoverHelper, CoverProvider, CoverService } from '../plugins/types'
+import type { CoverCache } from './cover-cache'
 
-// Holds the cover service the files plugin gives, for plugins that start after it.
+// The core's cover service: the cover cache, made at start whatever plugins
+// are on, and what a plugin's helper adds to it (see CoverHelper). Without a
+// helper a song cover is 'later' and a large cover has no picture to be made from.
 export class Covers implements CoverProvider {
-  #service: CoverService | undefined
+  #helper: CoverHelper | undefined
+  readonly #service: CoverService
 
-  provide(service: CoverService): void {
-    this.#service = service
+  constructor(readonly cache: CoverCache) {
+    this.#service = {
+      cache,
+      song: (q, signal) => this.#helper?.song(q, signal) ?? Promise.resolve('later'),
+      kept: () => this.kept()
+    }
+  }
+
+  provide(helper: CoverHelper): void {
+    this.#helper = helper
   }
 
   get(): CoverService {
-    if (!this.#service) throw new Error('No plugin has provided the cover service yet')
     return this.#service
   }
 
   kept(): void {
-    this.#service?.kept()
+    this.#helper?.kept()
+  }
+
+  // the picture a cover was made from, to make its large size
+  source(hash: string): Promise<Uint8Array | undefined> {
+    return this.#helper?.source(hash) ?? Promise.resolve(undefined)
   }
 }
 

@@ -15,7 +15,7 @@ import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../../json-file'
 import { cleanArtist } from '../files/cover-match'
 import { isCoverHash } from '../../covers/cover-names'
 import { cleanSong, type SongSource } from '../files/song-cover'
-import { makeCover, withNewColors, type LogoCache } from '../covers'
+import { makeCover, withNewColors, type LogoCache } from '../../covers/covers'
 
 const sources = ['deezer', 'itunes'] as const
 

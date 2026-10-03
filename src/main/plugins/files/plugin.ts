@@ -18,7 +18,6 @@ export class FilesPlugin implements MainPlugin {
     private readonly o: {
       // the other plugins' covers to keep; the library asks at once for its start data
       keptByOthers: () => string[]
-      coverPreload: string
     }
   ) {}
 
@@ -33,15 +32,15 @@ export class FilesPlugin implements MainPlugin {
       ctx.settings,
       ctx.toPage,
       ctx.idsMoved,
-      this.o.coverPreload,
+      ctx.covers.get().cache,
       this.o.keptByOthers,
       ctx.userData
     )
     this.#library = library
     ctx.covers.provide({
-      cache: library.covers,
       song: (q, signal) => library.songCover(q, signal),
-      kept: () => library.coversKept()
+      kept: () => library.coversKept(),
+      source: (hash) => library.coverSource(hash)
     })
     for (const [host, route] of Object.entries(libraryRoutes(library))) ctx.route(host, route)
 

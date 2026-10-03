@@ -8,8 +8,8 @@ import type { SettingsStore } from '../settings-store'
 // A request to spindle://<host>/...; `parts` are the path pieces.
 export type Route = (req: Request, url: URL, parts: string[]) => Response | Promise<Response>
 
-// Pictures every plugin may use. The files plugin provides them when it starts,
-// so a plugin that needs the cache starts after it.
+// Pictures every plugin may use: the core makes the cache at start, on or
+// off; the online song lookup comes from a plugin's helper (CoverHelper).
 export interface CoverService {
   cache: CoverCache
   // an online lookup for a song's cover
@@ -19,6 +19,20 @@ export interface CoverService {
   ): Promise<Uint8Array | 'none' | 'later'>
   // the list of covers to keep changed
   kept(): void
+}
+
+// What a plugin adds to the core's covers, whether it is on or off: the online
+// song lookup (run next to its album lookup, so both keep to the same limits),
+// the prune that keeps the covers others list, and the picture a cover was
+// made from.
+export interface CoverHelper {
+  song(
+    q: { artist: string; song: string },
+    signal: AbortSignal
+  ): Promise<Uint8Array | 'none' | 'later'>
+  // the covers other plugins keep changed
+  kept(): void
+  source(hash: string): Promise<Uint8Array | undefined>
 }
 
 export interface PluginContext {
@@ -41,7 +55,7 @@ export interface PluginContext {
 }
 
 export interface CoverProvider {
-  provide(service: CoverService): void
+  provide(helper: CoverHelper): void
   get(): CoverService
   // no-op until provided
   kept(): void
@@ -58,7 +72,7 @@ export interface MainPlugin {
   flushSync(): void
   // Slower quit work, waited for. Nothing when there is nothing left to wait for.
   flush?(): Promise<void> | undefined
-  // the "Find missing covers online" setting changed (after the files plugin has it)
+  // the "Find missing covers online" setting changed (in list order)
   coverSettingChanged?(): void
   windowOpened?(): void
   windowClosed?(): void

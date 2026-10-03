@@ -3,7 +3,7 @@
 // cover window, so the app colors, the stage and the media controls work as
 // for an album. Main owns the station's `logo`; the page only shows it.
 import { sameLogo, type Station, type StationLogo } from '../../../shared/stations'
-import { makeCover, withNewColors, type LogoCache } from '../covers'
+import { makeCover, withNewColors, type LogoCache } from '../../covers/covers'
 import { localAddress } from './logo-fetch'
 
 // Metal Only's logo comes with the app (resources/metal-only.png), so the

@@ -2,7 +2,7 @@
 // mfp.json, the switch, and reading the site again when asked. Off, it makes
 // no request and writes nothing; what it has stays.
 import type { MfpStatus } from '../../../shared/mfp'
-import type { MadeCover } from '../covers'
+import type { MadeCover } from '../../covers/covers'
 import type { MfpEpisode } from './site'
 import { isStale, parseMfp, refreshEpisodes, serializeMfp, type MfpData } from './store'
 

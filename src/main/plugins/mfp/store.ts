@@ -3,7 +3,7 @@
 // Only a copy of the site, so a broken file just starts empty.
 import { parseThemePalettes } from '../../../shared/palette'
 import { isCoverHash } from '../../covers/cover-names'
-import type { MadeCover } from '../covers'
+import type { MadeCover } from '../../covers/covers'
 import { parseEpisode, parseSlugs, type MfpEpisode, type MfpTrack } from './site'
 
 export interface MfpData {

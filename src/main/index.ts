@@ -7,9 +7,10 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { PlaybackChannel, PlaylistChannel, SettingsChannel, WinChannel } from '../shared/ipc'
 import metalOnlyLogoPath from '../../resources/metal-only.png?asset'
 import { pageSettings } from '../shared/settings'
-import { handleProtocol, registerScheme } from './plugins/files/protocol'
+import { coverRoute, handleProtocol, registerScheme } from './protocol'
+import { CoverCache } from './covers/cover-cache'
 import { pageIpc } from './page-ipc'
-import { Covers } from './plugins/covers'
+import { Covers } from './covers/covers'
 import { createPlugins } from './plugins/list'
 import type { MainPlugin, Route } from './plugins/types'
 import type { IdMoves } from '../shared/id-moves'
@@ -27,6 +28,8 @@ let savedQueue: QueueFile
 // each plugin owns its files, requests and IPC; this file only loops over them
 let plugins: MainPlugin[] = []
 let main: MainWindow | null = null
+// the core's cover cache, for every plugin; made at start whatever is on
+let coverCache: CoverCache | undefined
 // kept here so it isn't garbage collected, which would remove the icon
 let tray: Electron.Tray | null = null
 
@@ -50,6 +53,7 @@ let quitting = false
 app.on('before-quit', () => (quitting = true))
 
 function createWindow(splash?: Splash): void {
+  coverCache?.allow()
   for (const p of plugins) p.windowOpened?.()
   main = new MainWindow(store)
   main.hideOnMinimize = () =>
@@ -62,6 +66,8 @@ function createWindow(splash?: Splash): void {
   })
   main.win.on('closed', () => {
     main = null
+    // a hidden cover window would keep the app running with no window
+    coverCache?.shutDown()
     for (const p of plugins) p.windowClosed?.()
   })
 }
@@ -111,7 +117,7 @@ page.on(SettingsChannel.save, (_, raw, toFile) => {
     next.fetchCovers !== before.fetchCovers ||
     JSON.stringify(next.coverSources) !== JSON.stringify(before.coverSources)
   ) {
-    // in list order: the files plugin has the new setting before a song lookup
+    // in list order: the song lookup has the new setting before another plugin asks it
     for (const p of plugins) p.coverSettingChanged?.()
   }
   for (const p of plugins)
@@ -156,13 +162,13 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   savedQueue = new QueueFile()
   const userData = app.getPath('userData')
   const log = (text: string): void => console.warn(text)
-  const covers = new Covers()
-  const routes = new Map<string, Route>()
+  coverCache = new CoverCache(join(userData, 'covers'), join(__dirname, '../preload/covers.js'))
+  const covers = new Covers(coverCache)
+  const routes = new Map<string, Route>([['cover', coverRoute(covers)]])
   // made first: a plugin may open files now that another's start asks about (the cover prune)
   plugins = createPlugins({
     userData,
     log,
-    coverPreload: join(__dirname, '../preload/covers.js'),
     metalOnlyLogoPath
   })
   const ctx = {
@@ -184,7 +190,6 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
       return lists && queue
     }
   }
-  // in list order: files first, since the others use its cover cache
   for (const p of plugins) p.start(ctx)
   // the saved value, as the plugins have only seen the setting at start
   for (const p of plugins) p.setOn(store.get().plugins[p.id])

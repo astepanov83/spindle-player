@@ -9,8 +9,6 @@ import { RadioPlugin } from './radio/plugin'
 export interface PluginEnv {
   userData: string
   log(text: string): void
-  // the page script of the hidden cover window
-  coverPreload: string
   // the logo that ships with the app
   metalOnlyLogoPath: string
 }
@@ -23,8 +21,7 @@ export function createPlugins(env: PluginEnv): MainPlugin[] {
   })
   const list: MainPlugin[] = []
   const files = new FilesPlugin({
-    keptByOthers: () => list.flatMap((p) => p.keptCovers()),
-    coverPreload: env.coverPreload
+    keptByOthers: () => list.flatMap((p) => p.keptCovers())
   })
   list.push(files, radio, new MfpPlugin(env.userData, { log: env.log }))
   return list

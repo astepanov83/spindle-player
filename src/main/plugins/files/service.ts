@@ -11,7 +11,7 @@ import { parseChanges } from '../../../shared/artist-overrides'
 import type { CoverSource } from '../../../shared/settings'
 import { ffmpegTool } from '../../ffmpeg-path'
 import type { SettingsStore } from '../../settings-store'
-import { CoverCache } from '../../covers/cover-cache'
+import type { CoverCache } from '../../covers/cover-cache'
 import { addDropped } from './dropped'
 import { LibraryClient } from './library-client'
 import { LibraryProcess } from './library-process'
@@ -25,7 +25,6 @@ const flushWaitMs = 2000
 const libraryPoolSize = '8'
 
 export class LibraryService {
-  readonly covers: CoverCache
   // the bundled decoders; without them APE, WMA and the like don't play
   readonly ffmpeg = ffmpegTool('ffmpeg')
   readonly ffprobe = ffmpegTool('ffprobe')
@@ -45,12 +44,12 @@ export class LibraryService {
     // files and writes them before it returns
     // (false when a write failed, so the library process keeps the map)
     readonly idsMoved: (moves: IdMoves) => boolean,
-    coverPreload: string,
+    // the core's: pictures found in music files and online go in it
+    readonly covers: CoverCache,
     // covers other plugins keep that the index does not know (station logos), for the prune
     readonly keepCovers: () => string[] = () => [],
     readonly dir = app.getPath('userData')
   ) {
-    this.covers = new CoverCache(join(dir, 'covers'), coverPreload)
     if (!this.ffmpeg || !this.ffprobe)
       console.error(
         'ffmpeg or ffprobe not found (npm run fetch-ffmpeg); APE, WMA and the like will not play'
@@ -148,10 +147,9 @@ export class LibraryService {
     this.#client.scan(retryFailed)
   }
 
-  // The app window closed: no more scanning or covers until a new one opens,
-  // so nothing keeps the app running with no window.
+  // The app window closed: no more scanning until a new one opens, so nothing
+  // keeps the app running with no window (the core shuts the cover cache).
   pause(): void {
-    this.covers.shutDown()
     this.setPlaying(false)
     this.#client.stop()
   }
@@ -186,7 +184,6 @@ export class LibraryService {
   }
 
   resume(): void {
-    this.covers.allow()
     // the online lookup was held when the window closed (macOS keeps the app)
     this.#post({ type: 'resume' })
   }

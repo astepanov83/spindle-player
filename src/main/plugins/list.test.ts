@@ -21,7 +21,6 @@ describe('createPlugins', () => {
     const made = createPlugins({
       userData: dir,
       log: () => {},
-      coverPreload: '',
       metalOnlyLogoPath: ''
     })
     expect(made.map((p) => p.id)).toEqual(plugins.map((p) => p.id))

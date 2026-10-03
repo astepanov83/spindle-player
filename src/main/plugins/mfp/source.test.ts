@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MfpStatus } from '../../../shared/mfp'
 import { defaultPalettes, fallbackPalettes } from '../../../shared/palette'
-import type { MadeCover } from '../covers'
+import type { MadeCover } from '../../covers/covers'
 import type { MfpEpisode } from './site'
 import { MfpSource, type MfpSourceOptions } from './source'
 import { serializeMfp, staleMs } from './store'

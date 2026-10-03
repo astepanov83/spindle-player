@@ -3,8 +3,18 @@
   import Stage from '../visualizer/Stage.svelte'
   import { layout } from '../stores/layout.svelte'
   import { queues } from '../stores/queues.svelte'
+  import { settings } from '../stores/settings.svelte'
+  import { plugins } from '../../../shared/plugins'
+  import { startHint } from './start-hint'
 
   let { style }: { style: 'panel' | 'full' } = $props()
+
+  const hint = $derived(
+    startHint({
+      anyPluginOn: plugins.some((p) => settings.plugins[p.id]),
+      hasLibrary: layout.hasLibrary
+    })
+  )
 </script>
 
 <div class="np {style}">
@@ -16,11 +26,8 @@
       <div class="song-sub" title={queues.sub}><PlayingText line="sub" /></div>
     {:else}
       <div class="song-title">Nothing playing</div>
-      {#if layout.hasLibrary}
-        <div class="song-sub">Pick an album or a song to start</div>
-      {:else}
-        <!-- Focus has no library to pick from -->
-        <div class="song-sub">Switch to Studio or Classic to pick music</div>
+      <div class="song-sub">{hint.text}</div>
+      {#if hint.settings}
         <button class="chip open" onclick={() => (layout.settingsOpen = true)}>Open Settings</button
         >
       {/if}

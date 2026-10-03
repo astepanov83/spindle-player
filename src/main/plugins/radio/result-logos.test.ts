@@ -108,6 +108,26 @@ describe('ResultLogos', () => {
     expect(h.load).toHaveBeenCalledTimes(4)
   })
 
+  it('clear drops waiting rows and forgets everything', async () => {
+    const h = held()
+    const logos = new ResultLogos({ load: h.load, log: () => {} })
+    const list = [1, 2, 3, 4, 5, 6].map((n) => station(`rb-${n}`, `https://l.example/${n}.png`))
+    logos.searched(list)
+    const all = list.map((s) => logos.get(s.id))
+    await tick()
+    expect(h.load).toHaveBeenCalledTimes(4)
+    logos.clear()
+    for (const n of [1, 2, 3, 4]) h.release(`https://l.example/${n}.png`)
+    await tick()
+    // the two waiting rows never started a fetch
+    expect(h.load).toHaveBeenCalledTimes(4)
+    expect(await all[4]).toBeUndefined()
+    expect(await all[5]).toBeUndefined()
+    // memory is empty: even a kept logo is gone, and no station can be asked for
+    expect(logos.bytes).toBe(0)
+    expect(await logos.get('rb-1')).toBeUndefined()
+  })
+
   it('asks once for two rows with the same logo', async () => {
     const h = held()
     const logos = new ResultLogos({ load: h.load, log: () => {} })

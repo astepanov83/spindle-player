@@ -4,7 +4,7 @@
 import { join } from 'path'
 import { RadioChannel, type RadioCover, type RadioLogo, type RadioTitle } from '../../../shared/ipc'
 import type { PluginId } from '../../../shared/plugins'
-import { parseStation, type StationLogo } from '../../../shared/stations'
+import { parseStation, type Station, type StationLogo } from '../../../shared/stations'
 import { notFound } from '../../library/protocol'
 import type { MainPlugin, PluginContext } from '../types'
 import { checkedFetch } from './checked-fetch'
@@ -90,6 +90,15 @@ export class RadioPlugin implements MainPlugin {
       covers.kept()
     }
 
+    const fetchSource = async (source: string, station: Station): Promise<Uint8Array> => {
+      if (source === metalOnlyLogo) return this.o.bundledLogo()
+      const privateOk = onLocalNetwork(station)
+      const o = { fetch: logoFetch(privateOk), userAgent, privateOk }
+      // a station with no logo, or one that failed: its homepage's icons (ticket 033)
+      if (source.startsWith(sitePrefix)) return fetchSiteLogo(source.slice(sitePrefix.length), o)
+      return fetchLogo(source, o)
+    }
+
     const played = new PlayedStations(
       stations,
       (station) => {
@@ -103,16 +112,16 @@ export class RadioPlugin implements MainPlugin {
       },
       log,
       // not waited for: the stream matters more than the picture
-      (station) => void logos.update(station, setLogo)
+      (station) => void logos.update(station, setLogo),
+      () => this.#on
     )
     const logos = new StationLogos({
       load: async (source, station) => {
-        if (source === metalOnlyLogo) return this.o.bundledLogo()
-        const privateOk = onLocalNetwork(station)
-        const o = { fetch: logoFetch(privateOk), userAgent, privateOk }
-        // a station with no logo, or one that failed: its homepage's icons (ticket 033)
-        if (source.startsWith(sitePrefix)) return fetchSiteLogo(source.slice(sitePrefix.length), o)
-        return fetchLogo(source, o)
+        if (!this.#on) throw new Error('radio is off')
+        const data = await fetchSource(source, station)
+        // it came back after radio went off: no picture is made, no file written
+        if (!this.#on) throw new Error('radio is off')
+        return data
       },
       cache: covers.get().cache,
       kept: () => covers.kept(),
@@ -260,9 +269,12 @@ export class RadioPlugin implements MainPlugin {
       this.#stop()
       // the rows of the search before it get no logos
       this.#searches++
+      parts?.resultLogos.clear()
       return
     }
     if (!parts) return
+    // the setting may have changed while off, when the call was skipped
+    parts.songCovers.settingChanged()
     // Metal Only's logo ships with the app: made from the file, so My stations
     // shows it before it is played (no request)
     for (const s of this.stations.list()) {

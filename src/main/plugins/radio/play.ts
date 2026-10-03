@@ -32,7 +32,9 @@ export class PlayedStations {
     readonly find: (station: Station) => Promise<Stream[]>,
     readonly log: (text: string) => void,
     // told at once which station plays, as main knows it (its logo is looked up behind)
-    readonly started: (station: Station) => void = () => {}
+    readonly started: (station: Station) => void = () => {},
+    // false drops a find that comes back late (radio went off): nothing is saved
+    readonly allowed: () => boolean = () => true
   ) {}
 
   // My stations first: that copy has the latest streams and choice.
@@ -72,7 +74,7 @@ export class PlayedStations {
       this.log(`Radio ${station.id}: could not look for streams: ${String(e)}`)
       return
     }
-    if (!found.length) return
+    if (!found.length || !this.allowed()) return
     const id = station.id
     const saved = this.saved.get(id)
     if (saved) {

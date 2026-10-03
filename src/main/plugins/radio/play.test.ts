@@ -258,4 +258,16 @@ describe('streams a search found', () => {
     expect(p.searched([st('rb-1', [s128, aac])])).toBe(false)
     expect(p.lookup('rb-1')?.streams).toEqual([s128, aac])
   })
+
+  it('drops streams found after it is told no (radio went off)', async () => {
+    const f = finder()
+    const store = saved([st('rb-1', [s128])])
+    let on = true
+    const p = new PlayedStations(store, f.find, log, undefined, () => on)
+    await p.play(st('rb-1', [s128]))
+    on = false
+    f.answer([s320])
+    await new Promise((ok) => setTimeout(ok, 0))
+    expect(store.list[0].streams).toEqual([s128])
+  })
 })

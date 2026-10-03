@@ -1,9 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RadioChannel } from '../../../shared/ipc'
-import type { Station } from '../../../shared/stations'
+import { fallbackPalettes } from '../../../shared/palette'
+import { stationsFile, type Station } from '../../../shared/stations'
 import type { PluginContext } from '../types'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/nowhere' }, protocol: {}, net: {} }))
@@ -26,7 +27,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }))
 type Handler = (...args: unknown[]) => unknown
 
 // The plugin on fake page, network and cover cache; `fetched` lists every request it makes.
-function setup(): {
+function setup(opts: { hasLogo?: boolean; bundled?: () => Promise<Uint8Array> } = {}): {
   plugin: InstanceType<typeof RadioPlugin>
   call(channel: string, ...args: unknown[]): Promise<unknown>
   route(host: string, path: string): Promise<Response>
@@ -34,21 +35,25 @@ function setup(): {
   lookups: string[]
   aborted: () => boolean
   bundled: ReturnType<typeof vi.fn>
+  addLogo: ReturnType<typeof vi.fn>
+  sources: { fetchCovers: boolean; coverSources: Record<string, boolean> }
 } {
   const handlers = new Map<string, Handler>()
   const routes = new Map<string, (req: Request, url: URL, parts: string[]) => unknown>()
   const fetched: string[] = []
   const lookups: string[] = []
   let signal: AbortSignal | undefined
-  const bundled = vi.fn(async () => new Uint8Array([1]))
+  const bundled = vi.fn(opts.bundled ?? (async () => new Uint8Array([1])))
+  const addLogo = vi.fn(async () => undefined)
+  const sources = { fetchCovers: false, coverSources: {} as Record<string, boolean> }
   const plugin = new RadioPlugin(dir, { log: () => {}, bundledLogo: bundled })
   const cache = {
-    addLogo: async () => undefined,
-    hasLogo: async () => false,
+    addLogo,
+    hasLogo: async () => opts.hasLogo ?? false,
     logoPalette: async () => undefined
   }
   const ctx = {
-    settings: { live: () => ({ fetchCovers: false, coverSources: {} }) },
+    settings: { live: () => sources },
     userData: dir,
     userAgent: 'test',
     log: () => {},
@@ -90,7 +95,9 @@ function setup(): {
     fetched,
     lookups,
     aborted: () => signal?.aborted ?? false,
-    bundled
+    bundled,
+    addLogo,
+    sources
   }
 }
 
@@ -150,6 +157,7 @@ describe('RadioPlugin off', () => {
       'rb-1'
     ])
     expect(ids(await r.call(RadioChannel.remove, 'rb-1'))).toContain('rb-1')
+    expect(ids(await r.call(RadioChannel.restore, 'rb-1'))).toContain('rb-1')
     expect(ids(await r.call(RadioChannel.move, 'rb-1', -1))).toEqual(['metal-only', 'rb-1'])
     expect(ids(await r.call(RadioChannel.choose, 'rb-1', 'https://drone.example/stream'))).toEqual([
       'metal-only',
@@ -193,9 +201,45 @@ describe('RadioPlugin off', () => {
     await expect(r.call(RadioChannel.stop)).resolves.toBeUndefined()
   })
 
-  it('keeps its covers listed, so the prune does not drop them', () => {
-    const r = setup()
+  it('keeps its covers listed, so the prune does not drop them', async () => {
+    const hash = 'a'.repeat(40)
+    const logo = { hash, palette: fallbackPalettes('x'), from: 'https://drone.example/logo.png' }
+    writeFileSync(
+      join(dir, 'stations.json'),
+      JSON.stringify(stationsFile([{ ...station, logoUrl: logo.from, logo }]))
+    )
+    const r = setup({ hasLogo: true })
+    r.plugin.setOn(true)
+    expect(r.plugin.keptCovers()).toContain(hash)
     r.plugin.setOn(false)
-    expect(r.plugin.keptCovers()).toEqual([])
+    expect(r.plugin.keptCovers()).toContain(hash)
+  })
+
+  it('makes no picture from a logo that arrives after it went off', async () => {
+    let arrive!: (b: Uint8Array) => void
+    const r = setup({ bundled: () => new Promise((ok) => (arrive = ok)) })
+    r.plugin.setOn(true)
+    await vi.waitFor(() => expect(r.bundled).toHaveBeenCalled())
+    r.plugin.setOn(false)
+    arrive(new Uint8Array([1]))
+    await new Promise((ok) => setTimeout(ok, 20))
+    expect(r.addLogo).not.toHaveBeenCalled()
+  })
+
+  it('does not look at the cover setting while off, and sees it when turned on', async () => {
+    const miss = { version: 1, songs: { 'iron maiden\0the trooper': { at: Date.now() } } }
+    writeFileSync(join(dir, 'radio-covers.json'), JSON.stringify(miss))
+    const r = setup()
+    r.sources.fetchCovers = true
+    r.plugin.setOn(true)
+    r.plugin.setOn(false)
+    // a service turned on while off
+    r.sources.coverSources = { deezer: true }
+    r.plugin.coverSettingChanged()
+    r.plugin.flushSync()
+    expect(readFileSync(join(dir, 'radio-covers.json'), 'utf8')).toContain('trooper')
+    r.plugin.setOn(true)
+    r.plugin.flushSync()
+    expect(readFileSync(join(dir, 'radio-covers.json'), 'utf8')).not.toContain('trooper')
   })
 })

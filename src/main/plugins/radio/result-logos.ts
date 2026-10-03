@@ -44,6 +44,8 @@ export class ResultLogos {
   // by logo address, oldest first
   #kept = new Map<string, Kept>()
   #bytes = 0
+  // changes at clear(): a fetch that started before it keeps nothing
+  #round = 0
   #busy = new Map<string, Promise<ResultLogo | undefined>>()
   #running = 0
   #waiting: { id: string; start: () => void; drop: () => void }[] = []
@@ -60,6 +62,17 @@ export class ResultLogos {
     }
     // rows that are gone never ask again
     this.#waiting = this.#waiting.filter((w) => this.#latest.has(w.id) || (w.drop(), false))
+  }
+
+  // Radio went off: forget every search. Rows still waiting never start a fetch.
+  clear(): void {
+    this.#latest = new Set()
+    this.#source.clear()
+    this.#kept.clear()
+    this.#bytes = 0
+    this.#round++
+    for (const w of this.#waiting) w.drop()
+    this.#waiting = []
   }
 
   // The logo of a station from search, or undefined for none.
@@ -80,6 +93,7 @@ export class ResultLogos {
   }
 
   async #fetch(id: string, url: string): Promise<ResultLogo | undefined> {
+    const round = this.#round
     if (!(await this.#turn(id))) return undefined
     let logo: ResultLogo | undefined
     try {
@@ -91,7 +105,7 @@ export class ResultLogos {
       this.#running--
       this.#next()
     }
-    this.#keep(url, logo)
+    if (round === this.#round) this.#keep(url, logo)
     return logo
   }
 

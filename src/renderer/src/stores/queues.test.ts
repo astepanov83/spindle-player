@@ -116,6 +116,7 @@ const loads = (): string[] => fake.calls.filter((c) => c.startsWith('load'))
 
 beforeEach(async () => {
   settings.plugins.radio = true
+  settings.plugins.files = true
   files.load(lib)
   radio.load(mine)
   await queues.backToQueue()
@@ -415,5 +416,33 @@ describe('radio turned off (ticket 057)', () => {
     expect(queues.active).toBe('track')
     expect(fake.calls).toEqual(['load spindle://media/s2 at 30'])
     expect(savePlaying).toHaveBeenCalledWith({ active: 'track' })
+  })
+})
+
+describe('music files turned off (ticket 063)', () => {
+  it('its songs stay in the queue, greyed and not played, and play once it is on again', async () => {
+    const { itemInfo } = await import('../plugins')
+    settings.plugins.files = false
+    queues.refresh()
+    expect(queue.items).toEqual(['files:s0', 'files:s1', 'files:s2'])
+    expect(itemInfo('files:s1')).toEqual({ state: 'off', text: 'Music files are off' })
+    fake.calls = []
+    queues.togglePlay()
+    expect(loads()).toEqual([])
+    settings.plugins.files = true
+    queues.refresh()
+    expect(queue.items).toEqual(['files:s0', 'files:s1', 'files:s2'])
+    fake.calls = []
+    queue.playList([...queue.items], 1, 'Mix')
+    expect(loads()).toEqual(['load spindle://media/s1 at 0'])
+  })
+
+  it('radio plays while music files is off', async () => {
+    settings.plugins.files = false
+    queues.refresh()
+    fake.calls = []
+    await playStation(mine[0])
+    expect(queues.active).toBe('live')
+    expect(loads()).toEqual(['load spindle://radio/a?stream=0 live'])
   })
 })

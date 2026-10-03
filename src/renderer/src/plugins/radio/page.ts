@@ -51,6 +51,7 @@ export function radioBlocks(query: string): Block[] {
 
 function stationRows(list: Station[], saved: boolean, stale = false): Block {
   return rowsBlock<Station>({
+    rows: 'item',
     items: list,
     key: (s) => s.id,
     row: (s) => stationRow(s, saved),

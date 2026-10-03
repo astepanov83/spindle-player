@@ -3,6 +3,7 @@ import { files } from './store.svelte'
 import type { PageHalf } from '../types'
 import { canOpenFiles, filesPath, filesTabs, keepFiles } from './nav'
 import { filesAct, filesEmptyPlaylists, filesPage, filesSearch } from './page'
+import { filesDrop } from './drop'
 import { filesTabOf } from './pages'
 import { filesActSetting, filesCoverLines, filesSettings, filesStatusLine } from './settings'
 import { trackPlayable, trackState } from './tracks'
@@ -26,5 +27,6 @@ export const filesHalf: PageHalf = {
   actSetting: filesActSetting,
   version: () => files.revision,
   statusLine: filesStatusLine,
-  coverLines: filesCoverLines
+  coverLines: filesCoverLines,
+  drop: filesDrop
 }

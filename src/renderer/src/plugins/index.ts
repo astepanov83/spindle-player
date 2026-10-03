@@ -163,6 +163,17 @@ export function coverLines(): { text: string; busy: boolean }[] {
   return plugins.flatMap((p) => (pluginOn(p.id) ? (halves[p.id].coverLines?.() ?? []) : []))
 }
 
+// Whether a plugin that is on takes files dropped on the window.
+export function takesDrops(): boolean {
+  return plugins.some((p) => pluginOn(p.id) && !!halves[p.id].drop)
+}
+
+// Files dropped on the window, to each plugin that is on and takes them.
+// None on: the drop does nothing (the cursor said so while dragging).
+export function dropOn(dropped: File[]): void {
+  for (const p of plugins) if (pluginOn(p.id)) halves[p.id].drop?.(dropped)
+}
+
 // The settings blocks of a plugin that is on.
 export function settingBlocks(plugin: PluginId): SettingBlock[] {
   return pluginOn(plugin) ? (halves[plugin].settings?.() ?? []) : []

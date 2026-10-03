@@ -29,8 +29,8 @@
   } = $props()
 
   const items = $derived(b.items as unknown[])
-  // all rows of a block are of one sort; item rows are taller, for the logo
-  const plays = $derived(items.length > 0 && 'play' in b.row(items[0]))
+  // item rows are taller, for the logo
+  const plays = $derived(b.rows === 'item' && items.length > 0)
   const size = $derived(plays ? 60 : 56)
 
   let list: HTMLDivElement | undefined = $state()

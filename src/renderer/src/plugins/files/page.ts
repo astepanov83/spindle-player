@@ -502,6 +502,7 @@ function foldersPage(page: string, query: string): Block[] {
     )
   blocks.push(
     rowsBlock<number>({
+      rows: 'page',
       items: view.folders,
       // by key: a scan can number the folders again
       key: (i) => tree.nodes[i].key,

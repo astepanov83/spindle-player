@@ -102,6 +102,7 @@ function listBlocks(query: string): Block[] {
 
 function episodeRows(list: Episode[]): Block {
   return rowsBlock<Episode>({
+    rows: 'page',
     items: list,
     key: (e) => episodePage(e.id),
     row: (e) => ({

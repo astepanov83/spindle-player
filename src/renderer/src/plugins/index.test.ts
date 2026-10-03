@@ -521,3 +521,81 @@ describe('"Show all" of a plugin that went off (ticket 060)', () => {
     expect(library.searchAll).toBe('files:songs')
   })
 })
+
+describe('typedIn (carried from ticket 062)', () => {
+  it('gives the text to the plugin of the tab, not while it is off, and not for the core', async () => {
+    const { radioHalf } = await import('./radio')
+    const typed = vi.spyOn(radioHalf, 'typed')
+    p.typedIn('radio', 'radio', 'metal', true)
+    expect(typed).toHaveBeenCalledWith('radio', 'metal', true)
+    typed.mockClear()
+    p.typedIn('core', 'playlists', 'metal')
+    expect(typed).not.toHaveBeenCalled()
+    settings.plugins.radio = false
+    p.typedIn('radio', 'radio', 'metal')
+    expect(typed).not.toHaveBeenCalled()
+  })
+})
+
+describe('music files turned off (ticket 063)', () => {
+  const ids = (): string[] => p.pluginTabs().map((t) => t.id)
+
+  it('takes its tabs and gives them back, and the library starts on the first tab on', () => {
+    files.load(lib())
+    settings.plugins.files = false
+    expect(ids()).toEqual(['radio', 'playlists', 'mfp'])
+    library.setTabs(p.navTabs())
+    library.showIn('chips')
+    expect(library.tab).toBe('radio')
+    settings.plugins.files = true
+    expect(ids()).toEqual(['songs', 'albums', 'artists', 'folders', 'playlists', 'radio', 'mfp'])
+    // on again, its pages are there
+    library.setTabs(p.navTabs())
+    p.openPage({ plugin: 'files', page: 'album/al' })
+    expect([library.tab, library.page('albums')]).toEqual(['albums', 'album/al'])
+  })
+
+  it('greys its songs out and keeps what it holds for when it is on again', () => {
+    files.load(lib())
+    settings.plugins.files = false
+    expect(p.itemInfo('files:s1')).toEqual({ state: 'off', text: 'Music files are off' })
+    expect(p.playItem('files:s1')).toBeUndefined()
+    expect(p.searchGroups('song').map((g) => g.plugin)).not.toContain('files')
+    settings.plugins.files = true
+    expect(p.itemInfo('files:s1').state).toBe('ok')
+  })
+
+  it('shows no scan line, cover lookup lines or settings blocks while off', () => {
+    files.load(lib())
+    files.status = {
+      ...files.status,
+      phase: 'read',
+      done: 1,
+      total: 2,
+      fetch: { running: true, found: 1, notFound: 0, left: 3, phase: 'covers' }
+    }
+    expect(p.statusLines()).toEqual(['Reading tags: 1 of 2'])
+    expect(p.coverLines()).toEqual([
+      { text: 'Looking up covers: found 1 of 4 · 3 left', busy: true }
+    ])
+    expect(p.settingBlocks('files').length).toBeGreaterThan(0)
+    settings.plugins.files = false
+    expect(p.statusLines()).toEqual([])
+    expect(p.coverLines()).toEqual([])
+    expect(p.settingBlocks('files')).toEqual([])
+  })
+
+  it('takes no files dropped on the window while off', async () => {
+    const addDropped = vi.fn(async () => ({ added: [], known: 0, other: 1 }))
+    Object.assign(window, { libraryApi: { addDropped } })
+    const dropped = [new File([], 'music')]
+    expect(p.takesDrops()).toBe(true)
+    settings.plugins.files = false
+    expect(p.takesDrops()).toBe(false)
+    p.dropOn(dropped)
+    expect(addDropped).not.toHaveBeenCalled()
+    settings.plugins.files = true
+    p.dropOn(dropped)
+    expect(addDropped).toHaveBeenCalledWith(dropped)
+  })
+})

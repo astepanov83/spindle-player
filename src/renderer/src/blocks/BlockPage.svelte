@@ -54,6 +54,11 @@
     return below?.kind === 'rows' || (below?.kind === 'empty' && !below.title)
   }
   const underHead = (i: number): boolean => blocks[i - 1]?.kind === 'head'
+  // room under a page that ends in rows or a quiet line, as the Radio tab had
+  const endRoom = $derived.by(() => {
+    const last = blocks[blocks.length - 1]
+    return last?.kind === 'rows' || (last?.kind === 'empty' && !last.title)
+  })
 
   // the tab's plugin hears the search box (Radio asks Radio Browser)
   $effect(() => {
@@ -86,6 +91,7 @@
       <Results block={b} {scrollEl} />
     {/if}
   {/each}
+  {#if endRoom}<div class="end"></div>{/if}
 {/if}
 
 <style>
@@ -96,6 +102,10 @@
   }
   .gap {
     height: 22px;
+  }
+  .end {
+    height: 12px;
+    flex-shrink: 0;
   }
   .part {
     margin: 0 0 14px;

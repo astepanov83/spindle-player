@@ -38,8 +38,8 @@
     quit: 'Closing the window quits Spindle.'
   }
 
-  // A plugin with a switch has its blocks under it; one without (files, until
-  // ticket 063) has a section of its own, where Music folders always was.
+  // A plugin with a switch has its blocks under it; one without would have a
+  // section of its own.
   const switchable = plugins.filter((p) => switchablePlugins.includes(p.id))
   const sections = plugins.filter((p) => !switchablePlugins.includes(p.id))
 

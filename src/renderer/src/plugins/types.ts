@@ -236,19 +236,31 @@ export interface ItemRow extends RowLook {
 
 export type Row = PageRow | ItemRow
 
-// Folders, MFP's episodes, stations. Only the rows on screen are drawn. The
-// rows of a block are all page rows or all item rows.
-export interface RowsBlock<T = unknown> {
+// Folders, MFP's episodes, stations. Only the rows on screen are drawn.
+interface RowsOf<T> {
   kind: 'rows'
   items: readonly T[]
   key(item: T): string
-  row(item: T): Row
   // the search text filters the list in place, and stays when a row opens,
   // so a match further down can be followed to
   filtered?: boolean
   // rows of an older answer while a newer one is on its way: drawn faded
   stale?: boolean
 }
+
+// The rows of a block are all of one sort, named by `rows`, so a block that
+// mixes them does not type check (their heights differ).
+export interface PageRowsBlock<T = unknown> extends RowsOf<T> {
+  rows: 'page'
+  row(item: T): PageRow
+}
+
+export interface ItemRowsBlock<T = unknown> extends RowsOf<T> {
+  rows: 'item'
+  row(item: T): ItemRow
+}
+
+export type RowsBlock<T = unknown> = PageRowsBlock<T> | ItemRowsBlock<T>
 
 // The path bar of a tree (Folders). A step along it keeps the search text.
 export interface TreeBlock {
@@ -325,8 +337,9 @@ export type SettingBlock =
 // A list block for a plugin's own array: its tiles and rows are typed by it.
 export const tilesBlock = <T>(b: Omit<TilesBlock<T>, 'kind'>): TilesBlock =>
   ({ kind: 'tiles', ...b }) as TilesBlock
-export const rowsBlock = <T>(b: Omit<RowsBlock<T>, 'kind'>): RowsBlock =>
-  ({ kind: 'rows', ...b }) as RowsBlock
+export const rowsBlock = <T>(
+  b: Omit<PageRowsBlock<T>, 'kind'> | Omit<ItemRowsBlock<T>, 'kind'>
+): RowsBlock => ({ kind: 'rows', ...b }) as RowsBlock
 
 export interface ItemInfo {
   title: string
@@ -450,7 +463,7 @@ export interface PageHalf {
   // playlists with none in it, which says what playlists are for.
   emptyPlaylists?(noPlaylists: boolean): EmptyBlock | undefined
   // Its blocks in Settings, asked while it is on: under its switch, or in a
-  // section of their own while it has none (files, until ticket 063).
+  // section of their own for a plugin with no switch.
   settings?(): SettingBlock[]
   // A settings block was used: a button (`press`), a row of a list (`remove`,
   // with the row's id), a switch (`set`, with 'true' or 'false'). `id` is the
@@ -465,6 +478,8 @@ export interface PageHalf {
   // The online cover lookup's lines under "Find missing covers online" in
   // Settings, with a spinner on the one that runs.
   coverLines?(): { text: string; busy: boolean }[]
+  // Files from the system dropped on the window, asked while it is on.
+  drop?(dropped: File[]): void
   // a plugin whose items are live (radio): it drives its own item
   live?: LivePlugin
   // One of the item's actions was used: a button (no value), or an option

@@ -19,7 +19,8 @@ import { queue } from './stores/queue.svelte'
 import { radio } from './plugins/radio/store.svelte'
 import { mfp } from './plugins/mfp/store.svelte'
 import { loadSettings } from './stores/settings.svelte'
-import { dropText, ScanWatch } from './library/scan-text'
+import { ScanWatch } from './library/scan-text'
+import { dropOn, takesDrops } from './plugins'
 import { orFallback } from './start'
 import { emptyQueues } from '../../shared/saved-queue'
 import { defaultSettings } from '../../shared/settings'
@@ -34,21 +35,18 @@ import {
 } from '../../shared/id-moves'
 
 // A file dropped on the window would replace the app (main blocks that too),
-// so the page takes every drop itself. Only files from the system count:
-// the folders among them become music folders (main checks each path).
+// so the page takes every drop itself. Only files from the system count, and
+// only while a plugin that takes them is on.
 window.addEventListener('dragover', (e) => {
   e.preventDefault()
   if (e.dataTransfer)
-    e.dataTransfer.dropEffect = e.dataTransfer.types.includes('Files') ? 'copy' : 'none'
+    e.dataTransfer.dropEffect =
+      e.dataTransfer.types.includes('Files') && takesDrops() ? 'copy' : 'none'
 })
 window.addEventListener('drop', (e) => {
   e.preventDefault()
-  const files = [...(e.dataTransfer?.files ?? [])]
-  if (!files.length) return
-  void window.libraryApi.addDropped(files).then((r) => {
-    const text = dropText(r)
-    if (text) notice.show(text)
-  })
+  const dropped = [...(e.dataTransfer?.files ?? [])]
+  if (dropped.length) dropOn(dropped)
 })
 
 // MFP's news from main, also while the page waits for its first answer.

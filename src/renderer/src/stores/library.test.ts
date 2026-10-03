@@ -186,6 +186,14 @@ describe('Back and Forward (ticket 051)', () => {
     files.openAlbum('b')
     expect(library.takeReturn()).toBe(false)
   })
+
+  it('does not say so when a pick changed nothing', () => {
+    library.pickTab('albums')
+    library.takeReturn()
+    // Studio has no Songs: the pick lands on the place shown
+    library.pickTab('songs')
+    expect([library.tab, library.takeReturn()]).toEqual(['albums', false])
+  })
 })
 
 describe('Artists', () => {
@@ -422,6 +430,16 @@ describe('search text (ticket 039)', () => {
     expect(library.query).toBe('')
     // another chip keeps its page (ticket 051)
     expect(files.shownAlbum()).toBe('a')
+  })
+
+  it("is cleared by a click on Classic's playlist shown, as a step", () => {
+    library.showIn('sidebar')
+    library.pickTab('playlists', 'playlist/p1')
+    library.query = 'blue'
+    library.pickTab('playlists', 'playlist/p1')
+    expect([library.openPlaylist, library.query]).toEqual(['p1', ''])
+    library.back()
+    expect([library.openPlaylist, library.query]).toEqual(['p1', 'blue'])
   })
 
   it('is cleared when another section is picked', () => {

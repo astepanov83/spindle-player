@@ -352,15 +352,17 @@ class LibraryStore {
 
   // A step: the place now goes on the history for Back. The search text goes
   // unless `keepQuery` (a folder opened while its search filters, "Show all").
-  go(change: Partial<Nav>, keepQuery = false): void {
+  // False when it changed nothing.
+  go(change: Partial<Nav>, keepQuery = false): boolean {
     const nav = this.#fix({ ...this.#nav, ...change })
     const query = keepQuery ? this.#query : ''
     const now = this.#step()
     this.#returning = false
-    if (sameStep({ nav, query }, now)) return
+    if (sameStep({ nav, query }, now)) return false
     this.#history = leave(this.#history, now)
     this.#nav = nav
     this.query = query
+    return true
   }
 
   #step(): Step {
@@ -423,12 +425,16 @@ class LibraryStore {
   pickTab(tab: string, page?: string): void {
     if (tab === this.tab && page === undefined) {
       if (this.#follow?.tab === tab) this.#follow = null
-      return this.go({ pages: withPage(this.#nav.pages, tab, ''), searchAll: null })
+      this.go({ pages: withPage(this.#nav.pages, tab, ''), searchAll: null })
+      return
     }
-    if (tab === this.tab && page === this.page(tab)) return
+    // the page shown (Classic's playlist): only its search text goes, as a step
+    if (tab === this.tab && page === this.page(tab)) {
+      this.go({})
+      return
+    }
     const pages = page === undefined ? this.#nav.pages : withPage(this.#nav.pages, tab, page)
-    this.go({ tab, pages, searchAll: null })
-    this.#returning = true
+    if (this.go({ tab, pages, searchAll: null })) this.#returning = true
   }
 
   // A page of a tab from inside it (a tile, a back link, the path bar); ''

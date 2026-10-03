@@ -14,12 +14,13 @@
   import { theme } from '../stores/theme.svelte'
   import { openSongMenu } from './song-menu'
   import { playAlbum, playingTrack, trackKeys } from '../plugins/files/views'
+  import { openAlbum } from '../plugins/files/nav'
 
   let {
     scrollEl,
     items,
     sub = 'artist',
-    onopen = (id) => library.openAlbum(id)
+    onopen = openAlbum
   }: {
     scrollEl: HTMLElement | undefined
     // these albums instead of the library's, with no search (an artist's)

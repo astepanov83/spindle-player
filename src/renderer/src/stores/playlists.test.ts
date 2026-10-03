@@ -16,7 +16,8 @@ vi.stubGlobal('crypto', {
 })
 
 const { playlists } = await import('./playlists.svelte')
-const { library } = await import('./library.svelte')
+const { library, playlistPage } = await import('./library.svelte')
+const { navTabs } = await import('../plugins')
 
 describe('removing a playlist', () => {
   it('drops its sort and keeps the others', () => {
@@ -43,27 +44,36 @@ describe('removing a playlist in history (ticket 051)', () => {
   })
 
   it('leaves the playlist shown, in both templates', () => {
+    library.setTabs(navTabs())
+    library.showIn('chips')
     const a = playlists.create()
     library.showPlaylist(a)
     playlists.remove(a)
-    expect([library.openPlaylist, library.section]).toEqual([null, 'songs'])
+    // Studio's chip shows the list
+    expect([library.tab, library.openPlaylist]).toEqual(['playlists', null])
+    library.showIn('sidebar')
+    const b = playlists.create()
+    library.showPlaylist(b)
+    playlists.remove(b)
+    // Classic has none: its first section
+    expect([library.tab, library.openPlaylist]).toEqual(['songs', null])
   })
 })
 
 describe('removing a playlist while its rows are filtered (ticket 039)', () => {
   it('clears the search text, which was for its rows', () => {
     const a = playlists.create()
-    library.go({ section: `pl:${a}` })
+    library.pickTab('playlists', playlistPage(a))
     library.query = 'blue'
     playlists.remove(a)
-    expect(library.section).toBe('songs')
+    expect(library.tab).toBe('songs')
     expect(library.query).toBe('')
   })
 
   it('keeps the text when another playlist is removed', () => {
     const a = playlists.create()
     const b = playlists.create()
-    library.go({ section: `pl:${a}` })
+    library.pickTab('playlists', playlistPage(a))
     library.query = 'blue'
     playlists.remove(b)
     expect(library.query).toBe('blue')

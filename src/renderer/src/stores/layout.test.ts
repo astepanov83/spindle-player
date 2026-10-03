@@ -8,7 +8,7 @@ const { settings } = await import('./settings.svelte')
 describe('choosing a template (ticket 039)', () => {
   it('clears the search text: the other template shows another view', () => {
     settings.template = 'studio'
-    library.go({ chip: 'radio' })
+    library.go({ tab: 'radio' })
     library.query = 'jazz'
     layout.chooseTemplate('classic')
     expect(settings.template).toBe('classic')
@@ -17,7 +17,7 @@ describe('choosing a template (ticket 039)', () => {
 
   it('starts a new history: the old one steps through places the new template does not show', () => {
     settings.template = 'studio'
-    library.go({ chip: 'artists' })
+    library.go({ tab: 'artists' })
     layout.chooseTemplate('classic')
     expect(library.canBack).toBe(false)
   })

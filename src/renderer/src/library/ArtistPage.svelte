@@ -15,6 +15,7 @@
   import { artistCovers, artistPageSongs, artistSongs } from './artists'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
   import { trackKeys } from '../plugins/files/views'
+  import { followArtist, openArtist, openArtistAlbum } from '../plugins/files/nav'
   import type { ItemKey } from '../../../shared/plugins/items'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
@@ -75,13 +76,13 @@
     const changes = editArtist(a, names)
     if (!Object.keys(changes).length) return
     window.libraryApi.setArtists(changes)
-    library.followArtist(artistKey(names[0]))
+    followArtist(artistKey(names[0]))
   }
 
   function useTag(t: ArtistTag): void {
     window.libraryApi.setArtists({ [t.key]: null })
     // with no other tag, the artist becomes the tag again
-    library.followArtist(a.tags.length > 1 ? a.key : t.key)
+    followArtist(a.tags.length > 1 ? a.key : t.key)
   }
 
   function onkeydown(e: KeyboardEvent): void {
@@ -104,7 +105,7 @@
     !t.names ? '' : t.names.length > 1 ? ' (split)' : ' (renamed)'
 </script>
 
-<button class="back" onclick={() => library.openArtist(null)}
+<button class="back" onclick={() => openArtist(null)}
   ><Icon name="back" size={16} />All artists</button
 >
 <div class="head">
@@ -193,7 +194,7 @@
 
 {#if albums.length}
   <h3 class="part section-label">Albums</h3>
-  <AlbumGrid {scrollEl} items={albums} sub="year" onopen={(id) => library.openArtistAlbum(id)} />
+  <AlbumGrid {scrollEl} items={albums} sub="year" onopen={(id) => openArtistAlbum(id)} />
 {/if}
 
 {#if also.length}

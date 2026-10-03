@@ -8,10 +8,12 @@
   import { fmtCount } from '../format'
   import { filterArtists } from './artists'
   import { library } from '../stores/library.svelte'
+  import { openArtistAlbum, shownArtist } from '../plugins/files/nav'
 
   let { scrollEl }: { scrollEl: HTMLElement | undefined } = $props()
 
-  const artist = $derived(library.artist ? library.getArtist(library.artist) : undefined)
+  const open = $derived(shownArtist())
+  const artist = $derived(open.key ? library.getArtist(open.key) : undefined)
   // what the grid shows: a search filters it
   const shown = $derived(
     library.query.trim()
@@ -29,11 +31,11 @@
 
 {#if library.query.trim()}
   {@render grid()}
-{:else if library.artistAlbum}
+{:else if open.album}
   <AlbumPage
-    albumId={library.artistAlbum}
+    albumId={open.album}
     back={artist?.name ?? 'All artists'}
-    onback={() => library.openArtistAlbum(null)}
+    onback={() => openArtistAlbum(null)}
   />
 {:else if artist}
   <ArtistPage {artist} {scrollEl} />

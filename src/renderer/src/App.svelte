@@ -28,7 +28,8 @@
     showSeekInMediaSession,
     showStateInMediaSession
   } from './stores/media-session'
-  import { itemsVersion } from './plugins'
+  import { itemsVersion, navTabs } from './plugins'
+  import { library } from './stores/library.svelte'
   import { player } from './stores/player.svelte'
   import { queues } from './stores/queues.svelte'
   import { queue } from './stores/queue.svelte'
@@ -61,6 +62,14 @@
   $effect(() => {
     void version
     untrack(() => queues.refresh())
+  })
+
+  // The library's tabs follow the plugins that are on: one turned off takes
+  // its tabs, pages and history steps with it. .pre, so the library is drawn
+  // with them from the start.
+  $effect.pre(() => {
+    const tabs = navTabs()
+    untrack(() => library.setTabs(tabs))
   })
 
   // The library scan slows down while a song plays, so the audio gets the disk first.

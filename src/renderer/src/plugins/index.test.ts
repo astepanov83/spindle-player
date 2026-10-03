@@ -191,16 +191,20 @@ describe('playItem', () => {
 describe('links', () => {
   it('lead to the album at the song and to the artist', () => {
     library.load(lib())
-    library.go({ chip: 'radio' })
+    library.go({ tab: 'radio' })
     const i = p.infoOf('files:s1')!
     expect(i.links?.map((l) => l.label)).toEqual(['Go to album', 'Go to artist'])
     expect(i.names).toEqual([
       { name: 'Marina Vale', to: { plugin: 'files', page: 'artist/marinavale' } }
     ])
     p.openPage(i.titleTo!)
-    expect([library.chip, library.open, library.landing]).toEqual(['albums', 'al', { song: 's1' }])
+    expect([library.tab, library.page('albums'), library.landing]).toEqual([
+      'albums',
+      'album/al',
+      { song: 's1' }
+    ])
     p.openPage(i.names![0].to!)
-    expect([library.chip, library.artist]).toEqual(['artists', 'marinavale'])
+    expect([library.tab, library.page('artists')]).toEqual(['artists', 'artist/marinavale'])
   })
 
   it("an MFP song's lead to its episode only", () => {
@@ -213,6 +217,34 @@ describe('links', () => {
     expect(p.canOpen(i.groupTo!)).toBe(true)
     settings.plugins.mfp = false
     expect(p.canOpen(i.groupTo!)).toBe(false)
+  })
+})
+
+describe('tabs', () => {
+  const ids = (): string[] => p.pluginTabs().map((t) => t.id)
+
+  it('come from the plugins that are on, with Playlists after the first one', () => {
+    expect(ids()).toEqual(['songs', 'albums', 'artists', 'folders', 'playlists', 'radio', 'mfp'])
+    settings.plugins.radio = false
+    settings.plugins.mfp = false
+    expect(ids()).toEqual(['songs', 'albums', 'artists', 'folders', 'playlists'])
+    settings.plugins.files = false
+    expect(ids()).toEqual([])
+  })
+
+  it('open a link in the tab that shows it', () => {
+    library.load(lib())
+    p.openPage({ plugin: 'mfp', page: 'episode/ep' })
+    expect([library.tab, library.page('mfp')]).toEqual(['mfp', 'episode/ep'])
+    p.openPage({ plugin: 'radio', page: '' })
+    expect(library.tab).toBe('radio')
+    // a files link to an episode is no page of files
+    p.openPage({ plugin: 'files', page: 'album/ep' })
+    expect(library.tab).toBe('radio')
+    settings.plugins.radio = false
+    p.openPage({ plugin: 'files', page: 'album/al' })
+    p.openPage({ plugin: 'radio', page: '' })
+    expect(library.tab).toBe('albums')
   })
 })
 

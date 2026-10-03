@@ -15,6 +15,27 @@ export interface PageAddress {
   item?: string
 }
 
+// Studio's chips or Classic's sidebar
+export type NavKind = 'chips' | 'sidebar'
+
+// A tab of a plugin: a chip in Studio, a section in Classic.
+export interface Tab {
+  // "albums", "radio"; unique across plugins
+  id: string
+  // the chip: "Albums"
+  label: string
+  // Classic's sidebar
+  icon: IconName
+  // the search box's placeholder: "Search stations"
+  search: string
+  // a shorter one for Classic's narrow sidebar, when it differs
+  searchShort?: string
+  // the line next to the chips: "Scanning 1,240 of 8,000"
+  status?: string
+  // shown only there (Classic's Songs); none: in both
+  only?: NavKind
+}
+
 export interface ItemInfo {
   title: string
   // the artist; for a station, its codec or country
@@ -109,9 +130,18 @@ export interface PageHalf {
   info(id: string): ItemState
   // may wait (radio asks main first); undefined when it can't be played now
   play(id: string): Playable | undefined | Promise<Playable | undefined>
-  // whether a page is still there (a rescan may have removed it), and showing it
+  // its tabs, in order (spec "Pages and tabs")
+  tabs(): Tab[]
+  // which of its tabs shows a page: where a link to it opens
+  tabOf(page: string): string | undefined
+  // whether a page is still there (a rescan may have removed it)
   canOpen(to: PageAddress): boolean
-  open(to: PageAddress): void
+  // What is left of a page of one of its tabs after its data changed: the
+  // page, one above it, or '' for the tab's top. None: pages never go.
+  keep?(tab: string, page: string): string
+  // The page's place under its tab, top first, for the scroll places: a
+  // move up this path shows where the view was left (ticket 042).
+  path?(tab: string, page: string): string[]
   // changes whenever an answer of `info` may have changed
   version(): number
   // a plugin whose items are live (radio): it drives its own item

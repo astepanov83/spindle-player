@@ -2,7 +2,9 @@
 // the store moves here in ticket 063.
 import { library } from '../../stores/library.svelte'
 import type { PageHalf } from '../types'
-import { canOpenPage, openPage, trackPlayable, trackState } from './tracks'
+import { canOpenFiles, filesPath, filesTabs, keepFiles } from './nav'
+import { filesTabOf } from './pages'
+import { trackPlayable, trackState } from './tracks'
 
 // before the first library a song is on its way, not gone
 const complete = (): boolean => library.loaded
@@ -10,7 +12,10 @@ const complete = (): boolean => library.loaded
 export const filesHalf: PageHalf = {
   info: (id) => trackState('files', id, complete),
   play: (id) => trackPlayable('files', id),
-  canOpen: canOpenPage,
-  open: openPage,
+  tabs: filesTabs,
+  tabOf: filesTabOf,
+  canOpen: canOpenFiles,
+  keep: keepFiles,
+  path: filesPath,
   version: () => library.revision
 }

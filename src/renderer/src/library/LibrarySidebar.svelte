@@ -14,35 +14,37 @@
   import SearchResults from './SearchResults.svelte'
   import SongTable from './SongTable.svelte'
   import ViewHead from './ViewHead.svelte'
+  import NoPlugins from './NoPlugins.svelte'
+  import { untrack } from 'svelte'
   import { fmtCount } from '../format'
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
-  import { folderSearchText } from './folders'
   import { libraryOnScreen } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { songRows } from './views'
-  import { library, type Section } from '../stores/library.svelte'
+  import { library, playlistPage, playlistsTab } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
-  import { pluginOn } from '../stores/settings.svelte'
+  import { pluginTabs } from '../plugins'
+  import { tabsIn } from '../plugins/tabs'
   import { trackKey } from '../plugins/files/views'
+  import { shownAlbum, showArtist } from '../plugins/files/nav'
 
-  const allSections: [Section, IconName, string][] = [
-    ['songs', 'note', 'Songs'],
-    ['albums', 'disc', 'Albums'],
-    ['artists', 'person', 'Artists'],
-    ['folders', 'folder', 'Folders'],
-    ['radio', 'radio', 'Radio'],
-    ['mfp', 'viz', 'MFP']
-  ]
-  // Radio and MFP only while their plugin is on (tickets 052, 057)
-  const sections = $derived(
-    allSections.filter(([s]) => (s !== 'mfp' && s !== 'radio') || pluginOn(s))
-  )
+  // the tabs of the plugins that are on (ticket 059); playlists are listed
+  // under their own heading
+  const tabs = $derived(tabsIn(pluginTabs(), 'sidebar'))
+  const sections = $derived(tabs.filter((t) => t.id !== playlistsTab))
+  const hasPlaylists = $derived(tabs.some((t) => t.id === playlistsTab))
+  const shown = $derived(tabs.find((t) => t.id === library.tab))
+  const open = $derived(shownAlbum())
+  // untracked: a write while this block is drawn
+  untrack(() => library.showIn('sidebar'))
 
   let scrollEl: HTMLDivElement | undefined = $state()
 
   const playlist = $derived(
-    library.section.startsWith('pl:') ? playlists.get(library.section.slice(3)) : undefined
+    library.tab === playlistsTab && library.openPlaylist
+      ? playlists.get(library.openPlaylist)
+      : undefined
   )
 
   const songs = $derived(
@@ -51,95 +53,76 @@
 
   const searching = $derived(!!library.query.trim())
 
-  function pick(s: Section): void {
-    library.pickSection(s)
-  }
-
-  // from the search results: one step to the artist's page
-  function openArtist(key: string): void {
-    library.showArtist(key)
-  }
-
-  const placeholders: Partial<Record<Section, string>> = {
-    songs: 'Search songs',
-    albums: 'Search library',
-    artists: 'Search artists',
-    folders: 'Search folders',
-    radio: 'Search stations',
-    mfp: 'Search mixes'
-  }
+  const pickPlaylist = (id: string): void => library.pickTab(playlistsTab, playlistPage(id))
 
   function create(): void {
     const id = playlists.create()
-    pick(`pl:${id}`)
+    pickPlaylist(id)
     playlists.editing = id
   }
 
   scrollTopOnChange(
     () => scrollEl,
-    () => libraryView(library.section)
+    () => libraryView()
   )
 
   libraryOnScreen()
 </script>
 
-{#snippet item(sec: Section, icon: IconName, label: string)}
-  <button class="sidebtn" aria-current={library.section === sec} onclick={() => pick(sec)}>
-    <Icon name={icon} size={18} /><span
-      class="lbl"
-      title={sec.startsWith('pl:') ? label : undefined}>{label}</span
-    >
+{#snippet item(current: boolean, pick: () => void, icon: IconName, label: string, full = false)}
+  <button class="sidebtn" aria-current={current} onclick={pick}>
+    <Icon name={icon} size={18} /><span class="lbl" title={full ? label : undefined}>{label}</span>
   </button>
 {/snippet}
 
 <div class="lib2" data-notice-host>
   <aside class="side">
     <div class="search">
-      <SearchBox
-        placeholder={library.section === 'folders'
-          ? folderSearchText(library.folders, library.folder)
-          : (placeholders[library.section] ?? 'Search this playlist')}
-      />
+      <SearchBox placeholder={shown?.searchShort ?? shown?.search ?? 'Search'} />
     </div>
     <div class="sidehead section-label">Library <HistoryButtons size={26} /></div>
-    {#each sections as [sec, icon, label] (sec)}
-      {@render item(sec, icon, label)}
+    {#each sections as t (t.id)}
+      {@render item(library.tab === t.id, () => library.pickTab(t.id), t.icon, t.label)}
     {/each}
-    <div class="sidehead section-label">
-      Playlists
-      <button class="add" aria-label="New playlist" title="New playlist" onclick={create}
-        ><Icon name="plus" size={16} /></button
-      >
-    </div>
-    {#each playlists.list as p (p.id)}
-      {@render item(`pl:${p.id}`, 'list', p.name)}
-    {/each}
+    {#if hasPlaylists}
+      <div class="sidehead section-label">
+        Playlists
+        <button class="add" aria-label="New playlist" title="New playlist" onclick={create}
+          ><Icon name="plus" size={16} /></button
+        >
+      </div>
+      {#each playlists.list as p (p.id)}
+        {@render item(playlist?.id === p.id, () => pickPlaylist(p.id), 'list', p.name, true)}
+      {/each}
+    {/if}
     <div class="foot"><ScanLine wrap /></div>
   </aside>
   <div class="main" bind:this={scrollEl}>
-    {#if library.section === 'radio'}
+    {#if !tabs.length}
+      <div class="fill"><NoPlugins /></div>
+    {:else if shown?.plugin === 'radio'}
       <RadioView searchAt="left" />
-    {:else if library.section === 'mfp'}
+    {:else if shown?.plugin === 'mfp'}
       <MfpView />
     {:else if !library.albums.length}
       <!-- radio and MFP need no songs, so the sidebar stays -->
       <div class="fill"><NoLibrary /></div>
-    {:else if library.section === 'songs'}
+    {:else if shown?.id === 'songs'}
       <SongTable title="Songs" meta="Library" items={songs} {scrollEl} />
-    {:else if library.section === 'albums'}
+    {:else if shown?.id === 'albums'}
       {#if searching}
-        <SearchResults {scrollEl} onartist={openArtist} />
-      {:else if library.open}
-        <AlbumPage albumId={library.open} />
+        <SearchResults {scrollEl} onartist={showArtist} />
+      {:else if open}
+        <AlbumPage albumId={open} />
       {:else}
         <ViewHead title="Albums" count={fmtCount(library.albums.length, 'album', 'albums')} />
         <AlbumGrid {scrollEl} />
       {/if}
     {:else if playlist}
       <PlaylistView id={playlist.id} {scrollEl} />
-    {:else if library.section === 'folders'}
+    {:else if shown?.id === 'folders'}
       <FolderView {scrollEl} />
-    {:else if library.section === 'artists'}
+    {:else if shown?.id === 'artists'}
       <ArtistView {scrollEl} />
     {/if}
   </div>

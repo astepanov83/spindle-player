@@ -15,12 +15,13 @@
   import { commonFolder, folderParts, folderPath } from './folders'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
   import { isPlaying, playAlbum, trackKey, trackKeys, trackOf } from '../plugins/files/views'
+  import { openAlbum, showArtist, showFolder } from '../plugins/files/nav'
 
   // back: the label of the link back (an artist's name when opened from them)
   let {
     albumId,
     back = 'All albums',
-    onback = () => library.openAlbum(null)
+    onback = () => openAlbum(null)
   }: { albumId: string; back?: string; onback?: () => void } = $props()
 
   const al = $derived(library.album(albumId))
@@ -70,13 +71,13 @@
     <h2 class="page-title clamp" title={al.title}>{al.title}</h2>
     <div class="page-meta">
       {#each artists as a, i (i)}{#if i}{comma}{/if}<GoLink
-          go={a.key ? () => library.showArtist(a.key!) : undefined}>{a.name}</GoLink
+          go={a.key ? () => showArtist(a.key!) : undefined}>{a.name}</GoLink
         >{/each} · {tracks.length} songs · {minutes} min
     </div>
     {#if parts}
       {@const path = folderPath(parts)}
       <div class="page-meta path" title={path}>
-        <GoLink go={() => library.showFolder(library.folders.nodes[folder!].key)}
+        <GoLink go={() => showFolder(library.folders.nodes[folder!].key)}
           ><bdi dir="ltr">{path}</bdi></GoLink
         >
       </div>

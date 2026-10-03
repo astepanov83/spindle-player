@@ -13,9 +13,10 @@
   import { episodeRows } from './views'
   import { library } from '../stores/library.svelte'
   import { queues } from '../stores/queues.svelte'
-  import { pluginOn } from '../stores/settings.svelte'
   import { isPlaying, playAlbum } from '../plugins/files/views'
+  import { openEpisode, shownEpisode } from '../plugins/mfp/nav'
 
+  const episode = $derived(shownEpisode())
   const rows = $derived(episodeRows(library.mfpAlbums, (id) => library.track(id), library.query))
   const status = $derived(mfpLine(library.status.mfp, Date.now()))
   // every song under an episode, in order, for the arrow keys
@@ -30,13 +31,8 @@
   }
 </script>
 
-{#if !pluginOn('mfp')}
-  <Empty
-    title="Music For Programming is off"
-    text="Turn it on in Settings, under Plugins, to play the mixes from musicforprogramming.net."
-  />
-{:else if library.episode}
-  <EpisodePage albumId={library.episode} />
+{#if episode}
+  <EpisodePage albumId={episode} />
 {:else}
   <ViewHead
     title="Music For Programming"
@@ -57,7 +53,7 @@
     <div class="lines" use:roving={{ rows: keyRows }}>
       {#each rows as r (r.album.id)}
         {@const al = r.album}
-        <button class="ep row" data-row onclick={() => library.openEpisode(al.id)}>
+        <button class="ep row" data-row onclick={() => openEpisode(al.id)}>
           <Thumb src={al.cover} size={40} radius={4} />
           <span class="nm" title={al.title}>{al.title}</span>
           <span class="o">{al.year || ''}</span>

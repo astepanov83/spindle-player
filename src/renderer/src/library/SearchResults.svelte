@@ -20,6 +20,7 @@
   import { openSongMenu } from './song-menu'
   import type { Track } from '../../../shared/library'
   import { isPlaying, trackKey } from '../plugins/files/views'
+  import { openAlbum } from '../plugins/files/nav'
 
   let {
     scrollEl,
@@ -53,10 +54,6 @@
   // the clicked song, with every song of its group found after it as the queue
   function play(rows: Track[], i: number): void {
     queue.playList(rows.map(trackKey), i, from)
-  }
-
-  function openAlbum(id: string): void {
-    library.openAlbum(id)
   }
 </script>
 

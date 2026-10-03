@@ -181,7 +181,7 @@ describe('Go to (ticket 040)', () => {
       folder: 0
     })
     library.load({ albums: [album], tracks: [track('s1'), track('s2')], folders: [] })
-    library.go({ chip: 'radio' })
+    library.go({ tab: 'radio' })
   }
 
   it('one song goes to its album and its artist, between the queue and the playlists', () => {
@@ -199,11 +199,15 @@ describe('Go to (ticket 040)', () => {
       'New playlist'
     ])
     pick(m, 'Go to album')
-    expect([library.chip, library.open, library.landing]).toEqual(['albums', 'al', { song: 's2' }])
+    expect([library.tab, library.page('albums'), library.landing]).toEqual([
+      'albums',
+      'album/al',
+      { song: 's2' }
+    ])
     // the queue's drawer closes, so the page shows
     expect(layout.showQueue).toBe(false)
     pick(m, 'Go to artist')
-    expect([library.chip, library.artist]).toEqual(['artists', 'marinavale'])
+    expect([library.tab, library.page('artists')]).toEqual(['artists', 'artist/marinavale'])
   })
 
   it('a split artist gives one item per artist', () => {
@@ -218,7 +222,7 @@ describe('Go to (ticket 040)', () => {
       '---'
     ])
     pick(m, 'Go to B')
-    expect(library.artist).toBe('b')
+    expect(library.page('artists')).toBe('artist/b')
   })
 
   it('an MFP song goes to its episode, and not to an artist (ticket 052)', () => {
@@ -254,7 +258,11 @@ describe('Go to (ticket 040)', () => {
     expect(labels(m)).toContain('Go to album')
     expect(labels(m)).not.toContain('Go to artist')
     pick(m, 'Go to album')
-    expect([library.chip, library.episode, library.landing]).toEqual(['mfp', 'ep', { song: 'm1' }])
+    expect([library.tab, library.page('mfp'), library.landing]).toEqual([
+      'mfp',
+      'episode/ep',
+      { song: 'm1' }
+    ])
   })
 
   it('is left out for several songs, and where there is no library (Focus)', () => {

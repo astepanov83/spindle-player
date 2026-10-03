@@ -19,6 +19,7 @@
   import { queue } from '../stores/queue.svelte'
   import { sections, songMenu } from './song-menu'
   import { playingTrack, trackKeys } from '../plugins/files/views'
+  import { openArtist } from '../plugins/files/nav'
 
   let {
     scrollEl,
@@ -33,7 +34,7 @@
 
   // the grid shows over the open page while searching; a pick is a step, which ends the search
   function open(key: string): void {
-    library.openArtist(key)
+    openArtist(key)
   }
 
   const GAP = 16

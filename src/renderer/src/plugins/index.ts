@@ -2,10 +2,12 @@
 // link opens. The page halves by plugin id; a plugin that is off is not asked.
 import { plugins, type PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
+import { library, playlistsTab, type NavTab } from '../stores/library.svelte'
 import { pluginOn } from '../stores/settings.svelte'
 import { filesHalf } from './files'
 import { mfpHalf } from './mfp'
 import { radioHalf } from './radio'
+import { orderTabs, type ShownTab } from './tabs'
 import type {
   Action,
   Can,
@@ -94,8 +96,49 @@ export function canOpen(to: PageAddress): boolean {
   return pluginOn(to.plugin) && halves[to.plugin].canOpen(to)
 }
 
+// A link: the page in the tab of its plugin that shows it, at its item.
 export function openPage(to: PageAddress): void {
-  if (canOpen(to)) halves[to.plugin].open(to)
+  const tab = canOpen(to) ? halves[to.plugin].tabOf(to.page) : undefined
+  if (tab) library.link(tab, to.page, to.item ?? null)
+}
+
+// The core's tab. Classic lists each playlist in its sidebar instead.
+function playlists(): ShownTab {
+  const open = library.openPlaylist
+  return {
+    id: playlistsTab,
+    label: 'Playlists',
+    icon: 'list',
+    search: open ? 'Search this playlist' : 'Search playlists',
+    plugin: 'core'
+  }
+}
+
+// The tabs of the plugins that are on, in order (tabs.ts).
+export function pluginTabs(): ShownTab[] {
+  const on = plugins.filter((p) => pluginOn(p.id))
+  return orderTabs(
+    on.map((p) => halves[p.id].tabs().map((t) => ({ ...t, plugin: p.id }))),
+    playlists()
+  )
+}
+
+// What the library store needs of them, to close what left (setTabs).
+export function navTabs(): NavTab[] {
+  return pluginTabs().map((t) => {
+    const keep = t.plugin === 'core' ? undefined : halves[t.plugin].keep
+    return { id: t.id, ...(t.only ? { only: t.only } : {}), ...(keep ? { keep } : {}) }
+  })
+}
+
+// The open page's place under its tab, for the scroll places (ticket 042).
+export function pagePath(tab: string): string[] {
+  const t = pluginTabs().find((t) => t.id === tab)
+  const page = library.page(tab)
+  if (!t) return []
+  if (t.plugin === 'core') return library.openPlaylist ? [`pl:${library.openPlaylist}`] : []
+  const path = halves[t.plugin].path
+  return path ? path(tab, page) : page ? [page] : []
 }
 
 // Changes whenever an answer of itemInfo may have changed: a plugin turned on

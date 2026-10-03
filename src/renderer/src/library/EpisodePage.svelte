@@ -16,6 +16,7 @@
   import { songMatches } from './views'
   import { openPlaylistMenu, openSongMenu } from './song-menu'
   import { isPlaying, playAlbum, trackKey, trackKeys, trackOf } from '../plugins/files/views'
+  import { openEpisode } from '../plugins/mfp/nav'
 
   let { albumId }: { albumId: string } = $props()
 
@@ -58,7 +59,7 @@
   }
 </script>
 
-<button class="back" onclick={() => library.openEpisode(null)}
+<button class="back" onclick={() => openEpisode(null)}
   ><Icon name="back" size={16} />All episodes</button
 >
 <div class="albhead">

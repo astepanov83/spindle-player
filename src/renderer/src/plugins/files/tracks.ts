@@ -2,7 +2,6 @@
 // until ticket 061, so the mfp page half uses this as well.
 import type { Art, Track } from '../../../../shared/library'
 import type { PluginId } from '../../../../shared/plugins'
-import { linkTarget } from '../../../../shared/saved-queue'
 import { artistLinks } from '../../library/artists'
 import { library } from '../../stores/library.svelte'
 import type { ItemInfo, ItemState, PageAddress, Playable } from '../types'
@@ -98,17 +97,4 @@ export function trackPlayable(plugin: PluginId, id: string): Playable | undefine
   if (t.part) p.part = t.part
   if (t.codec) p.codec = t.codec
   return p
-}
-
-// An album or episode page shows its song when asked to.
-export function canOpenPage(to: PageAddress): boolean {
-  return library.canShow({ plugin: to.plugin, page: to.page })
-}
-
-export function openPage(to: PageAddress): void {
-  const link = { plugin: to.plugin, page: to.page }
-  const target = linkTarget(link)
-  if (to.item && (target?.kind === 'album' || target?.kind === 'episode'))
-    library.showAlbum(target.id, to.item)
-  else library.showFrom(link)
 }

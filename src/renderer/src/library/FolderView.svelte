@@ -17,12 +17,13 @@
   import { player } from '../stores/player.svelte'
   import { queue } from '../stores/queue.svelte'
   import { playingTrack, trackKey } from '../plugins/files/views'
+  import { openFolder, shownFolderKey } from '../plugins/files/nav'
 
   let { scrollEl }: { scrollEl: HTMLElement | undefined } = $props()
 
   const ROW = 56
   const tree = $derived(library.folders)
-  const shown = $derived(shownFolder(tree, library.folder))
+  const shown = $derived(shownFolder(tree, shownFolderKey()))
   const node = $derived(shown === null ? undefined : tree.nodes[shown])
   const title = $derived(node?.name ?? 'Folders')
   const path = $derived(shown === null ? [] : crumbs(tree, shown))
@@ -75,7 +76,7 @@
 {#if showPath}
   <nav class="crumbs" aria-label="Folder path">
     {#if tree.roots.length > 1}
-      <button class="crumb" onclick={() => library.openFolder(null)}>Folders</button>
+      <button class="crumb" onclick={() => openFolder(null)}>Folders</button>
     {/if}
     {#each path as i, n (i)}
       {#if n > 0 || tree.roots.length > 1}<span class="sep" aria-hidden="true">/</span>{/if}
@@ -83,7 +84,7 @@
         class="crumb"
         disabled={i === shown}
         title={tree.nodes[i].parent < 0 ? tree.nodes[i].key : tree.nodes[i].name}
-        onclick={() => library.openFolder(tree.nodes[i].key)}>{tree.nodes[i].name}</button
+        onclick={() => openFolder(tree.nodes[i].key)}>{tree.nodes[i].name}</button
       >
     {/each}
   </nav>
@@ -133,7 +134,7 @@
     <button
       class="row"
       style:transform="translateY({v.offset(item)}px)"
-      onclick={() => library.openFolder(f.key)}
+      onclick={() => openFolder(f.key)}
       oncontextmenu={(e) =>
         openSongMenu(e, songIds(i), { from: f.name, link: queueLink('folder', f.key) })}
     >

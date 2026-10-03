@@ -27,7 +27,7 @@ import {
   type SortKey
 } from '../library/views'
 import { emptyTree, folderTree, type FolderTree } from '../library/folders'
-import { linkTarget, type QueueLink } from '../../../shared/saved-queue'
+import type { NavKind } from '../plugins/types'
 import {
   emptyHistory,
   goBack,
@@ -38,31 +38,31 @@ import {
   type Walk
 } from '../library/history'
 
-export type Chip = 'albums' | 'artists' | 'folders' | 'playlists' | 'radio' | 'mfp'
-// sidebar sections; playlists are "pl:<id>"
-export type Section = 'songs' | 'albums' | 'artists' | 'folders' | 'radio' | 'mfp' | `pl:${string}`
 export type SearchGroup = 'songs' | 'albums' | 'artists' | 'mfp'
 
-// Where the library is: the chip (Studio) or section (Classic), and the page
-// open in each of them. Each chip keeps its page while another one shows, so
-// going back to it shows what was left there. One object, so a step of
-// history is a copy of it (ticket 051).
+// The core's own tab (spec "Pages and tabs"): its pages are "playlist/<id>".
+export const playlistsTab = 'playlists'
+export const playlistPage = (id: string): string => `playlist/${id}`
+
+// Where the library is: the tab shown (a chip in Studio, a section in
+// Classic) and the page open in each tab. Each tab keeps its page while
+// another one shows, so going back to it shows what was left there. One
+// object, so a step of history is a copy of it (ticket 051). Page strings
+// are the plugins': the core only keeps them.
 export interface Nav {
-  chip: Chip
-  section: Section
-  // Albums: the open album, null for the grid
-  album: string | null
-  // Artists: the open artist (null for the grid), and an album opened from it
-  artist: string | null
-  artistAlbum: string | null
-  // Folders: the open folder by key (see folders.ts), null for the top
-  folder: string | null
-  // Studio's Playlists chip: the open playlist, null for the list
-  playlist: string | null
-  // MFP: the open episode (an album id), null for the list (ticket 052)
-  episode: string | null
+  tab: string
+  // a tab not in it shows its top; never ''
+  pages: Readonly<Record<string, string>>
   // the search results' group shown whole after "Show all", null for all groups
   searchAll: SearchGroup | null
+}
+
+// What the store needs of a tab that shows: where, and what is left of its
+// page after its plugin's data changed (PageHalf.keep).
+export interface NavTab {
+  id: string
+  only?: NavKind
+  keep?: (tab: string, page: string) => string
 }
 
 // A step of history: the place and the search text it had, so Back to a
@@ -72,21 +72,24 @@ export interface Step {
   query: string
 }
 
-const startNav = (): Nav => ({
-  chip: 'albums',
-  section: 'songs',
-  album: null,
-  artist: null,
-  artistAlbum: null,
-  folder: null,
-  playlist: null,
-  episode: null,
-  searchAll: null
-})
+const startNav = (): Nav => ({ tab: '', pages: {}, searchAll: null })
+
+function samePages(a: Nav['pages'], b: Nav['pages']): boolean {
+  const keys = Object.keys(a)
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k])
+}
 
 const sameNav = (a: Nav, b: Nav): boolean =>
-  (Object.keys(a) as (keyof Nav)[]).every((k) => a[k] === b[k])
+  a === b || (a.tab === b.tab && a.searchAll === b.searchAll && samePages(a.pages, b.pages))
 const sameStep = (a: Step, b: Step): boolean => a.query === b.query && sameNav(a.nav, b.nav)
+
+function withPage(pages: Nav['pages'], tab: string, page: string): Nav['pages'] {
+  if ((pages[tab] ?? '') === page) return pages
+  const out = { ...pages }
+  if (page) out[tab] = page
+  else delete out[tab]
+  return out
+}
 
 // The same list when every album in it is the same object, so views made
 // from it don't redo their work.
@@ -136,8 +139,12 @@ class LibraryStore {
   // status, which main sends often, so the next status doesn't hide it.
   loadFailed = $state(false)
 
-  // Change it with a step (#go), so Back can return, or Back and Forward.
+  // Change it with a step (go), so Back can return, or Back and Forward.
   #nav: Nav = $state.raw(startNav())
+  // the tabs of the plugins that are on (setTabs); null until told
+  #tabs: NavTab[] | null = $state.raw(null)
+  // which library draws them (showIn); null until one is drawn
+  #kind: NavKind | null = $state.raw(null)
   #history: History<Step> = $state.raw(emptyHistory())
   // Back, Forward or another chip shows a place seen before: it shows where
   // it was left, not the top. The scroll code takes it once (takeReturn).
@@ -153,9 +160,9 @@ class LibraryStore {
   artistSort: Sort | null = $state(null)
   // the artist whose names are being edited (ticket 024)
   editingArtist: string | null = $state(null)
-  // After an edit, the key the open artist has in the library that comes
-  // back: a rename or split changes it.
-  #follow: string | null = null
+  // After an edit, the page the open one is now in the library that comes
+  // back: a rename or split changes an artist's key. `to` gets the old page.
+  #follow: { tab: string; to: (page: string) => string } | null = null
   // A link just opened a page (ticket 040): it starts at the top, also when
   // it was open already, or at `song`'s row. The library part's scroll code
   // takes it once.
@@ -229,62 +236,106 @@ class LibraryStore {
     }
     if (songs) this.#version++
     this.#loads++
-    // the open albums or artist may be gone after a rescan
-    let nav = this.#fix(this.#nav)
-    const a = this.#nav.artist
-    if (a && !nav.artist) {
+    // the open pages may be gone after a rescan
+    const was = this.#nav
+    let nav = this.#fix(was)
+    const f = this.#follow
+    const from = f && was.pages[f.tab]
+    if (f && from && nav.pages[f.tab] !== from) {
       // kept until used: a scan's patch may come before the edit's
-      const to = this.#follow && this.#artistIndex.has(this.#follow) ? this.#follow : null
+      const to = this.#keep(f.tab, f.to(from))
       if (to) {
-        nav = { ...nav, artist: to, artistAlbum: this.#nav.artistAlbum }
+        nav = { ...nav, pages: withPage(nav.pages, f.tab, to) }
         this.#follow = null
       }
     }
-    if (!sameNav(nav, this.#nav)) this.#nav = nav
+    if (!sameNav(nav, was)) this.#nav = nav
   }
 
-  // What is left of a place after a rescan: an album or artist that is gone
-  // closes. A folder that is gone shows the nearest one above (shownFolder).
+  #keep(tab: string, page: string): string {
+    const t = this.#tabs?.find((t) => t.id === tab)
+    return t?.keep && page ? t.keep(tab, page) : page
+  }
+
+  // What is left of a place: a page its plugin says is gone closes (or shows
+  // one above it), a tab that left takes its page with it, and a tab not
+  // shown gives way to the first one shown.
   #fix(nav: Nav): Nav {
-    const album = (id: string | null): string | null => (id && this.#albumIndex.has(id) ? id : null)
-    const artist = nav.artist && this.#artistIndex.has(nav.artist) ? nav.artist : null
-    const episode = nav.episode && this.#albumIndex.has(nav.episode) ? nav.episode : null
-    return {
-      ...nav,
-      album: album(nav.album),
-      artist,
-      artistAlbum: artist ? album(nav.artistAlbum) : null,
-      episode
+    const tabs = this.#tabs
+    if (!tabs) return nav
+    const pages: Record<string, string> = {}
+    for (const t of tabs) {
+      const page = this.#keep(t.id, nav.pages[t.id] ?? '')
+      if (page) pages[t.id] = page
     }
+    const shown = (id: string): boolean => this.#shows(id, pages[id] ?? '')
+    const tab = shown(nav.tab) ? nav.tab : (tabs.find((t) => shown(t.id))?.id ?? '')
+    const out: Nav = {
+      tab,
+      pages: samePages(pages, nav.pages) ? nav.pages : pages,
+      searchAll: tab === nav.tab ? nav.searchAll : null
+    }
+    return sameNav(out, nav) ? nav : out
   }
 
-  get chip(): Chip {
-    return this.#nav.chip
+  #shows(id: string, page: string): boolean {
+    const t = this.#tabs?.find((t) => t.id === id)
+    const kind = this.#kind
+    if (!t || (kind && t.only && t.only !== kind)) return false
+    // Classic lists the playlists, it has no Playlists page
+    return !(kind === 'sidebar' && id === playlistsTab && !page)
   }
-  get section(): Section {
-    return this.#nav.section
+
+  // A step whose tab is gone drops its search text with it: a query for
+  // stations is no query for albums.
+  #fixStep(s: Step): Step {
+    const nav = this.#fix(s.nav)
+    return nav === s.nav ? s : { nav, query: nav.tab === s.nav.tab ? s.query : '' }
   }
-  // Albums' open album
-  get open(): string | null {
-    return this.#nav.album
+
+  // The plugins' tabs changed (one turned on or off): the view and every
+  // step of history leave the tabs that went.
+  setTabs(list: NavTab[]): void {
+    const old = this.#tabs
+    const same = (t: NavTab, i: number): boolean =>
+      t.id === list[i].id && t.only === list[i].only && t.keep === list[i].keep
+    if (old && old.length === list.length && old.every(same)) return
+    this.#tabs = list
+    this.#refit()
   }
-  get artist(): string | null {
-    return this.#nav.artist
+
+  // The library on screen: Studio's chips or Classic's sidebar. A tab the
+  // other one doesn't show gives way to its first.
+  showIn(kind: NavKind): void {
+    if (kind === this.#kind) return
+    this.#kind = kind
+    this.#refit()
   }
-  get artistAlbum(): string | null {
-    return this.#nav.artistAlbum
+
+  #refit(): void {
+    const now = this.#fixStep(this.#step())
+    this.#nav = now.nav
+    this.#query = now.query
+    this.#history = mapSteps(this.#history, (s) => this.#fixStep(s), sameStep)
   }
-  get folder(): string | null {
-    return this.#nav.folder
+
+  get tab(): string {
+    return this.#nav.tab
   }
-  get openPlaylist(): string | null {
-    return this.#nav.playlist
+
+  // the page open in a tab, '' for its top
+  page(tab: string): string {
+    return this.#nav.pages[tab] ?? ''
   }
-  get episode(): string | null {
-    return this.#nav.episode
-  }
+
   get searchAll(): SearchGroup | null {
     return this.#nav.searchAll
+  }
+
+  // Studio's playlist page; also Classic's playlist shown
+  get openPlaylist(): string | null {
+    const p = this.page(playlistsTab)
+    return p.startsWith('playlist/') ? p.slice('playlist/'.length) : null
   }
 
   // The search text. Typing never closes the open page: a view shows its
@@ -302,7 +353,7 @@ class LibraryStore {
   // A step: the place now goes on the history for Back. The search text goes
   // unless `keepQuery` (a folder opened while its search filters, "Show all").
   go(change: Partial<Nav>, keepQuery = false): void {
-    const nav = { ...this.#nav, ...change }
+    const nav = this.#fix({ ...this.#nav, ...change })
     const query = keepQuery ? this.#query : ''
     const now = this.#step()
     this.#returning = false
@@ -317,18 +368,20 @@ class LibraryStore {
   }
 
   get #walk(): Walk<Step> {
-    return { fix: (s) => ({ ...s, nav: this.#fix(s.nav) }), same: sameStep }
+    return { fix: (s) => this.#fixStep(s), same: sameStep }
   }
 
   // Whether Back and Forward would show something else: a step a rescan or
   // a delete made the same as the place shown doesn't count.
   get canBack(): boolean {
     void this.#version
+    void this.#tabs
     return goBack(this.#history, this.#step(), this.#walk) !== null
   }
 
   get canForward(): boolean {
     void this.#version
+    void this.#tabs
     return goForward(this.#history, this.#step(), this.#walk) !== null
   }
 
@@ -364,36 +417,41 @@ class LibraryStore {
     this.query = ''
   }
 
-  // A chip or section is picked. Another one shows the page it was left on;
-  // the one shown goes to its top (the grid, the list). No search text: a
-  // query for stations is no query for albums.
-  pickChip(c: Chip): void {
-    if (c !== this.chip) return this.#toTab({ chip: c })
-    if (c === 'albums') this.go({ album: null, searchAll: null })
-    else if (c === 'artists') this.openArtist(null)
-    else if (c === 'folders') this.go({ folder: null })
-    else if (c === 'playlists') this.go({ playlist: null })
-    else if (c === 'mfp') this.go({ episode: null })
-    else this.go({})
-  }
-
-  pickSection(s: Section): void {
-    if (s !== this.section) return this.#toTab({ section: s })
-    if (s === 'albums') this.go({ album: null, searchAll: null })
-    else if (s === 'artists') this.openArtist(null)
-    else if (s === 'folders') this.go({ folder: null })
-    else if (s === 'mfp') this.go({ episode: null })
-    else this.go({})
-  }
-
-  #toTab(change: Partial<Nav>): void {
-    this.go({ ...change, searchAll: null })
+  // A chip or section is picked; `page`: Classic's playlist. Another one
+  // shows the page it was left on; the one shown goes to its top (the grid,
+  // the list). No search text: a query for stations is no query for albums.
+  pickTab(tab: string, page?: string): void {
+    if (tab === this.tab && page === undefined) {
+      if (this.#follow?.tab === tab) this.#follow = null
+      return this.go({ pages: withPage(this.#nav.pages, tab, ''), searchAll: null })
+    }
+    if (tab === this.tab && page === this.page(tab)) return
+    const pages = page === undefined ? this.#nav.pages : withPage(this.#nav.pages, tab, page)
+    this.go({ tab, pages, searchAll: null })
     this.#returning = true
   }
 
-  // An album from the Albums grid or the search results; null is the back link.
-  openAlbum(id: string | null): void {
-    this.go({ album: id, searchAll: null })
+  // A page of a tab from inside it (a tile, a back link, the path bar); ''
+  // is the tab's top. The search text stays when `keepQuery` (a folder
+  // opened while its search filters, so a match deeper down can be followed).
+  openPage(tab: string, page: string, keepQuery = false): void {
+    this.go({ tab, pages: withPage(this.#nav.pages, tab, page), searchAll: null }, keepQuery)
+  }
+
+  // Links from what plays and "Go to" in the song menu (ticket 040). Each is a
+  // step, in both templates. `song`: the row to scroll into view. The caller
+  // checks the page is still there (plugins' canOpen).
+  link(tab: string, page: string, song: string | null = null): void {
+    if (this.#follow?.tab === tab) this.#follow = null
+    this.openPage(tab, page)
+    this.landing = { song }
+  }
+
+  // The open page of `tab` is renamed (an artist's names were edited): once
+  // the library has the page `to` gives for the old one, it shows that. Null
+  // forgets it.
+  follow(f: { tab: string; to: (page: string) => string } | null): void {
+    this.#follow = f
   }
 
   // "Show all" in the search results; null is "All results"
@@ -401,14 +459,13 @@ class LibraryStore {
     this.go({ searchAll: group }, true)
   }
 
-  // An episode from the MFP list; null is the back link.
-  openEpisode(id: string | null): void {
-    this.go({ episode: id })
-  }
-
   // Studio's playlist page; null is the list
   openPlaylistPage(id: string | null): void {
-    this.go({ playlist: id })
+    this.openPage(playlistsTab, id ? playlistPage(id) : '')
+  }
+
+  showPlaylist(id: string): void {
+    this.link(playlistsTab, playlistPage(id))
   }
 
   playlistSort(id: string): Sort | null {
@@ -424,24 +481,19 @@ class LibraryStore {
   forgetPlaylist(id: string): void {
     if (id in this.playlistSorts)
       this.playlistSorts = withPlaylistSort(this.playlistSorts, id, null)
-    const out = (n: Nav): Nav => ({
-      ...n,
-      section: n.section === `pl:${id}` ? 'songs' : n.section,
-      playlist: n.playlist === id ? null : n.playlist
-    })
-    const nav = out(this.#nav)
-    if (!sameNav(nav, this.#nav)) {
-      // the text filtered the playlist's rows
+    const page = playlistPage(id)
+    const out = (n: Nav): Nav =>
+      n.pages[playlistsTab] === page
+        ? this.#fix({ ...n, pages: withPage(n.pages, playlistsTab, '') })
+        : n
+    const was = this.#nav
+    const nav = out(was)
+    if (!sameNav(nav, was)) {
       this.#nav = nav
-      this.query = ''
+      // the text filtered the playlist's rows
+      if (was.tab === playlistsTab) this.query = ''
     }
     this.#history = mapSteps(this.#history, (s) => ({ ...s, nav: out(s.nav) }), sameStep)
-  }
-
-  // Folders' path bar and subfolders. The search text stays, so a match
-  // deeper down can be followed to.
-  openFolder(key: string | null): void {
-    this.go({ folder: key }, true)
   }
 
   sortFolder(k: SortKey): void {
@@ -451,79 +503,6 @@ class LibraryStore {
   getArtist(key: string): Artist | undefined {
     const i = this.#artistIndex.get(key)
     return i === undefined ? undefined : this.artists[i]
-  }
-
-  // The open artist is renamed or split: show `key` once it is in the library.
-  followArtist(key: string): void {
-    this.#follow = key
-  }
-
-  // null goes back to the grid
-  openArtist(key: string | null): void {
-    this.#follow = null
-    this.go({ artist: key, artistAlbum: null })
-  }
-
-  // null goes back to the artist
-  openArtistAlbum(id: string | null): void {
-    this.go({ artistAlbum: id })
-  }
-
-  // Links from what plays and "Go to" in the song menu (ticket 040). Each is a
-  // step, in both templates, since the store doesn't know which one shows.
-  // Something a rescan removed opens nothing.
-  #link(change: Partial<Nav>, song: string | null = null): void {
-    this.go({ searchAll: null, ...change })
-    this.landing = { song }
-  }
-
-  // `song`: the row to scroll into view
-  showAlbum(id: string, song?: string): void {
-    const i = this.#albumIndex.get(id)
-    if (i === undefined) return
-    if (this.#allAlbums[i].online === 'mfp')
-      this.#link({ chip: 'mfp', section: 'mfp', episode: id }, song ?? null)
-    else this.#link({ chip: 'albums', section: 'albums', album: id }, song ?? null)
-  }
-
-  showArtist(key: string): void {
-    if (!this.#artistIndex.has(key)) return
-    this.#follow = null
-    this.#link({ chip: 'artists', section: 'artists', artist: key, artistAlbum: null })
-  }
-
-  showFolder(key: string): void {
-    this.#link({ chip: 'folders', section: 'folders', folder: key })
-  }
-
-  showPlaylist(id: string): void {
-    this.#link({ chip: 'playlists', section: `pl:${id}`, playlist: id })
-  }
-
-  showRadio(): void {
-    this.#link({ chip: 'radio', section: 'radio' })
-  }
-
-  // Whether a link still has something to open after a rescan. Playlists
-  // are not the library's: the caller checks those.
-  // An episode is an album here; showAlbum opens its page.
-  canShow(link: QueueLink): boolean {
-    void this.#version
-    const to = linkTarget(link)
-    if (!to) return false
-    if (to.kind === 'album' || to.kind === 'episode') return this.#albumIndex.has(to.id)
-    if (to.kind === 'artist') return this.#artistIndex.has(to.id)
-    if (to.kind === 'folder') return this.folders.byKey.has(to.id)
-    return true
-  }
-
-  showFrom(link: QueueLink): void {
-    const to = linkTarget(link)
-    if (!to) return
-    if (to.kind === 'album' || to.kind === 'episode') this.showAlbum(to.id)
-    else if (to.kind === 'artist') this.showArtist(to.id)
-    else if (to.kind === 'folder') this.showFolder(to.id)
-    else this.showPlaylist(to.id)
   }
 
   sortArtist(k: SortKey): void {
@@ -556,6 +535,12 @@ class LibraryStore {
   album(id: string): Album {
     void this.#version
     return this.#allAlbums[this.#albumIndex.get(id)!]
+  }
+
+  findAlbum(id: string): Album | undefined {
+    void this.#version
+    const i = this.#albumIndex.get(id)
+    return i === undefined ? undefined : this.#allAlbums[i]
   }
 
   // the song's own picture, else its album's

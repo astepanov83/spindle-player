@@ -7,7 +7,19 @@ import { queueLink } from '../../../shared/saved-queue'
 import type { LibraryData } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 import { library } from '../stores/library.svelte'
+import { openPage } from '../plugins'
 import { libraryView, scrollTopOnChange } from './scroll-top.svelte'
+
+// radio's page half hears main from the start; before the imports load it
+vi.hoisted(() =>
+  vi.stubGlobal('window', {
+    radioApi: { onTitle: () => () => {}, onLogo: () => () => {}, onCover: () => () => {} }
+  })
+)
+
+// a link to album "a", at a song
+const showAlbum = (song?: string): void =>
+  openPage({ plugin: 'files', page: 'album/a', ...(song ? { item: song } : {}) })
 
 describe('where a link lands (ticket 040)', () => {
   let frames: (() => void)[] = []
@@ -85,7 +97,7 @@ describe('where a link lands (ticket 040)', () => {
     cleanup = $effect.root(() =>
       scrollTopOnChange(
         () => box,
-        () => libraryView('albums')
+        () => libraryView()
       )
     )
     flushSync()
@@ -93,7 +105,7 @@ describe('where a link lands (ticket 040)', () => {
   })
 
   it('scrolls the song row to the middle once, then leaves the page alone', async () => {
-    library.showAlbum('a', 'a1')
+    showAlbum('a1')
     flushSync()
     await settle()
     // row middle at 510, box middle at 50
@@ -106,18 +118,18 @@ describe('where a link lands (ticket 040)', () => {
   })
 
   it('starts at the top when the page linked to is already open', async () => {
-    library.showAlbum('a')
+    showAlbum()
     flushSync()
     await settle()
     box!.scrollTop = 300
-    library.showFrom(queueLink('album', 'a'))
+    openPage({ plugin: 'files', page: queueLink('album', 'a').page })
     flushSync()
     await settle()
     expect(box!.scrollTop).toBe(0)
   })
 
   it('starts at the top when the link closes a search over that page', async () => {
-    library.showAlbum('a')
+    showAlbum()
     flushSync()
     await settle()
     box!.scrollTop = 300
@@ -125,7 +137,7 @@ describe('where a link lands (ticket 040)', () => {
     flushSync()
     await settle()
     // going up from the results would show the album where it was left
-    library.showAlbum('a')
+    showAlbum()
     flushSync()
     await settle()
     expect(box!.scrollTop).toBe(0)
@@ -134,7 +146,7 @@ describe('where a link lands (ticket 040)', () => {
   it('keeps the row until the box is there', async () => {
     box = undefined
     flushSync()
-    library.showAlbum('a', 'a1')
+    showAlbum('a1')
     flushSync()
     await settle()
     expect(library.landing).toEqual({ song: 'a1' })

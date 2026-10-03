@@ -1,7 +1,6 @@
 // Radio's page half: stations are live items. The store does the playing
 // (reconnects, streams, titles); this answers the core's questions from it.
 import { stationArt, type Station } from '../../../../shared/stations'
-import { library } from '../../stores/library.svelte'
 import type { ItemState, LivePlugin, PageHalf } from '../types'
 import { stationLine, stepStation } from './logic'
 import { radio, radioPage } from './store.svelte'
@@ -54,8 +53,9 @@ export const radioHalf: PageHalf = {
   },
   // stations play through `live`, never from the track queue
   play: () => undefined,
+  tabs: () => [{ id: 'radio', label: 'Radio', icon: 'radio', search: 'Search stations' }],
+  tabOf: (page) => (page === '' ? 'radio' : undefined),
   canOpen: (to) => to.page === '',
-  open: () => library.showRadio(),
   version: () => (radio.loaded ? 1 : 0),
   live,
   // the bar's actions are the playing station's (store.svelte.ts, #actions)

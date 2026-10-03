@@ -13,7 +13,7 @@
     type ThemeChoice,
     type VisualizerStyle
   } from '../../../shared/settings'
-  import { plugins, switchablePlugins } from '../../../shared/plugins'
+  import { plugins } from '../../../shared/plugins'
   import { templateIds, templates } from '../../../shared/templates'
   import { settingBlocks } from '../plugins'
   import { layout } from '../stores/layout.svelte'
@@ -37,11 +37,6 @@
     minimize: 'Closing the window minimizes it, and the music keeps playing.',
     quit: 'Closing the window quits Spindle.'
   }
-
-  // A plugin with a switch has its blocks under it; one without would have a
-  // section of its own.
-  const switchable = plugins.filter((p) => switchablePlugins.includes(p.id))
-  const sections = plugins.filter((p) => !switchablePlugins.includes(p.id))
 
   let el: HTMLDivElement | undefined = $state()
 
@@ -127,15 +122,9 @@
     <p class="hint">{closeHints[settings.closeAction]}</p>
   </div>
   <CoverFetch />
-  {#each sections as p (p.id)}
-    {@const blocks = settingBlocks(p.id)}
-    {#if blocks.length}
-      <div class="set"><SettingBlocks plugin={p.id} {blocks} /></div>
-    {/if}
-  {/each}
   <div class="set">
     <span class="section-label">Plugins</span>
-    {#each switchable as p (p.id)}
+    {#each plugins as p (p.id)}
       <label class="check">
         <input type="checkbox" bind:checked={settings.plugins[p.id]} />
         {p.name}

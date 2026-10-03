@@ -60,10 +60,6 @@ export const plugins: PluginInfo[] = [
   }
 ]
 
-// Plugins whose switch shows in Settings: each of them now. One left out would
-// have its blocks in a section of their own, with no switch.
-export const switchablePlugins: PluginId[] = ['files', 'radio', 'mfp']
-
 export function isPluginId(v: unknown): v is PluginId {
   return plugins.some((p) => p.id === v)
 }

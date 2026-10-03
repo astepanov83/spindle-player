@@ -466,8 +466,7 @@ export interface PageHalf {
   // songs at all: none once it has some. `noPlaylists`: Studio's list of
   // playlists with none in it, which says what playlists are for.
   emptyPlaylists?(noPlaylists: boolean): EmptyBlock | undefined
-  // Its blocks in Settings, asked while it is on: under its switch, or in a
-  // section of their own for a plugin with no switch.
+  // Its blocks in Settings, under its switch, asked while it is on.
   settings?(): SettingBlock[]
   // A settings block was used: a button (`press`), a row of a list (`remove`,
   // with the row's id), a switch (`set`, with 'true' or 'false'). `id` is the

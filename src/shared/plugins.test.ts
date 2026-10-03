@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isPluginId, plugins, switchablePlugins } from './plugins'
+import { isPluginId, plugins } from './plugins'
 import { queueLink, type LinkKind } from './saved-queue'
 
 describe('plugin list', () => {
@@ -26,10 +26,6 @@ describe('plugin list', () => {
     expect(isPluginId('mfp')).toBe(true)
     expect(isPluginId('jukebox')).toBe(false)
     expect(isPluginId(undefined)).toBe(false)
-  })
-
-  it('only shows switches for plugins in the list', () => {
-    for (const id of switchablePlugins) expect(isPluginId(id)).toBe(true)
   })
 
   it('gives each kind of "From" page to one plugin, and a playlist to the core', () => {

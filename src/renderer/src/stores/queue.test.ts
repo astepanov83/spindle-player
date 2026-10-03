@@ -523,9 +523,14 @@ describe('queue actions (ticket 037)', () => {
   })
 
   it('moves only files keys when ids change', () => {
-    queue.restore({ items: ['files:a0', 'mfp:a1', 'files:a2'], index: 0, from: 'X', pos: 0 })
-    queue.moveIds({ a0: 'n0', a1: 'n1' })
-    expect(queue.items).toEqual(['files:n0', 'mfp:a1', 'files:a2'])
+    const l = lib(['a', 3], ['e', 2])
+    l.albums[1].online = 'mfp'
+    for (const t of l.tracks) if (t.albumId === 'e') t.online = 'mfp'
+    library.load(l)
+    queue.restore({ items: ['files:a0', 'mfp:e0', 'files:a2'], index: 0, from: 'X', pos: 0 })
+    // the same ids from a files rescan: only the files key moves
+    queue.moveIds({ a0: 'n0', e0: 'n1' })
+    expect(queue.items).toEqual(['files:n0', 'mfp:e0', 'files:a2'])
   })
 
   it('removing a row before the current song keeps it playing', () => {

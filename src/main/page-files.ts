@@ -1,6 +1,7 @@
 // Files the page edits: playlists and the saved queue. Main checks what the
 // page sends like a file read, keeps the latest, and writes it a bit later.
-import { dirname, join } from 'path'
+import { constants, copyFileSync } from 'fs'
+import { basename, dirname, join } from 'path'
 import { app } from 'electron'
 import {
   isKnownPlaylistsFile,
@@ -42,8 +43,29 @@ function open<T>(
   return { value: file.value, writer }
 }
 
-// An old file was converted: it is on disk at once, so it is converted only
-// once. openJsonFile kept the old one as "<name>.unknown" first.
+// An old file is converted once. openJsonFile kept it as "<name>.unknown",
+// but that copy is replaced the next time a file can't be read back, e.g.
+// after an older build ran (it starts empty on the new file and saves). So it
+// is also kept as "<name>.v1.json", made once and never written over. Without
+// that copy the file is not written this session.
+function keepOld<T>(
+  path: string,
+  writer: JsonFileWriter<T> | undefined
+): JsonFileWriter<T> | undefined {
+  console.warn(`Converting old ${basename(path)} to version 2`)
+  if (!writer) return undefined
+  const to = join(dirname(path), `${basename(path, '.json')}.v1.json`)
+  try {
+    copyFileSync(path, to, constants.COPYFILE_EXCL)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return writer
+    console.error(`Could not keep a copy of ${path}; not saving it this session`, error)
+    return undefined
+  }
+  return writer
+}
+
+// The converted file is on disk at once, so it is converted only once.
 function writeConverted<T>(writer: JsonFileWriter<T> | undefined, data: T): void {
   if (!writer) return
   writer.schedule(data)
@@ -61,6 +83,7 @@ export class PlaylistFile {
     const f = open<unknown>(path, 'Playlists file', isKnownPlaylistsFile, 500)
     this.#writer = f.writer
     if (isOldPlaylistsFile(f.value)) {
+      this.#writer = keepOld(path, f.writer)
       this.#data = convertPlaylists(f.value, mfpIdsBeside(path))
       writeConverted(this.#writer, playlistsFile(this.#data))
     } else this.#data = parsePlaylists(f.value)
@@ -104,6 +127,7 @@ export class QueueFile {
     const f = open<SavedQueues>(path, 'Queue file', isKnownQueueFile, 1000, 0)
     this.#writer = f.writer
     if (isOldQueueFile(f.value)) {
+      this.#writer = keepOld(path, f.writer)
       this.#data = convertQueue(f.value, mfpIdsBeside(path))
       writeConverted(this.#writer, this.#data)
     } else this.#data = parseSavedQueues(f.value)

@@ -247,6 +247,11 @@ describe('QueueFile', () => {
 })
 
 describe('files from before item keys (ticket 055)', () => {
+  let warn: ReturnType<typeof vi.spyOn>
+  beforeEach(() => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
   // one episode with two rows: its songs' ids are made as the library makes them
   function writeMfp(): { song: string; album: string } {
     const episode = {
@@ -297,9 +302,13 @@ describe('files from before item keys (ticket 055)', () => {
     )
     expect(file.get()).toEqual(want)
     expect(readFileSync(`${path}.unknown`, 'utf8')).toBe(old)
+    expect(readFileSync(join(dir, 'queue.v1.json'), 'utf8')).toBe(old)
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(want)
+    expect(warn).toHaveBeenCalledWith('Converting old queue.json to version 2')
     // the next start reads it as it is
+    warn.mockClear()
     expect(new QueueFile(path).get()).toEqual(want)
+    expect(warn).not.toHaveBeenCalled()
   })
 
   it('converts old playlists the same way', () => {
@@ -313,7 +322,25 @@ describe('files from before item keys (ticket 055)', () => {
     const want = [{ id: 'p', name: 'Mix', items: ['files:t1', `mfp:${mfp.song}`] }]
     expect(new PlaylistFile(path).get()).toEqual(want)
     expect(readFileSync(`${path}.unknown`, 'utf8')).toBe(old)
+    expect(readFileSync(join(dir, 'playlists.v1.json'), 'utf8')).toBe(old)
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ version: 2, playlists: want })
+  })
+
+  it('never writes over the v1 copy, which outlives an older build run in between', () => {
+    const path = join(dir, 'playlists.json')
+    const first = JSON.stringify({
+      version: 1,
+      playlists: [{ id: 'p', name: 'Mix', trackIds: ['t1'] }]
+    })
+    writeFileSync(path, first)
+    new PlaylistFile(path)
+    // an older build read version 2 as unknown, started empty and saved
+    const emptied = JSON.stringify({ version: 1, playlists: [] })
+    writeFileSync(path, emptied)
+    expect(new PlaylistFile(path).get()).toEqual([])
+    expect(readFileSync(`${path}.unknown`, 'utf8')).toBe(emptied)
+    expect(readFileSync(join(dir, 'playlists.v1.json'), 'utf8')).toBe(first)
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ version: 2, playlists: [] })
   })
 
   it('gives every id to files when mfp.json is missing or broken', () => {
@@ -345,6 +372,21 @@ describe('files from before item keys (ticket 055)', () => {
     const file = new QueueFile(path)
     expect(file.get().track.items).toEqual(['files:t1'])
     file.setPlace({ index: 0, pos: 5 })
+    file.flushSync()
+    expect(readFileSync(path, 'utf8')).toBe(old)
+  })
+
+  it('the same for old playlists', () => {
+    const path = join(dir, 'playlists.json')
+    const old = JSON.stringify({
+      version: 1,
+      playlists: [{ id: 'p', name: 'Mix', trackIds: ['t1'] }]
+    })
+    writeFileSync(path, old)
+    mkdirSync(`${path}.unknown`)
+    const file = new PlaylistFile(path)
+    expect(file.get()[0].items).toEqual(['files:t1'])
+    file.setFromPage([])
     file.flushSync()
     expect(readFileSync(path, 'utf8')).toBe(old)
   })

@@ -158,7 +158,8 @@ describe('what plays (ticket 027)', () => {
   })
 
   it('gives the track queue the player with no live item or a bad one', () => {
-    for (const current of [null, 'files:a', 'radio:', 'metal-only', 3]) {
+    // a station id is checked as before item keys
+    for (const current of [null, 'files:a', 'radio:', 'metal-only', 3, 'radio:a/b', 'radio:../x']) {
       const q = parseSavedQueues({ version: 2, track, live: { current }, active: 'live' })
       expect(q).toEqual({ ...emptyQueues(), track })
       expect(savedStation(q)).toBeUndefined()

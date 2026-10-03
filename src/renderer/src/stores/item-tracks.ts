@@ -1,11 +1,13 @@
 // Until ticket 056, the page asks the library about the items of the queue
 // and playlists: files and MFP items are both library tracks, by the id after
 // the ":". 056 asks each item's plugin instead and removes this file.
-import { itemKey, splitKey, type ItemKey } from '../../../shared/plugins/items'
+import { itemKey, type ItemKey } from '../../../shared/plugins/items'
 import { library } from './library.svelte'
 
+// Keys in the stores were checked when they came in, so no full split: this
+// runs on every row of a 50k queue.
 export function trackIdOf(key: string): string {
-  return splitKey(key)?.id ?? key
+  return key.slice(key.indexOf(':') + 1)
 }
 
 export function trackIdsOf(keys: string[]): string[] {

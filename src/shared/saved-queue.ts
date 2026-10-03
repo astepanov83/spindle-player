@@ -106,11 +106,17 @@ export function parseSavedQueue(raw: unknown): SavedQueue {
   }
 }
 
+// A station id is checked as before item keys (it ends up in a URL).
+function isLiveKey(v: unknown): v is ItemKey {
+  if (!isKeyOfKind(v, 'live')) return false
+  const k = splitKey(v)!
+  return k.plugin !== 'radio' || isStationId(k.id)
+}
+
 // The whole file. A bad live item leaves the track queue playing.
 export function parseSavedQueues(raw: unknown): SavedQueues {
   if (!isObject(raw)) return emptyQueues()
-  const current =
-    isObject(raw.live) && isKeyOfKind(raw.live.current, 'live') ? raw.live.current : null
+  const current = isObject(raw.live) && isLiveKey(raw.live.current) ? raw.live.current : null
   return {
     version: 2,
     track: parseSavedQueue(raw.track),

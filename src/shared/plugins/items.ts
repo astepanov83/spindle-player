@@ -22,10 +22,14 @@ export function isItemKey(v: unknown): v is ItemKey {
   return typeof v === 'string' && v.length <= 5000 && splitKey(v) !== undefined
 }
 
+// Each plugin's kind, for the check below.
+const kinds = new Map<string, ItemKind>(plugins.map((p) => [p.id, p.itemKind]))
+
 // A key of a plugin whose items are of this kind: a track queue and a playlist
-// hold only `track` items.
+// hold only `track` items. Runs on every item of a 50k list, so it makes no
+// objects: the same answer as isItemKey plus splitKey's plugin, done cheaply.
 export function isKeyOfKind(v: unknown, kind: ItemKind): v is ItemKey {
-  if (!isItemKey(v)) return false
-  const plugin = splitKey(v)!.plugin
-  return plugins.some((p) => p.id === plugin && p.itemKind === kind)
+  if (typeof v !== 'string' || v.length > 5000) return false
+  const at = v.indexOf(':')
+  return at > 0 && at < v.length - 1 && kinds.get(v.slice(0, at)) === kind
 }

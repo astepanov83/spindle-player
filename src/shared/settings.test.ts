@@ -233,9 +233,9 @@ describe('window place', () => {
 })
 
 describe('cover fetch settings', () => {
-  it('is off with every source on by default', () => {
+  it('is on with every source on by default', () => {
     const s = parseStoredSettings(undefined)
-    expect(s.fetchCovers).toBe(false)
+    expect(s.fetchCovers).toBe(true)
     expect(s.coverSources).toEqual({ musicbrainz: true, deezer: true, itunes: true })
   })
 
@@ -249,7 +249,11 @@ describe('cover fetch settings', () => {
   })
 
   it('falls back on a wrong switch', () => {
-    expect(parseStoredSettings({ fetchCovers: 1 }).fetchCovers).toBe(false)
+    expect(parseStoredSettings({ fetchCovers: 1 }).fetchCovers).toBe(true)
+  })
+
+  it('keeps a saved off', () => {
+    expect(parseStoredSettings({ fetchCovers: false }).fetchCovers).toBe(false)
   })
 
   it('knows the new fields in a file', () => {

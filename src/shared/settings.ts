@@ -65,7 +65,7 @@ export function defaultSettings(): Settings {
     visualizer: 'ring',
     theme: 'system',
     volume: 70,
-    fetchCovers: false,
+    fetchCovers: true,
     coverSources: { musicbrainz: true, deezer: true, itunes: true },
     closeAction: 'ask',
     plugins: pluginDefaults()

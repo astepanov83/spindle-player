@@ -34,8 +34,10 @@
     ['radio', 'radio', 'Radio'],
     ['mfp', 'viz', 'MFP']
   ]
-  // MFP only while its setting is on (ticket 052)
-  const sections = $derived(allSections.filter(([s]) => s !== 'mfp' || pluginOn('mfp')))
+  // Radio and MFP only while their plugin is on (tickets 052, 057)
+  const sections = $derived(
+    allSections.filter(([s]) => (s !== 'mfp' && s !== 'radio') || pluginOn(s))
+  )
 
   let scrollEl: HTMLDivElement | undefined = $state()
 

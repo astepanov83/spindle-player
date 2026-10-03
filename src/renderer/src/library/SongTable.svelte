@@ -14,7 +14,7 @@
   import { nextSort, sortItems, type Sort, type SortKey } from './views'
   import { infoOf, itemInfo, itemsVersion } from '../plugins'
   import { library } from '../stores/library.svelte'
-  import { playing } from '../stores/playing.svelte'
+  import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
 
@@ -118,7 +118,7 @@
     {#each v.items as item (item.key)}
       {@const key = rows[item.index]}
       {@const s = itemInfo(key)}
-      {@const cur = playing.isItem(key)}
+      {@const cur = queues.isItem(key)}
       <button
         class="tr row"
         class:cur-row={cur}
@@ -131,7 +131,7 @@
         oncontextmenu={(e) => openSongMenu(e, [key], { inPlaylist: playlistId, from: title, link })}
       >
         <span class="n"
-          >{#if cur && playing.songPlaying}<Eq />{:else}{item.index + 1}{/if}</span
+          >{#if cur && queues.songPlaying}<Eq />{:else}{item.index + 1}{/if}</span
         >
         {#if s.state === 'ok'}
           {@const t = s.info}

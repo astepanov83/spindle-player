@@ -2,6 +2,9 @@
 // work/specs/plugins.md, "Items". Plain data: the core draws it.
 import type { Art } from '../../../shared/library'
 import type { PluginId } from '../../../shared/plugins'
+import type { EngineEvents } from '../audio/engine'
+
+export type { ItemKind } from '../../../shared/plugins'
 
 // A page of a plugin. Only that plugin reads `page`. `item`: the row to show
 // on it (the song in its album).
@@ -67,4 +70,50 @@ export interface PageHalf {
   open(to: PageAddress): void
   // changes whenever an answer of `info` may have changed
   version(): number
+  // a plugin whose items are live (radio): it drives its own item
+  live?: LivePlugin
+}
+
+// A song heard on a live item, for the Queue part's list (newest last).
+export interface HistoryEntry {
+  title: string
+  subtitle?: string
+  // when it was heard
+  at: number
+  art?: Art
+  // the newest entry is the title on air now (the core shows it while sound is wanted)
+  now?: boolean
+}
+
+// How a live plugin tells the core about its item. Calls for an item that is
+// no longer the live queue's are dropped.
+export interface LiveHandle {
+  // a new connection or stream: the core loads it and plays
+  load(p: Playable): void
+  // drops what the engine has now (a stalled connection), before a new one
+  clear(): void
+  // the plugin stopped by itself (it gave up, or the system paused it)
+  stopped(): void
+  history(list: HistoryEntry[]): void
+  // "Connecting to 320 kbps", "Retry 1 of 3"; undefined when there is nothing to say
+  status(text: string | undefined): void
+  // what is on air: a new song title, a new cover
+  info(info: ItemInfo): void
+}
+
+// A plugin whose items never end and can't be sought. Its reconnects and
+// stream changes stay inside it; the core only plays what it loads.
+export interface LivePlugin {
+  // picked but not playing (after a restart): its info and history, no sound
+  show(id: string, h: LiveHandle): void
+  // undefined when it can't be played, or another play came meanwhile
+  play(id: string, h: LiveHandle): Promise<Playable | undefined>
+  // pause drops the connection; resume opens a new one
+  pause(id: string): void
+  resume(id: string): Promise<Playable | undefined>
+  // the engine's events while its item plays
+  events(id: string): Partial<EngineEvents>
+  // media keys: the item after or before this one (radio: My stations)
+  next(id: string): string | undefined
+  previous(id: string): string | undefined
 }

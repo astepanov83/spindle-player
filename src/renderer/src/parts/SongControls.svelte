@@ -10,7 +10,7 @@
   import Volume from './Volume.svelte'
   import { fmtTime } from '../format'
   import { player } from '../stores/player.svelte'
-  import { playing } from '../stores/playing.svelte'
+  import { queues } from '../stores/queues.svelte'
 
   let { style }: { style: 'stack' | 'bar' } = $props()
 </script>
@@ -18,11 +18,11 @@
 {#if style === 'bar'}
   <div class="ctl bar">
     <div class="bl">
-      <div class="minicv"><Cover src={playing.art?.cover} /></div>
+      <div class="minicv"><Cover src={queues.art?.cover} /></div>
       <div class="meta">
-        {#if playing.title}
-          <div class="song-title" title={playing.title}><PlayingText line="title" /></div>
-          <div class="song-sub" title={playing.sub}><PlayingText line="sub" /></div>
+        {#if queues.title}
+          <div class="song-title" title={queues.title}><PlayingText line="title" /></div>
+          <div class="song-sub" title={queues.sub}><PlayingText line="sub" /></div>
         {:else}
           <div class="song-title">Nothing playing</div>
         {/if}

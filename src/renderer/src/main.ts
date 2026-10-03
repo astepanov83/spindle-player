@@ -14,9 +14,9 @@ import { LibraryFeed } from './stores/library-feed'
 import { layout } from './stores/layout.svelte'
 import { notice } from './stores/notice.svelte'
 import { playlists } from './stores/playlists.svelte'
-import { playing } from './stores/playing.svelte'
+import { queues } from './stores/queues.svelte'
 import { queue } from './stores/queue.svelte'
-import { radio } from './stores/radio.svelte'
+import { radio } from './plugins/radio/store.svelte'
 import { loadSettings } from './stores/settings.svelte'
 import { dropText, ScanWatch } from './library/scan-text'
 import { orFallback } from './start'
@@ -85,10 +85,12 @@ if (moves) {
   moves = Object.keys(later).length ? later : undefined
 }
 playlists.load(startLists, lists.ok)
-radio.load(stations.value)
+// My stations that could not be read stay not loaded: a saved station is
+// then not taken for gone (queues.restore).
+if (stations.ok) radio.load(stations.value)
 // paused where it was; songs their plugin says are gone leave the queue.
-// Radio comes back with its station, paused.
-playing.restore(startQueue, stations.ok)
+// A live item (a station) comes back picked, paused.
+queues.restore(startQueue)
 
 // A library that can't be read leaves the one shown as it is.
 function loadLibrary(bytes: Uint8Array): boolean {

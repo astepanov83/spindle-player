@@ -9,7 +9,6 @@ import {
   parseSavedQueue,
   parseSavedQueues,
   queueLink,
-  savedStation,
   type SavedQueue,
   type SavedQueues
 } from './saved-queue'
@@ -152,7 +151,6 @@ describe('what plays (ticket 027)', () => {
   it('keeps a live station, even with no songs in the queue', () => {
     const raw = { ...emptyQueues(), live: { current: 'radio:metal-only' }, active: 'live' }
     expect(parseSavedQueues(raw)).toEqual(raw)
-    expect(savedStation(parseSavedQueues(raw))).toBe('metal-only')
     const withSongs = { ...raw, track }
     expect(parseSavedQueues(withSongs)).toEqual(withSongs)
   })
@@ -162,7 +160,6 @@ describe('what plays (ticket 027)', () => {
     for (const current of [null, 'files:a', 'radio:', 'metal-only', 3, 'radio:a/b', 'radio:../x']) {
       const q = parseSavedQueues({ version: 2, track, live: { current }, active: 'live' })
       expect(q).toEqual({ ...emptyQueues(), track })
-      expect(savedStation(q)).toBeUndefined()
     }
     expect(parseSavedQueues({ version: 2, track, active: 'tv' }).active).toBe('track')
     for (const raw of [undefined, null, 'x', []])
@@ -171,16 +168,24 @@ describe('what plays (ticket 027)', () => {
 
   it('applyPlaying sets the live item or the track queue and keeps the list', () => {
     const q: SavedQueues = { ...emptyQueues(), track }
-    const radio = applyPlaying(q, { kind: 'radio', station: 'metal-only' })
+    const radio = applyPlaying(q, { active: 'live', current: 'radio:metal-only' })
     expect(radio).toEqual({ ...q, live: { current: 'radio:metal-only' }, active: 'live' })
     expect(radio.track).toBe(q.track)
-    expect(applyPlaying(radio, { kind: 'radio', station: 'metal-only' })).toBe(radio)
+    expect(applyPlaying(radio, { active: 'live', current: 'radio:metal-only' })).toBe(radio)
     // the station stays the live queue's, waiting
-    const back = applyPlaying(radio, { kind: 'queue' })
+    const back = applyPlaying(radio, { active: 'track' })
     expect(back).toEqual({ ...radio, active: 'track' })
-    expect(savedStation(back)).toBeUndefined()
-    expect(applyPlaying(q, { kind: 'queue' })).toBe(q)
-    for (const bad of [null, 5, { kind: 'radio' }, { kind: 'radio', station: '../x' }, {}])
-      expect(applyPlaying(q, bad)).toBe(q)
+    expect(applyPlaying(q, { active: 'track' })).toBe(q)
+    const bad = [
+      null,
+      5,
+      { active: 'live' },
+      { active: 'live', current: 'radio:../x' },
+      // a track item can't be the live one
+      { active: 'live', current: 'files:a' },
+      { kind: 'queue' },
+      {}
+    ]
+    for (const b of bad) expect(applyPlaying(q, b)).toBe(q)
   })
 })

@@ -38,7 +38,12 @@ vi.mock('../stores/queue.svelte', () => ({
   }
 }))
 const showFolder = vi.fn(async (parts: string[]) => parts.length > 0)
-vi.stubGlobal('window', { playlistsApi: { save: vi.fn() }, libraryApi: { showFolder } })
+// radio's page half hears main from the start
+vi.stubGlobal('window', {
+  playlistsApi: { save: vi.fn() },
+  libraryApi: { showFolder },
+  radioApi: { onTitle: () => () => {}, onLogo: () => () => {}, onCover: () => () => {} }
+})
 
 const { playlistMenu, songMenu, sections } = await import('./song-menu')
 const { playlists } = await import('../stores/playlists.svelte')

@@ -1,18 +1,22 @@
 <!-- Radio in Studio's chips and Classic's sidebar (ticket 029): My stations,
-     filtered at once by the search box, then Radio Browser's stations for it. -->
+     filtered at once by the search box, then Radio Browser's stations for it.
+     Reads radio's page half until blocks draw it (ticket 062). -->
 <script lang="ts">
+  import Empty from './Empty.svelte'
   import ViewHead from './ViewHead.svelte'
   import Icon from '../ui/Icon.svelte'
   import { fmtCount } from '../format'
   import Thumb from '../ui/Thumb.svelte'
   import { roving } from '../ui/roving'
   import { stationArt, type Station } from '../../../shared/stations'
-  import { bitrateLine, searchRows, stationLine, stationMatches } from '../radio/logic'
+  import { itemKey } from '../../../shared/plugins/items'
+  import { bitrateLine, searchRows, stationLine, stationMatches } from '../plugins/radio/logic'
+  import { radioSearch } from '../plugins/radio/search.svelte'
+  import { radio } from '../plugins/radio/store.svelte'
   import { library } from '../stores/library.svelte'
   import { menu, type MenuEntry } from '../stores/menu.svelte'
-  import { playing } from '../stores/playing.svelte'
-  import { radio } from '../stores/radio.svelte'
-  import { radioSearch } from '../stores/radio-search.svelte'
+  import { queues } from '../stores/queues.svelte'
+  import { pluginOn } from '../stores/settings.svelte'
 
   // where the search box is, for the hint under the title
   let { searchAt }: { searchAt: 'above' | 'left' } = $props()
@@ -24,7 +28,9 @@
   const found = $derived(searchRows(radioSearch.results, radio.stations))
 
   // Radio Browser is asked 400ms after typing stops (the store waits)
-  $effect(() => radioSearch.want(library.query))
+  $effect(() => {
+    if (pluginOn('radio')) radioSearch.want(library.query)
+  })
 
   // A saved station's logo is a cover (030). A result's comes through main,
   // which fetches it when the row shows: the page can't load from the web.
@@ -34,11 +40,13 @@
     return result && s.logoUrl ? `spindle://radio-logo/${s.id}` : undefined
   }
 
-  const isOn = (s: Station): boolean => playing.kind === 'radio' && radio.station?.id === s.id
+  const isOn = (s: Station): boolean =>
+    queues.active === 'live' && queues.live.current === itemKey('radio', s.id)
 
   // A result that is in My stations plays as saved: its chosen stream and logo.
   function play(s: Station): void {
-    void playing.playStation(saved.get(s.id) ?? s)
+    radio.offer(saved.get(s.id) ?? s)
+    void queues.playItem(itemKey('radio', s.id))
   }
 
   function star(s: Station): void {
@@ -112,51 +120,58 @@
   </div>
 {/snippet}
 
-<ViewHead
-  title="Radio"
-  meta="Internet radio"
-  count={fmtCount(radio.stations.length, 'station', 'stations')}
-  hint="Find stations with the search box {searchAt === 'above' ? 'above' : 'on the left'}."
-/>
-<div class="radio">
-  <h3 class="section-label">My stations</h3>
-  <div class="list lines" role="list" use:roving={{ rows: mine }}>
-    {#each mine as s (s.id)}
-      {@render row(s, false)}
-    {/each}
-  </div>
-  {#if !radio.stations.length}
-    <p class="hint">No stations yet. Search for one, then press its star to keep it here.</p>
-  {:else if !mine.length}
-    <p class="hint">None of My stations match.</p>
-  {/if}
-
-  {#if radioSearch.status !== 'idle'}
-    <h3 class="section-label">From Radio Browser</h3>
-    {#if radioSearch.status === 'unreachable'}
-      <p class="hint">Radio Browser can't be reached. My stations still play.</p>
-    {:else if radioSearch.status === 'searching' && !found.length}
-      <p class="hint">Searching…</p>
-    {:else if radioSearch.status === 'done' && !found.length}
-      <p class="hint">
-        {radioSearch.results.length
-          ? 'Every station found is in My stations.'
-          : 'No stations found.'}
-      </p>
-    {:else}
-      <div
-        class="list lines"
-        role="list"
-        class:stale={radioSearch.status === 'searching'}
-        use:roving={{ rows: found }}
-      >
-        {#each found as s (s.id)}
-          {@render row(s, true)}
-        {/each}
-      </div>
+{#if !pluginOn('radio')}
+  <Empty
+    title="Radio is off"
+    text="Turn it on in Settings, under Plugins, to search and play internet radio stations."
+  />
+{:else}
+  <ViewHead
+    title="Radio"
+    meta="Internet radio"
+    count={fmtCount(radio.stations.length, 'station', 'stations')}
+    hint="Find stations with the search box {searchAt === 'above' ? 'above' : 'on the left'}."
+  />
+  <div class="radio">
+    <h3 class="section-label">My stations</h3>
+    <div class="list lines" role="list" use:roving={{ rows: mine }}>
+      {#each mine as s (s.id)}
+        {@render row(s, false)}
+      {/each}
+    </div>
+    {#if !radio.stations.length}
+      <p class="hint">No stations yet. Search for one, then press its star to keep it here.</p>
+    {:else if !mine.length}
+      <p class="hint">None of My stations match.</p>
     {/if}
-  {/if}
-</div>
+
+    {#if radioSearch.status !== 'idle'}
+      <h3 class="section-label">From Radio Browser</h3>
+      {#if radioSearch.status === 'unreachable'}
+        <p class="hint">Radio Browser can't be reached. My stations still play.</p>
+      {:else if radioSearch.status === 'searching' && !found.length}
+        <p class="hint">Searching…</p>
+      {:else if radioSearch.status === 'done' && !found.length}
+        <p class="hint">
+          {radioSearch.results.length
+            ? 'Every station found is in My stations.'
+            : 'No stations found.'}
+        </p>
+      {:else}
+        <div
+          class="list lines"
+          role="list"
+          class:stale={radioSearch.status === 'searching'}
+          use:roving={{ rows: found }}
+        >
+          {#each found as s (s.id)}
+            {@render row(s, true)}
+          {/each}
+        </div>
+      {/if}
+    {/if}
+  </div>
+{/if}
 
 <style>
   .radio {

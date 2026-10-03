@@ -144,7 +144,7 @@ export class QueueFile {
     this.#writer?.schedule(this.#data)
   }
 
-  // Radio or the queue (ticket 027).
+  // The track queue or the live one (tickets 027, 057).
   setPlaying(raw: unknown): void {
     const next = applyPlaying(this.#data, raw)
     if (next === this.#data) return

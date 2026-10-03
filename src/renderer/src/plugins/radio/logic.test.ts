@@ -1,23 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import type { Station, Stream } from '../../../shared/stations'
+import type { Station, Stream } from '../../../../shared/stations'
 import {
-  backNote,
   bitrateLine,
   searchRows,
   stationLine,
   stationMatches,
   cantPlayFormat,
-  heardAt,
-  msToMidnight,
   firstStream,
+  historyEntries,
   nextStream,
   parseTitle,
-  recentRows,
   retryDelayMs,
   stepStation,
   streamChoices
 } from './logic'
-import { fallbackPalettes } from '../../../shared/palette'
+import { fallbackPalettes } from '../../../../shared/palette'
 
 describe('parseTitle (from webmusicmo)', () => {
   it('splits "artist - song * dj OnAir * show *" into parts', () => {
@@ -190,67 +187,47 @@ describe('streamChoices', () => {
 })
 
 describe('recent songs (031)', () => {
-  const at = (d: number, h: number, m: number): number => new Date(2026, 8, d, h, m).getTime()
-  const now = at(30, 22, 0)
+  const now = new Date(2026, 8, 30, 22, 0).getTime()
 
-  it('shows the time for today, the day for older titles', () => {
-    expect(heardAt(at(30, 21, 4), now)).toBe('21:04')
-    expect(heardAt(at(30, 0, 5), now)).toBe('00:05')
-    expect(heardAt(at(28, 21, 4), now)).toBe('28 Sep')
-  })
-
-  it('lists newest first and marks the title playing now', () => {
+  it('splits each title and marks the newest when it is the title playing now', () => {
     const history = [
-      { at: at(30, 21, 8), title: 'Dio - Holy Diver' },
-      { at: at(30, 21, 14), title: 'Iron Maiden - Powerslave * Blacky OnAir *' }
+      { at: 1, title: 'Dio - Holy Diver' },
+      { at: 2, title: 'Iron Maiden - Powerslave * Blacky OnAir *' }
     ]
-    const rows = recentRows(history, 'Iron Maiden - Powerslave * Blacky OnAir * ', now)
-    expect(rows.map((r) => [r.time, r.artist, r.song, r.now])).toEqual([
-      ['21:14', 'Iron Maiden', 'Powerslave', true],
-      ['21:08', 'Dio', 'Holy Diver', false]
+    expect(historyEntries(history, 'Iron Maiden - Powerslave * Blacky OnAir * ')).toEqual([
+      { at: 1, title: 'Holy Diver', subtitle: 'Dio' },
+      { at: 2, title: 'Powerslave', subtitle: 'Iron Maiden', now: true }
     ])
-    expect(new Set(rows.map((r) => r.key)).size).toBe(2)
   })
 
-  it('marks nothing when stopped, or when the newest is not what plays', () => {
+  it('marks nothing when the newest is not what plays, or nothing plays', () => {
     const history = [{ at: now, title: 'A - B' }]
-    expect(recentRows(history, undefined, now)[0].now).toBe(false)
-    expect(recentRows(history, 'C - D', now)[0].now).toBe(false)
+    expect(historyEntries(history, '')[0].now).toBeUndefined()
+    expect(historyEntries(history, 'C - D')[0].now).toBeUndefined()
   })
 
-  it('gives a row the small cover found for its song, and none to the others (ticket 032)', () => {
+  it('gives an entry the cover found for its song, and none to the others (ticket 032)', () => {
     const cover = { hash: 'b'.repeat(40), palette: fallbackPalettes('x') }
     const history = [
       { at: now - 1, title: 'Station Jingle' },
       { at: now, title: 'A - B', cover }
     ]
-    expect(recentRows(history, 'A - B', now).map((r) => r.cover)).toEqual([
-      `spindle://cover/small/${'b'.repeat(40)}`,
-      ''
-    ])
+    const [jingle, song] = historyEntries(history, 'A - B')
+    expect(jingle.art).toBeUndefined()
+    expect(song.art?.cover).toBe(`spindle://cover/small/${'b'.repeat(40)}`)
+    expect(song.art?.palette).toBe(cover.palette)
   })
 
   it('marks a title too long for the file, which keeps it cut', () => {
     const long = 'A - ' + 'b'.repeat(600)
     const history = [{ at: now, title: long.slice(0, 500) }]
-    expect(recentRows(history, long, now)[0].now).toBe(true)
-  })
-
-  it('waits until the next midnight to turn times into days', () => {
-    expect(msToMidnight(at(30, 23, 59))).toBe(60_000)
-    expect(msToMidnight(at(30, 0, 0))).toBe(86_400_000)
+    expect(historyEntries(history, long)[0].now).toBe(true)
   })
 
   it('a title with no dash is all song', () => {
-    const [r] = recentRows([{ at: now, title: 'Station jingle' }], undefined, now)
-    expect([r.artist, r.song]).toEqual(['', 'Station jingle'])
-  })
-
-  it('says where the queue came from and how long it is', () => {
-    expect(backNote('Late Night', 42)).toBe('From Late Night, 42 songs')
-    expect(backNote('Powerslave', 1)).toBe('From Powerslave, 1 song')
-    expect(backNote('', 1200)).toBe('1,200 songs')
-    expect(backNote('Late Night', 0)).toBe('The queue is empty')
+    expect(historyEntries([{ at: now, title: 'Station jingle' }], '')).toEqual([
+      { at: now, title: 'Station jingle' }
+    ])
   })
 })
 

@@ -1,9 +1,9 @@
 // The Radio view's search of Radio Browser (ticket 029). It asks 400ms after
 // typing stops; My stations are filtered at once by the view itself. Kept
 // here, not in the view, so a layout rebuild keeps the results.
-import type { RadioSearch } from '../../../shared/ipc'
-import type { Station } from '../../../shared/stations'
-import { radio } from './radio.svelte'
+import type { RadioSearch } from '../../../../shared/ipc'
+import type { Station } from '../../../../shared/stations'
+import { radio } from './store.svelte'
 
 const waitMs = 400
 

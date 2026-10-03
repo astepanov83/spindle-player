@@ -1,32 +1,32 @@
 // The system's media controls (media keys, MPRIS on Linux) go through Chromium's
 // media session. Without handlers Chromium would play or pause the element
-// itself; with them, the queue or the radio decides, and Next and Previous work
-// too. On the radio they step through My stations.
+// itself; with them, the queue that plays decides, and Next and Previous work
+// too. On a live item they ask its plugin (radio: My stations).
 import type { Art } from '../../../shared/library'
 import { CoverBlob, fetchBlob } from './cover-blob'
 import { paletteTile, tileKey } from './cover-tile'
 import { player } from './player.svelte'
-import { playing, type MediaText, type PlayingKind } from './playing.svelte'
+import { queues, type Active, type MediaText } from './queues.svelte'
 
 export function setupMediaSession(): void {
   const ms = navigator.mediaSession
   if (!ms) return
-  ms.setActionHandler('play', () => playing.play())
-  ms.setActionHandler('pause', () => playing.pause())
-  ms.setActionHandler('nexttrack', () => void playing.next())
-  ms.setActionHandler('previoustrack', () => void playing.prev())
+  ms.setActionHandler('play', () => void queues.play())
+  ms.setActionHandler('pause', () => queues.pause())
+  ms.setActionHandler('nexttrack', () => void queues.next())
+  ms.setActionHandler('previoustrack', () => void queues.prev())
 }
 
-// A stream can't be sought, so radio offers no seek.
-export function showSeekInMediaSession(kind: PlayingKind): void {
+// A live item can't be sought, so it offers no seek.
+export function showSeekInMediaSession(active: Active): void {
   const ms = navigator.mediaSession
   if (!ms) return
   ms.setActionHandler(
     'seekto',
-    kind === 'radio'
+    active === 'live'
       ? null
       : (d) => {
-          if (d.seekTime !== undefined) playing.seek(d.seekTime)
+          if (d.seekTime !== undefined) queues.seek(d.seekTime)
         }
   )
 }
@@ -63,7 +63,7 @@ export function showInMediaSession(text: MediaText | undefined, art: Art | undef
 
 export function showStateInMediaSession(): void {
   if (!navigator.mediaSession) return
-  navigator.mediaSession.playbackState = playing.media
+  navigator.mediaSession.playbackState = queues.media
     ? player.playing
       ? 'playing'
       : 'paused'
@@ -71,12 +71,12 @@ export function showStateInMediaSession(): void {
 }
 
 // Without this, Chromium tells the system the element's own time and length,
-// which for a track of a disc image is the whole image. Radio has no position.
+// which for a track of a disc image is the whole image. A live item has no position.
 export function showPositionInMediaSession(pos: number, duration: number): void {
   const ms = navigator.mediaSession
   if (!ms?.setPositionState) return
   try {
-    if (playing.kind === 'radio' || !playing.media || !(duration > 0)) ms.setPositionState()
+    if (queues.active === 'live' || !queues.media || !(duration > 0)) ms.setPositionState()
     else ms.setPositionState({ duration, position: Math.min(pos, duration), playbackRate: 1 })
   } catch {
     // a bad value must not stop the page; the next update tries again

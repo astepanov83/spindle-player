@@ -91,7 +91,7 @@ const savePlace = vi.fn()
 vi.stubGlobal('window', { playbackApi: { log, saveQueue, savePlace } })
 
 const { queue } = await import('./queue.svelte')
-// playing.svelte.ts passes the engine's events on; here they go to the queue straight
+// queues.svelte.ts passes the engine's events on; here they go to the queue straight
 Object.assign(fake.on, queue.events)
 const { player } = await import('./player.svelte')
 const { notice } = await import('./notice.svelte')
@@ -884,6 +884,32 @@ describe('a playable that comes later (ticket 056)', () => {
     await Promise.resolve()
     queue.active = true
     expect(fake.calls).toEqual(['clear'])
+  })
+
+  it('Play pressed while it is on its way plays it when it comes (ticket 057)', async () => {
+    plugin.later = true
+    queue.restore({ items: albums.a, index: 1, from: 'A', pos: 7 })
+    fake.reset()
+    expect(queue.playWhenReady(true)).toBe(true)
+    for (const done of plugin.pending) done()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(fake.calls).toEqual(['load media/a1', 'play'])
+  })
+
+  it('Pause pressed while it is on its way loads it paused', async () => {
+    plugin.later = true
+    queue.jump(2)
+    fake.reset()
+    // the play button turns it over
+    expect(queue.playWhenReady()).toBe(true)
+    for (const done of plugin.pending) done()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(fake.calls).toEqual(['load media/a2'])
+    expect(player.playing).toBe(false)
+    // nothing waits any more
+    expect(queue.playWhenReady(true)).toBe(false)
   })
 
   it('a failed answer is logged, and the song waits to be tried again', async () => {

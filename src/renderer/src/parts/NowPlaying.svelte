@@ -2,7 +2,7 @@
   import PlayingText from './PlayingText.svelte'
   import Stage from '../visualizer/Stage.svelte'
   import { layout } from '../stores/layout.svelte'
-  import { playing } from '../stores/playing.svelte'
+  import { queues } from '../stores/queues.svelte'
 
   let { style }: { style: 'panel' | 'full' } = $props()
 </script>
@@ -10,10 +10,10 @@
 <div class="np {style}">
   <Stage />
   <div class="meta">
-    {#if playing.title}
+    {#if queues.title}
       <!-- a long line is cut: the tooltip has it whole -->
-      <div class="song-title" title={playing.title}><PlayingText line="title" /></div>
-      <div class="song-sub" title={playing.sub}><PlayingText line="sub" /></div>
+      <div class="song-title" title={queues.title}><PlayingText line="title" /></div>
+      <div class="song-sub" title={queues.sub}><PlayingText line="sub" /></div>
     {:else}
       <div class="song-title">Nothing playing</div>
       {#if layout.hasLibrary}

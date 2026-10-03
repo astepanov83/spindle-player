@@ -1,10 +1,12 @@
-// The radio store with a fake engine and a fake main: reconnect timing, the
-// next stream after 3 failed retries, and stopping when all streams fail.
+// Radio's page half played by the core's live queue, with a fake engine and a
+// fake main: reconnect timing, the next stream after 3 failed retries, and
+// stopping when all streams fail.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { EngineError, EngineEvents } from '../audio/engine'
-import type { LastAnswer, RadioCover, RadioLogo, RadioTitle } from '../../../shared/ipc'
-import { defaultPalettes, fallbackPalettes } from '../../../shared/palette'
-import type { HistoryEntry, Station } from '../../../shared/stations'
+import type { EngineError, EngineEvents } from '../../audio/engine'
+import { itemKey } from '../../../../shared/plugins/items'
+import type { LastAnswer, RadioCover, RadioLogo, RadioTitle } from '../../../../shared/ipc'
+import { defaultPalettes, fallbackPalettes } from '../../../../shared/palette'
+import type { HistoryEntry, Station } from '../../../../shared/stations'
 
 const fake = vi.hoisted(() => ({
   on: {} as Partial<EngineEvents>,
@@ -14,7 +16,7 @@ const fake = vi.hoisted(() => ({
   urls: [] as string[]
 }))
 
-vi.mock('../audio/engine', () => ({
+vi.mock('../../audio/engine', () => ({
   engine: {
     on: (e: Partial<EngineEvents>) => Object.assign(fake.on, e),
     get loaded() {
@@ -41,6 +43,7 @@ vi.mock('../audio/engine', () => ({
       fake.calls.push('pause')
     },
     seek: () => {},
+    continueWith: () => {},
     clear: () => {
       fake.loaded = false
       fake.paused = true
@@ -104,9 +107,19 @@ vi.stubGlobal('window', {
   }
 })
 
-const { radio } = await import('./radio.svelte')
-const { player } = await import('./player.svelte')
-const { notice } = await import('./notice.svelte')
+const { radio } = await import('./store.svelte')
+const { queues } = await import('../../stores/queues.svelte')
+const { player } = await import('../../stores/player.svelte')
+const { notice } = await import('../../stores/notice.svelte')
+
+// as the Radio view plays a station: that copy, through the live queue
+function playStation(s: Station): Promise<void> {
+  radio.offer(s)
+  return queues.playLive(itemKey('radio', s.id))
+}
+// the play button after a pause
+const resume = async (): Promise<void> => await queues.play()
+const pause = (): void => queues.pause()
 
 const st = (id: string, bitrates: (number | undefined)[]): Station => ({
   id,
@@ -127,8 +140,8 @@ const four: EngineError = {
 }
 
 const loads = (): string[] => fake.calls.filter((c) => c.startsWith('load'))
-// the engine's events go to the radio side (playing.svelte.ts does this in the app)
-const ev = radio.events
+// the engine's events, as the core passes them on
+const ev = fake.on
 
 beforeEach(async () => {
   vi.useFakeTimers()
@@ -146,13 +159,13 @@ beforeEach(async () => {
 afterEach(() => vi.useRealTimers())
 
 async function start(s: Station): Promise<void> {
-  await radio.play(s)
+  await playStation(s)
   fake.calls = []
 }
 
 describe('playing a station', () => {
   it('asks main first, then opens the stream live and plays', async () => {
-    const p = radio.play(mine[0])
+    const p = playStation(mine[0])
     expect(fake.calls).toEqual(['clear'])
     expect(player.playing).toBe(true)
     await p
@@ -162,18 +175,18 @@ describe('playing a station', () => {
 
   it('plays the streams main found (Metal Only starts with none)', async () => {
     known = (s) => ({ ...s, streams: [{ url: 'https://m/1', bitrate: 128 }] })
-    await radio.play({ ...mine[0], streams: [] })
+    await playStation({ ...mine[0], streams: [] })
     expect(loads()).toEqual(['load spindle://radio/a?stream=0 live'])
   })
 
   it('starts with the chosen stream', async () => {
-    await radio.play({ ...mine[1], chosen: 'https://b/2' })
+    await playStation({ ...mine[1], chosen: 'https://b/2' })
     expect(loads()).toEqual(['load spindle://radio/b?stream=2 live'])
   })
 
   it('drops the answer for a station clicked before the last one', async () => {
-    const first = radio.play(mine[0])
-    const second = radio.play(mine[2])
+    const first = playStation(mine[0])
+    const second = playStation(mine[2])
     await Promise.all([first, second])
     expect(loads()).toEqual(['load spindle://radio/c?stream=0 live'])
     expect(radio.station?.id).toBe('c')
@@ -181,7 +194,7 @@ describe('playing a station', () => {
 
   it('stops with a notice when main refuses the station', async () => {
     known = () => undefined
-    await radio.play(mine[0])
+    await playStation(mine[0])
     expect(loads()).toEqual([])
     expect(player.playing).toBe(false)
     expect(notice.text).toBe("Station can't be reached: A")
@@ -190,22 +203,22 @@ describe('playing a station', () => {
   it('pause drops the connection; play opens a new one', async () => {
     await start(mine[0])
     stop.mockClear()
-    radio.pause()
+    pause()
     // main stops the stream; the element keeps it, paused, so the system's
     // media controls stay (with no source Chromium drops them)
     expect(fake.calls).toEqual(['pause'])
     expect(stop).toHaveBeenCalledOnce()
     expect(player.playing).toBe(false)
     fake.calls = []
-    await radio.resume()
+    await resume()
     expect(loads()).toEqual(['load spindle://radio/a?stream=0 live'])
   })
 
   it('opens every connection at a new address, so Chromium can’t replay what it kept', async () => {
     fake.urls = []
     await start(mine[0])
-    radio.pause()
-    await radio.resume()
+    pause()
+    await resume()
     expect(fake.urls).toHaveLength(2)
     expect(fake.urls[0]).toMatch(/^spindle:\/\/radio\/a\?stream=0&c=\d+$/)
     expect(fake.urls[1]).not.toBe(fake.urls[0])
@@ -370,7 +383,7 @@ describe('reconnecting', () => {
   it('does nothing after the user paused', async () => {
     await start(mine[0])
     ev.error!(net)
-    radio.pause()
+    pause()
     fake.calls = []
     ev.error!(net)
     ev.waiting!()
@@ -381,7 +394,7 @@ describe('reconnecting', () => {
 
 describe('status, next to the dot', () => {
   it('connecting from the click until sound comes, then live', async () => {
-    const p = radio.play(mine[1])
+    const p = playStation(mine[1])
     // main is still finding the streams
     expect(radio.status).toBe('connecting')
     await p
@@ -442,7 +455,7 @@ describe('status, next to the dot', () => {
   it('off after pause, after giving up, and when main refuses the station', async () => {
     await start(mine[0])
     ev.playing!()
-    radio.pause()
+    pause()
     expect(radio.status).toBe('off')
     await start(mine[0])
     for (const ms of [1000, 2000, 4000, 0]) {
@@ -451,7 +464,7 @@ describe('status, next to the dot', () => {
     }
     expect(radio.status).toBe('off')
     known = () => undefined
-    await radio.play(mine[2])
+    await playStation(mine[2])
     expect(radio.status).toBe('off')
   })
 
@@ -476,7 +489,7 @@ describe('choosing a stream', () => {
 
   it('while paused only picks it', async () => {
     await start(mine[1])
-    radio.pause()
+    pause()
     fake.calls = []
     radio.choose(1)
     expect(fake.calls).toEqual([])
@@ -562,7 +575,7 @@ describe('late answers and outside pauses (027 fix round 1)', () => {
     let known: (s: Station | undefined) => void = () => {}
     play.mockImplementationOnce(() => new Promise<Station | undefined>((r) => (known = r)))
     const q = st('q', [128])
-    const playing = radio.play(q)
+    const playing = playStation(q)
     // the reply about p comes while q waits for radio:play
     reply({ ok: true, bytes: 64000 })
     await vi.advanceTimersByTimeAsync(0)
@@ -731,10 +744,10 @@ describe('the time listened', () => {
     await start(mine[2])
     ev.playing!()
     await vi.advanceTimersByTimeAsync(7000)
-    radio.pause()
+    pause()
     await vi.advanceTimersByTimeAsync(60000)
     expect(at()).toBe(7)
-    await radio.resume()
+    await resume()
     ev.playing!()
     await vi.advanceTimersByTimeAsync(1000)
     expect(at()).toBe(8)
@@ -748,10 +761,10 @@ describe('the time listened', () => {
     ev.playing!()
     expect(radio.listened(stale)).toBe(0)
     await vi.advanceTimersByTimeAsync(5000)
-    radio.pause()
+    pause()
     const heard = radio.listened()
     const stale2 = Date.now()
-    await radio.resume()
+    await resume()
     await vi.advanceTimersByTimeAsync(300)
     ev.playing!()
     expect(radio.listened(stale2)).toBe(heard)
@@ -854,7 +867,7 @@ describe('events from main at start (final fix 5)', () => {
     const before = { titleListener, logoListener, coverListener }
     logoListener = undefined
     vi.resetModules()
-    const { radio: fresh } = await import('./radio.svelte')
+    const { radio: fresh } = await import('./store.svelte')
     try {
       // made at start from the shipped file, before the page has the list
       expect(logoListener).toBeDefined()

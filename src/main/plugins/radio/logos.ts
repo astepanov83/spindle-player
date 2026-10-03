@@ -100,7 +100,7 @@ export async function withNewColors<T extends { hash: string; palette: ThemePale
 
 export interface LogoDeps {
   // the picture from a source (a web address, metalOnlyLogo or a sitePrefix
-  // homepage) for this station; throws with the reason
+  // homepage) for this station; throws with the reason, or LoadSkipped
   load(source: string, station: Station): Promise<Uint8Array>
   cache: LogoCache
   // keptThisRun() grew: the cover prune must hear of it before the files are written
@@ -115,6 +115,10 @@ export function keptLogos(saved: Station[], run: Set<string>): string[] {
   for (const s of saved) if (s.logo) out.add(s.logo.hash)
   return [...out]
 }
+
+// Thrown by load when it may not ask now (radio is off). Not a failure: the
+// source is asked again once it may.
+export class LoadSkipped extends Error {}
 
 export class StationLogos {
   // by source, made this run
@@ -195,6 +199,7 @@ export class StationLogos {
     try {
       data = await this.d.load(source, station)
     } catch (e) {
+      if (e instanceof LoadSkipped) return undefined
       this.#failed.add(source)
       this.d.log(`Could not fetch a station logo from ${source}: ${String(e)}`)
       return undefined

@@ -16,6 +16,7 @@ import {
   needsBundledLogo,
   onLocalNetwork,
   sitePrefix,
+  LoadSkipped,
   StationLogos
 } from './logos'
 import { PlayedStations } from './play'
@@ -117,10 +118,11 @@ export class RadioPlugin implements MainPlugin {
     )
     const logos = new StationLogos({
       load: async (source, station) => {
-        if (!this.#on) throw new Error('radio is off')
+        // not a failure: asked again once radio is on
+        if (!this.#on) throw new LoadSkipped('radio is off')
         const data = await fetchSource(source, station)
         // it came back after radio went off: no picture is made, no file written
-        if (!this.#on) throw new Error('radio is off')
+        if (!this.#on) throw new LoadSkipped('radio is off')
         return data
       },
       cache: covers.get().cache,

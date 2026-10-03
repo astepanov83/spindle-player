@@ -4,6 +4,7 @@ import { fallbackPalettes, paletteVersion } from '../../../shared/palette'
 import type { Station, StationLogo } from '../../../shared/stations'
 import {
   keptLogos,
+  LoadSkipped,
   logoSource,
   logoSources,
   metalOnlyLogo,
@@ -131,6 +132,16 @@ describe('StationLogos', () => {
     // the next run tries again
     d.load.mockResolvedValue(pic)
     expect(await new StationLogos(d).logoFor(st('a', { logoUrl: url }))).toBeDefined()
+  })
+
+  it('tries a source again after a load it skipped (radio was off), and logs nothing', async () => {
+    const d = deps()
+    d.log = vi.fn()
+    d.load.mockRejectedValueOnce(new LoadSkipped('radio is off'))
+    const logos = new StationLogos(d)
+    expect(await logos.logoFor(st('a', { logoUrl: url }))).toBeUndefined()
+    expect(await logos.logoFor(st('a', { logoUrl: url }))).toEqual(made)
+    expect(d.log).not.toHaveBeenCalled()
   })
 
   it('does not try a picture the cover window could not use again in the same run', async () => {

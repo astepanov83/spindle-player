@@ -10,8 +10,8 @@
 // and `ended` comes at the part's end. The next part of the same file carries
 // on without a reload (continueWith), so there is no gap between them.
 //
-// A radio stream is loaded with { live: true } (ticket 027): it has no length,
-// and its errors go straight to the radio store, which reconnects.
+// A live stream (radio) is loaded with { live: true } (ticket 027): it has no length,
+// and its errors go straight to its live plugin, which reconnects (ticket 057).
 
 export type EngineError = {
   // MediaError code: 2 network, 3 decode, 4 format not supported
@@ -38,7 +38,7 @@ export interface EngineEvents {
   // play() was refused (for example NotAllowedError); not the song's fault
   refused(message: string): void
   error(e: EngineError): void
-  // no data to play for now; the radio store sees a stall by it
+  // no data to play for now; a live plugin sees a stall by it
   waiting(): void
 }
 
@@ -152,7 +152,7 @@ export class AudioEngine {
       // an error with no source is our own clear(), not a bad file
       if (!el.getAttribute('src')) return
       const e = el.error
-      // a stream can't be decoded by ffmpeg or asked with a HEAD: the radio store decides
+      // a stream can't be decoded by ffmpeg or asked with a HEAD: its live plugin decides
       if (this.#live) {
         this.#on.error?.({ code: e?.code ?? 0, message: e?.message ?? '', gone: false })
         return

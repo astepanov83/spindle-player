@@ -226,6 +226,20 @@ describe('RadioPlugin off', () => {
     expect(r.addLogo).not.toHaveBeenCalled()
   })
 
+  it('makes a logo refused while off once it is on again', async () => {
+    let arrive!: (b: Uint8Array) => void
+    const r = setup({ bundled: () => new Promise((ok) => (arrive = ok)) })
+    r.plugin.setOn(true)
+    await vi.waitFor(() => expect(r.bundled).toHaveBeenCalledOnce())
+    r.plugin.setOn(false)
+    arrive(new Uint8Array([1]))
+    await new Promise((ok) => setTimeout(ok, 20))
+    r.bundled.mockImplementation(async () => new Uint8Array([1]))
+    r.plugin.setOn(true)
+    await vi.waitFor(() => expect(r.addLogo).toHaveBeenCalled())
+    expect(r.bundled).toHaveBeenCalledTimes(2)
+  })
+
   it('does not look at the cover setting while off, and sees it when turned on', async () => {
     const miss = { version: 1, songs: { 'iron maiden\0the trooper': { at: Date.now() } } }
     writeFileSync(join(dir, 'radio-covers.json'), JSON.stringify(miss))

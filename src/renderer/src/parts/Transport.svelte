@@ -2,7 +2,7 @@
   import IconButton from '../ui/IconButton.svelte'
   import PlayButton from './PlayButton.svelte'
   import { player } from '../stores/player.svelte'
-  import { playing } from '../stores/playing.svelte'
+  import { queues } from '../stores/queues.svelte'
 </script>
 
 <div class="transport">
@@ -15,16 +15,16 @@
   <IconButton
     icon="prev"
     label="Previous"
-    disabled={playing.nothing}
-    onclick={() => playing.prev()}
+    disabled={queues.nothing}
+    onclick={() => queues.prev()}
   />
   <PlayButton
     icon={player.playing ? 'pause' : 'play'}
     label={player.playing ? 'Pause' : 'Play'}
-    disabled={playing.nothing}
-    onclick={() => playing.togglePlay()}
+    disabled={queues.nothing}
+    onclick={() => queues.togglePlay()}
   />
-  <IconButton icon="next" label="Next" disabled={playing.nothing} onclick={() => playing.next()} />
+  <IconButton icon="next" label="Next" disabled={queues.nothing} onclick={() => queues.next()} />
   <IconButton
     icon="repeat"
     label="Repeat"

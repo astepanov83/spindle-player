@@ -2,7 +2,7 @@
 // you left off. Version 2 holds item keys (ticket 055); main converts an older
 // file once at start (main/convert-files.ts).
 import type { PluginId } from './plugins'
-import { isKeyOfKind, itemKey, splitKey, type ItemKey } from './plugins/items'
+import { isKeyOfKind, splitKey, type ItemKey } from './plugins/items'
 import { isStationId } from './stations'
 
 // What "From <from>" opens (ticket 040): a page of a plugin, or of the core
@@ -61,7 +61,7 @@ export interface SavedQueues {
 }
 
 // What plays: sent on its own when it changes. Main turns it into `live` and `active`.
-export type SavedPlaying = { kind: 'queue' } | { kind: 'radio'; station: string }
+export type SavedPlaying = { active: 'track' } | { active: 'live'; current: ItemKey }
 
 export function emptyQueue(): SavedQueue {
   return { items: [], index: 0, from: '', pos: 0 }
@@ -130,17 +130,11 @@ export function parseSavedQueues(raw: unknown): SavedQueues {
 // changed or the message is bad.
 export function applyPlaying(q: SavedQueues, raw: unknown): SavedQueues {
   if (!isObject(raw)) return q
-  if (raw.kind === 'queue') return q.active === 'track' ? q : { ...q, active: 'track' }
-  if (raw.kind !== 'radio' || !isStationId(raw.station)) return q
-  const current = itemKey('radio', raw.station)
+  if (raw.active === 'track') return q.active === 'track' ? q : { ...q, active: 'track' }
+  if (raw.active !== 'live' || !isLiveKey(raw.current)) return q
+  const current = raw.current
   if (q.active === 'live' && q.live.current === current) return q
   return { ...q, live: { current }, active: 'live' }
-}
-
-// The station a saved live item is, for the radio store until it is a plugin (057).
-export function savedStation(q: SavedQueues): string | undefined {
-  const k = q.active === 'live' && q.live.current ? splitKey(q.live.current) : undefined
-  return k?.plugin === 'radio' ? k.id : undefined
 }
 
 // Version 2 with a track queue. Anything else is copied aside before the

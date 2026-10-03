@@ -4,7 +4,7 @@ import type { Track } from '../../../../shared/library'
 import { itemKey, type ItemKey } from '../../../../shared/plugins/items'
 import { albumLink } from '../../library/album'
 import { library } from '../../stores/library.svelte'
-import { playing } from '../../stores/playing.svelte'
+import { queues } from '../../stores/queues.svelte'
 import { queue } from '../../stores/queue.svelte'
 import { pluginOf } from './tracks'
 
@@ -31,11 +31,11 @@ export function trackOf(key: ItemKey | undefined): Track | undefined {
 // The queue's song while it plays, as a library song (for the marks on
 // albums and folders).
 export function playingTrack(): Track | undefined {
-  return trackOf(playing.item)
+  return trackOf(queues.item)
 }
 
 export function isPlaying(t: Track): boolean {
-  return playing.item === trackKey(t)
+  return queues.item === trackKey(t)
 }
 
 // The album page's Play, a tile's play button: the album is the queue.

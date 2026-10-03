@@ -14,8 +14,8 @@
   import Volume from './Volume.svelte'
   import { fmtClock } from '../format'
   import { player } from '../stores/player.svelte'
-  import { playing } from '../stores/playing.svelte'
-  import { radio, type RadioStatus } from '../stores/radio.svelte'
+  import { queues } from '../stores/queues.svelte'
+  import { radio, type RadioStatus } from '../plugins/radio/store.svelte'
 
   let { style }: { style: 'stack' | 'bar' } = $props()
 
@@ -42,7 +42,7 @@
   <PlayButton
     icon={player.playing ? 'stop' : 'play'}
     label={player.playing ? 'Stop' : 'Play'}
-    onclick={() => playing.togglePlay()}
+    onclick={() => queues.togglePlay()}
   />
 {/snippet}
 
@@ -78,11 +78,11 @@
 {#if style === 'bar'}
   <div class="ctl bar">
     <div class="bl">
-      <div class="minicv"><Cover src={playing.art?.cover} /></div>
+      <div class="minicv"><Cover src={queues.art?.cover} /></div>
       <div class="meta">
         <!-- cut sooner when Save shows: the tooltip has it whole -->
-        <div class="song-title" title={playing.title}><PlayingText line="title" /></div>
-        <div class="song-sub" title={playing.sub}><PlayingText line="sub" /></div>
+        <div class="song-title" title={queues.title}><PlayingText line="title" /></div>
+        <div class="song-sub" title={queues.sub}><PlayingText line="sub" /></div>
       </div>
       {@render save(true)}
     </div>

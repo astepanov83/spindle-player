@@ -1,7 +1,8 @@
-// The list you played from, and the song playing from it. See work/specs/queue.md.
-// The moves are plain functions in queue/logic.ts; this store plays what they
-// pick. It knows songs by item key only: each one's plugin says what it is and
-// how to play it (plugins/index.ts).
+// The track queue: the list you played from, and the song playing from it.
+// See work/specs/queue.md. The moves are plain functions in queue/logic.ts;
+// this store plays what they pick. It knows songs by item key only: each
+// one's plugin says what it is and how to play it (plugins/index.ts). The
+// live queue and which of the two plays are in queues.svelte.ts.
 import { moveKeys, type IdMoves } from '../../../shared/id-moves'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink, QueuePlace, SavedQueue } from '../../../shared/saved-queue'
@@ -37,7 +38,7 @@ const savePosEverySec = 5
 const notMissing = (key: ItemKey): boolean => itemInfo(key).state !== 'missing'
 const isOff = (key: ItemKey): boolean => itemInfo(key).state === 'off'
 
-class QueueStore {
+class TrackQueue {
   items: ItemKey[] = $state.raw([])
   index = $state(0)
   from = $state('')
@@ -62,12 +63,12 @@ class QueueStore {
     this.currentState?.state === 'ok' ? this.currentState.info : undefined
   )
 
-  // False while radio has the player (ticket 027): the queue waits with its
-  // list and place, and a library change must not load a song.
+  // False while the live queue has the player (ticket 027): this queue waits
+  // with its list and place, and a library change must not load a song.
   active = true
   // Called whenever the user plays from the queue or the library: takes the
-  // player back from radio, and makes sure queue.json says the queue plays.
-  // playing.svelte.ts sets it.
+  // player back from the live queue, and makes sure queue.json says the track
+  // queue plays. queues.svelte.ts sets it.
   takeOver: () => void = () => {}
 
   #fails = 0
@@ -77,10 +78,13 @@ class QueueStore {
   // The current song could not load: its plugin has no data for it yet, or
   // it is off with no other song to go on to. It loads once it can.
   #waiting: { andPlay: boolean; at: number } | undefined
+  // The current song's playable is on its way (its plugin asks first). Play
+  // or Pause pressed meanwhile decides whether it plays when it comes.
+  #pending: { andPlay: boolean } | undefined
   // counts loads, so an answer that comes late for an older song is dropped
   #loads = 0
 
-  // The engine's events while the queue has the player (playing.svelte.ts passes them on).
+  // The engine's events while the queue has the player (queues.svelte.ts passes them on).
   readonly events: Partial<EngineEvents> = {
     time: (t) => {
       player.pos = t
@@ -107,7 +111,7 @@ class QueueStore {
   }
 
   // The user played something from the queue or the library.
-  // True when radio had it, so nothing of the song is loaded.
+  // True when the live queue had it, so nothing of the song is loaded.
   #claim(): boolean {
     const fromRadio = !this.active
     this.takeOver()
@@ -133,6 +137,7 @@ class QueueStore {
     this.starts++
     this.ended = false
     this.#waiting = undefined
+    this.#pending = undefined
     this.#loads++
     player.pos = at
     this.savePos()
@@ -150,17 +155,22 @@ class QueueStore {
     } else if (p instanceof Promise) {
       const n = this.#loads
       this.#unload()
-      // radio may have taken the player meanwhile
+      const pending = { andPlay }
+      this.#pending = pending
+      // the live queue may have taken the player meanwhile
       const still = (): boolean => n === this.#loads && this.active
       p.then(
         (r) => {
           if (!still()) return
-          if (r) this.#load(key, r, at, andPlay)
-          else this.#waiting = { andPlay, at }
+          this.#pending = undefined
+          if (r) this.#load(key, r, at, pending.andPlay)
+          else this.#waiting = { andPlay: pending.andPlay, at }
         },
         (e) => {
           window.playbackApi.log(`Could not get ${key} to play: ${e}`)
-          if (still()) this.#waiting = { andPlay, at }
+          if (!still()) return
+          this.#pending = undefined
+          this.#waiting = { andPlay: pending.andPlay, at }
         }
       )
     } else this.#load(key, p, at, andPlay)
@@ -203,6 +213,7 @@ class QueueStore {
   #carryOn(key: ItemKey, p: Playable): void {
     this.starts++
     this.#loads++
+    this.#pending = undefined
     this.#loaded = { key, p }
     player.pos = 0
     player.duration = typeof p.length === 'number' ? p.length : 0
@@ -362,12 +373,13 @@ class QueueStore {
     this.ended = true
   }
 
-  // Play or Pause pressed while the current song waits for its plugin: it
-  // plays once it loads, or not. No `on` turns it over (the play button).
-  // False when nothing waits.
+  // Play or Pause pressed while the current song waits for its plugin or its
+  // playable: it plays once it loads, or not. No `on` turns it over (the play
+  // button). False when nothing waits.
   playWhenReady(on?: boolean): boolean {
-    if (!this.#waiting) return false
-    this.#waiting = { ...this.#waiting, andPlay: on ?? !this.#waiting.andPlay }
+    const w = this.#waiting ?? this.#pending
+    if (!w) return false
+    w.andPlay = on ?? !w.andPlay
     return true
   }
 
@@ -483,4 +495,4 @@ class QueueStore {
   }
 }
 
-export const queue = new QueueStore()
+export const queue = new TrackQueue()

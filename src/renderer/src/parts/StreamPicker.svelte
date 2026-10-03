@@ -1,8 +1,8 @@
 <!-- The bitrate picker: the station's streams, highest first. The pick is kept per station. -->
 <script lang="ts">
-  import { streamChoices } from '../radio/logic'
+  import { streamChoices } from '../plugins/radio/logic'
   import { menu } from '../stores/menu.svelte'
-  import { radio } from '../stores/radio.svelte'
+  import { radio } from '../plugins/radio/store.svelte'
 
   // short: "320" for the bar, else "320 kbps mp3"
   let { short = false }: { short?: boolean } = $props()

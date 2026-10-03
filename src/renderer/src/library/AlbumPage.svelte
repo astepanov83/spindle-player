@@ -8,7 +8,7 @@
   import { roving } from '../ui/roving'
   import { library } from '../stores/library.svelte'
   import { player } from '../stores/player.svelte'
-  import { playing } from '../stores/playing.svelte'
+  import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
   import { albumButton, albumLabel, albumLines } from './album'
   import { artistLinks } from './artists'
@@ -43,14 +43,14 @@
       link: queue.link,
       currentAlbum: trackOf(queue.current)?.albumId,
       ended: queue.ended,
-      queuePlays: playing.kind === 'queue',
+      queuePlays: queues.active === 'track',
       sounding: player.playing
     })
   )
 
   function playOrPause(): void {
     if (btn === 'play') playAlbum(al.id, 0)
-    else playing.togglePlay()
+    else queues.togglePlay()
   }
 
   function shufflePlay(): void {
@@ -119,7 +119,7 @@
         oncontextmenu={(e) => openSongMenu(e, [trackKey(t)], { from: al.title, link })}
       >
         <span class="n"
-          >{#if cur && playing.songPlaying}<Eq />{:else if line.no}{line.no}{/if}</span
+          >{#if cur && queues.songPlaying}<Eq />{:else if line.no}{line.no}{/if}</span
         >
         <span class="nm" title={t.title}>{t.title}</span>
         <span class="ar" title={t.artist}>{t.artist}</span>

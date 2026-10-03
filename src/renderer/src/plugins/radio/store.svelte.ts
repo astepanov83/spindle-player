@@ -1,8 +1,9 @@
 // The station playing, its stream and titles, and reconnecting when the stream
 // drops. See work/specs/radio.md, "Playing a live stream". The moves are plain
-// functions in radio/logic.ts; playing.svelte.ts says when radio has the player.
-import type { Art } from '../../../shared/library'
-import type { RadioCover, RadioLogo, RadioTitle } from '../../../shared/ipc'
+// functions in logic.ts. The core plays what this loads through the handle it
+// gives (index.ts is the LivePlugin over this store).
+import type { Art } from '../../../../shared/library'
+import type { RadioCover, RadioLogo, RadioTitle } from '../../../../shared/ipc'
 import {
   addEntry,
   historyTitle,
@@ -12,19 +13,20 @@ import {
   type HistoryEntry,
   type Station,
   type StationLogo
-} from '../../../shared/stations'
-import { engine, type EngineEvents } from '../audio/engine'
+} from '../../../../shared/stations'
+import type { EngineEvents } from '../../audio/engine'
+import { notice } from '../../stores/notice.svelte'
+import type { ItemInfo, LiveHandle, PageAddress, Playable } from '../types'
 import {
   cantPlayFormat,
   firstStream,
+  historyEntries,
   nextStream,
   parseTitle,
   radioUrl,
   retryDelayMs,
   streamChoices
-} from '../radio/logic'
-import { notice } from './notice.svelte'
-import { player } from './player.svelte'
+} from './logic'
 
 // A stream stuck this long with no data is taken for dropped.
 const stallMs = 8000
@@ -39,9 +41,16 @@ const retriesPerStream = 3
 // What the dot next to the controls' LIVE says.
 export type RadioStatus = 'off' | 'connecting' | 'live' | 'buffering' | 'reconnecting'
 
+// The Radio view: what a station's name links to.
+export const radioPage: PageAddress = { plugin: 'radio', page: '' }
+
+const liveCan = { seek: false, pause: true, next: true, previous: true }
+
 class RadioStore {
   // My stations, in the user's order
   stations: Station[] = $state.raw([])
+  // My stations came from main: a station not in them is gone
+  loaded = $state(false)
   // the station playing, or picked and paused
   station: Station | undefined = $state.raw()
   // index into station.streams
@@ -94,8 +103,12 @@ class RadioStore {
   #early: Map<string, StationLogo | undefined> | undefined = new Map()
   // stations main is saving now
   #saving = new Set<string>()
+  // the core's handle for the station: loads, stops, and hears what is on air
+  #h: LiveHandle | undefined
+  // a station the Radio view is about to play (a search result is in no list)
+  #offered: Station | undefined
 
-  // The engine's events while radio has the player (playing.svelte.ts passes them on).
+  // The engine's events while radio has the player (the core passes them on).
   readonly events: Partial<EngineEvents> = {
     playing: () => {
       clearTimeout(this.#stallTimer)
@@ -126,10 +139,11 @@ class RadioStore {
     ended: () => this.#lost('the stream ended'),
     error: (e) => this.#lost(`error ${e.code} ${e.message}`),
     // Chromium paused the element itself (the system's audio, not our handlers):
-    // a pause like the user's. Our own pauses leave no source (a reconnect, a
-    // new station) or are followed by a new play (another stream) before this comes.
+    // a pause like the user's. The core passes it on only while the element
+    // still has a source and is paused: our own pauses leave no source (a
+    // reconnect, a new station) or are followed by a new play (another stream).
     paused: () => {
-      if (!this.#wanted || this.#down || !engine.loaded || !engine.el.paused) return
+      if (!this.#wanted || this.#down) return
       this.pause()
     },
     refused: (message) => {
@@ -153,6 +167,29 @@ class RadioStore {
     this.stations = early?.size
       ? stations.map((s) => (early.has(s.id) ? withLogo(s, early.get(s.id)) : s))
       : stations
+    this.loaded = true
+  }
+
+  // A station by id: in My stations, the one playing, or one the Radio view offered.
+  find(id: string): Station | undefined {
+    return (
+      this.stations.find((s) => s.id === id) ??
+      (this.station?.id === id ? this.station : undefined) ??
+      (this.#offered?.id === id ? this.#offered : undefined)
+    )
+  }
+
+  // The Radio view plays this copy next (a search result, or a saved one
+  // with its chosen stream), not the one find gives.
+  offer(station: Station): void {
+    this.#offered = station
+  }
+
+  // What play takes for an id: the offered copy once, else find's.
+  take(id: string): Station | undefined {
+    const s = this.#offered?.id === id ? this.#offered : this.find(id)
+    this.#offered = undefined
+    return s
   }
 
   // My stations after a search added streams to some. New streams go at the
@@ -160,58 +197,67 @@ class RadioStore {
   searched(stations: Station[]): void {
     this.stations = stations
     const now = stations.find((s) => s.id === this.station?.id)
-    if (now) this.station = now
+    if (now) {
+      this.station = now
+      this.#tell()
+    }
   }
 
   // Picked but not playing: after a restart.
-  select(station: Station): void {
+  select(station: Station, h: LiveHandle): void {
+    this.#h = h
     this.pause()
     this.#show(station)
+    this.#tell()
     this.stream = firstStream(station)
   }
 
-  // Asks main for the station's streams, then opens one at the live edge.
-  async play(station: Station): Promise<void> {
+  // Asks main for the station's streams, then gives the core a connection at
+  // the live edge. Undefined when it can't play, or another play came meanwhile.
+  async play(station: Station, h: LiveHandle): Promise<Playable | undefined> {
+    this.#h = h
     const n = this.#start()
     this.#setStatus('connecting', 'Finding the streams')
     // the song or the last station stops now, not when main answers
-    engine.clear()
+    h.clear()
     const same = station.id === this.station?.id
     this.#show(station)
+    this.#tell()
     let known: Station | undefined
     try {
       known = await window.radioApi.play($state.snapshot(station) as Station)
     } catch (e) {
       window.playbackApi.log(`Radio ${station.id}: radio:play failed: ${String(e)}`)
     }
-    if (n !== this.#seq) return
+    if (n !== this.#seq) return undefined
     if (!known) return this.#giveUp()
     this.station = known
     this.stations = this.stations.map((s) => (s.id === known.id ? known : s))
+    this.#tell()
     // play again after a pause keeps the stream it had
     if (!same || !known.streams[this.stream]) this.stream = firstStream(known)
     if (this.stream < 0) return this.#giveUp()
     this.#setStatus('connecting', `Connecting to ${this.#streamLabel()}`)
-    this.#connect()
+    return this.#connection()
   }
 
   // Play after pause: a new connection at the live edge.
-  async resume(): Promise<void> {
-    if (this.station) await this.play(this.station)
+  async resume(): Promise<Playable | undefined> {
+    return this.station && this.#h ? this.play(this.station, this.#h) : undefined
   }
 
   // Drops the connection, so nothing old plays after a long pause. Main ends
-  // the stream; the element keeps it, paused: with no source Chromium drops the
-  // system's media controls (MPRIS said Stopped and Play did nothing).
+  // the stream; the core pauses the element and keeps its source: with no
+  // source Chromium drops the system's media controls (MPRIS said Stopped and
+  // Play did nothing).
   pause(): void {
     this.#seq++
     this.#wanted = false
     clearTimeout(this.#retryTimer)
     clearTimeout(this.#stallTimer)
-    player.playing = false
     this.#setStatus('off', 'Stopped')
     this.#soundStops()
-    engine.pause()
+    this.#h?.stopped()
     window.radioApi.stop()
   }
 
@@ -301,9 +347,9 @@ class RadioStore {
     if (!this.#wanted) return
     clearTimeout(this.#retryTimer)
     clearTimeout(this.#stallTimer)
-    engine.clear()
+    this.#h?.clear()
     this.#setStatus('connecting', `Connecting to ${this.#streamLabel()}`)
-    this.#connect()
+    this.#h?.load(this.#connection())
   }
 
   // A new try for the user: all counts start again.
@@ -315,7 +361,6 @@ class RadioStore {
     this.#failed.clear()
     this.#formatFailed.clear()
     this.#wanted = true
-    player.playing = true
     // an answer about the last connection must not act on this one
     this.#connects++
     return ++this.#seq
@@ -333,10 +378,30 @@ class RadioStore {
     // has any title heard while it was on the way.
     void window.radioApi.history(id).then(
       (h) => {
-        if (this.station?.id === id) this.history = h
+        if (this.station?.id !== id) return
+        this.history = h
+        this.#tell()
       },
       () => {}
     )
+  }
+
+  // What is on air, for Now Playing, the media session and the colors. Before
+  // a song title comes the title is the station, so it isn't said twice.
+  #onAir(s: Station): ItemInfo {
+    const track = this.now.track
+    return track
+      ? { title: track, subtitle: s.name, art: this.art, names: [{ name: s.name, to: radioPage }] }
+      : { title: s.name, subtitle: 'Radio', art: this.art, titleTo: radioPage }
+  }
+
+  // The core hears what is on air and the recent songs after each change to
+  // the station, its title or its history.
+  #tell(): void {
+    const s = this.station
+    if (!this.#h || !s) return
+    this.#h.info(this.#onAir(s))
+    this.#h.history(historyEntries(this.history, this.title))
   }
 
   #setStatus(status: RadioStatus, detail: string, retryAt?: number): void {
@@ -345,6 +410,7 @@ class RadioStore {
     this.status = status
     this.#detail = detail
     this.#retryAt = retryAt
+    this.#h?.status(status === 'off' ? undefined : detail)
   }
 
   // "320 kbps mp3", as the stream picker names it
@@ -362,15 +428,17 @@ class RadioStore {
     this.#soundSince = undefined
   }
 
-  #connect(): void {
+  // A new connection to the stream picked, at a new address.
+  #connection(): Playable {
     this.#soundStops()
     this.#connects++
     this.#sound = false
     this.#down = false
-    engine.load(radioUrl(this.station!.id, this.stream, this.#connects), 0, undefined, {
-      live: true
-    })
-    engine.play()
+    return {
+      url: radioUrl(this.station!.id, this.stream, this.#connects),
+      length: 'live',
+      can: liveCan
+    }
   }
 
   // The connection failed, ended or stalled. Before any sound, main is asked what
@@ -384,7 +452,7 @@ class RadioStore {
     clearTimeout(this.#retryTimer)
     clearTimeout(this.#stallTimer)
     // closes a stalled connection too
-    engine.clear()
+    this.#h?.clear()
     const s = this.station!
     window.playbackApi.log(`Radio ${s.id}: stream ${this.stream}: ${why}`)
     if (this.#sound) return this.#retry()
@@ -412,7 +480,7 @@ class RadioStore {
     this.#retryTimer = setTimeout(() => {
       // the wait is over; it stays reconnecting until sound comes
       this.#setStatus('reconnecting', detail)
-      this.#connect()
+      this.#h?.load(this.#connection())
     }, ms)
   }
 
@@ -424,20 +492,23 @@ class RadioStore {
     this.stream = next
     this.#retries = 0
     this.#setStatus('reconnecting', `Trying another stream: ${this.#streamLabel()}`)
-    this.#connect()
+    this.#h?.load(this.#connection())
   }
 
-  #giveUp(): void {
+  #giveUp(): undefined {
     const name = this.station?.name ?? ''
     const format = this.#formatFailed.size > 0 && this.#formatFailed.size === this.#failed.size
     this.pause()
     notice.show(format ? `Format can't be played: ${name}` : `Station can't be reached: ${name}`)
+    return undefined
   }
 
   #logo({ id, logo }: RadioLogo): void {
     this.#early?.set(id, logo)
     this.stations = this.stations.map((s) => (s.id === id ? withLogo(s, logo) : s))
-    if (this.station?.id === id) this.station = withLogo(this.station, logo)
+    if (this.station?.id !== id) return
+    this.station = withLogo(this.station, logo)
+    this.#tell()
   }
 
   // Only for the title playing: an answer for one that changed since is dropped.
@@ -446,12 +517,14 @@ class RadioStore {
     const last = this.history.at(-1)
     if (last?.title !== historyTitle(title)) return
     this.history = [...this.history.slice(0, -1), { ...last, cover }]
+    this.#tell()
   }
 
   #heard(t: RadioTitle): void {
     if (t.stationId !== this.station?.id) return
     this.title = t.title
     this.history = addEntry(this.history, t.title, t.at)
+    this.#tell()
   }
 }
 

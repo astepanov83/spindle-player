@@ -1,17 +1,18 @@
 // Radio moves as plain functions: the title's parts, which stream to try next,
-// how long to wait. stores/radio.svelte.ts plays what they pick.
+// how long to wait. store.svelte.ts plays what they pick.
 import {
   historyTitle,
+  songArt,
   type HistoryEntry,
   type Station,
   type Stream
-} from '../../../shared/stations'
-import type { LastAnswer } from '../../../shared/ipc'
-import { coverUrls } from '../../../shared/library'
-import { parseTitle } from '../../../shared/radio-title'
+} from '../../../../shared/stations'
+import type { LastAnswer } from '../../../../shared/ipc'
+import { parseTitle } from '../../../../shared/radio-title'
+import type { HistoryEntry as LiveEntry } from '../types'
 
 // in shared/, since main looks song covers up by the same parts (ticket 032)
-export { parseTitle, type RadioTitleParts } from '../../../shared/radio-title'
+export { parseTitle, type RadioTitleParts } from '../../../../shared/radio-title'
 
 // aac, opus and vorbis sound like mp3 at about 1.5 times the bitrate
 const codecWeight: Record<string, number> = { aac: 1.5, opus: 1.6, vorbis: 1.3 }
@@ -124,65 +125,20 @@ export function radioUrl(stationId: string, stream: number, connection: number):
   return `spindle://radio/${stationId}?stream=${stream}&c=${connection}`
 }
 
-const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-// When a recent song was heard: "21:14" today, "28 Sep" before (the file keeps
-// a station's titles for up to 30 days after its last play).
-export function heardAt(at: number, now: number): string {
-  const d = new Date(at)
-  if (d.toDateString() !== new Date(now).toDateString()) {
-    return `${d.getDate()} ${months[d.getMonth()]}`
-  }
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-// ms until the next local midnight, when today's times turn into days
-export function msToMidnight(now: number): number {
-  const d = new Date(now)
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() - now
-}
-
-export interface RecentRow {
-  key: string
-  time: string
-  artist: string
-  song: string
-  // the title playing now
-  now: boolean
-  // the small cover found for the song (ticket 032), or ''
-  cover: string
-}
-
-// The Queue part's rows while radio plays: newest first. `current` is the
-// title playing now, or undefined when stopped; only the newest can be it.
-export function recentRows(
-  history: HistoryEntry[],
-  current: string | undefined,
-  now: number
-): RecentRow[] {
+// The station's titles as the core's history (the Queue part's list): each
+// title's parts and the cover found for its song. The newest is on air when
+// it is `title`, the one playing now.
+export function historyEntries(history: HistoryEntry[], title: string): LiveEntry[] {
   // the file keeps a long title cut
-  const playingNow = current === undefined ? undefined : historyTitle(current)
-  return history
-    .map((e, i) => {
-      const t = parseTitle(e.title)
-      return {
-        key: `${e.at}:${e.title}`,
-        time: heardAt(e.at, now),
-        artist: t.artist,
-        song: t.song,
-        now: i === history.length - 1 && e.title === playingNow,
-        cover: e.cover ? coverUrls(e.cover.hash).cover : ''
-      }
-    })
-    .reverse()
-}
-
-// What "Back to queue" goes back to: "From Late Night, 42 songs".
-export function backNote(from: string, count: number): string {
-  if (!count) return 'The queue is empty'
-  const songs = `${count.toLocaleString('en-US')} ${count === 1 ? 'song' : 'songs'}`
-  return from ? `From ${from}, ${songs}` : songs
+  const playingNow = historyTitle(title)
+  return history.map((e, i) => {
+    const t = parseTitle(e.title)
+    const entry: LiveEntry = { title: t.song, at: e.at }
+    if (t.artist) entry.subtitle = t.artist
+    if (e.cover) entry.art = songArt(e.cover)
+    if (i === history.length - 1 && e.title === playingNow) entry.now = true
+    return entry
+  })
 }
 
 // The Radio view's filter of My stations: name, tag or country.

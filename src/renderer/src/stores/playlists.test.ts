@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Album, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 
-vi.stubGlobal('window', { playlistsApi: { save: vi.fn() } })
+// radio's page half hears main from the start
+vi.stubGlobal('window', {
+  playlistsApi: { save: vi.fn() },
+  radioApi: { onTitle: () => () => {}, onLogo: () => () => {}, onCover: () => () => {} }
+})
 vi.stubGlobal('crypto', {
   randomUUID: (() => {
     let n = 0

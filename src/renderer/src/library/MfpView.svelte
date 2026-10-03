@@ -12,7 +12,7 @@
   import { mfpLine } from './scan-text'
   import { episodeRows } from './views'
   import { library } from '../stores/library.svelte'
-  import { playing } from '../stores/playing.svelte'
+  import { queues } from '../stores/queues.svelte'
   import { pluginOn } from '../stores/settings.svelte'
   import { isPlaying, playAlbum } from '../plugins/files/views'
 
@@ -33,7 +33,7 @@
 {#if !pluginOn('mfp')}
   <Empty
     title="Music For Programming is off"
-    text="Turn it on in Settings, under Online music, to play the mixes from musicforprogramming.net."
+    text="Turn it on in Settings, under Plugins, to play the mixes from musicforprogramming.net."
   />
 {:else if library.episode}
   <EpisodePage albumId={library.episode} />
@@ -75,7 +75,7 @@
             onclick={() => play(al.id, t.id)}
           >
             <span class="nm"
-              >{#if cur && playing.songPlaying}<Eq />{/if}<span title={t.title}>{t.title}</span
+              >{#if cur && queues.songPlaying}<Eq />{/if}<span title={t.title}>{t.title}</span
               ></span
             >
             <span class="o" title={t.artist}>{t.artist}</span>

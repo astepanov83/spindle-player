@@ -42,9 +42,9 @@ export const plugins: PluginInfo[] = [
   }
 ]
 
-// Plugins whose switch shows in Settings. Add 'radio' (057) and 'files' (063)
-// when they can really be turned off.
-export const switchablePlugins: PluginId[] = ['mfp']
+// Plugins whose switch shows in Settings. Add 'files' (063) when it can really
+// be turned off.
+export const switchablePlugins: PluginId[] = ['radio', 'mfp']
 
 export function isPluginId(v: unknown): v is PluginId {
   return plugins.some((p) => p.id === v)

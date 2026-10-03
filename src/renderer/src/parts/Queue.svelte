@@ -3,22 +3,21 @@
   import GoLink from '../ui/GoLink.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Thumb from '../ui/Thumb.svelte'
-  import RecentSongs from './RecentSongs.svelte'
+  import LiveHistory from './LiveHistory.svelte'
   import { fmtLength, fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { roving } from '../ui/roving'
   import { dropIndex, dropSlot, rowShift } from '../ui/drag-rows'
   import { layout } from '../stores/layout.svelte'
   import { library } from '../stores/library.svelte'
-  import { playing } from '../stores/playing.svelte'
+  import { queues } from '../stores/queues.svelte'
   import { playlists } from '../stores/playlists.svelte'
   import { queue } from '../stores/queue.svelte'
-  import { radio } from '../stores/radio.svelte'
   import { openSongMenu } from '../library/song-menu'
   import { linkTarget } from '../../../shared/saved-queue'
   import type { ItemKey } from '../../../shared/plugins/items'
   import type { ItemAnswer } from '../plugins/types'
-  import { canOpen, itemInfo, openPage } from '../plugins'
+  import { canOpen, infoOf, itemInfo, openPage } from '../plugins'
 
   // header and close are set by the container, not by templates
   let { header = false, close = false }: { header?: boolean; close?: boolean } = $props()
@@ -35,7 +34,7 @@
   const currentKey = (): number => queue.starts
   $effect(() => {
     const key = currentKey()
-    // radio showed its songs here: back on the queue, show its current song again
+    // a live item showed its songs here: back on the queue, show its current song again
     if (!body) {
       seen = -1
       return
@@ -181,8 +180,11 @@
     drag = null
   }
 
-  // Radio: its recent songs in place of the queue, with a head even in a tab.
-  const onRadio = $derived(playing.kind === 'radio')
+  // A live item: its recent songs in place of the queue, with a head even in a tab.
+  const onLive = $derived(queues.active === 'live')
+  const liveHead = $derived(
+    `${infoOf(queues.live.current ?? undefined)?.title ?? ''} · recent songs`
+  )
 
   // in the markup this would lose its spaces next to a block
   const dot = ' · '
@@ -216,13 +218,11 @@
 />
 
 <div class="qpart" class:dragging={!!drag}>
-  {#if header || onRadio}
+  {#if header || onLive}
     <div class="head">
       <div class="title">
-        {#if onRadio}
-          <b title="{radio.station?.name ?? 'Radio'} · recent songs"
-            >{radio.station?.name ?? 'Radio'} · recent songs</b
-          >
+        {#if onLive}
+          <b title={liveHead}>{liveHead}</b>
         {:else}
           <b>Queue</b>{#if queue.from}<small>From <GoLink go={openFrom}>{queue.from}</GoLink></small
             >{/if}
@@ -233,7 +233,7 @@
       {/if}
     </div>
   {/if}
-  {#if !onRadio && queue.items.length}
+  {#if !onLive && queue.items.length}
     <div class="sum" class:tab={!header}>
       <!-- the tab has no head, so "From" goes here there -->
       <span class="count"
@@ -247,8 +247,8 @@
       >
     </div>
   {/if}
-  {#if onRadio}
-    <RecentSongs />
+  {#if onLive}
+    <LiveHistory />
   {:else}
     <div class="body" bind:this={body}>
       {#if !queue.items.length}
@@ -286,7 +286,7 @@
             onkeydown={(e) => onrowkey(e, item.index)}
             oncontextmenu={(e) => openSongMenu(e, [key], { queueRow: item.index })}
           >
-            {@render words(s, cur && playing.songPlaying)}
+            {@render words(s, cur && queues.songPlaying)}
           </button>
         {/each}
         {#if drag}

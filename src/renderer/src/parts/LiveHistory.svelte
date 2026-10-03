@@ -1,14 +1,15 @@
-<!-- The Queue part while radio plays: the station's recent songs, newest first,
-     under a row that gives the player back to the queue (decision 147). -->
+<!-- The Queue part while a live item plays: the songs its plugin heard,
+     newest first, under a row that gives the player back to the queue
+     (decision 147). Drawn from the live queue's data; nothing can be moved,
+     removed or played. -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
   import Thumb from '../ui/Thumb.svelte'
+  import { infoOf } from '../plugins'
   import { player } from '../stores/player.svelte'
-  import { playing } from '../stores/playing.svelte'
   import { queue } from '../stores/queue.svelte'
-  import { radio } from '../stores/radio.svelte'
-  import { backNote, msToMidnight, recentRows } from '../radio/logic'
-  import { stationArt } from '../../../shared/stations'
+  import { queues } from '../stores/queues.svelte'
+  import { backNote, historyRows, msToMidnight } from '../queue/history'
 
   // Today's times turn into days at midnight, with no new title to redraw them.
   let now = $state(Date.now())
@@ -22,24 +23,25 @@
     return () => clearTimeout(timer)
   })
 
-  // player.playing is radio's wish for sound while radio plays
-  const rows = $derived(recentRows(radio.history, player.playing ? radio.title : undefined, now))
+  // player.playing is the live item's wish for sound while it plays
+  const rows = $derived(historyRows(queues.live.history, player.playing, now))
   const note = $derived(backNote(queue.from, queue.items.length))
   // the cover column shows only once a song has one (ticket 032): with the
   // setting off, rows keep their width for the text
   const thumbs = $derived(rows.some((r) => r.cover))
-  // a song with no cover (a jingle, a miss) shows the station's logo, or the record
-  const logo = $derived(radio.station && stationArt(radio.station).cover)
+  // a song with no cover (a jingle, a miss) shows the item's own picture (a
+  // station's logo), or the record
+  const logo = $derived(infoOf(queues.live.current ?? undefined)?.art?.cover)
 </script>
 
 <div class="body">
   <!-- the note on its own line: a column is too narrow for a long album name -->
-  <button class="back row" title={note} onclick={() => playing.backToQueue()}>
+  <button class="back row" title={note} onclick={() => queues.backToQueue()}>
     <Icon name="back" size={18} />
     <span class="qt"><span class="bt">Back to queue</span><span class="ar">{note}</span></span>
   </button>
   {#if !rows.length}
-    <p class="empty">Songs this station plays show up here.</p>
+    <p class="empty">Songs show up here as they play.</p>
   {/if}
   {#each rows as r (r.key)}
     <div class="rrow" class:cur-row={r.now} class:thumbs>
@@ -48,8 +50,8 @@
         <Thumb src={r.cover || logo} size={40} />
       {/if}
       <span class="qt">
-        <span class="nm" title={r.song}>{r.song}</span>
-        {#if r.artist}<span class="ar" title={r.artist}>{r.artist}</span>{/if}
+        <span class="nm" title={r.title}>{r.title}</span>
+        {#if r.subtitle}<span class="ar" title={r.subtitle}>{r.subtitle}</span>{/if}
       </span>
       {#if r.now}<span class="now">Now</span>{/if}
     </div>

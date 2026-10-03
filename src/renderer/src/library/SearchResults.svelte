@@ -15,7 +15,7 @@
   import { filterArtists } from './artists'
   import { filterAlbums, searchSongs } from './views'
   import { library, type SearchGroup } from '../stores/library.svelte'
-  import { playing } from '../stores/playing.svelte'
+  import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
   import type { Track } from '../../../shared/library'
@@ -86,7 +86,7 @@
           <span class="tt">
             <Thumb src={library.art(t).cover} size={36} radius={4} />
             <span class="nm"
-              >{#if cur && playing.songPlaying}<Eq />{/if}<span title={t.title}>{t.title}</span
+              >{#if cur && queues.songPlaying}<Eq />{/if}<span title={t.title}>{t.title}</span
               ></span
             >
           </span>

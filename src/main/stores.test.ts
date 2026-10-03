@@ -233,14 +233,14 @@ describe('QueueFile', () => {
     const path = join(dir, 'queue.json')
     const file = new QueueFile(path)
     file.setFromPage({ items: ['files:a', 'files:b'], index: 0, from: 'X', pos: 0 })
-    file.setPlaying({ kind: 'radio', station: 'metal-only' })
+    file.setPlaying({ active: 'live', current: 'radio:metal-only' })
     file.setFromPage({ items: ['files:c'], index: 0, from: 'Y', pos: 0 })
     file.setPlace({ index: 0, pos: 9 })
     file.flushSync()
     const live = { live: { current: 'radio:metal-only' }, active: 'live' }
     const track = { items: ['files:c'], index: 0, from: 'Y', pos: 9 }
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(queues(track, live))
-    file.setPlaying({ kind: 'queue' })
+    file.setPlaying({ active: 'track' })
     file.flushSync()
     expect(JSON.parse(readFileSync(path, 'utf8')).active).toBe('track')
   })

@@ -1,8 +1,14 @@
 // The core's questions to plugins, answered by the files and mfp page halves
-// from a small made-up library.
+// from a small made-up library, and by radio's from My stations.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Album, LibraryData, MfpStatus, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
+import type { Station } from '../../../shared/stations'
+
+// radio's page half hears main from the start
+vi.stubGlobal('window', {
+  radioApi: { onTitle: () => () => {}, onLogo: () => () => {}, onCover: () => () => {} }
+})
 
 let p: typeof import('./index')
 let library: typeof import('../stores/library.svelte').library
@@ -117,10 +123,24 @@ describe('itemInfo', () => {
     expect(p.itemInfo('files:m1').state).toBe('missing')
   })
 
-  it('radio has no page half yet: its items wait, so none is dropped as gone', () => {
+  it('a station waits for My stations, then is one of them or gone (ticket 057)', async () => {
+    const { radio } = await import('./radio/store.svelte')
     expect(p.itemInfo('radio:x').state).toBe('loading')
+    const drone: Station = { id: 'x', name: 'Drone', tags: ['ambient'], streams: [] }
+    radio.load([drone])
+    const s = p.itemInfo('radio:x')
+    expect(s.state === 'ok' && [s.info.title, s.info.subtitle]).toEqual(['Drone', 'ambient'])
+    expect(s.state === 'ok' && s.info.titleTo).toEqual({ plugin: 'radio', page: '' })
+    expect(p.itemInfo('radio:y').state).toBe('missing')
+    expect(p.isLive('radio:x')).toBe(true)
+    expect(p.isLive('files:s1')).toBe(false)
+    expect(p.liveOf('radio:x')?.id).toBe('x')
+    // a station is not played from the track queue
+    expect(p.playItem('radio:x')).toBeUndefined()
     settings.plugins.radio = false
     expect(p.itemInfo('radio:x')).toEqual({ state: 'off', text: 'Radio is off' })
+    // off, it can still be stopped
+    expect(p.liveOf('radio:x')).toBeDefined()
   })
 })
 

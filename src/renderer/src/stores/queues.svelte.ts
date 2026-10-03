@@ -7,7 +7,7 @@ import { itemKey, splitKey, type ItemKey } from '../../../shared/plugins/items'
 import type { SavedPlaying, SavedQueues } from '../../../shared/saved-queue'
 import { engine, type EngineEvents } from '../audio/engine'
 import { barOf, type Bar } from '../queue/bar'
-import { actOn, infoOf, isLive, itemInfo, liveOf } from '../plugins'
+import { actOn, actionsOf, canOf, infoOf, isLive, itemInfo, liveOf } from '../plugins'
 import type {
   Action,
   Can,
@@ -112,10 +112,11 @@ class Queues {
   sub: string | undefined = $derived(this.info && subLine(this.info.subtitle, this.info.group))
   art: Art | undefined = $derived(this.info?.art)
   // what the player bar draws for it
-  bar: Bar = $derived(
-    this.active === 'live'
-      ? barOf('live', this.live.playable, this.live.actions)
-      : barOf('track', queue.playable, queue.playable?.actions ?? [])
+  bar: Bar = $derived(this.active === 'live' ? this.#liveBar() : this.#trackBar())
+  // The bar says "Nothing playing": no song, or one that can't be drawn yet.
+  // A live item picked shows its lines, empty until its plugin has its data.
+  nothingPlaying: boolean = $derived(
+    this.active === 'live' ? !this.live.current : !this.info?.title
   )
   // Nothing picked: Play, Previous and Next have nothing to act on.
   nothing: boolean = $derived(this.active === 'live' ? !this.live.current : !queue.current)
@@ -163,6 +164,18 @@ class Queues {
     }
     engine.on(route)
     queue.takeOver = () => this.#toTrack()
+  }
+
+  #liveBar(): Bar {
+    return barOf('live', this.live.playable, this.live.actions)
+  }
+
+  // the song's plugin may change what it can do while it plays
+  #trackBar(): Bar {
+    const key = queue.current
+    const p = queue.playable
+    const actions = (key && actionsOf(key)) ?? p?.actions ?? []
+    return barOf('track', p, actions, key && canOf(key))
   }
 
   #liveEvents(): Partial<EngineEvents> {

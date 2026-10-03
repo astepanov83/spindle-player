@@ -63,7 +63,8 @@ const live = vi.hoisted(() => ({
   events: { error: vi.fn(), paused: vi.fn() },
   // its items, in the order Next steps through
   ids: ['one', 'two', 'three'],
-  songsLater: false
+  songsLater: false,
+  reactive: false
 }))
 
 const playable = (id: string, n = 1): Playable => ({
@@ -72,7 +73,10 @@ const playable = (id: string, n = 1): Playable => ({
   can: { seek: false, pause: true, next: true, previous: true }
 })
 
-vi.mock('../plugins', () => {
+vi.mock('../plugins', async () => {
+  // what 'files:a' says now: its Like button turns on when used (ticket 058)
+  const { SvelteSet } = await import('svelte/reactivity')
+  const liked = new SvelteSet<string>()
   const songs: Record<string, ItemInfo> = {
     'files:s0': { title: 'Song 0', length: 100 },
     'files:s1': { title: 'Song 1', length: 100 },
@@ -130,8 +134,20 @@ vi.mock('../plugins', () => {
       return live.songsLater ? new Promise((done) => live.waiting.push(() => done(p))) : p
     },
     isLive: (key: string) => key.startsWith('radio:'),
-    actOn: (key: string, actionId: string, value?: string) =>
-      void live.calls.push(`act ${key} ${actionId}${value === undefined ? '' : ` ${value}`}`),
+    actOn: (key: string, actionId: string, value?: string) => {
+      live.calls.push(`act ${key} ${actionId}${value === undefined ? '' : ` ${value}`}`)
+      if (live.reactive && actionId === 'like') liked.add(key)
+    },
+    canOf: (key: string) =>
+      live.reactive && key === 'files:a'
+        ? { seek: true, pause: true, next: false, previous: !liked.has(key) }
+        : undefined,
+    // with live.reactive, 'files:a' says its actions as they are now, and
+    // Previous goes once it is liked
+    actionsOf: (key: string): Action[] | undefined =>
+      live.reactive && key === 'files:a'
+        ? [{ id: 'like', kind: 'button', label: 'Like', on: liked.has(key) }]
+        : undefined,
     liveOf: (key: string) => (key.startsWith('radio:') ? { plugin, id: key.slice(6) } : undefined)
   }
 })
@@ -166,6 +182,7 @@ async function playLive(key: ItemKey, id = key.slice(6)): Promise<void> {
 beforeEach(async () => {
   live.on = true
   live.songsLater = false
+  live.reactive = false
   queues.backToQueue()
   await answer(() => undefined)
   queue.playList(['files:s0', 'files:s1'], 1, 'Mix')
@@ -498,6 +515,59 @@ describe('the player bar', () => {
     live.calls = []
     queues.act('like')
     expect(live.calls).toEqual(['act files:a like'])
+  })
+})
+
+describe('the player bar while a song changes (fix round 1)', () => {
+  it('a clicked song on its way: the default bar, not the last song’s actions', async () => {
+    queue.playList(['files:a', 'files:s0'], 0, '')
+    expect(queues.bar.buttons.map((a) => a.id)).toEqual(['like'])
+    live.songsLater = true
+    void queue.next()
+    expect(queue.current).toBe('files:s0')
+    expect(queues.bar).toMatchObject({ seek: true, next: true, buttons: [] })
+    live.calls = []
+    // the last song's action is not sent to the new one
+    queues.act('like')
+    expect(live.calls).toEqual([])
+    await answer(() => undefined)
+    expect(queues.bar.buttons).toEqual([])
+  })
+
+  it('a song whose id moved (a rescan) keeps its playable on the bar', () => {
+    queue.playList(['files:a'], 0, '')
+    queue.moveIds({ a: 'a2' })
+    expect(queue.current).toBe('files:a2')
+    expect(queues.bar.buttons.map((x) => x.id)).toEqual(['like'])
+  })
+
+  it('a song’s can and actions are read as its plugin changes them', () => {
+    live.reactive = true
+    queue.playList(['files:a'], 0, '')
+    expect(queues.bar.buttons).toEqual([{ id: 'like', kind: 'button', label: 'Like', on: false }])
+    queues.act('like')
+    expect(live.calls).toContain('act files:a like')
+    expect(queues.bar.buttons[0]).toMatchObject({ id: 'like', on: true })
+    expect(queues.bar.previous).toBe(false)
+  })
+})
+
+describe('"Nothing playing" (fix round 1)', () => {
+  it('a live item picked whose plugin has no data yet still shows its lines', async () => {
+    await playLive(one)
+    expect(queues.nothingPlaying).toBe(false)
+    live.on = false
+    // its plugin is off: no title, but the item is still the live one
+    expect(queues.title).toBeUndefined()
+    expect(queues.nothingPlaying).toBe(false)
+  })
+
+  it('the track queue with no song says it', async () => {
+    expect(queues.nothingPlaying).toBe(false)
+    // Clear keeps the current song; a second Clear takes it too
+    queue.clear()
+    queue.clear()
+    expect(queues.nothingPlaying).toBe(true)
   })
 })
 

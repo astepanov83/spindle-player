@@ -26,13 +26,15 @@ export interface Bar {
 const trackCan: Can = { seek: true, pause: true, next: true, previous: true }
 const liveCan: Can = { seek: false, pause: true, next: false, previous: false }
 
+// `now`: what the plugin says the item can do now, over the playable's.
 export function barOf(
   kind: ItemKind,
   p: { length: number | 'live'; can: Can } | undefined,
-  actions: Action[]
+  actions: Action[],
+  now?: Can
 ): Bar {
   const live = p ? p.length === 'live' : kind === 'live'
-  const can = p?.can ?? (kind === 'live' ? liveCan : trackCan)
+  const can = now ?? p?.can ?? (kind === 'live' ? liveCan : trackCan)
   return {
     live,
     seek: !live && can.seek,

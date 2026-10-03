@@ -164,6 +164,13 @@ describe('actOn (ticket 058)', () => {
     // a plugin with no actions
     expect(() => p.actOn('files:s1', 'like')).not.toThrow()
   })
+
+  it('canOf and actionsOf: undefined for a plugin that says nothing more, or is off', () => {
+    expect(p.canOf('files:s1')).toBeUndefined()
+    expect(p.actionsOf('files:s1')).toBeUndefined()
+    settings.plugins.files = false
+    expect(p.actionsOf('files:s1')).toBeUndefined()
+  })
 })
 
 describe('playItem', () => {

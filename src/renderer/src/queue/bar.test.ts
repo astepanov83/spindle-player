@@ -41,6 +41,11 @@ describe('barOf', () => {
     })
   })
 
+  it('what the plugin says the item can do now wins over the playable', () => {
+    const now = { ...all, next: false }
+    expect(barOf('track', { length: 200, can: all }, [], now)).toMatchObject({ next: false })
+  })
+
   it('with no playable yet: as for any song, or a live item with no Next', () => {
     expect(barOf('track', undefined, [])).toMatchObject({ live: false, seek: true, next: true })
     expect(barOf('live', undefined, [])).toMatchObject({ live: true, seek: false, next: false })

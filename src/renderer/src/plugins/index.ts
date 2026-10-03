@@ -6,7 +6,16 @@ import { pluginOn } from '../stores/settings.svelte'
 import { filesHalf } from './files'
 import { mfpHalf } from './mfp'
 import { radioHalf } from './radio'
-import type { ItemAnswer, ItemInfo, LivePlugin, PageAddress, PageHalf, Playable } from './types'
+import type {
+  Action,
+  Can,
+  ItemAnswer,
+  ItemInfo,
+  LivePlugin,
+  PageAddress,
+  PageHalf,
+  Playable
+} from './types'
 
 const halves: Record<PluginId, PageHalf> = { files: filesHalf, radio: radioHalf, mfp: mfpHalf }
 
@@ -67,6 +76,18 @@ export function isLive(key: ItemKey): boolean {
 export function actOn(key: ItemKey, actionId: string, value?: string): void {
   const e = entryOf(key)
   if (e && pluginOn(e.id)) e.half.act?.(key.slice(e.prefix.length), actionId, value)
+}
+
+// What a track item can do and offers now, when its plugin says more than
+// its Playable did. Undefined while the plugin is off or says nothing.
+export function canOf(key: ItemKey): Can | undefined {
+  const e = entryOf(key)
+  return e && pluginOn(e.id) ? e.half.can?.(key.slice(e.prefix.length)) : undefined
+}
+
+export function actionsOf(key: ItemKey): Action[] | undefined {
+  const e = entryOf(key)
+  return e && pluginOn(e.id) ? e.half.actions?.(key.slice(e.prefix.length)) : undefined
 }
 
 export function canOpen(to: PageAddress): boolean {

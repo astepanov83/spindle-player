@@ -118,6 +118,10 @@ export interface PageHalf {
   live?: LivePlugin
   // one of the item's actions was used: a button (no value), or an option picked
   act?(id: string, actionId: string, value?: string): void
+  // A track item's can and actions now, read by the bar as they change (a
+  // button turned on). Undefined: the Playable's. Live items use their handle.
+  can?(id: string): Can | undefined
+  actions?(id: string): Action[] | undefined
 }
 
 // A song heard on a live item, for the Queue part's list (newest last).

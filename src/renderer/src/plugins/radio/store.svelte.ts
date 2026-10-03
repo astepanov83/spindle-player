@@ -412,7 +412,8 @@ class RadioStore {
   }
 
   // The bar's actions: the stream picker, and Save while the station is not
-  // in My stations (none once it is, as before).
+  // in My stations (none once it is, as before). Reads stations, station,
+  // stream and #saving: a new field read here must call #tellActions too.
   #actions(s: Station): Action[] {
     const list: Action[] = []
     const choices = streamChoices(s.streams)

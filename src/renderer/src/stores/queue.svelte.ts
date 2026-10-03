@@ -100,9 +100,11 @@ class TrackQueue {
   // shows Pause then, so pressing it says "not now".
   wantsPlay = $state(false)
 
-  // what the loaded song can do, for the player bar
+  // What the current song can do, for the player bar. None while it is on its
+  // way: the engine may still hold the last song, whose actions are not its.
   get playable(): Playable | undefined {
-    return this.#loaded?.p
+    const l = this.#loaded
+    return l && l.key === this.current ? l.p : undefined
   }
 
   #wish(): void {
@@ -480,7 +482,11 @@ class TrackQueue {
   // nothing restarts. Called just before the library with the new ids loads.
   moveIds(moves: IdMoves): void {
     const items = moveKeys(this.items, moves)
-    if (items !== this.items) this.#set({ ...this.#state(), items })
+    if (items === this.items) return
+    // the loaded song keeps its new key, so the bar still reads its playable
+    const l = this.#loaded
+    if (l) this.#loaded = { ...l, key: moveKeys([l.key], moves)[0] }
+    this.#set({ ...this.#state(), items })
   }
 
   // "Back to queue": the song loaded paused at its place.

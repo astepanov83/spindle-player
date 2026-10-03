@@ -27,7 +27,7 @@
     <div class="bl">
       <div class="minicv"><Cover src={queues.art?.cover} /></div>
       <div class="meta">
-        {#if queues.title}
+        {#if !queues.nothingPlaying}
           <!-- cut sooner when a button shows next to it: the tooltip has it whole -->
           <div class="song-title" title={queues.title}><PlayingText line="title" /></div>
           <div class="song-sub" title={queues.sub}><PlayingText line="sub" /></div>

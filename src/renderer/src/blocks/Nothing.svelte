@@ -8,7 +8,7 @@
 </script>
 
 <div class="none">
-  <b>{b.title}</b>
+  {#if b.title}<b>{b.title}</b>{/if}
   <p>{b.text}</p>
   {#if b.action}
     {@const a = b.action}

@@ -1,5 +1,5 @@
-// The Radio view's search: Radio Browser is asked 400ms after typing stops,
-// and only the newest answer is shown.
+// The Radio tab's search: Radio Browser is asked 400ms after typing stops,
+// or at once on Enter, and only the newest answer is shown.
 import { flushSync } from 'svelte'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RadioSearch } from '../../../../shared/ipc'
@@ -98,6 +98,36 @@ describe('radioSearch', () => {
     expect(search).toHaveBeenCalledTimes(3)
   })
 
+  it('Enter asks at once, and the wait that was running asks nothing more', async () => {
+    radioSearch.want('dro')
+    await vi.advanceTimersByTimeAsync(200)
+    radioSearch.now('drone')
+    expect(search).toHaveBeenCalledExactlyOnceWith('drone')
+    expect(radioSearch.status).toBe('searching')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(search).toHaveBeenCalledOnce()
+    answers.get('drone')!({ ok: true, stations: [found('rb-1')] })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(radioSearch.find('rb-1')?.id).toBe('rb-1')
+    expect(radioSearch.find('rb-2')).toBeUndefined()
+  })
+
+  it('Enter does not ask again for the search asked or shown, but does after a failure', async () => {
+    radioSearch.want('drone')
+    await vi.advanceTimersByTimeAsync(400)
+    radioSearch.now('drone')
+    expect(search).toHaveBeenCalledOnce()
+    answers.get('drone')!({ ok: false })
+    await vi.advanceTimersByTimeAsync(0)
+    radioSearch.now('drone')
+    expect(search).toHaveBeenCalledTimes(2)
+    // an empty box asks nothing
+    radioSearch.now('  ')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(search).toHaveBeenCalledTimes(2)
+    expect(radioSearch.status).toBe('idle')
+  })
+
   it('a cleared box shows no results and drops the answer on its way', async () => {
     radioSearch.want('drone')
     await vi.advanceTimersByTimeAsync(400)
@@ -111,10 +141,10 @@ describe('radioSearch', () => {
 
 describe('radioSearch in an effect', () => {
   it('asks once when Radio Browser cannot be reached, not again and again', async () => {
-    // the view opens with an empty box, then the user types
+    // the tab opens with an empty box, then the user types
     const box = $state({ q: '' })
     const stop = $effect.root(() => {
-      // what RadioView does
+      // what BlockPage does, through radio's typed()
       $effect(() => radioSearch.want(box.q))
     })
     flushSync()

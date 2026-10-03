@@ -141,7 +141,7 @@ export function historyEntries(history: HistoryEntry[], title: string): LiveEntr
   })
 }
 
-// The Radio view's filter of My stations: name, tag or country.
+// The Radio tab's filter of My stations: name, tag or country.
 export function stationMatches(s: Station, q: string): boolean {
   const t = q.trim().toLowerCase()
   if (!t) return true

@@ -3,8 +3,9 @@
 <script lang="ts">
   import type { PluginId } from '../../../shared/plugins'
   import Empty from '../library/Empty.svelte'
-  import RadioView from '../library/RadioView.svelte'
+  import { typedIn } from '../plugins'
   import type { Block, NavKind } from '../plugins/types'
+  import { library } from '../stores/library.svelte'
   import Head from './Head.svelte'
   import Nothing from './Nothing.svelte'
   import Results from './Results.svelte'
@@ -46,6 +47,18 @@
     const above = blocks[i - 1]
     return above?.kind === 'rows' && above.items.length > 0
   }
+  // a heading over rows, or over the line that says why there are none,
+  // lines up with their text
+  const overRows = (i: number): boolean => {
+    const below = blocks[i + 1]
+    return below?.kind === 'rows' || (below?.kind === 'empty' && !below.title)
+  }
+  const underHead = (i: number): boolean => blocks[i - 1]?.kind === 'head'
+
+  // the tab's plugin hears the search box (Radio asks Radio Browser)
+  $effect(() => {
+    typedIn(plugin, tab, library.query)
+  })
 </script>
 
 {#if lone?.kind === 'empty'}
@@ -53,25 +66,24 @@
 {:else}
   {#each blocks as b, i (keys[i])}
     {#if b.kind === 'head'}
-      <Head block={b} {tab} {plugin} />
+      <Head block={b} {tab} {plugin} {nav} />
     {:else if b.kind === 'tiles'}
       <Tiles block={b} {tab} {plugin} {scrollEl} />
     {:else if b.kind === 'songs'}
       {#if gapBefore(i)}<div class="gap"></div>{/if}
       <Songs block={b} {plugin} {scrollEl} />
     {:else if b.kind === 'rows'}
-      <Rows block={b} {tab} {scrollEl} />
+      <Rows block={b} {tab} {plugin} {scrollEl} />
     {:else if b.kind === 'tree'}
       <Tree block={b} {tab} />
     {:else if b.kind === 'empty'}
-      <Empty title={b.title} text={b.text} />
+      {#if b.title}<Empty title={b.title} text={b.text} />{:else}<p class="note">{b.text}</p>{/if}
     {:else if b.kind === 'text'}
-      <h3 class="part section-label">{b.text}</h3>
-    {:else if b.kind === 'results'}
-      <Results block={b} {scrollEl} />
+      <h3 class="part section-label" class:over-rows={overRows(i)} class:top={underHead(i)}>
+        {b.text}
+      </h3>
     {:else}
-      <!-- radio's old view, until blocks draw it (ticket 062) -->
-      <RadioView {nav} />
+      <Results block={b} {scrollEl} />
     {/if}
   {/each}
 {/if}
@@ -87,5 +99,20 @@
   }
   .part {
     margin: 0 0 14px;
+  }
+  .over-rows {
+    margin: 14px 12px 6px;
+  }
+  .over-rows.top {
+    margin-top: 4px;
+  }
+  /* one quiet line under a list: "No stations found." */
+  .note {
+    color: var(--ink-3);
+    font-size: var(--text-m);
+    line-height: 1.6;
+    padding: 6px 12px;
+    margin: 0;
+    max-width: 52ch;
   }
 </style>

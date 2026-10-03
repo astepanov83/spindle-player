@@ -313,7 +313,7 @@ describe('pages (ticket 059)', () => {
     expect(p.pageBlocks(tab('albums')).map((b) => b.kind)).toEqual(['head', 'tiles'])
     library.query = 'vale'
     expect(p.pageBlocks(tab('albums')).map((b) => b.kind)).toEqual(['results'])
-    expect(p.pageBlocks(tab('radio'))).toEqual([{ kind: 'view', view: 'radio' }])
+    expect(p.pageBlocks(tab('radio')).map((b) => b.kind)).toEqual(['head', 'text', 'rows', 'empty'])
     expect(p.pageBlocks(tab('playlists'))).toEqual([])
   })
 

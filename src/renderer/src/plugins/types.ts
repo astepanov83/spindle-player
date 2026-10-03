@@ -52,7 +52,6 @@ export type Block =
   | EmptyBlock
   | TextBlock
   | ResultsBlock
-  | ViewBlock
 
 // A piece of a line: plain text, or a name that opens its page.
 export interface Piece {
@@ -111,6 +110,9 @@ export interface HeadBlock {
   count?: string
   // a list's line under its title: "Reading musicforprogramming.net…"
   hint?: string
+  // A line under the title that points at the search box: the core ends it
+  // with where the box is ("above", "on the left"). In place of `hint`.
+  searchHint?: string
   // the line under the title: "Marina Vale · 9 songs · 41 min"
   line?: Piece[]
   // a web page, after the line; it opens in the browser (an https address)
@@ -203,7 +205,8 @@ export interface SongsBlock {
   queue?: ItemKey[]
 }
 
-export interface Row {
+// What every row shows.
+interface RowLook {
   title: string
   // under the title (a music folder's path), and its tooltip
   subtitle?: string
@@ -212,6 +215,10 @@ export interface Row {
   meta?: string
   // more on the right, a column each before `meta`: "2026", "22 songs"
   details?: string[]
+}
+
+// A row that opens a page; right-click gives the song menu for its songs.
+export interface PageRow extends RowLook {
   to: PageAddress
   playing?: (item: ItemKey) => boolean
   songs: () => ItemKey[]
@@ -219,7 +226,20 @@ export interface Row {
   link?: QueueLink
 }
 
-// Folders. Only the rows on screen are drawn.
+// A row that plays its item (a station), marked while that item is the one
+// playing. act(the row's key, id) for its star and its menu.
+export interface ItemRow extends RowLook {
+  play: ItemKey
+  // a star button after the row: `on` filled; `label` is its tooltip
+  star?: { on: boolean; label: string }
+  // its right-click menu: "Move up", "Remove"
+  menu?: { id: string; label: string }[]
+}
+
+export type Row = PageRow | ItemRow
+
+// Folders, MFP's episodes, stations. Only the rows on screen are drawn. The
+// rows of a block are all page rows or all item rows.
 export interface RowsBlock<T = unknown> {
   kind: 'rows'
   items: readonly T[]
@@ -228,6 +248,8 @@ export interface RowsBlock<T = unknown> {
   // the search text filters the list in place, and stays when a row opens,
   // so a match further down can be followed to
   filtered?: boolean
+  // rows of an older answer while a newer one is on its way: drawn faded
+  stale?: boolean
 }
 
 // The path bar of a tree (Folders). A step along it keeps the search text.
@@ -239,12 +261,13 @@ export interface TreeBlock {
 }
 
 // Nothing to show. Alone on a page it fills it ("No music yet"), with its
-// button; among other blocks it is a short note ("No matches").
+// button; among other blocks it is a short note ("No matches"), or with no
+// title one quiet line under a list ("No stations found.").
 export interface EmptyBlock {
   kind: 'empty'
   // act's target for the button
   id: string
-  title: string
+  title?: string
   text: string
   action?: { label: string; id: string }
 }
@@ -275,13 +298,6 @@ export interface FoundGroup {
   key: string
   plugin: PluginId
   group: SearchGroup
-}
-
-// Temporary: a plugin's old view, which the core draws as it is until blocks
-// draw it. Radio's goes in ticket 062; then this kind goes.
-export interface ViewBlock {
-  kind: 'view'
-  view: 'radio'
 }
 
 // What a plugin shows in Settings: data again, drawn by the core
@@ -422,6 +438,10 @@ export interface PageHalf {
   path?(tab: string, page: string): string[]
   // a page of one of its tabs, with the search box's text
   page(tab: string, page: string, query: string): Block[]
+  // The search box's text while one of its tabs shows: when the tab opens,
+  // on each change, and on Enter (`enter`). For a search on the network
+  // (Radio Browser), which page() must not start: page() only reads.
+  typed?(tab: string, query: string, enter: boolean): void
   // What it finds for the search box's text (trimmed, not empty), at once
   // and with no network, in the order shown. It always returns its groups,
   // even empty ones (one shown whole stays while the text changes); the core

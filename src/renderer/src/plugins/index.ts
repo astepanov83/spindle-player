@@ -116,6 +116,17 @@ export function pageBlocks(tab: ShownTab): Block[] {
   )
 }
 
+// The search box's text, to the plugin of the tab shown: as it changes, and
+// on Enter. Not while its plugin is off.
+export function typedIn(
+  plugin: PluginId | 'core',
+  tab: string,
+  query: string,
+  enter = false
+): void {
+  if (plugin !== 'core' && pluginOn(plugin)) halves[plugin].typed?.(tab, query, enter)
+}
+
 // What the plugins that are on find for the search text, in plugin order.
 // Empty groups too: one shown whole stays while the text changes.
 export function searchGroups(query: string): FoundGroup[] {

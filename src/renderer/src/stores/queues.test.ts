@@ -63,6 +63,7 @@ vi.stubGlobal('window', {
 const { queues } = await import('./queues.svelte')
 const { queue } = await import('./queue.svelte')
 const { radio } = await import('../plugins/radio/store.svelte')
+const { radioSearch } = await import('../plugins/radio/search.svelte')
 const { player } = await import('./player.svelte')
 const { library } = await import('./library.svelte')
 const { settings } = await import('./settings.svelte')
@@ -105,11 +106,10 @@ const station = (id: string): Station => ({
 })
 const mine = [station('a'), station('b'), station('c')]
 
-// as the Radio view plays a station
+// as the Radio tab plays a station: a saved one, or a result of its search
 function playStation(s: Station): Promise<void> {
-  let p: Promise<void> = Promise.resolve()
-  radio.playOffered(s, () => (p = queues.playLive(itemKey('radio', s.id))))
-  return p
+  if (!radio.stations.includes(s)) radioSearch.results = [s]
+  return queues.playLive(itemKey('radio', s.id))
 }
 
 const loads = (): string[] => fake.calls.filter((c) => c.startsWith('load'))
@@ -388,6 +388,8 @@ describe('radio turned off (ticket 057)', () => {
     settings.plugins.radio = false
     await playStation(station('found'))
     settings.plugins.radio = true
+    // the search that showed it is gone
+    radioSearch.results = []
     expect(radio.find('found')).toBeUndefined()
     expect(itemInfo('radio:found').state).toBe('missing')
   })

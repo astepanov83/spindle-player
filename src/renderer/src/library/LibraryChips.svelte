@@ -13,7 +13,7 @@
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { library } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
-  import { pageBlocks, playlistsEmpty, pluginTabs } from '../plugins'
+  import { pageBlocks, playlistsEmpty, pluginTabs, typedIn } from '../plugins'
   import { tabsIn } from '../plugins/tabs'
 
   // the tabs of the plugins that are on (ticket 059)
@@ -42,7 +42,10 @@
   <div class="top">
     <div class="searchrow">
       <HistoryButtons />
-      <SearchBox placeholder={shown?.search ?? 'Search'} />
+      <SearchBox
+        placeholder={shown?.search ?? 'Search'}
+        onenter={() => shown && typedIn(shown.plugin, shown.id, library.query, true)}
+      />
     </div>
     <!-- the scan line takes the row's spare room, so the grid never moves -->
     <div class="chiprow">

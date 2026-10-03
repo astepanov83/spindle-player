@@ -41,7 +41,7 @@ const retriesPerStream = 3
 // What the dot next to the controls' LIVE says.
 export type RadioStatus = 'off' | 'connecting' | 'live' | 'buffering' | 'reconnecting'
 
-// The Radio view: what a station's name links to.
+// The Radio tab: what a station's name links to.
 export const radioPage: PageAddress = { plugin: 'radio', page: '' }
 
 // No Next or Previous on the bar (decision 150); the media keys still step
@@ -95,7 +95,7 @@ class RadioStore {
   })
   // the station is in My stations; else the controls offer Save
   saved = $derived(!!this.station && this.stations.some((s) => s.id === this.station!.id))
-  // the Radio view's row shows it; the core's bar hears it through the handle
+  // what the core hears through the handle (the bar, the row's mark)
   status: RadioStatus = $state('off')
 
   // the user wants sound: reconnect while this holds
@@ -122,8 +122,6 @@ class RadioStore {
   #saving = new Set<string>()
   // the core's handle for the station: loads, stops, and hears what is on air
   #h: LiveHandle | undefined
-  // a station the Radio view is about to play (a search result is in no list)
-  #offered: Station | undefined
 
   // The engine's events while radio has the player (the core passes them on).
   readonly events: Partial<EngineEvents> = {
@@ -185,32 +183,12 @@ class RadioStore {
     this.loaded = true
   }
 
-  // A station by id: in My stations, the one playing, or one the Radio view offered.
+  // A station by id: in My stations, or the one playing. A search result
+  // is found through the search (index.ts).
   find(id: string): Station | undefined {
     return (
-      this.stations.find((s) => s.id === id) ??
-      (this.station?.id === id ? this.station : undefined) ??
-      (this.#offered?.id === id ? this.#offered : undefined)
+      this.stations.find((s) => s.id === id) ?? (this.station?.id === id ? this.station : undefined)
     )
-  }
-
-  // The Radio view plays this copy (a search result, or a saved one with its
-  // chosen stream), not the one find gives. It counts only while `play`
-  // starts: a play refused (radio off) leaves no station behind.
-  playOffered(station: Station, play: () => void): void {
-    this.#offered = station
-    try {
-      play()
-    } finally {
-      this.#offered = undefined
-    }
-  }
-
-  // What play takes for an id: the offered copy once, else find's.
-  take(id: string): Station | undefined {
-    const s = this.#offered?.id === id ? this.#offered : this.find(id)
-    this.#offered = undefined
-    return s
   }
 
   // My stations after a search added streams to some. New streams go at the
@@ -286,7 +264,7 @@ class RadioStore {
   }
 
   // Save: a station tried from search goes into My stations. The playing
-  // one by default; the Radio view saves any result.
+  // one by default; a row's star saves any result.
   async save(station: Station | undefined = this.station): Promise<void> {
     const s = station
     // a second click while main saves

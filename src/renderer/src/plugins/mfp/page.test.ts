@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Episode, MfpEpisodes } from '../../../../shared/mfp'
 import { defaultPalettes } from '../../../../shared/palette'
-import type { Block, HeadBlock, RowsBlock, SongsBlock } from '../types'
+import type { Block, HeadBlock, PageRow, RowsBlock, SongsBlock } from '../types'
 
 let mfp: typeof import('./store.svelte').mfp
 let page: typeof import('./page')
@@ -72,7 +72,7 @@ describe('the episode list', () => {
     expect(head(blocks[0]).hint).toBeUndefined()
     // the store's list as it is
     expect(rows(blocks[1]).items).toBe(mfp.episodes)
-    const r = rows(blocks[1]).row(mfp.episodes[0])
+    const r = rows(blocks[1]).row(mfp.episodes[0]) as PageRow
     expect(r).toMatchObject({
       title: '2: Paper Suns',
       art: `spindle://cover/small/${'c'.repeat(40)}`,

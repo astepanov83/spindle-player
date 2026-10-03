@@ -108,6 +108,7 @@ vi.stubGlobal('window', {
 })
 
 const { radio } = await import('./store.svelte')
+const { radioSearch } = await import('./search.svelte')
 const { queues } = await import('../../stores/queues.svelte')
 const { player } = await import('../../stores/player.svelte')
 const { notice } = await import('../../stores/notice.svelte')
@@ -117,11 +118,13 @@ type ChoiceAction = import('../../queue/bar').ChoiceAction
 // the bar's tooltip, from what radio told the core
 const detail = (now = Date.now()): string => statusTip(queues.live.status, now)
 
-// as the Radio view plays a station: that copy, through the live queue
+// As the Radio tab plays a station: a saved one, or a result of its search.
+// A changed copy of a saved station is saved that way first.
 function playStation(s: Station): Promise<void> {
-  let p: Promise<void> = Promise.resolve()
-  radio.playOffered(s, () => (p = queues.playLive(itemKey('radio', s.id))))
-  return p
+  if (radio.stations.some((x) => x.id === s.id))
+    radio.stations = radio.stations.map((x) => (x.id === s.id ? s : x))
+  else radioSearch.results = [s]
+  return queues.playLive(itemKey('radio', s.id))
 }
 // the play button after a pause
 const resume = async (): Promise<void> => await queues.play()

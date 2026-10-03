@@ -12,15 +12,25 @@
   import GoLink from '../ui/GoLink.svelte'
   import Icon from '../ui/Icon.svelte'
   import { actOnPage, openFrom, openPage } from '../plugins'
-  import type { HeadBlock, HeadButton } from '../plugins/types'
+  import type { HeadBlock, HeadButton, NavKind } from '../plugins/types'
   import { player } from '../stores/player.svelte'
   import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
   import { playOrPause } from './play'
 
-  let { block: b, tab, plugin }: { block: HeadBlock; tab: string; plugin: PluginId } = $props()
+  let {
+    block: b,
+    tab,
+    plugin,
+    nav
+  }: { block: HeadBlock; tab: string; plugin: PluginId; nav: NavKind } = $props()
 
   const act = (id: string, value?: string): void => actOnPage(plugin, b.id, id, value)
+
+  // where the search box is: over the chips, or in Classic's sidebar
+  const hint = $derived(
+    b.searchHint ? `${b.searchHint} ${nav === 'chips' ? 'above' : 'on the left'}.` : b.hint
+  )
 
   // a link main would not open is not drawn
   const link = $derived(b.link && canOpenExternal(b.link.url) ? b.link : undefined)
@@ -164,7 +174,7 @@
 {/snippet}
 
 {#if b.look === 'list'}
-  <ViewHead title={b.title} meta={b.meta} count={b.count ?? ''} hint={b.hint} />
+  <ViewHead title={b.title} meta={b.meta} count={b.count ?? ''} {hint} />
 {:else if b.look === 'album'}
   {@render back()}
   <div class="albhead">

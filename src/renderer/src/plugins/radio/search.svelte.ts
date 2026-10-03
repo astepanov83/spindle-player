@@ -1,6 +1,6 @@
-// The Radio view's search of Radio Browser (ticket 029). It asks 400ms after
-// typing stops; My stations are filtered at once by the view itself. Kept
-// here, not in the view, so a layout rebuild keeps the results.
+// The Radio tab's search of Radio Browser (tickets 029, 062). It asks 400ms
+// after typing stops, or at once on Enter; My stations are filtered at once
+// by the page. Kept here, not in the page, so a layout rebuild keeps the results.
 import type { RadioSearch } from '../../../../shared/ipc'
 import type { Station } from '../../../../shared/stations'
 import { radio } from './store.svelte'
@@ -22,11 +22,12 @@ class RadioSearchStore {
   // counts searches, so an older answer that comes last is dropped
   #seq = 0
 
-  // The search box changed, or the view opened with it.
+  // The search box changed, or the tab opened with it.
   want(q: string): void {
     const t = q.trim()
     if (t === this.#shown && this.#fresh) return
     clearTimeout(this.#timer)
+    this.#timer = undefined
     this.#seq++
     this.#shown = t
     this.#fresh = true
@@ -36,7 +37,25 @@ class RadioSearchStore {
       return
     }
     this.status = 'searching'
-    this.#timer = setTimeout(() => void this.#run(t), waitMs)
+    this.#timer = setTimeout(() => {
+      this.#timer = undefined
+      void this.#run(t)
+    }, waitMs)
+  }
+
+  // Enter: what want() would ask, asked now. A search already asked or
+  // answered is not asked again; a failed one is.
+  now(q: string): void {
+    this.want(q)
+    if (this.#timer === undefined) return
+    clearTimeout(this.#timer)
+    this.#timer = undefined
+    void this.#run(this.#shown)
+  }
+
+  // a station of the newest answer, which the tab shows and plays
+  find(id: string): Station | undefined {
+    return this.results.find((s) => s.id === id)
   }
 
   async #run(q: string): Promise<void> {

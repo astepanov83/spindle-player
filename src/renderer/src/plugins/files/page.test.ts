@@ -4,7 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Album, LibraryData, Track } from '../../../../shared/library'
 import { defaultPalettes } from '../../../../shared/palette'
-import type { Block, HeadBlock, RowsBlock, SongsBlock, TilesBlock } from '../types'
+import type { Block, HeadBlock, PageRow, RowsBlock, SongsBlock, TilesBlock } from '../types'
 
 const api = {
   addFolder: vi.fn(),
@@ -264,8 +264,9 @@ describe('pages', () => {
     expect(rows.row(rows.items[0])).toMatchObject({ title: 'Rock', meta: '4 songs' })
     expect(rows.row(rows.items[0]).subtitle).toBeUndefined()
     // the song playing is in it
-    expect(rows.row(rows.items[0]).playing?.('files:b1')).toBe(true)
-    expect(rows.row(rows.items[0]).playing?.('radio:x')).toBe(false)
+    const rockRow = rows.row(rows.items[0]) as PageRow
+    expect(rockRow.playing?.('files:b1')).toBe(true)
+    expect(rockRow.playing?.('radio:x')).toBe(false)
     const [m, rock, live] = library.folders.nodes.map((n) => n.key)
     const blocks = page.filesPage('folders', `folder/${live}`, '')
     expect(kinds(blocks)).toEqual(['tree', 'head', 'rows', 'songs'])

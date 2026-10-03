@@ -14,7 +14,7 @@
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
   import { library, playlistPage, playlistsTab } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
-  import { pageBlocks, playlistsEmpty, pluginTabs } from '../plugins'
+  import { pageBlocks, playlistsEmpty, pluginTabs, typedIn } from '../plugins'
   import { tabsIn } from '../plugins/tabs'
 
   // the tabs of the plugins that are on (ticket 059); playlists are listed
@@ -63,7 +63,10 @@
 <div class="lib2" data-notice-host>
   <aside class="side">
     <div class="search">
-      <SearchBox placeholder={shown?.searchShort ?? shown?.search ?? 'Search'} />
+      <SearchBox
+        placeholder={shown?.searchShort ?? shown?.search ?? 'Search'}
+        onenter={() => shown && typedIn(shown.plugin, shown.id, library.query, true)}
+      />
     </div>
     <div class="sidehead section-label">Library <HistoryButtons size={26} /></div>
     {#each sections as t (t.id)}

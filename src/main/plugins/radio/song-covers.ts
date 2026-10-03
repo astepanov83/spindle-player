@@ -12,12 +12,12 @@ import type { RadioCover } from '../../../shared/ipc'
 import { songQuery, type SongQuery } from '../../../shared/radio-title'
 import type { SongCover } from '../../../shared/stations'
 import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../../json-file'
-import { cleanArtist } from '../files/cover-match'
+import { cleanArtist, cleanSong } from '../../covers/clean-names'
 import { isCoverHash } from '../../covers/cover-names'
-import { cleanSong, type SongSource } from '../files/song-cover'
 import { makeCover, withNewColors, type LogoCache } from '../../covers/covers'
 
 const sources = ['deezer', 'itunes'] as const
+type SongSource = (typeof sources)[number]
 
 // a miss is looked up again after this long, as for albums
 export const notFoundMs = 30 * 24 * 3600 * 1000

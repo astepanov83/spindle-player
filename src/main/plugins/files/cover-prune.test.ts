@@ -1,7 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { fallbackPalettes } from '../../../shared/palette'
-import type { Station } from '../../../shared/stations'
-import { keptLogos } from '../radio/logos'
 import { coversInUse, emptyIndex } from './merge'
 import { pruneCoverFiles, removeOldTemp, tmpAgeMs, type PruneFs } from './cover-prune'
 
@@ -200,19 +197,10 @@ describe('removeOldTemp', () => {
   })
 })
 
-describe('pruning with station logos', () => {
-  it('keeps the logos of saved stations and the ones made this run', async () => {
+describe('pruning with covers other plugins keep', () => {
+  it('keeps the covers listed by others', async () => {
     const ix = emptyIndex()
     ix.files.set('/m/a.flac', { path: '/m/a.flac', mtime: 0, size: 0, duration: 0, cover: h1 })
-    const saved: Station[] = [
-      {
-        id: 's',
-        name: 's',
-        tags: [],
-        streams: [],
-        logo: { hash: h2, palette: fallbackPalettes('x') }
-      }
-    ]
     const h4 = '4'.repeat(40)
     const fs = fakeFs({
       [`${h1}.jpg`]: 0,
@@ -221,8 +209,9 @@ describe('pruning with station logos', () => {
       [`${h3}.jpg`]: 0,
       [`${h4}.jpg`]: 0
     })
-    // what main sent the library process (a removed station's logo is no longer in it)
-    const kept = keptLogos(saved, new Set([h3]))
+    // what main sent the library process: a saved station's logo and one made
+    // this run (a removed station's logo is no longer in it)
+    const kept = [h2, h3]
     await pruneCoverFiles({
       dir: '/c',
       used: () => coversInUse(ix, [], kept),

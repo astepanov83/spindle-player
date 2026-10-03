@@ -2,21 +2,29 @@ import type { IdMoves } from '../../shared/id-moves'
 import type { PluginId } from '../../shared/plugins'
 import type { PageIpc } from '../page-ipc'
 import type { CoverCache } from '../covers/cover-cache'
-import type { MirrorDns } from './radio/radio-browser'
 import type { SettingsStore } from '../settings-store'
 
 // A request to spindle://<host>/...; `parts` are the path pieces.
 export type Route = (req: Request, url: URL, parts: string[]) => Response | Promise<Response>
+
+// Name lookups, handed in so a test can fake them.
+export interface Dns {
+  lookup(host: string, o: { all: true }): Promise<{ address: string; family: number }[]>
+  reverse(ip: string): Promise<string[]>
+}
+
+// A song to find a cover for.
+export interface SongQuery {
+  artist: string
+  song: string
+}
 
 // Pictures every plugin may use: the core makes the cache at start, on or
 // off; the online song lookup comes from a plugin's helper (CoverHelper).
 export interface CoverService {
   cache: CoverCache
   // an online lookup for a song's cover
-  song(
-    q: { artist: string; song: string },
-    signal: AbortSignal
-  ): Promise<Uint8Array | 'none' | 'later'>
+  song(q: SongQuery, signal: AbortSignal): Promise<Uint8Array | 'none' | 'later'>
   // the list of covers to keep changed
   kept(): void
 }
@@ -26,10 +34,7 @@ export interface CoverService {
 // the prune that keeps the covers others list, and the picture a cover was
 // made from.
 export interface CoverHelper {
-  song(
-    q: { artist: string; song: string },
-    signal: AbortSignal
-  ): Promise<Uint8Array | 'none' | 'later'>
+  song(q: SongQuery, signal: AbortSignal): Promise<Uint8Array | 'none' | 'later'>
   // the covers other plugins keep changed
   kept(): void
   source(hash: string): Promise<Uint8Array | undefined>
@@ -48,7 +53,7 @@ export interface PluginContext {
   // Electron's network, handed in so a test can fake it
   fetch: typeof fetch
   request(options: Electron.ClientRequestConstructorOptions): Electron.ClientRequest
-  dns: MirrorDns
+  dns: Dns
   covers: CoverProvider
   // ids a rescan moved: renamed in the playlists and the queue; false when a write failed
   idsMoved(moves: IdMoves): boolean

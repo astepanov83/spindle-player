@@ -2,9 +2,10 @@
 // iTunes. It runs in the library process next to the album lookup and goes
 // through the same CoverHttp, so the same limiters, timeouts and image hosts
 // hold. Strict like album covers: the station's logo is fine, a wrong cover is not.
-import type { SongQuery } from '../../../shared/radio-title'
+import type { SongQuery } from '../types'
 import { BusyError, NetError, type CoverHttp } from './cover-http'
-import { cleanAlbum, sameArtist, various } from './cover-match'
+import { cleanAlbum, cleanSong } from '../../covers/clean-names'
+import { sameArtist, various } from './cover-match'
 import { answerError, term } from './cover-sources'
 
 export type SongSource = 'deezer' | 'itunes'
@@ -39,24 +40,6 @@ export function songSearchUrl(source: SongSource, q: SongQuery): string {
   return source === 'deezer'
     ? withParams('https://api.deezer.com/search/track', { limit: '10', q: words })
     : withParams('https://itunes.apple.com/search', { entity: 'song', limit: '10', term: words })
-}
-
-// "(feat. X)", "[Radio Edit]": the same song, the same cover
-const extra = /\b(feat\.?|ft\.?|featuring|edit)\b/i
-
-const live = /\blive\b/i
-
-// The song's name for comparing: album cleanup, and without feat and edit
-// brackets. A bracket or a " - " suffix saying "live" stays a word even when
-// it says "remaster" too ("Live at Long Beach Arena; 1998 Remaster"), since
-// the album cleanup would drop it.
-export function cleanSong(s: string): string {
-  const marked = s
-    .replace(/[([]([^)\]]*)[)\]]/g, (m, inner: string) =>
-      live.test(inner) ? ' live ' : extra.test(inner) ? ' ' : m
-    )
-    .replace(/\s[-–]\s[^-–]*$/, (m) => (live.test(m) ? ' live' : m))
-  return cleanAlbum(marked)
 }
 
 // The setting went off, or a service did: a running song lookup may be about

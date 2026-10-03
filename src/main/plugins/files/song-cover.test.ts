@@ -3,7 +3,6 @@ import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import { BusyError, NetError } from './cover-http'
 import {
-  cleanSong,
   findSongCover,
   parseSongAnswer,
   pickSongs,
@@ -33,22 +32,8 @@ describe('songSearchUrl', () => {
   })
 })
 
-describe('cleanSong', () => {
-  it('drops edition, edit and feat brackets', () => {
-    expect(cleanSong('The Trooper (1998 Remaster)')).toBe('the trooper')
-    expect(cleanSong('One (Radio Edit)')).toBe('one')
-    expect(cleanSong('Numb [feat. Someone]')).toBe('numb')
-    expect(cleanSong('The Trooper (Live 2003)')).toBe('the trooper live')
-    expect(cleanSong('The Trooper (Live at Donington; 1998 Remaster)')).toBe('the trooper live')
-  })
-
-  it('keeps "live" from a " - " suffix too', () => {
-    expect(cleanSong('The Trooper - Live at Long Beach Arena; 1998 Remaster')).toBe(
-      'the trooper live'
-    )
-    expect(cleanSong('The Trooper - Live Version')).toBe('the trooper live')
-    expect(cleanSong('The Trooper - 2015 Remaster')).toBe('the trooper')
-    // not the studio song
+describe('pickSongs with a live version', () => {
+  it('takes no live recording for the studio song', () => {
     const c = { image: 'https://x.dzcdn.net/1.jpg', rank: 0, artist: 'Iron Maiden' }
     expect(pickSongs(trooper, [{ ...c, song: 'The Trooper - Live Version' }])).toEqual([])
   })

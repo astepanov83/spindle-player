@@ -4,6 +4,7 @@
 // for the run. A play of a station from here counts a click, as their docs ask.
 import type { RadioSearch } from '../../../shared/ipc'
 import { webAddress, type Station, type Stream } from '../../../shared/stations'
+import type { Dns } from '../types'
 
 // The fields read from a station record.
 export interface RbRecord {
@@ -169,11 +170,6 @@ export function groupStations(
 }
 
 // What resolveMirrors needs of node's dns.promises.
-export interface MirrorDns {
-  lookup(host: string, o: { all: true }): Promise<{ address: string; family: number }[]>
-  reverse(ip: string): Promise<string[]>
-}
-
 const roundRobin = 'all.api.radio-browser.info'
 
 // Radio Browser's servers: every address of all.api.radio-browser.info, named
@@ -182,7 +178,7 @@ const roundRobin = 'all.api.radio-browser.info'
 // own address, whose name ("proxy.lan") is no mirror. The round-robin name, which
 // works over https too, is always tried last.
 export async function resolveMirrors(
-  dns: MirrorDns,
+  dns: Dns,
   random: () => number = Math.random
 ): Promise<string[]> {
   const addrs = await dns.lookup(roundRobin, { all: true })

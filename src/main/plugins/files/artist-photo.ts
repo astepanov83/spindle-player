@@ -4,7 +4,8 @@
 // artist is taken only when one of their albums or songs has a title the
 // library has too.
 import { allowedImageHost } from './cover-http'
-import { cleanAlbum, cleanArtist, stripEdition, various } from './cover-match'
+import { cleanAlbum, cleanArtist, stripEdition } from '../../covers/clean-names'
+import { various } from './cover-match'
 import { term } from './cover-sources'
 
 // A title of the artist's to check a found artist by.

@@ -1,5 +1,6 @@
 // Every request the online cover lookup makes goes through here (ticket 014):
 // one limiter per service, a timeout, and only pictures from the services' own hosts.
+import { maxImage, readCapped } from '../../read-capped'
 import { gaps, RateLimit, type Limiter } from './rate'
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>
@@ -18,7 +19,6 @@ export interface HttpDeps {
   timeoutMs?: number
 }
 
-export const maxImage = 10 * 1024 * 1024
 const maxJson = 2 * 1024 * 1024
 // Cover Art Archive sends a picture on to archive.org in one or two hops
 const maxRedirects = 3
@@ -54,31 +54,6 @@ export function allowedImageHost(url: string): boolean {
 const isImage = (b: Uint8Array): boolean =>
   (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) ||
   (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)
-
-// The body, or undefined past `max` bytes. The header's length is not trusted.
-export async function readCapped(res: Response, max: number): Promise<Uint8Array | undefined> {
-  if (!res.body) return new Uint8Array()
-  const parts: Uint8Array[] = []
-  let size = 0
-  const reader = res.body.getReader()
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    size += value.length
-    if (size > max) {
-      await reader.cancel()
-      return undefined
-    }
-    parts.push(value)
-  }
-  const out = new Uint8Array(size)
-  let at = 0
-  for (const p of parts) {
-    out.set(p, at)
-    at += p.length
-  }
-  return out
-}
 
 export class CoverHttp {
   constructor(readonly d: HttpDeps) {}

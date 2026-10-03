@@ -2,6 +2,7 @@
 // Strict on purpose: an album with no cover is fine, a wrong cover is not.
 
 import { various } from '../../../shared/library'
+import { cleanAlbum, cleanArtist } from '../../covers/clean-names'
 
 // An album with no picture of its own, to look up.
 export interface CoverQuery {
@@ -37,46 +38,6 @@ export interface Candidate {
 
 // A single or EP shares its title with the album, but not its cover.
 const minAlbumTracks = 5
-
-const edition =
-  /\b(deluxe|remaster(ed)?|edition|bonus|expanded|anniversary|mono|stereo|mix|version|reissue)\b/i
-
-// Lowercase, no accents, "&" as "and", anything but letters and digits as one space.
-function fold(s: string): string {
-  return (
-    s
-      .normalize('NFKD')
-      // accents on Latin, Greek and Cyrillic letters only: in Indic scripts and
-      // kana the marks are part of the word
-      .replace(/([\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}])\p{Mn}+/gu, '$1')
-      .toLowerCase()
-      .replace(/&/g, ' and ')
-      .replace(/[^\p{L}\p{N}]+/gu, ' ')
-      .trim()
-  )
-}
-
-// The album's name without edition words and disc numbers, as written.
-export function stripEdition(s: string): string {
-  return (
-    s
-      // brackets holding edition words: "(Remastered 2009)", "[Deluxe Edition]"
-      .replace(/[([]([^)\]]*)[)\]]/g, (m, inner: string) => (edition.test(inner) ? ' ' : m))
-      // " - Remastered 2009" at the end
-      .replace(/\s[-–]\s[^-–]*$/, (m) => (edition.test(m) ? '' : m))
-      // "CD1", "(Disc 2)" at the end
-      .replace(/[\s([-]*\b(cd|dis[ck])\s*\d+[)\]]?\s*$/i, '')
-      .trim()
-  )
-}
-
-export function cleanAlbum(s: string): string {
-  return fold(stripEdition(s))
-}
-
-export function cleanArtist(s: string): string {
-  return fold(s).replace(/^the /, '')
-}
 
 export function searchKey(artist: string, album: string): string {
   return cleanArtist(artist) + '\0' + cleanAlbum(album)

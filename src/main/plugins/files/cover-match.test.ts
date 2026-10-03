@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  cleanAlbum,
-  cleanArtist,
-  pickCandidates,
-  searchKey,
-  type Candidate,
-  type CoverQuery
-} from './cover-match'
+import { pickCandidates, searchKey, type Candidate, type CoverQuery } from './cover-match'
 
 const q = (more: Partial<CoverQuery> = {}): CoverQuery => ({
   albumId: 'a1',
@@ -26,41 +19,6 @@ const c = (more: Partial<Candidate> = {}): Candidate => ({
   tracks: 17,
   image: 'https://x/1.jpg',
   ...more
-})
-
-describe('cleanup', () => {
-  it('drops edition words in brackets and disc numbers', () => {
-    expect(cleanAlbum('Abbey Road (Remastered 2009) [Deluxe Edition]')).toBe('abbey road')
-    expect(cleanAlbum('Abbey Road - Remastered 2009')).toBe('abbey road')
-    expect(cleanAlbum('Mellon Collie CD1')).toBe('mellon collie')
-    expect(cleanAlbum('Mellon Collie (Disc 2)')).toBe('mellon collie')
-    expect(cleanAlbum('Abbey Road (2019 Mix)')).toBe('abbey road')
-    expect(cleanAlbum('Club Classics (Remix Album)')).toBe('club classics remix album')
-  })
-
-  it('keeps brackets that are part of the name', () => {
-    expect(cleanAlbum("(What's the Story) Morning Glory?")).toBe('what s the story morning glory')
-    expect(cleanAlbum('Pompeii (Live)')).toBe('pompeii live')
-  })
-
-  it('treats & as and, drops accents and a leading "the"', () => {
-    expect(cleanArtist('The Beatles')).toBe('beatles')
-    expect(cleanArtist('Simon & Garfunkel')).toBe(cleanArtist('Simon and Garfunkel'))
-    expect(cleanArtist('Björk')).toBe('bjork')
-  })
-
-  it('keeps vowel signs and voicing marks, which change the word', () => {
-    expect(cleanAlbum('हम आपके हैं कौन')).not.toBe(cleanAlbum('हम आपक ह कन'))
-    expect(cleanAlbum('ドラゴンボール')).not.toBe(cleanAlbum('トラコンホール'))
-    // accents on Latin, Greek and Cyrillic letters still go
-    expect(cleanArtist('Sigur Rós')).toBe('sigur ros')
-    expect(cleanAlbum('Мой рок-н-ролл')).toBe(cleanAlbum('Мои рок-н-ролл'))
-  })
-
-  it('keeps letters of other scripts', () => {
-    expect(cleanAlbum('Группа крови')).toBe('группа крови')
-    expect(cleanArtist('椎名林檎')).toBe('椎名林檎')
-  })
 })
 
 describe('pickCandidates', () => {

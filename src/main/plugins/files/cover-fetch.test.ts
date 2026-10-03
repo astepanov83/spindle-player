@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CoverFetcher, type FetcherDeps } from './cover-fetch'
 import { BusyError, NetError } from './cover-http'
-import { cleanArtist, searchKey, type CoverQuery } from './cover-match'
+import { cleanArtist } from '../../covers/clean-names'
+import { searchKey, type CoverQuery } from './cover-match'
 import type { ArtistQuery } from './artist-photo'
 import type { Fetched } from './fetched-store'
 

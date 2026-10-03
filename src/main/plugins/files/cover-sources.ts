@@ -1,6 +1,7 @@
 // Where each service is asked for a cover, and what its answer means (ticket 014).
 import type { CoverSource } from '../../../shared/settings'
-import { stripEdition, type Candidate, type CoverQuery, type ReleaseKind } from './cover-match'
+import { stripEdition } from '../../covers/clean-names'
+import type { Candidate, CoverQuery, ReleaseKind } from './cover-match'
 
 export const caaGroupUrl = (id: string): string =>
   `https://coverartarchive.org/release-group/${id}/front-1200`

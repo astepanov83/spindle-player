@@ -11,6 +11,7 @@ import type { ItemAnswer, ItemInfo, PageAddress, PageHalf, Playable } from './ty
 const halves: Partial<Record<PluginId, PageHalf>> = { files: filesHalf, mfp: mfpHalf }
 
 const missing: ItemAnswer = { state: 'missing' }
+const loading: ItemAnswer = { state: 'loading' }
 
 // Each plugin with the start of its keys and its answer while off, made once,
 // so asking makes no objects.
@@ -32,7 +33,8 @@ export function itemInfo(key: ItemKey): ItemAnswer {
   const e = entryOf(key)
   if (!e) return missing
   if (!pluginOn(e.id)) return e.off
-  return e.half ? e.half.info(key.slice(e.prefix.length)) : missing
+  // radio's keys wait for its half (ticket 057): never pruned as gone
+  return e.half ? e.half.info(key.slice(e.prefix.length)) : loading
 }
 
 // The item's info while it can be drawn as itself.

@@ -117,8 +117,8 @@ describe('itemInfo', () => {
     expect(p.itemInfo('files:m1').state).toBe('missing')
   })
 
-  it('radio has no page half yet: its items are not songs', () => {
-    expect(p.itemInfo('radio:x').state).toBe('missing')
+  it('radio has no page half yet: its items wait, so none is dropped as gone', () => {
+    expect(p.itemInfo('radio:x').state).toBe('loading')
     settings.plugins.radio = false
     expect(p.itemInfo('radio:x')).toEqual({ state: 'off', text: 'Radio is off' })
   })
@@ -176,5 +176,14 @@ describe('itemsVersion', () => {
     expect(b).not.toBe(a)
     library.load(lib())
     expect(p.itemsVersion()).not.toBe(b)
+  })
+
+  it("stays the same for a scan's status that changes no answer", () => {
+    library.load(lib())
+    library.status = { ...library.status, mfp: mfpOn }
+    const a = p.itemsVersion()
+    library.status = { ...library.status, done: 5, total: 10 }
+    library.status = { ...library.status, mfp: { ...mfpOn, running: true } }
+    expect(p.itemsVersion()).toBe(a)
   })
 })

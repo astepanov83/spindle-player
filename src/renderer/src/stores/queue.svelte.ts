@@ -150,11 +150,19 @@ class QueueStore {
     } else if (p instanceof Promise) {
       const n = this.#loads
       this.#unload()
-      void p.then((r) => {
-        if (n !== this.#loads) return
-        if (r) this.#load(key, r, at, andPlay)
-        else this.#waiting = { andPlay, at }
-      })
+      // radio may have taken the player meanwhile
+      const still = (): boolean => n === this.#loads && this.active
+      p.then(
+        (r) => {
+          if (!still()) return
+          if (r) this.#load(key, r, at, andPlay)
+          else this.#waiting = { andPlay, at }
+        },
+        (e) => {
+          window.playbackApi.log(`Could not get ${key} to play: ${e}`)
+          if (still()) this.#waiting = { andPlay, at }
+        }
+      )
     } else this.#load(key, p, at, andPlay)
   }
 
@@ -173,8 +181,10 @@ class QueueStore {
     engine.clear()
   }
 
-  // The current song's plugin is off: it is passed over as a failed song is,
-  // to the next one that can play. With none, it waits for its plugin.
+  // The current song's plugin is off (a list that starts on it, a restore): it
+  // is passed over as a failed song is, to the next one that can play. With
+  // none, it waits for its plugin, paused: sound starts only if Play is
+  // pressed in the wait (playWhenReady).
   #passOver(andPlay: boolean, at: number): void {
     const q = this.#state()
     const s = passOver(q, isOff, (x) => advance(x, this.#nextOptions()))
@@ -183,7 +193,7 @@ class QueueStore {
       return this.#start(andPlay)
     }
     this.#unload()
-    this.#waiting = { andPlay, at }
+    this.#waiting = { andPlay: false, at }
     const st = itemInfo(q.items[q.index])
     if (andPlay && st.state === 'off') notice.show(`${st.text}: nothing to play`)
   }
@@ -211,11 +221,11 @@ class QueueStore {
     this.#start()
   }
 
-  // Clicking a row; the current one starts again. A song whose plugin is off
-  // does nothing: it can't play.
+  // Clicking a row; the current one starts again. A greyed song (its plugin
+  // is off, or its data not in yet) does nothing: it can't play now.
   jump(index: number): void {
     const key = this.items[index]
-    if (key === undefined || isOff(key)) return
+    if (key === undefined || itemInfo(key).state !== 'ok') return
     this.#claim()
     this.#fails = 0
     this.#set(jump(this.#state(), index))
@@ -306,8 +316,10 @@ class QueueStore {
       engine.seek(0)
       play()
     } else if (step.kind === 'play') {
+      const next = this.#onward(step.state)
+      if (!next) return this.#stopAtEnd()
       const before = this.#loaded
-      this.#set(step.state)
+      this.#set(next)
       const key = this.current!
       const p = player.playing && before ? playItem(key) : undefined
       if (p && !(p instanceof Promise) && follows(before?.p, p)) this.#carryOn(key, p)
@@ -315,14 +327,22 @@ class QueueStore {
     } else this.#stopAtEnd()
   }
 
+  // The next song, past songs whose plugin is off. None when only such songs
+  // are left: the queue then stops at its end, as after a failed last song.
+  #onward(next: QueueState): QueueState | undefined {
+    const s = passOver(next, isOff, (x) => advance(x, this.#nextOptions()))
+    return isOff(s.items[s.index]) ? undefined : s
+  }
+
   #move(andPlay: boolean): boolean {
     const before = this.#state()
     const after = advance(before, this.#nextOptions())
-    if (after === before) {
+    const next = after === before ? undefined : this.#onward(after)
+    if (!next) {
       this.#stopAtEnd()
       return false
     }
-    this.#set(after)
+    this.#set(next)
     this.#start(andPlay)
     return true
   }
@@ -340,6 +360,15 @@ class QueueStore {
     player.pos = 0
     this.savePos()
     this.ended = true
+  }
+
+  // Play or Pause pressed while the current song waits for its plugin: it
+  // plays once it loads, or not. No `on` turns it over (the play button).
+  // False when nothing waits.
+  playWhenReady(on?: boolean): boolean {
+    if (!this.#waiting) return false
+    this.#waiting = { ...this.#waiting, andPlay: on ?? !this.#waiting.andPlay }
+    return true
   }
 
   // The seek bar, arrows and media keys (through playing.seek). Not the

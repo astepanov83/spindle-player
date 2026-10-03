@@ -47,7 +47,9 @@ const plugin = vi.hoisted(() => ({
   loading: new Set<string>(),
   // answers come later, as radio's will
   later: false,
-  pending: [] as (() => void)[]
+  pending: [] as (() => void)[],
+  // the next later answer fails with this
+  reject: undefined as Promise<never> | undefined
 }))
 
 vi.mock('../plugins', () => {
@@ -77,6 +79,7 @@ vi.mock('../plugins', () => {
     },
     playItem: (key: string) => {
       if (!plugin.later) return playable(key)
+      if (plugin.reject) return plugin.reject
       return new Promise((done) => plugin.pending.push(() => done(playable(key))))
     }
   }
@@ -126,6 +129,7 @@ beforeEach(() => {
   plugin.loading.clear()
   plugin.later = false
   plugin.pending = []
+  plugin.reject = undefined
   setSongs(['a', 3], ['b', 2])
   player.repeat = false
   player.shuffle = false
@@ -754,7 +758,7 @@ describe('songs of a plugin that is off (ticket 056)', () => {
     expect(queue.items).toHaveLength(4)
   })
 
-  it('with nothing else to play, waits and loads when the plugin is on again', () => {
+  it('with nothing else to play, waits and loads paused when the plugin is on again', () => {
     queue.playList(albums.e, 0, 'Episode')
     expect(queue.current).toBe('mfp:e0')
     expect(fake.calls).toEqual(['clear'])
@@ -762,7 +766,42 @@ describe('songs of a plugin that is off (ticket 056)', () => {
     fake.reset()
     plugin.off.clear()
     queue.refresh()
+    expect(fake.calls).toEqual(['load media/e0'])
+    expect(player.playing).toBe(false)
+  })
+
+  it('Play pressed in that wait plays once the plugin is on', () => {
+    queue.playList(albums.e, 0, 'Episode')
+    expect(queue.playWhenReady()).toBe(true)
+    fake.reset()
+    plugin.off.clear()
+    queue.refresh()
     expect(fake.calls).toEqual(['load media/e0', 'play'])
+  })
+
+  it('at the end, with only off songs after, the queue stops on the last song that played', () => {
+    queue.jump(0)
+    queue.remove(3)
+    fake.reset()
+    fake.on.ended!()
+    expect(queue.current).toBe('files:a0')
+    expect(queue.ended).toBe(true)
+    expect(fake.calls).toEqual(['pause', 'seek 0'])
+    // turning the plugin on later starts nothing
+    fake.reset()
+    plugin.off.clear()
+    queue.refresh()
+    expect(fake.calls).toEqual([])
+    expect(queue.playWhenReady()).toBe(false)
+  })
+
+  it('Next with only off songs after stops the same way', () => {
+    queue.remove(3)
+    fake.reset()
+    queue.next()
+    expect(queue.current).toBe('files:a0')
+    expect(queue.ended).toBe(true)
+    expect(fake.calls).toEqual(['pause', 'seek 0'])
   })
 })
 
@@ -800,6 +839,30 @@ describe('songs whose plugin has no data yet (ticket 056)', () => {
   })
 })
 
+describe('a song that waits for its plugin (ticket 056)', () => {
+  beforeEach(() => {
+    plugin.loading.add('mfp')
+    queue.playList(['files:a0', 'mfp:x'] as ItemKey[], 0, 'X')
+    fake.reset()
+  })
+
+  it('is not played by a click', () => {
+    queue.jump(1)
+    expect(queue.current).toBe('files:a0')
+    expect(fake.calls).toEqual([])
+  })
+
+  it('plays when it loads if Play was pressed while it waited', () => {
+    queue.restore({ items: ['mfp:x'], index: 0, from: 'X', pos: 0 })
+    expect(queue.playWhenReady(true)).toBe(true)
+    plugin.songs.set('mfp:x', { info: { title: 'X', length: 50 } })
+    plugin.loading.clear()
+    fake.reset()
+    queue.refresh()
+    expect(fake.calls).toEqual(['load media/x', 'play'])
+  })
+})
+
 describe('a playable that comes later (ticket 056)', () => {
   it('loads when it comes, unless another song was picked meanwhile', async () => {
     plugin.later = true
@@ -810,5 +873,30 @@ describe('a playable that comes later (ticket 056)', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(fake.calls).toEqual(['clear', 'clear', 'load media/a2', 'play'])
+  })
+
+  it('does not load over radio, which took the player meanwhile', async () => {
+    plugin.later = true
+    queue.jump(1)
+    queue.active = false
+    for (const done of plugin.pending) done()
+    await Promise.resolve()
+    await Promise.resolve()
+    queue.active = true
+    expect(fake.calls).toEqual(['clear'])
+  })
+
+  it('a failed answer is logged, and the song waits to be tried again', async () => {
+    plugin.later = true
+    plugin.reject = Promise.reject(new Error('no answer'))
+    queue.jump(2)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(log).toHaveBeenCalledWith('Could not get files:a2 to play: Error: no answer')
+    plugin.later = false
+    plugin.reject = undefined
+    fake.reset()
+    queue.refresh()
+    expect(fake.calls).toEqual(['load media/a2', 'play'])
   })
 })

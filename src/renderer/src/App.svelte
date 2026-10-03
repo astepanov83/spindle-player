@@ -54,8 +54,11 @@
 
   // New data in a plugin, or one turned on or off: songs that are gone leave
   // the queue, and a song that waited for its plugin loads.
+  // A $derived, so a read that changes without changing the version (MFP's
+  // status, every 100 ms in a scan) doesn't run the refresh.
+  const version = $derived(itemsVersion())
   $effect(() => {
-    void itemsVersion()
+    void version
     untrack(() => queue.refresh())
   })
 

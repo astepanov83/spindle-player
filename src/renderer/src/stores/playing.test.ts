@@ -202,6 +202,27 @@ describe('back to the queue', () => {
   })
 })
 
+describe('Play while the song waits for its plugin (ticket 056)', () => {
+  it('plays it once its data is in, without a second press', async () => {
+    const { settings } = await import('./settings.svelte')
+    settings.plugins.mfp = true
+    // MFP was just turned on: its episodes are not in yet
+    queue.restore({ items: ['mfp:m1'], index: 0, from: 'X', pos: 0 })
+    fake.calls = []
+    playing.togglePlay()
+    expect(fake.calls).toEqual([])
+    library.status = { ...library.status, mfp: { episodes: 1, fetchedAt: 1, running: false } }
+    library.load({
+      ...lib,
+      albums: [...lib.albums, { ...lib.albums[0], id: 'ep', online: 'mfp', trackIds: ['m1'] }],
+      tracks: [...tracks, { ...tracks[0], id: 'm1', albumId: 'ep', online: 'mfp', folder: -1 }]
+    })
+    queue.refresh()
+    expect(fake.calls).toEqual(['load spindle://media/m1 at 0', 'play'])
+    settings.plugins.mfp = false
+  })
+})
+
 describe('after a restart', () => {
   const saved: SavedQueues = {
     ...emptyQueues(),

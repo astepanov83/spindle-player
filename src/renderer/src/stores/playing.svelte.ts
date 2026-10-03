@@ -117,7 +117,10 @@ class PlayingStore {
   // Play and pause for the play button, the Space key and the media keys.
   // Radio's pause drops the connection; play opens a new one at the live edge.
   togglePlay(): void {
-    if (this.kind === 'queue') return toggleSong()
+    if (this.kind === 'queue') {
+      if (!queue.playWhenReady()) toggleSong()
+      return
+    }
     if (radio.wanted) radio.pause()
     else void radio.resume()
   }
@@ -125,12 +128,13 @@ class PlayingStore {
   play(): void {
     if (this.kind === 'radio') {
       if (!radio.wanted) void radio.resume()
-    } else if (!player.playing) toggleSong()
+    } else if (!player.playing && !queue.playWhenReady(true)) toggleSong()
   }
 
   pause(): void {
     if (this.kind === 'radio') radio.pause()
     else if (player.playing) toggleSong()
+    else queue.playWhenReady(false)
   }
 
   // A stream can't be sought, and player.pos is the queue's place while radio plays.

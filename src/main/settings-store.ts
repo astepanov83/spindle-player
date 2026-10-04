@@ -4,6 +4,7 @@ import { app } from 'electron'
 import type { TemplateId } from '../shared/layout'
 import { templates } from '../shared/templates'
 import {
+  type AiSettings,
   isKnownSettingsFile,
   pageSettings,
   parseSize,
@@ -45,7 +46,8 @@ export class SettingsStore {
   }
 
   // Checks the value like a file read, so a bad message can't store junk; a bad
-  // field keeps its current value. Window sizes, place and folders stay main's own.
+  // field keeps its current value. Window sizes, place, folders and the AI
+  // choices stay main's own.
   // toFile false: the page could not load the settings, so its choices only
   // reach the window (size per template, theme), never the file.
   setFromPage(raw: unknown, toFile = true): { before: Settings; next: Settings } {
@@ -56,6 +58,7 @@ export class SettingsStore {
       next.windowSizes = this.#data.windowSizes
       next.windowPlace = this.#data.windowPlace
       next.folders = this.#data.folders
+      next.ai = this.#data.ai
       this.#replace(next)
     }
     return { before, next: this.#live }
@@ -78,6 +81,11 @@ export class SettingsStore {
 
   setFolders(folders: string[]): void {
     this.#replace({ ...this.#data, folders: parseFolders(folders) })
+  }
+
+  // From the AI service, checked like a file read.
+  setAi(ai: AiSettings): void {
+    this.#replace({ ...this.#data, ai: parseStoredSettings({ ai }, this.#data).ai })
   }
 
   #replace(next: StoredSettings): void {

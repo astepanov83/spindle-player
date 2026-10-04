@@ -89,6 +89,20 @@ describe('SettingsStore', () => {
   })
 })
 
+describe('SettingsStore AI choices', () => {
+  it('stores them checked, and the page cannot change them', () => {
+    const path = join(dir, 'settings.json')
+    const store = new SettingsStore(path)
+    store.setAi({ provider: 'p', tasks: { a: true, b: 'x' as never }, providers: {} })
+    store.setFromPage({ theme: 'dark', ai: { provider: 'q', tasks: {}, providers: {} } })
+    store.flushSync()
+    const file = JSON.parse(readFileSync(path, 'utf8'))
+    expect(isKnownSettingsFile(file)).toBe(true)
+    expect(file.theme).toBe('dark')
+    expect(file.ai).toEqual({ provider: 'p', tasks: { a: true }, providers: {} })
+  })
+})
+
 describe('SettingsStore window sizes', () => {
   it('stores every size so the file reads back as known', () => {
     const path = join(dir, 'settings.json')

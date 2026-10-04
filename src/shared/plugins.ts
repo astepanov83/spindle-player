@@ -1,3 +1,4 @@
+import type { AiTaskInfo } from './ai'
 import type { FilesChannels, LibraryApi } from './plugins/files/ipc'
 import type { MfpApi, MfpChannels } from './plugins/mfp/ipc'
 import type { RadioApi, RadioChannels } from './plugins/radio/ipc'
@@ -24,6 +25,8 @@ export interface PluginInfo {
   liveIds?: RegExp
   // the settings field that turned it on before `plugins`, still read
   oldSwitch?: string
+  // features of it that ask a language model (spec "AI models")
+  aiTasks?: AiTaskInfo[]
 }
 
 // Also the order of the switches and tabs.

@@ -7,7 +7,13 @@ import {
   type StoredSettings
 } from './settings'
 
-const defaults = { ...defaultSettings(), windowSizes: {}, windowPlace: null, folders: [] }
+const defaults = {
+  ...defaultSettings(),
+  windowSizes: {},
+  windowPlace: null,
+  folders: [],
+  ai: { provider: 'openrouter', tasks: {}, providers: {} }
+}
 
 describe('parseStoredSettings', () => {
   it('gives the defaults for no file or a file that is not an object', () => {
@@ -29,7 +35,8 @@ describe('parseStoredSettings', () => {
       plugins: { files: true, radio: false, mfp: true },
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowPlace: { x: -1200, y: 40, maximized: true },
-      folders: ['/home/me/Music', '/mnt/nas/music']
+      folders: ['/home/me/Music', '/mnt/nas/music'],
+      ai: { provider: 'other', tasks: { a: true, b: false }, providers: { other: { model: 'x' } } }
     }
     expect(parseStoredSettings(good)).toEqual(good)
   })
@@ -124,7 +131,8 @@ describe('parseStoredSettings with a base', () => {
     plugins: { files: true, radio: true, mfp: false },
     windowSizes: { focus: { width: 500, height: 700 } },
     windowPlace: { x: 40, y: 60, maximized: false },
-    folders: ['/m']
+    folders: ['/m'],
+    ai: { provider: 'p', tasks: { a: true }, providers: {} }
   }
 
   it('keeps the current value of each bad field, not the default', () => {
@@ -324,5 +332,57 @@ describe('close action setting', () => {
     expect(pageSettings(parseStoredSettings({ closeAction: 'minimize' })).closeAction).toBe(
       'minimize'
     )
+  })
+})
+
+describe('AI setting', () => {
+  it('has the default provider and every task off', () => {
+    expect(parseStoredSettings(undefined).ai).toEqual({
+      provider: 'openrouter',
+      tasks: {},
+      providers: {}
+    })
+  })
+
+  it('drops only the wrong entries', () => {
+    const ai = parseStoredSettings({
+      ai: {
+        provider: '',
+        tasks: { a: true, b: 'yes' },
+        providers: { p: { model: 'm', n: 3 }, q: 'x' }
+      }
+    }).ai
+    expect(ai).toEqual({
+      provider: 'openrouter',
+      tasks: { a: true },
+      providers: { p: { model: 'm' } }
+    })
+  })
+
+  it('keeps the current value of a field that is not an object', () => {
+    const base = parseStoredSettings({
+      ai: { provider: 'p', tasks: { a: true }, providers: { p: { model: 'm' } } }
+    })
+    expect(parseStoredSettings({ ai: { tasks: [], providers: 1 } }, base).ai).toEqual(base.ai)
+    expect(parseStoredSettings({ ai: 'on' }, base).ai).toEqual(base.ai)
+  })
+
+  it('knows the field in a file', () => {
+    expect(isKnownSettingsFile({ ai: {} })).toBe(true)
+    expect(
+      isKnownSettingsFile({
+        ai: { provider: 'p', tasks: { a: true }, providers: { p: { m: 'x' } } }
+      })
+    ).toBe(true)
+    expect(isKnownSettingsFile({ ai: { provider: '' } })).toBe(false)
+    expect(isKnownSettingsFile({ ai: { tasks: { a: 1 } } })).toBe(false)
+    expect(isKnownSettingsFile({ ai: { providers: { p: { m: 1 } } } })).toBe(false)
+    expect(isKnownSettingsFile({ ai: { providers: { p: 'x' } } })).toBe(false)
+    expect(isKnownSettingsFile({ ai: { keys: {} } })).toBe(false)
+    expect(isKnownSettingsFile({ ai: [] })).toBe(false)
+  })
+
+  it('is not given to the page', () => {
+    expect(pageSettings(parseStoredSettings(undefined))).not.toHaveProperty('ai')
   })
 })

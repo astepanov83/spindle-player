@@ -120,7 +120,13 @@ export function parseArtists(raw: unknown): ArtistsFile {
   return out
 }
 
-export function serializeArtists(f: ArtistsFile): unknown {
+// What is written: a copy, so the file can change while a save waits.
+export interface ArtistsData {
+  version: number
+  artists: ArtistEntry[]
+}
+
+export function serializeArtists(f: ArtistsFile): ArtistsData {
   return {
     version,
     artists: f.artists.map((a) => ({
@@ -129,6 +135,23 @@ export function serializeArtists(f: ArtistsFile): unknown {
       tags: a.tags.map((l) => ({ tag: l.tag, by: l.by }))
     }))
   }
+}
+
+// The text of artists.json, made to be read and edited by a person: one
+// artist per line group, a lone tag on the artist's line, several tags one
+// per line. Built by hand, as JSON.stringify can't keep a short list on a line.
+export function artistsText(data: ArtistsData): string {
+  const str = JSON.stringify
+  const link = (l: ArtistLink): string => `{ "tag": ${str(l.tag)}, "by": ${str(l.by)} }`
+  const entry = (a: ArtistEntry): string => {
+    const head = `  { "name": ${str(a.name)}, "nameBy": ${str(a.nameBy)}, "tags": [`
+    if (a.tags.length < 2)
+      return `${head} ${a.tags.map(link).join('')}${a.tags.length ? ' ' : ''}] }`
+    return `${head}\n${a.tags.map((l) => `    ${link(l)}`).join(',\n')} ] }`
+  }
+  const open = `{ "version": ${str(data.version)}, "artists": [`
+  if (!data.artists.length) return `${open} ] }\n`
+  return `${open}\n${data.artists.map(entry).join(',\n')}\n] }\n`
 }
 
 export function parseCache(raw: unknown): ArtistAiCache {
@@ -370,10 +393,10 @@ export interface OldGroups {
   asked: Set<string>
 }
 
-export const knownOldOverrides = (raw: unknown): boolean =>
+const knownOldOverrides = (raw: unknown): boolean =>
   isObject(raw) && raw.version === version && isObject(raw.artists)
 
-export const knownOldGroups = (raw: unknown): boolean =>
+const knownOldGroups = (raw: unknown): boolean =>
   isObject(raw) && raw.version === version && isObject(raw.groups) && Array.isArray(raw.asked)
 
 export function parseOldOverrides(raw: unknown): OldOverrides {

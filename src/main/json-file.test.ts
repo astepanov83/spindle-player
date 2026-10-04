@@ -182,6 +182,16 @@ describe('JsonFileWriter', () => {
     expect(onDisk()).toEqual({ n: 2 })
   })
 
+  it('writes with a formatter when given one, both async and sync', async () => {
+    const w = new JsonFileWriter<{ n: number }>(file, 60_000, undefined, (d) => `n=${d.n}\n`)
+    w.schedule({ n: 1 })
+    await w.flush()
+    expect(readFileSync(file, 'utf8')).toBe('n=1\n')
+    w.schedule({ n: 2 })
+    w.flushSync()
+    expect(readFileSync(file, 'utf8')).toBe('n=2\n')
+  })
+
   it('flushSync says a write worked, or that there was nothing to write', () => {
     const w = new JsonFileWriter(file, 60_000)
     expect(w.flushSync()).toBe(true)

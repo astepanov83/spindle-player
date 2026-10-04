@@ -26,11 +26,13 @@ import {
   pruneCache,
   resolve,
   serializeArtists,
+  artistsText,
   serializeCache,
   tagSpellings,
   usedKeys,
   yourKeys,
   type ArtistAiCache,
+  type ArtistsData,
   type ArtistsFile,
   type Spelling
 } from '../../../shared/plugins/files/artists-file'
@@ -325,7 +327,7 @@ async function startFetcher(s: WorkerStart): Promise<void> {
 
 let artists: ArtistsFile = noArtists()
 // none when the file could not be read: it may still be fine, so it is never replaced
-let artistsWriter: JsonFileWriter<unknown> | undefined
+let artistsWriter: JsonFileWriter<ArtistsData> | undefined
 // the tags already sent to the model (artist-ai-cache.json)
 let aiCache: ArtistAiCache = noCache()
 let cacheWriter: JsonFileWriter<unknown> | undefined
@@ -338,14 +340,17 @@ const spelling: Spelling = (k) => spellings.get(k)
 
 // A broken file or one of an unknown version is copied aside before it is
 // written again (see openJsonFile): these took the user's time to make. True
-// when artists.json was there, even if it could not be used.
-function loadArtists(s: WorkerStart): boolean {
+// when artists.json was there, and whether none of it could be used.
+function loadArtists(s: WorkerStart): { had: boolean; unusable: boolean } {
   const had = existsSync(s.artistsPath)
   const f = openJsonFile(s.artistsPath, 'Artists', knownArtists)
   artists = parseArtists(f.value)
   if (f.canWrite)
-    artistsWriter = new JsonFileWriter<unknown>(s.artistsPath, 1000, (e) =>
-      log(`Could not save ${s.artistsPath}: ${e}`)
+    artistsWriter = new JsonFileWriter<ArtistsData>(
+      s.artistsPath,
+      1000,
+      (e) => log(`Could not save ${s.artistsPath}: ${e}`),
+      artistsText
     )
   const c = openJsonFile(s.aiCachePath, 'Artist AI cache', knownCache)
   aiCache = parseCache(c.value)
@@ -353,7 +358,7 @@ function loadArtists(s: WorkerStart): boolean {
     cacheWriter = new JsonFileWriter<unknown>(s.aiCachePath, 1000, (e) =>
       log(`Could not save ${s.aiCachePath}: ${e}`)
     )
-  return had
+  return { had, unusable: had && !knownArtists(f.value) }
 }
 
 const saveArtists = (): void => {
@@ -374,12 +379,21 @@ function setArtists(c: ArtistChanges): void {
 // The old files still to move: write: artists.json came from them, so it is
 // written first. Nothing is written while off, so the move waits for on.
 let oldFiles: { write: boolean } | undefined
+// The index was empty at start, so the move waits for the first finished scan.
+let convertLater = false
 
 // artist-overrides.json (024) and artist-groups.json (068) become
 // artists.json once, at start, after the index is read: tag keys get their
 // spelling from the library. With artists.json there already, they are only
-// moved aside. True when artists.json came from them.
-function convertOldFiles(s: WorkerStart, had: boolean): boolean {
+// moved aside. With no files in the index there are no spellings yet, so the
+// move waits for the first scan that ended (see convertLater). True when
+// artists.json came from them.
+function convertOldFiles(
+  s: WorkerStart,
+  had: boolean,
+  unusable: boolean,
+  scanned: boolean
+): boolean {
   const o = readJsonFile(s.oldOverridesPath)
   const g = readJsonFile(s.oldGroupsPath)
   if (o.kind === 'missing' && g.kind === 'missing') return false
@@ -390,8 +404,13 @@ function convertOldFiles(s: WorkerStart, had: boolean): boolean {
     )
     return false
   }
+  if (!had && !scanned && ix.files.size === 0) {
+    convertLater = true
+    return false
+  }
   oldFiles = { write: !had }
   if (had) {
+    if (unusable) log(`${s.artistsPath} can't be used, so the old names stay in the .v1.json files`)
     moveOldFiles(s)
     return false
   }
@@ -399,7 +418,7 @@ function convertOldFiles(s: WorkerStart, had: boolean): boolean {
     [o, s.oldOverridesPath],
     [g, s.oldGroupsPath]
   ] as const)
-    if (r.kind === 'broken') log(`Old artist file is broken, moved aside unread: ${path}`)
+    if (r.kind === 'broken') log(`Old artist file is broken, nothing was taken from it: ${path}`)
   const old = convertOld(
     parseOldOverrides(o.kind === 'ok' ? o.value : undefined),
     parseOldGroups(g.kind === 'ok' ? g.value : undefined),
@@ -419,10 +438,11 @@ function moveOldFiles(s: WorkerStart): void {
   const { write } = oldFiles
   oldFiles = undefined
   if (write) {
-    artistsWriter?.schedule(serializeArtists(artists))
+    // the cache first: if artists.json is written, its asked keys are there too
     cacheWriter?.schedule(serializeCache(aiCache))
-    const ok = artistsWriter?.flushSync() ?? false
     cacheWriter?.flushSync()
+    artistsWriter?.schedule(serializeArtists(artists))
+    const ok = artistsWriter?.flushSync() ?? false
     // the old files stay, so the next start makes artists.json again
     if (!ok) return
   }
@@ -1021,6 +1041,10 @@ async function scan(
     const used = usedKeys(credits)
     if (prune(artists, used)) saveArtists()
     if (pruneCache(aiCache, used)) saveCache()
+    if (convertLater) {
+      convertLater = false
+      if (convertOldFiles(start, false, false, true)) publisher.now()
+    }
   }
   setStatus({ phase: 'idle', done: 0, total: 0, read: undefined, scanFailed: failed })
   post({ type: 'scanned', id })
@@ -1243,7 +1267,7 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   status = { ...status, folders: s.folders }
   await removeStrayTemp()
   await loadCached()
-  const hadArtists = loadArtists(s)
+  const { had: hadArtists, unusable } = loadArtists(s)
   await startFetcher(s)
   const r = readJsonFile(start.indexPath)
   // the index is only a cache of the music files, so it is made again either way
@@ -1257,7 +1281,7 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   if (Object.keys(ix.pendingMoves).length) post({ type: 'ids-moved', moves: ix.pendingMoves })
   build()
   // the first build gives the tags' spellings
-  if (convertOldFiles(s, hadArtists)) build()
+  if (convertOldFiles(s, hadArtists, unusable, false)) build()
 })
 
 // Scans and prunes, one after the other; see scan-chain.ts.

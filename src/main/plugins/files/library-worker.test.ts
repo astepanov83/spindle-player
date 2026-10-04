@@ -605,6 +605,34 @@ describe('the library process', () => {
         await expectSplits()
       })
 
+      it('with no index at start, wait for the first finished scan to get the spellings', async () => {
+        // no library.json: the one song in the music folder is "Unknown artist"
+        write(oldOverrides(), { version: 1, artists: { unknownartist: ['Nobody'] } })
+        start(true)
+        await ready()
+        expect(existsSync(artistsPath())).toBe(false)
+        expect(existsSync(oldOverrides())).toBe(true)
+        scan(1)
+        await until(() => scanned(1))
+        send({ type: 'flush' })
+        expect(read(artistsPath())).toEqual({
+          version: 1,
+          artists: [artist('Nobody', 'you', ['Unknown artist', 'you'])]
+        })
+        expect(existsSync(oldOverrides())).toBe(false)
+        expect(existsSync(v1(oldOverrides()))).toBe(true)
+      })
+
+      it('with a broken artists.json, log that the old names stay in the .v1.json files', async () => {
+        index(tags)
+        write(artistsPath(), '{ broken')
+        write(oldOverrides(), users)
+        start(true)
+        await ready()
+        expect(readFileSync(v1(oldOverrides()), 'utf8')).toBe(users)
+        expect(heard.some((m) => m.type === 'log' && m.text.includes('.v1.json files'))).toBe(true)
+      })
+
       it('keeps a key no song has as its tag', async () => {
         index(['Kino'])
         write(oldOverrides(), { version: 1, artists: { gone: ['Gone Band'] } })

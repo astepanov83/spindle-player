@@ -262,7 +262,8 @@ export class UnionFind {
 
 // The name a group shows: never one the model picks. A name you gave comes
 // first, so the tags join what the user chose; else the single spelling
-// seen most often, the first seen on a tie (as in listArtists). Each member's own top spelling is the only one that can win.
+// seen most often, the first seen on a tie (as in listArtists). Each member's
+// own top spelling is the only one that can win.
 export function shownName(members: TaskName[]): string {
   const pool = members.some((m) => m.manual) ? members.filter((m) => m.manual) : members
   let best = pool[0]

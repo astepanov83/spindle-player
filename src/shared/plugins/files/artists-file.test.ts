@@ -4,6 +4,7 @@ import {
   addAsked,
   aiKeys,
   applyChanges,
+  artistsText,
   convertOld,
   creditOf,
   knownArtists,
@@ -51,6 +52,37 @@ describe('the file', () => {
       artist('Sadness', 'ai', ['Magogaio/Sadness', 'you'])
     )
     expect(parseArtists(JSON.parse(JSON.stringify(serializeArtists(f))))).toEqual(f)
+  })
+
+  it('reads back the text it writes, with odd characters', () => {
+    const f = file(
+      artist('Björk', 'you', ['Bjork', 'ai'], ['bjork "live"\\', 'you']),
+      artist('Кино', 'ai', ['kino', 'you']),
+      artist('Sadness', 'you', ['a, b', 'you'], ['Magogaio/Sadness', 'you'], ['c', 'ai'])
+    )
+    expect(parseArtists(JSON.parse(artistsText(serializeArtists(f))))).toEqual(f)
+    expect(parseArtists(JSON.parse(artistsText(serializeArtists(noArtists()))))).toEqual(
+      noArtists()
+    )
+  })
+
+  it('writes one artist per line group, a lone tag on its line', () => {
+    const f = file(
+      artist('Magogaio', 'you', ['Magogaio/Sadness', 'you']),
+      artist('Sadness', 'you', ['sadness, along memories', 'you'], ['Magogaio/Sadness', 'you'])
+    )
+    expect(artistsText(serializeArtists(f))).toBe(
+      [
+        '{ "version": 1, "artists": [',
+        '  { "name": "Magogaio", "nameBy": "you", "tags": [ { "tag": "Magogaio/Sadness", "by": "you" } ] },',
+        '  { "name": "Sadness", "nameBy": "you", "tags": [',
+        '    { "tag": "sadness, along memories", "by": "you" },',
+        '    { "tag": "Magogaio/Sadness", "by": "you" } ] }',
+        '] }',
+        ''
+      ].join('\n')
+    )
+    expect(artistsText(serializeArtists(noArtists()))).toBe('{ "version": 1, "artists": [ ] }\n')
   })
 
   it('reads the example from the spec', () => {

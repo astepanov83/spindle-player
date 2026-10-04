@@ -101,9 +101,13 @@ function tmpPath(path: string): string {
   return `${path}.${process.pid}.${++tmpCount}.tmp`
 }
 
-// `space` 0 writes one line, for big files like the library index.
-function toText(data: unknown, space: number): string {
-  return JSON.stringify(data, null, space) + '\n'
+// A number is the indent of JSON.stringify: 0 writes one line, for big files
+// like the library index. A function writes the whole text, for a file made to
+// be read by a person.
+export type JsonFormat<T = unknown> = number | ((data: T) => string)
+
+function toText<T>(data: T, format: JsonFormat<T>): string {
+  return typeof format === 'function' ? format(data) : JSON.stringify(data, null, format) + '\n'
 }
 
 // Write to a temp file, flush it to disk, then rename over the old file.
@@ -117,12 +121,12 @@ export async function writeFileAtomic(path: string, data: string | Uint8Array): 
   await writeTmp(path, data, async (tmp) => rename(tmp, path))
 }
 
-export function writeJsonFileSync(path: string, data: unknown, space = 2): void {
+export function writeJsonFileSync<T>(path: string, data: T, format: JsonFormat<T> = 2): void {
   const tmp = tmpPath(path)
   try {
     const fd = openSync(tmp, 'w')
     try {
-      writeSync(fd, toText(data, space))
+      writeSync(fd, toText(data, format))
       fsyncSync(fd)
     } finally {
       closeSync(fd)
@@ -174,7 +178,7 @@ export class JsonFileWriter<T> {
     readonly path: string,
     readonly delayMs: number,
     readonly onError: (error: unknown) => void = (e) => console.error(`Could not save ${path}`, e),
-    readonly space = 2
+    readonly format: JsonFormat<T> = 2
   ) {}
 
   // The value is written later, so don't change it after handing it over.
@@ -195,7 +199,7 @@ export class JsonFileWriter<T> {
       .then(() => {
         // a newer value is already queued behind this one
         if (version !== this.#version) return
-        return writeTmp(this.path, toText(pending.data, this.space), async (tmp) => {
+        return writeTmp(this.path, toText(pending.data, this.format), async (tmp) => {
           if (version === this.#version) renameSync(tmp, this.path)
           else await rm(tmp, { force: true })
         })
@@ -225,7 +229,7 @@ export class JsonFileWriter<T> {
     this.#inFlight = undefined
     ++this.#version
     try {
-      writeJsonFileSync(this.path, pending.data, this.space)
+      writeJsonFileSync(this.path, pending.data, this.format)
       return true
     } catch (error) {
       this.onError(error)

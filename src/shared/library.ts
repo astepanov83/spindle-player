@@ -39,8 +39,8 @@ export interface Folder {
 }
 
 // An artist credit after artists.json (ticket 069): your renames and splits,
-// and the AI's groups while that task is on. `artist` is what is shown: the tag, a new name, or the names of a split
-// joined by ", ".
+// and the AI's groups while that task is on. `artist` is what is shown: the
+// tag, a new name, or the names of a split joined by ", ".
 export interface ArtistCredit {
   artist: string
   // the names, only when a split made the tag several artists

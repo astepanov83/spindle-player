@@ -7,8 +7,8 @@ import { app, dialog, utilityProcess, type BrowserWindow } from 'electron'
 import { LibraryChannel, type DropResult } from '../../../shared/plugins/files/ipc'
 import type { IdMoves } from '../../../shared/id-moves'
 import type { ScanStatus } from '../../../shared/library'
-import { parseChanges } from '../../../shared/plugins/files/artist-overrides'
-import { artistGroupsTask } from '../../../shared/plugins/files/artist-groups'
+import { parseChanges } from '../../../shared/plugins/files/artist-edit'
+import { artistGroupsTask } from '../../../shared/plugins/files/artists-file'
 import type { AiClient } from '../../../shared/ai'
 import type { CoverSource } from '../../../shared/settings'
 import { ffmpegTool } from '../../ffmpeg-path'
@@ -104,8 +104,10 @@ export class LibraryService {
         // live: with settings.json unreadable, the page's choice still counts this run
         fetch: { on: this.store.live().fetchCovers, sources: this.store.live().coverSources },
         fetchedPath: join(this.dir, 'fetched-covers.json'),
-        overridesPath: join(this.dir, 'artist-overrides.json'),
-        groupsPath: join(this.dir, 'artist-groups.json'),
+        artistsPath: join(this.dir, 'artists.json'),
+        aiCachePath: join(this.dir, 'artist-ai-cache.json'),
+        oldOverridesPath: join(this.dir, 'artist-overrides.json'),
+        oldGroupsPath: join(this.dir, 'artist-groups.json'),
         aiOn: this.#aiOn,
         aiEnabled: this.#aiEnabled,
         userAgent: this.userAgent,
@@ -295,7 +297,7 @@ export class LibraryService {
   // The page renamed or split artists; checked here, since the page can't be trusted.
   setArtists(changes: unknown): void {
     const c = this.#on && parseChanges(changes)
-    if (c) this.#post({ type: 'artist-overrides', changes: c })
+    if (c) this.#post({ type: 'set-artists', changes: c })
   }
 
   // Only files in the index are served, by id; never a path from the page.

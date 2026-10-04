@@ -6,6 +6,7 @@ import type { FileEntry, LibraryIndex } from './types'
 import { cleanArtist } from '../../covers/clean-names'
 import { searchKey } from './cover-match'
 import { artistKey } from '../../../shared/plugins/files/artists'
+import { convertOld, resolve } from '../../../shared/plugins/files/artists-file'
 import type { Fetched } from './fetched-store'
 import type { LibraryData } from '../../../shared/library'
 import {
@@ -35,15 +36,13 @@ function build(
   const ix = emptyIndex()
   for (const f of files) ix.files.set(f.path, f)
   setup?.(ix)
-  return buildLibrary(
-    ix,
-    has,
-    fetched,
-    [],
-    photos,
-    new Map(Object.entries(overrides ?? {})),
-    new Map(Object.entries(groups ?? {}))
-  )
+  // artists.json as the old files would make it: overrides as your links,
+  // groups as the AI's, with the AI on
+  const tags = files.flatMap((f) => [f.artist, f.albumArtist]).filter((t) => t !== undefined)
+  const spelling = (key: string): string | undefined => tags.find((t) => artistKey(t) === key)
+  const old = { groups: new Map(Object.entries(groups ?? {})), asked: new Set<string>() }
+  const f = convertOld(new Map(Object.entries(overrides ?? {})), old, spelling).artists
+  return buildLibrary(ix, has, fetched, [], photos, resolve(f, true))
 }
 
 describe('buildLibrary', () => {
@@ -412,7 +411,7 @@ describe('artist photos (ticket 021)', () => {
   })
 })
 
-describe('artist overrides (ticket 024)', () => {
+describe('artist names you changed (tickets 024, 069)', () => {
   const files = [
     entry('/m/s/1.mp3', { album: 'Split', albumArtist: 'sadness, stellafera', artist: 'Sadness' }),
     entry('/m/s/2.mp3', {
@@ -467,7 +466,7 @@ describe('artist overrides (ticket 024)', () => {
   })
 })
 
-describe('artist groups (ticket 068)', () => {
+describe('artist spellings the AI grouped (tickets 068, 069)', () => {
   const files = [
     entry('/m/a/1.mp3', { album: 'Debut', artist: 'Bjork' }),
     entry('/m/b/1.mp3', { album: 'Homogenic', artist: 'Björk' }),
@@ -494,14 +493,14 @@ describe('artist groups (ticket 068)', () => {
     expect(albumOf(data, 'Homogenic')).not.toHaveProperty('artistTag')
   })
 
-  it('lets a manual override win over a group', () => {
+  it("lets your link win over the AI's", () => {
     const o = { kino: ['KINO'] }
     const { data } = build(files, undefined, () => true, undefined, undefined, o, g)
     expect(albumOf(data, 'Blood')).toMatchObject({ artist: 'KINO', artistTag: 'Kino' })
     expect(albumOf(data, 'Blood')).not.toHaveProperty('grouped')
   })
 
-  it('shows a tag whose override is its own name (Use tag) as the plain tag', () => {
+  it('shows a tag you kept as its own name (Use tag) as the plain tag', () => {
     const o = { kino: ['Kino'] }
     const { data } = build(files, undefined, () => true, undefined, undefined, o, g)
     const blood = albumOf(data, 'Blood')

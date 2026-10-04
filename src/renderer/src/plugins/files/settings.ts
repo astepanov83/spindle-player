@@ -13,7 +13,7 @@ import {
 } from './scan-text'
 import { files } from './store.svelte'
 import { ai } from '../../ai.svelte'
-import { artistGroupsTask } from '../../../../shared/plugins/files/artist-groups'
+import { artistGroupsTask } from '../../../../shared/plugins/files/artists-file'
 import type { SettingBlock } from '../../../../shared/setting-blocks'
 
 export function filesSettings(): SettingBlock[] {

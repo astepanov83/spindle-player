@@ -28,6 +28,12 @@ beforeEach(async () => {
   mkdirSync(music)
   // not a real mp3: read as a song with an error, which the index keeps
   writeFileSync(join(music, 'a.mp3'), 'not audio')
+  await boot()
+})
+afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+// A new library process, as after a quit; flush the one before first.
+async function boot(): Promise<void> {
   heard = []
   let listener: ((e: { data: WorkerIn }) => void) | undefined
   const port = {
@@ -39,8 +45,7 @@ beforeEach(async () => {
   ;({ offPruneMs } = await import('./library-worker'))
   vi.unstubAllGlobals()
   send = (m) => listener!({ data: m })
-})
-afterEach(() => rmSync(dir, { recursive: true, force: true }))
+}
 
 function start(
   on: boolean,
@@ -54,8 +59,10 @@ function start(
     folders: [music],
     fetch: { on: false, sources: { musicbrainz: false, deezer: false, itunes: false } },
     fetchedPath: join(dir, 'fetched-covers.json'),
-    overridesPath: join(dir, 'artist-overrides.json'),
-    groupsPath: join(dir, 'artist-groups.json'),
+    artistsPath: join(dir, 'artists.json'),
+    aiCachePath: join(dir, 'artist-ai-cache.json'),
+    oldOverridesPath: join(dir, 'artist-overrides.json'),
+    oldGroupsPath: join(dir, 'artist-groups.json'),
     aiOn,
     aiEnabled,
     userAgent: 'test',
@@ -89,18 +96,13 @@ describe('the library process', () => {
   it('started off: no scan and no files written, the library still given', async () => {
     start(false)
     scan(1)
-    send({ type: 'artist-overrides', changes: { x: ['Y'] } })
+    send({ type: 'set-artists', changes: { x: ['Y'] } })
     send({ type: 'get-library', req: 7 })
     await settle()
     expect(scanned(1)).toBe(false)
     expect(heard.some((m) => m.type === 'reply' && m.req === 7 && m.data)).toBe(true)
     send({ type: 'flush' })
-    for (const f of [
-      'library.json',
-      'fetched-covers.json',
-      'artist-overrides.json',
-      'artist-groups.json'
-    ])
+    for (const f of ['library.json', 'fetched-covers.json', 'artists.json', 'artist-ai-cache.json'])
       expect(existsSync(join(dir, f))).toBe(false)
   })
 
@@ -229,115 +231,173 @@ describe('the library process', () => {
     })
   })
 
-  describe('artist-groups.json (ticket 068)', () => {
-    const groupsPath = (): string => join(dir, 'artist-groups.json')
-    const saved = (): { groups: Record<string, string>; asked: string[] } =>
-      JSON.parse(readFileSync(groupsPath(), 'utf8'))
-    const decode = (b: Uint8Array): { tracks?: { artist: string }[] } =>
-      JSON.parse(new TextDecoder().decode(b))
-    // the song in the music folder has no tags: its artist is "Unknown artist"
-    const write = (v: unknown): void =>
-      writeFileSync(groupsPath(), typeof v === 'string' ? v : JSON.stringify(v))
-    const twoKeys = {
-      version: 1,
-      groups: { unknownartist: 'Nobody', gone: 'Gone' },
-      asked: ['unknownartist', 'gone']
+  describe('artists.json (ticket 069)', () => {
+    const artistsPath = (): string => join(dir, 'artists.json')
+    const cachePath = (): string => join(dir, 'artist-ai-cache.json')
+    const read = (path: string): unknown => JSON.parse(readFileSync(path, 'utf8'))
+    const write = (path: string, v: unknown): void =>
+      writeFileSync(path, typeof v === 'string' ? v : JSON.stringify(v))
+    interface Song {
+      title?: string
+      artist: string
+      artists?: string[]
+      grouped?: true
     }
+    const decode = (b: Uint8Array): { tracks?: Song[] } => JSON.parse(new TextDecoder().decode(b))
+    // an artist: tags as [tag, by]
+    const artist = (name: string, nameBy: string, ...tags: [string, string][]): unknown => ({
+      name,
+      nameBy,
+      tags: tags.map(([tag, by]) => ({ tag, by }))
+    })
 
     async function ready(): Promise<void> {
       send({ type: 'get-library', req: 99 })
       await until(() => heard.some((m) => m.type === 'reply' && m.req === 99))
     }
+    let req = 1000
+    // the songs as the page gets them now, by title
+    async function songs(): Promise<Record<string, Song>> {
+      const r = ++req
+      send({ type: 'get-library', req: r })
+      await until(() => heard.some((m) => m.type === 'reply' && m.req === r))
+      const m = heard.find((m) => m.type === 'reply' && m.req === r) as { data: Uint8Array }
+      return Object.fromEntries((decode(m.data).tracks ?? []).map((t) => [t.title, t]))
+    }
+    const artistOf = async (title: string): Promise<string> => (await songs())[title].artist
 
-    it('drops keys of tags that are gone after a scan that ran to the end', async () => {
-      write(twoKeys)
-      start(true)
-      scan(1)
-      await until(() => scanned(1))
-      send({ type: 'flush' })
-      expect(saved()).toEqual({
+    // An index of one song per tag, titled by the tag. onDisk: the files exist
+    // as the index has them, so a scan keeps their tags.
+    function index(tags: string[], onDisk = false): void {
+      // read by this tag reader, so a scan doesn't read the files again
+      const ix = { ...emptyIndex(), reader: readerVersion }
+      tags.forEach((artist, i) => {
+        const path = join(music, `${i}.mp3`)
+        let mtime = 1
+        let size = 1
+        if (onDisk) {
+          writeFileSync(path, 'x')
+          const st = statSync(path, { bigint: true })
+          mtime = Number(st.mtimeMs)
+          size = Number(st.size)
+        }
+        const title = tags.indexOf(artist) === i ? artist : `${artist} ${i}`
+        ix.files.set(path, { path, mtime, size, duration: 0, artist, album: `A${i}`, title })
+      })
+      writeFileSync(join(dir, 'library.json'), JSON.stringify(serializeIndex(ix)))
+    }
+
+    describe('pruning', () => {
+      // the song in the music folder has no tags: its artist is "Unknown artist"
+      const two = {
         version: 1,
-        groups: { unknownartist: 'Nobody' },
-        asked: ['unknownartist']
+        artists: [artist('Nobody', 'ai', ['Unknown artist', 'ai'], ['Gone', 'ai'])]
+      }
+      const asked = { version: 1, asked: ['unknownartist', 'gone'] }
+
+      it('drops links and asked keys of tags that are gone after a scan that ran to the end', async () => {
+        write(artistsPath(), two)
+        write(cachePath(), asked)
+        start(true)
+        scan(1)
+        await until(() => scanned(1))
+        send({ type: 'flush' })
+        expect(read(artistsPath())).toEqual({
+          version: 1,
+          artists: [artist('Nobody', 'ai', ['Unknown artist', 'ai'])]
+        })
+        expect(read(cachePath())).toEqual({ version: 1, asked: ['unknownartist'] })
+      })
+
+      it('keeps them after a scan that was cut short', async () => {
+        write(artistsPath(), two)
+        write(cachePath(), asked)
+        start(true)
+        scan(1)
+        send({ type: 'stop' })
+        await settle()
+        send({ type: 'flush' })
+        expect(scanned(1)).toBe(false)
+        expect(read(artistsPath())).toEqual(two)
+        expect(read(cachePath())).toEqual(asked)
+      })
+
+      it('keeps the names you gave in the cache, so they are not asked again', async () => {
+        index(['kino'], true)
+        write(artistsPath(), { version: 1, artists: [artist('Кино', 'you', ['kino', 'you'])] })
+        write(cachePath(), { version: 1, asked: ['кино', 'gone'] })
+        start(true)
+        scan(1)
+        await until(() => scanned(1))
+        send({ type: 'flush' })
+        expect(read(cachePath())).toEqual({ version: 1, asked: ['кино'] })
       })
     })
 
-    it('keeps them after a scan that was cut short', async () => {
-      write(twoKeys)
-      start(true)
-      scan(1)
-      send({ type: 'stop' })
-      await settle()
-      send({ type: 'flush' })
-      expect(scanned(1)).toBe(false)
-      expect(saved()).toEqual(twoKeys)
-    })
-
-    it('sets a broken file aside', async () => {
-      write('{ not json')
+    it('sets a broken file aside, and one of another version', async () => {
+      write(artistsPath(), '{ not json')
+      write(cachePath(), { version: 2, asked: [] })
       start(true)
       await ready()
-      expect(readFileSync(groupsPath() + '.broken', 'utf8')).toBe('{ not json')
+      expect(readFileSync(artistsPath() + '.broken', 'utf8')).toBe('{ not json')
+      expect(existsSync(cachePath() + '.unknown')).toBe(true)
     })
 
-    it('sets a file of another version aside', async () => {
-      write({ version: 2, groups: {}, asked: [] })
-      start(true)
-      await ready()
-      expect(existsSync(groupsPath() + '.unknown')).toBe(true)
-    })
+    describe('AI links', () => {
+      const bjork = { version: 1, artists: [artist('Björk', 'ai', ['Bjork', 'ai'])] }
+      beforeEach(() => {
+        index(['Bjork'])
+        write(artistsPath(), bjork)
+      })
 
-    // an index with one song tagged "Bjork", and a group for it
-    const bjork = { version: 1, groups: { bjork: 'Björk' }, asked: ['bjork'] }
-    function bjorkIndex(): void {
-      const ix = emptyIndex()
-      const path = join(music, 'a.mp3')
-      ix.files.set(path, { path, mtime: 1, size: 1, duration: 0, artist: 'Bjork' })
-      writeFileSync(join(dir, 'library.json'), JSON.stringify(serializeIndex(ix)))
-      write(bjork)
-    }
+      it('are applied only while the task is on, and republish when that changes', async () => {
+        start(false)
+        await ready()
+        const reply = heard.find((m) => m.type === 'reply' && m.req === 99) as {
+          data: Uint8Array
+        }
+        expect(decode(reply.data).tracks?.[0].artist).toBe('Bjork')
+        aiOn({ 'artist-groups': true })
+        await until(() => heard.some((m) => m.type === 'library'))
+        const patch = heard.find((m) => m.type === 'library') as { bytes: Uint8Array }
+        expect(decode(patch.bytes).tracks?.[0].artist).toBe('Björk')
+        aiOn({ 'artist-groups': false })
+        await until(() => heard.filter((m) => m.type === 'library').length === 2)
+        const off = heard.filter((m) => m.type === 'library')[1] as { bytes: Uint8Array }
+        expect(decode(off.bytes).tracks?.[0].artist).toBe('Bjork')
+        // switched off, the file keeps them
+        expect(read(artistsPath())).toEqual(bjork)
+      })
 
-    it('applies groups only while the task is on, and republishes when that changes', async () => {
-      bjorkIndex()
-      start(false)
-      await ready()
-      const reply = heard.find((m) => m.type === 'reply' && m.req === 99) as { data: Uint8Array }
-      expect(decode(reply.data).tracks?.[0].artist).toBe('Bjork')
-      aiOn({ 'artist-groups': true })
-      await until(() => heard.some((m) => m.type === 'library'))
-      const patch = heard.find((m) => m.type === 'library') as { bytes: Uint8Array }
-      expect(decode(patch.bytes).tracks?.[0].artist).toBe('Björk')
-      aiOn({ 'artist-groups': false })
-      await until(() => heard.filter((m) => m.type === 'library').length === 2)
-      const off = heard.filter((m) => m.type === 'library')[1] as { bytes: Uint8Array }
-      expect(decode(off.bytes).tracks?.[0].artist).toBe('Bjork')
-      // switched off, the file is kept
-      expect(saved()).toEqual(bjork)
+      it('are applied while switched on with the provider not ready, and no job runs', async () => {
+        start(true, [], {}, { 'artist-groups': true })
+        await ready()
+        expect(await artistOf('Bjork')).toBe('Björk')
+        await settle(50)
+        expect(heard.some((m) => m.type === 'ai-max-input')).toBe(false)
+      })
+
+      it('stay shown when the provider stops being ready, and hide when switched off', async () => {
+        start(false, [], { 'artist-groups': true })
+        await ready()
+        // a refused key or Disconnect: no new library, the links stay
+        aiOn({}, { 'artist-groups': true })
+        await settle(50)
+        expect(heard.filter((m) => m.type === 'library')).toEqual([])
+        aiOn({}, {})
+        await until(() => heard.some((m) => m.type === 'library'))
+        const off = heard.find((m) => m.type === 'library') as { bytes: Uint8Array }
+        expect(decode(off.bytes).tracks?.[0].artist).toBe('Bjork')
+      })
+
+      it('are applied from the start data when the task is on', async () => {
+        start(false, [], { 'artist-groups': true })
+        await ready()
+        expect(await artistOf('Bjork')).toBe('Björk')
+      })
     })
 
     describe('the job', () => {
-      // "Bjork" once and "Björk" twice, so "Björk" is the name shown. onDisk:
-      // the files exist as the index has them, so a scan keeps their tags.
-      function twins(onDisk = false): void {
-        // read by this tag reader, so a scan doesn't read the files again
-        const ix = { ...emptyIndex(), reader: readerVersion }
-        const add = (name: string, artist: string, album: string): void => {
-          const path = join(music, name)
-          let mtime = 1
-          let size = 1
-          if (onDisk) {
-            writeFileSync(path, 'x')
-            const st = statSync(path, { bigint: true })
-            mtime = Number(st.mtimeMs)
-            size = Number(st.size)
-          }
-          ix.files.set(path, { path, mtime, size, duration: 0, artist, album, title: name })
-        }
-        add('1.mp3', 'Bjork', 'Debut')
-        add('2.mp3', 'Björk', 'Homogenic')
-        add('3.mp3', 'Björk', 'Post')
-        writeFileSync(join(dir, 'library.json'), JSON.stringify(serializeIndex(ix)))
-      }
       const calls = (type: string): (WorkerOut & { id: number })[] =>
         heard.filter((m) => m.type === type) as (WorkerOut & { id: number })[]
       async function call(type: string, n: number): Promise<WorkerOut & { id: number }> {
@@ -349,61 +409,62 @@ describe('the library process', () => {
         model,
         json: { matches: [{ check: 1, same: 2, why: 'accent' }] }
       })
-
-      it('runs when the task turns on, asking main, then saves and shows the group', async () => {
-        twins()
-        start(true)
-        await ready()
-        aiOn({ 'artist-groups': true })
-        send({ type: 'ai-reply', id: (await call('ai-max-input', 1)).id, max: 100_000 })
-        const first = await call('ai-ask', 1)
+      // Answers the run's maxInput and its two asks, n the asks before it.
+      async function answerRun(n = 0): Promise<void> {
+        const runs = calls('ai-max-input').length
+        send({ type: 'ai-reply', id: (await call('ai-max-input', runs || 1)).id, max: 100_000 })
+        const first = await call('ai-ask', n + 1)
         expect(first).toMatchObject({ task: 'artist-groups' })
         send({ type: 'ai-reply', id: first.id, answer: answer('m1') as never })
-        const second = await call('ai-ask', 2)
+        const second = await call('ai-ask', n + 2)
         expect(second).toMatchObject({ avoid: ['m1'] })
         send({ type: 'ai-reply', id: second.id, answer: answer('m2') as never })
         await until(() =>
           heard.some((m) => m.type === 'status' && m.status.groups?.state === 'done')
         )
+      }
+
+      it('runs when the task turns on, asking main, then saves and shows the group', async () => {
+        // "Bjork" once and "Björk" twice, so "Björk" is the name shown
+        index(['Bjork', 'Björk', 'Björk'])
+        start(true)
+        await ready()
+        aiOn({ 'artist-groups': true })
+        await answerRun()
         const last = heard.filter((m) => m.type === 'library').at(-1) as { bytes: Uint8Array }
         // a patch: only the song tagged "Bjork" changed
         expect(decode(last.bytes).tracks?.map((t) => t.artist)).toEqual(['Björk'])
         send({ type: 'flush' })
-        expect(saved()).toEqual({
+        expect(read(artistsPath())).toEqual({
           version: 1,
-          groups: { bjork: 'Björk', björk: 'Björk' },
-          asked: ['bjork', 'björk']
+          artists: [artist('Björk', 'ai', ['Bjork', 'ai'], ['Björk', 'ai'])]
         })
+        expect(read(cachePath())).toEqual({ version: 1, asked: ['bjork', 'björk'] })
       })
 
       it('turned on during a scan, runs once after the scan ends', async () => {
-        twins(true)
+        index(['Bjork', 'Björk', 'Björk'], true)
         start(true)
         await ready()
         scan(1)
         aiOn({ 'artist-groups': true })
         await settle(0)
         expect(calls('ai-max-input')).toEqual([])
-        send({ type: 'ai-reply', id: (await call('ai-max-input', 1)).id, max: 100_000 })
+        await answerRun()
         const at = (type: string): number => heard.findIndex((m) => m.type === type)
         expect(scanned(1)).toBe(true)
         expect(at('scanned')).toBeLessThan(at('ai-max-input'))
-        const first = await call('ai-ask', 1)
-        send({ type: 'ai-reply', id: first.id, answer: answer('m1') as never })
-        const second = await call('ai-ask', 2)
-        send({ type: 'ai-reply', id: second.id, answer: answer('m2') as never })
-        await until(() =>
-          heard.some((m) => m.type === 'status' && m.status.groups?.state === 'done')
-        )
         await settle(50)
         expect(calls('ai-max-input')).toHaveLength(1)
         expect(calls('ai-ask')).toHaveLength(2)
         send({ type: 'flush' })
-        expect(saved().groups).toEqual({ bjork: 'Björk', björk: 'Björk' })
+        expect(read(artistsPath())).toMatchObject({
+          artists: [artist('Björk', 'ai', ['Bjork', 'ai'], ['Björk', 'ai'])]
+        })
       })
 
       it('is stopped by a new scan', async () => {
-        twins()
+        index(['Bjork', 'Björk', 'Björk'])
         start(true, [], { 'artist-groups': true })
         await ready()
         // turned off and on again: a run starts
@@ -416,38 +477,186 @@ describe('the library process', () => {
         // else the run after the scan posts into the next test's messages
         aiOn({})
       })
+
+      it('end to end: Edit artist, an AI group, AI off, Use tag, and a restart keeps it all', async () => {
+        index(['kino', 'Sadness, Stellafera', 'Bjork', 'Björk', 'Björk'])
+        // shown but no job yet
+        start(true, [], {}, { 'artist-groups': true })
+        await ready()
+
+        // Edit artist: a rename and a split
+        send({ type: 'set-artists', changes: { kino: ['Кино'] } })
+        send({ type: 'set-artists', changes: { 'sadness,stellafera': ['Sadness', 'Stellafera'] } })
+        let now = await songs()
+        expect(now['kino'].artist).toBe('Кино')
+        expect(now['Sadness, Stellafera'].artists).toEqual(['Sadness', 'Stellafera'])
+
+        // the AI groups "Bjork" with "Björk"; names you gave are not tags to link
+        aiOn({ 'artist-groups': true })
+        await answerRun()
+        now = await songs()
+        expect(now['Bjork']).toMatchObject({ artist: 'Björk', grouped: true })
+
+        // switched off, the AI's links hide; yours stay
+        aiOn({}, {})
+        now = await songs()
+        expect(now['Bjork'].artist).toBe('Bjork')
+        expect(now['kino'].artist).toBe('Кино')
+        aiOn({}, { 'artist-groups': true })
+        expect(await artistOf('Bjork')).toBe('Björk')
+
+        // Use tag on the AI's link: the tag as its own name, linked by you
+        send({ type: 'set-artists', changes: { bjork: null } })
+        expect(await artistOf('Bjork')).toBe('Bjork')
+        send({ type: 'flush' })
+        expect(read(artistsPath())).toEqual({
+          version: 1,
+          artists: [
+            artist('Кино', 'you', ['kino', 'you']),
+            artist('Sadness', 'you', ['Sadness, Stellafera', 'you']),
+            artist('Stellafera', 'you', ['Sadness, Stellafera', 'you']),
+            artist('Björk', 'ai', ['Björk', 'ai']),
+            artist('Bjork', 'you', ['Bjork', 'you'])
+          ]
+        })
+
+        await boot()
+        start(true, [], {}, { 'artist-groups': true })
+        await ready()
+        now = await songs()
+        expect(now['kino'].artist).toBe('Кино')
+        expect(now['Sadness, Stellafera'].artists).toEqual(['Sadness', 'Stellafera'])
+        expect(now['Bjork'].artist).toBe('Bjork')
+        expect(now['Björk'].artist).toBe('Björk')
+      })
     })
 
-    it('applies groups while switched on with the provider not ready, and runs no job', async () => {
-      bjorkIndex()
-      start(true, [], {}, { 'artist-groups': true })
-      await ready()
-      const reply = heard.find((m) => m.type === 'reply' && m.req === 99) as { data: Uint8Array }
-      expect(decode(reply.data).tracks?.[0].artist).toBe('Björk')
-      await settle(50)
-      expect(heard.some((m) => m.type === 'ai-max-input')).toBe(false)
-    })
+    describe('the old files', () => {
+      const oldOverrides = (): string => join(dir, 'artist-overrides.json')
+      const oldGroups = (): string => join(dir, 'artist-groups.json')
+      const v1 = (path: string): string => path.replace(/\.json$/, '.v1.json')
+      // the user's real file
+      const users = JSON.stringify({
+        version: 1,
+        artists: {
+          'sadness,alongmemories': ['Sadness'],
+          'sadness,thelightisfadingaway': ['Sadness'],
+          'sadness,dismalimerence': ['Sadness'],
+          'magogaio/sadness': ['Magogaio', 'Sadness']
+        }
+      })
+      const groups = JSON.stringify({
+        version: 1,
+        groups: { bjork: 'Björk', björk: 'Björk', 'magogaio/sadness': 'Magogaio' },
+        asked: ['bjork', 'björk', 'magogaio/sadness']
+      })
+      const tags = [
+        'Sadness, Along Memories',
+        'Sadness, The Light Is Fading Away',
+        'Sadness, Dismal Imerence',
+        'Magogaio/Sadness',
+        'Bjork',
+        'Björk'
+      ]
+      const converted = {
+        version: 1,
+        artists: [
+          artist('Magogaio', 'you', ['Magogaio/Sadness', 'you']),
+          artist(
+            'Sadness',
+            'you',
+            ['Sadness, Along Memories', 'you'],
+            ['Sadness, The Light Is Fading Away', 'you'],
+            ['Sadness, Dismal Imerence', 'you'],
+            ['Magogaio/Sadness', 'you']
+          ),
+          artist('Björk', 'ai', ['Bjork', 'ai'], ['Björk', 'ai'])
+        ]
+      }
+      async function expectSplits(): Promise<void> {
+        const now = await songs()
+        expect(now['Sadness, Along Memories'].artist).toBe('Sadness')
+        expect(now['Sadness, Dismal Imerence'].artist).toBe('Sadness')
+        expect(now['Magogaio/Sadness'].artists).toEqual(['Magogaio', 'Sadness'])
+      }
 
-    it('keeps groups shown when the provider stops being ready, and hides them when switched off', async () => {
-      bjorkIndex()
-      start(false, [], { 'artist-groups': true })
-      await ready()
-      // a refused key or Disconnect: no new library, the groups stay
-      aiOn({}, { 'artist-groups': true })
-      await settle(50)
-      expect(heard.filter((m) => m.type === 'library')).toEqual([])
-      aiOn({}, {})
-      await until(() => heard.some((m) => m.type === 'library'))
-      const off = heard.find((m) => m.type === 'library') as { bytes: Uint8Array }
-      expect(decode(off.bytes).tracks?.[0].artist).toBe('Bjork')
-    })
+      it("become artists.json at start, the user's splits still shown, and are renamed", async () => {
+        index(tags)
+        write(oldOverrides(), users)
+        write(oldGroups(), groups)
+        start(true, [], { 'artist-groups': true })
+        await ready()
+        await expectSplits()
+        expect(await artistOf('Bjork')).toBe('Björk')
+        expect(read(artistsPath())).toEqual(converted)
+        expect(read(cachePath())).toEqual({
+          version: 1,
+          asked: ['bjork', 'björk', 'magogaio/sadness']
+        })
+        expect(existsSync(oldOverrides())).toBe(false)
+        expect(existsSync(oldGroups())).toBe(false)
+        expect(readFileSync(v1(oldOverrides()), 'utf8')).toBe(users)
+        expect(readFileSync(v1(oldGroups()), 'utf8')).toBe(groups)
 
-    it('applies them from the start data when the task is on', async () => {
-      bjorkIndex()
-      start(false, [], { 'artist-groups': true })
-      await ready()
-      const reply = heard.find((m) => m.type === 'reply' && m.req === 99) as { data: Uint8Array }
-      expect(decode(reply.data).tracks?.[0].artist).toBe('Björk')
+        // read once: a restart reads artists.json
+        await boot()
+        start(true, [], { 'artist-groups': true })
+        await ready()
+        await expectSplits()
+      })
+
+      it('keeps a key no song has as its tag', async () => {
+        index(['Kino'])
+        write(oldOverrides(), { version: 1, artists: { gone: ['Gone Band'] } })
+        start(true)
+        await ready()
+        expect(read(artistsPath())).toEqual({
+          version: 1,
+          artists: [artist('Gone Band', 'you', ['gone', 'you'])]
+        })
+      })
+
+      it('are only renamed when artists.json is there already', async () => {
+        index(tags)
+        const mine = { version: 1, artists: [artist('Кино', 'you', ['Bjork', 'you'])] }
+        write(artistsPath(), mine)
+        write(oldOverrides(), users)
+        start(true)
+        await ready()
+        expect(await artistOf('Bjork')).toBe('Кино')
+        expect((await songs())['Sadness, Along Memories'].artist).toBe('Sadness, Along Memories')
+        expect(read(artistsPath())).toEqual(mine)
+        expect(existsSync(oldOverrides())).toBe(false)
+        expect(readFileSync(v1(oldOverrides()), 'utf8')).toBe(users)
+      })
+
+      it('never replace a .v1.json there already: the old file stays, and it is logged', async () => {
+        index(tags)
+        write(oldOverrides(), users)
+        write(v1(oldOverrides()), 'older')
+        start(true)
+        await ready()
+        await expectSplits()
+        expect(readFileSync(oldOverrides(), 'utf8')).toBe(users)
+        expect(readFileSync(v1(oldOverrides()), 'utf8')).toBe('older')
+        expect(heard.some((m) => m.type === 'log' && m.text.includes('is there already'))).toBe(
+          true
+        )
+      })
+
+      it('started off: shown, but nothing written or renamed until turned on', async () => {
+        index(tags)
+        write(oldOverrides(), users)
+        start(false)
+        await ready()
+        await expectSplits()
+        expect(existsSync(artistsPath())).toBe(false)
+        expect(readFileSync(oldOverrides(), 'utf8')).toBe(users)
+        send({ type: 'set-on', on: true })
+        expect(read(artistsPath())).toMatchObject({ artists: converted.artists.slice(0, 2) })
+        expect(existsSync(oldOverrides())).toBe(false)
+        expect(readFileSync(v1(oldOverrides()), 'utf8')).toBe(users)
+      })
     })
   })
 })

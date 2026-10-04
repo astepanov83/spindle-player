@@ -1,7 +1,7 @@
 // The library index on disk, and the messages between main and the library process.
 import type { IdMoves } from '../../../shared/id-moves'
 import type { ScanStatus } from '../../../shared/library'
-import type { ArtistChanges } from '../../../shared/plugins/files/artist-overrides'
+import type { ArtistChanges } from '../../../shared/plugins/files/artist-edit'
 import type { Answer, JsonRequest } from '../../../shared/ai'
 import type { CoverSource } from '../../../shared/settings'
 import type { ThemePalettes } from '../../../shared/palette'
@@ -102,10 +102,12 @@ export interface WorkerStart {
   // the online cover lookup setting, and where its results are kept (ticket 014)
   fetch: { on: boolean; sources: Record<CoverSource, boolean> }
   fetchedPath: string
-  // artist names changed by hand (ticket 024)
-  overridesPath: string
-  // artist spellings grouped by a model (ticket 068)
-  groupsPath: string
+  // who is who (ticket 069), and the artist groups job's progress
+  artistsPath: string
+  aiCachePath: string
+  // the files artists.json replaced (tickets 024 and 068), moved once at start
+  oldOverridesPath: string
+  oldGroupsPath: string
   // the files plugin's AI tasks that are on (AiClient.on) and switched on
   // (AiClient.enabled), by task id; see 'ai-on'
   aiOn: Record<string, boolean>
@@ -163,8 +165,8 @@ export type WorkerIn =
   | { type: 'fetch-covers'; on: boolean; sources: Record<CoverSource, boolean> }
   // an app window is open again after 'stop'
   | { type: 'resume' }
-  // the page renamed or split artists (ticket 024)
-  | { type: 'artist-overrides'; changes: ArtistChanges }
+  // the page renamed or split artists, or used a tag again (tickets 024, 069)
+  | { type: 'set-artists'; changes: ArtistChanges }
   // the covers main uses changed (station logos); the prune keeps them
   | { type: 'keep-covers'; hashes: string[] }
   // the cover of a song playing on the radio (ticket 032), looked up only
@@ -173,16 +175,16 @@ export type WorkerIn =
   // main gave up on an ask (a new title came): stop it
   | { type: 'cancel'; req: number }
   // AiClient.on (tasks) or AiClient.enabled of the files plugin's AI tasks
-  // changed. The artist groups job runs while on; groups are applied while
-  // enabled, so a provider that is not ready does not hide them. Switched
-  // off, they are not applied (the file is kept).
+  // changed. The artist groups job runs while on; the AI's links are applied
+  // while enabled, so a provider that is not ready does not hide them.
+  // Switched off, they are not applied (the file keeps them).
   | { type: 'ai-on'; tasks: Record<string, boolean>; enabled: Record<string, boolean> }
   // main's answer to an 'ai-ask' (answer) or 'ai-max-input' (max), by its id.
   // A call it was told to cancel gets none.
   | { type: 'ai-reply'; id: number; answer?: Answer; max?: number }
   // Music files turned on or off. Off: no scan, no album or artist lookup, and
-  // no writes to the index, fetched-covers.json, artist-overrides.json or
-  // artist-groups.json.
+  // no writes to the index, fetched-covers.json, artists.json or
+  // artist-ai-cache.json.
   // Song cover lookups for the radio go on.
   | { type: 'set-on'; on: boolean }
 

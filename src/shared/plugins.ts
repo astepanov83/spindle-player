@@ -1,6 +1,6 @@
 import type { AiTaskInfo } from './ai'
 import type { FilesChannels, LibraryApi } from './plugins/files/ipc'
-import { artistGroupsTask } from './plugins/files/artist-groups'
+import { artistGroupsTask } from './plugins/files/artists-file'
 import type { MfpApi, MfpChannels } from './plugins/mfp/ipc'
 import type { RadioApi, RadioChannels } from './plugins/radio/ipc'
 import { stationIdPattern } from './plugins/radio/ids'

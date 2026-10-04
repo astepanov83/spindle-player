@@ -2,7 +2,13 @@
 import { describe, expect, it } from 'vitest'
 import type { AiClient, Answer, JsonRequest } from '../../../shared/ai'
 import type { GroupsStatus } from '../../../shared/library'
-import { noGroups, type ArtistGroups } from '../../../shared/plugins/files/artist-groups'
+import {
+  noArtists,
+  noCache,
+  resolve,
+  type ArtistAiCache,
+  type ArtistsFile
+} from '../../../shared/plugins/files/artists-file'
 import { groupArtists, limitWaitMs, type JobEnd } from './group-artists-job'
 import { maxOutput, schema, system, type TaskName } from './group-artists'
 
@@ -55,33 +61,47 @@ const plain = (list: string[], counts: number[] = []): TaskName[] =>
 
 const many = (n: number): string[] => Array.from({ length: n }, (_, i) => `N${i + 1}`)
 
+interface Files {
+  artists: ArtistsFile
+  cache: ArtistAiCache
+}
+const fresh = (): Files => ({ artists: noArtists(), cache: noCache() })
+
 function job(
   ai: AiClient,
   names: TaskName[],
-  groups: ArtistGroups = noGroups(),
+  files: Files = fresh(),
   signal = new AbortController().signal
 ): {
   done: Promise<JobEnd>
-  groups: ArtistGroups
+  // tag key -> the name it shows, AI on
+  groups: () => Record<string, string>
+  cache: ArtistAiCache
+  artists: ArtistsFile
   statuses: (GroupsStatus | undefined)[]
   saves: { asked: number; groups: Record<string, string> }[]
 } {
   const statuses: (GroupsStatus | undefined)[] = []
   const saves: { asked: number; groups: Record<string, string> }[] = []
+  const { artists, cache } = files
+  const groups = (): Record<string, string> =>
+    Object.fromEntries([...resolve(artists, true)].map(([k, v]) => [k, v.names.join(', ')]))
   const done = groupArtists(
     {
       ai,
       names,
-      groups,
-      saved: () =>
-        saves.push({ asked: groups.asked.size, groups: Object.fromEntries(groups.groups) }),
+      artists,
+      cache,
+      // the tags in the library: names you gave are not tags
+      spelling: (k) => names.find((t) => t.key === k && !t.manual)?.name,
+      saved: () => saves.push({ asked: cache.asked.size, groups: groups() }),
       status: (s) => statuses.push(s),
       log: () => {},
       now: () => 1000
     },
     signal
   )
-  return { done, groups, statuses, saves }
+  return { done, groups, cache, artists, statuses, saves }
 }
 
 describe('the artist groups job', () => {
@@ -103,8 +123,8 @@ describe('the artist groups job', () => {
   it('makes no request when every name was asked', async () => {
     const { ai, calls } = fakeAi(both([]))
     const names = plain(['A', 'B'])
-    const g = noGroups()
-    g.asked = new Set(['a', 'b'])
+    const g = fresh()
+    g.cache.asked = new Set(['a', 'b'])
     const j = job(ai, names, g)
     expect(await j.done).toEqual({ end: 'done', grouped: 0, asked: false })
     expect(calls).toEqual([])
@@ -139,15 +159,15 @@ describe('the artist groups job', () => {
       const j = job(ai, plain(['Bjork', 'Björk', 'Björk!', 'Beatles', 'The Beatles']))
       await j.done
       expect(calls.map((c) => c.avoid)).toEqual([undefined, ['m1']])
-      expect(Object.fromEntries(j.groups.groups)).toEqual({ björk: 'Björk', 'björk!': 'Björk' })
+      expect(j.groups()).toEqual({ björk: 'Björk', 'björk!': 'Björk' })
     })
 
     it('keeps nothing of a chunk when no second model answers, and asks it again later', async () => {
       const { ai } = fakeAi((c) => (c.avoid ? { ok: false, error: 'failed' } : ok([[1, 2]])))
       const j = job(ai, plain(['Bjork', 'Björk']))
       expect(await j.done).toEqual({ end: 'failed' })
-      expect(j.groups.groups.size).toBe(0)
-      expect(j.groups.asked.size).toBe(0)
+      expect(Object.keys(j.groups()).length).toBe(0)
+      expect(j.cache.asked.size).toBe(0)
       expect(j.statuses.at(-1)).toEqual({ state: 'stopped', error: 'failed' })
     })
     describe('one model to use (a fixed choice, or only one fits)', () => {
@@ -177,7 +197,7 @@ describe('the artist groups job', () => {
         const j = job(ai, plain(['Bjork', 'Björk', 'Beatles', 'The Beatles', 'Abba']))
         expect(await j.done).toEqual({ end: 'done', grouped: 2, asked: true })
         expect(calls.map((c) => c.avoid)).toEqual([undefined, ['m1'], undefined])
-        expect(Object.fromEntries(j.groups.groups)).toEqual({ bjork: 'Bjork', björk: 'Bjork' })
+        expect(j.groups()).toEqual({ bjork: 'Bjork', björk: 'Bjork' })
         expect(j.statuses.at(-1)).toEqual({ state: 'done', grouped: 2, at: 1000 })
       })
 
@@ -185,8 +205,8 @@ describe('the artist groups job', () => {
         const { ai } = fakeAi((c, i) => (c.avoid ? avoided : ok(i === 0 ? [[2, 1]] : [[3, 1]])))
         const j = job(ai, plain(['Bjork', 'Björk', 'Bjorky']))
         expect(await j.done).toEqual({ end: 'done', grouped: 0, asked: true })
-        expect(j.groups.groups.size).toBe(0)
-        expect(j.groups.asked.size).toBe(3)
+        expect(Object.keys(j.groups()).length).toBe(0)
+        expect(j.cache.asked.size).toBe(3)
       })
 
       it('stops when the answer again fails', async () => {
@@ -195,7 +215,7 @@ describe('the artist groups job', () => {
         )
         const j = job(ai, plain(['Bjork', 'Björk']))
         expect(await j.done).toEqual({ end: 'failed' })
-        expect(j.groups.asked.size).toBe(0)
+        expect(j.cache.asked.size).toBe(0)
       })
     })
   })
@@ -211,20 +231,54 @@ describe('the artist groups job', () => {
       )
       const j = job(ai, list)
       expect(await j.done).toMatchObject({ end: 'done', grouped: 3 })
-      expect(Object.fromEntries(j.groups.groups)).toEqual({ n1: 'N2', n2: 'N2', n250: 'N2' })
+      expect(j.groups()).toEqual({ n1: 'N2', n2: 'N2', n250: 'N2' })
     })
 
     it('joins a saved group and keeps its name', async () => {
-      const g = noGroups()
-      g.groups.set('bjork', 'Björk (saved)')
-      g.asked.add('bjork')
+      const g = fresh()
+      g.artists.artists.push({
+        name: 'Björk (saved)',
+        nameBy: 'ai',
+        tags: [{ tag: 'Bjork', by: 'ai' }]
+      })
+      g.cache.asked.add('bjork')
       const { ai } = fakeAi(both([[2, 1]]))
       const j = job(ai, plain(['Bjork', 'Björk', 'BJÖRK'], [1, 9, 1]), g)
       await j.done
-      expect(Object.fromEntries(j.groups.groups)).toEqual({
+      expect(j.groups()).toEqual({
         bjork: 'Björk (saved)',
         björk: 'Björk (saved)'
       })
+    })
+
+    it('skips tags linked by you and never changes your links, joining your artist', async () => {
+      const g = fresh()
+      g.artists.artists.push(
+        { name: 'Björk', nameBy: 'you', tags: [{ tag: 'Bjork', by: 'you' }] },
+        { name: 'Beatles', nameBy: 'you', tags: [{ tag: 'Beatles', by: 'you' }] }
+      )
+      const { ai } = fakeAi(
+        both([
+          [2, 1],
+          [3, 1]
+        ])
+      )
+      // "Björk" is the name you gave "Bjork" (manual), "BJORK" a new spelling
+      const names = plain(['Björk', 'Bjork', 'BJORK!'])
+      names[0].manual = true
+      const j = job(ai, names, g)
+      expect(await j.done).toMatchObject({ end: 'done', grouped: 1 })
+      expect(j.artists.artists).toEqual([
+        {
+          name: 'Björk',
+          nameBy: 'you',
+          tags: [
+            { tag: 'Bjork', by: 'you' },
+            { tag: 'BJORK!', by: 'ai' }
+          ]
+        },
+        { name: 'Beatles', nameBy: 'you', tags: [{ tag: 'Beatles', by: 'you' }] }
+      ])
     })
 
     it('saves after each chunk, with more keys asked each time', async () => {
@@ -242,10 +296,10 @@ describe('the artist groups job', () => {
         if (i === 2) stop.abort()
         return ok([[1, 2]], c.avoid ? 'm2' : 'm1')
       })
-      const j = job(ai, plain(many(450)), noGroups(), stop.signal)
+      const j = job(ai, plain(many(450)), fresh(), stop.signal)
       await expect(j.done).rejects.toThrow()
-      expect(j.groups.asked.size).toBe(200)
-      expect(j.groups.groups.size).toBe(2)
+      expect(j.cache.asked.size).toBe(200)
+      expect(Object.keys(j.groups()).length).toBe(2)
       expect(j.saves).toHaveLength(1)
     })
 
@@ -274,7 +328,7 @@ describe('the artist groups job', () => {
       const { ai } = fakeAi(() => ({ ok: false, error: 'off' }))
       const j = job(ai, plain(['A', 'B']))
       expect(await j.done).toEqual({ end: 'off' })
-      expect(j.groups.asked.size).toBe(0)
+      expect(j.cache.asked.size).toBe(0)
     })
 
     it('limit: stops and says when it goes on', async () => {
@@ -283,7 +337,7 @@ describe('the artist groups job', () => {
       )
       const j = job(ai, plain(many(250)))
       expect(await j.done).toEqual({ end: 'limit', retryAt: 5000 })
-      expect(j.groups.asked.size).toBe(200)
+      expect(j.cache.asked.size).toBe(200)
       expect(j.statuses.at(-1)).toEqual({ state: 'limit', at: 5000 })
     })
 
@@ -312,7 +366,7 @@ describe('the artist groups job', () => {
         stop.abort()
         throw new Error('aborted')
       }
-      await expect(job(ai, plain(['A', 'B']), noGroups(), stop.signal).done).rejects.toThrow()
+      await expect(job(ai, plain(['A', 'B']), fresh(), stop.signal).done).rejects.toThrow()
     })
 
     it('auth: stops with no line of its own (the provider shows its login)', async () => {
@@ -328,7 +382,7 @@ describe('the artist groups job', () => {
         const j = job(ai, plain(['A', 'B']))
         expect(await j.done).toEqual({ end: error })
         expect(j.statuses.at(-1)).toEqual({ state: 'stopped', error })
-        expect(j.groups.asked.size).toBe(0)
+        expect(j.cache.asked.size).toBe(0)
       }
     })
 
@@ -355,7 +409,7 @@ describe('the artist groups job', () => {
         'LIST\n3 C | C album\n4 D | D album',
         'LIST\n3 C | C album\n4 D | D album'
       ])
-      expect(Object.fromEntries(j.groups.groups)).toEqual({ a: 'A', c: 'A', d: 'A' })
+      expect(j.groups()).toEqual({ a: 'A', c: 'A', d: 'A' })
     })
 
     it('splits the LIST before asking when maxInput says it will not fit', async () => {

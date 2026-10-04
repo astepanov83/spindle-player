@@ -172,7 +172,7 @@ describe('FilesPlugin', () => {
     expect(await s.call(LibraryChannel.showFolder, ['/music'])).toBe(false)
     expect(s.folders).toEqual([])
     expect(s.sent()).not.toContain('scan')
-    expect(s.sent()).not.toContain('artist-overrides')
+    expect(s.sent()).not.toContain('set-artists')
     expect(s.sent()).toContain('get-library')
   })
 

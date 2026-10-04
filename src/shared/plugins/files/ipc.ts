@@ -1,7 +1,7 @@
 // Music files' messages between main, the preload and its page half.
 import type { IdMoves } from '../../id-moves'
 import type { ScanStatus } from '../../library'
-import type { ArtistChanges } from './artist-overrides'
+import type { ArtistChanges } from './artist-edit'
 
 export const LibraryChannel = {
   load: 'library:load',

@@ -5,11 +5,14 @@
 import type { AiClient, Answer, AnswerError, JsonRequest } from '../../../shared/ai'
 import type { GroupsStatus } from '../../../shared/library'
 import {
+  addAiGroup,
   addAsked,
-  addGroup,
+  aiKeys,
   artistGroupsTask,
-  type ArtistGroups
-} from '../../../shared/plugins/files/artist-groups'
+  type ArtistAiCache,
+  type ArtistsFile,
+  type Spelling
+} from '../../../shared/plugins/files/artists-file'
 import {
   agreed,
   chunksOf,
@@ -36,8 +39,11 @@ export interface JobDeps {
   ai: AiClient
   // every name the task knows, numbered (taskNames)
   names: TaskName[]
-  // the saved groups and the keys asked; changed in place
-  groups: ArtistGroups
+  // artists.json and the keys asked; changed in place
+  artists: ArtistsFile
+  cache: ArtistAiCache
+  // a tag key's spelling in the library, for the links
+  spelling: Spelling
   // a chunk was done: save the file and show the groups
   saved(): void
   // undefined: no line to show (the task is off, or the provider asks for a login)
@@ -73,9 +79,9 @@ export async function groupArtists(d: JobDeps, signal: AbortSignal): Promise<Job
 }
 
 async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
-  const { ai, names, groups } = d
+  const { ai, names, artists, cache } = d
   if (!ai.on(task)) return { end: 'off' }
-  const chunks = chunksOf(names, groups.asked)
+  const chunks = chunksOf(names, cache.asked)
   if (!chunks.length) return { end: 'done', grouped: 0, asked: false }
   let max: number | undefined
   try {
@@ -102,7 +108,7 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
   for (const chunk of chunks) {
     d.status({
       state: 'running',
-      checked: names.filter((t) => groups.asked.has(t.key)).length,
+      checked: names.filter((t) => cache.asked.has(t.key)).length,
       total: names.length
     })
     let pairs: Map<Pair, string> | undefined
@@ -122,18 +128,19 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
       const [a, b] = p.split('-').map((n) => byN.get(Number(n))!.name)
       d.log(`Artist groups: ${a} = ${b}` + (why ? ` (${why})` : ''))
     }
-    const before = new Set(groups.groups.keys())
+    const before = aiKeys(artists)
     for (const g of uf.groups()) {
       const members = g.map((n) => byN.get(n)!)
-      addGroup(
-        groups,
+      addAiGroup(
+        artists,
         members.map((m) => m.key),
-        shownName(members)
+        shownName(members),
+        d.spelling
       )
     }
-    for (const k of groups.groups.keys()) if (!before.has(k)) grouped++
+    for (const k of aiKeys(artists)) if (!before.has(k)) grouped++
     addAsked(
-      groups,
+      cache,
       chunk.map((t) => t.key)
     )
     d.saved()

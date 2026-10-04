@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { buildLibrary } from './group'
 import { emptyIndex } from './merge'
 import type { FileEntry } from './types'
+import { artistKey } from '../../../shared/plugins/files/artists'
+import { convertOld, resolve, yourKeys } from '../../../shared/plugins/files/artists-file'
 import {
   agreed,
   chunksOf,
@@ -28,16 +30,13 @@ function names(
 ): TaskName[] {
   const ix = emptyIndex()
   for (const f of files) ix.files.set(f.path, f)
-  const { data } = buildLibrary(
-    ix,
-    () => true,
-    new Map(),
-    [],
-    new Map(),
-    new Map(Object.entries(overrides)),
-    new Map(Object.entries(groups))
-  )
-  return taskNames(data.albums, data.tracks)
+  // artists.json as the old files would make it, with the AI on
+  const tags = files.flatMap((f) => [f.artist, f.albumArtist]).filter((t) => t !== undefined)
+  const spelling = (key: string): string | undefined => tags.find((t) => artistKey(t) === key)
+  const old = { groups: new Map(Object.entries(groups)), asked: new Set<string>() }
+  const f = convertOld(new Map(Object.entries(overrides)), old, spelling).artists
+  const { data } = buildLibrary(ix, () => true, new Map(), [], new Map(), resolve(f, true))
+  return taskNames(data.albums, data.tracks, yourKeys(f))
 }
 
 // plain names for the request and answer tests
@@ -65,7 +64,7 @@ describe('the request', () => {
     expect(b.map((t) => [t.n, t.name])).toEqual(a.map((t) => [t.n, t.name]))
   })
 
-  it('lists the names overrides give, not the tags they replace, and no Various Artists', () => {
+  it('lists the names you gave, not the tags they replace, and no Various Artists', () => {
     const list = names(
       [
         song('Kino', 'Gruppa krovi'),
@@ -80,6 +79,14 @@ describe('the request', () => {
       ['A', false],
       ['DDT', true],
       ['Kino', false]
+    ])
+  })
+
+  it('lists a tag you kept as its own name (Use tag) as a name you gave', () => {
+    const list = names([song('Kino', 'Gruppa krovi'), song('Ddt', 'Osen')], { kino: ['Kino'] })
+    expect(list.map((t) => [t.name, t.manual])).toEqual([
+      ['Ddt', false],
+      ['Kino', true]
     ])
   })
 
@@ -211,7 +218,7 @@ describe('groups', () => {
     expect(shownName([a, b, c])).toBe('Bjork')
   })
 
-  it('shows the name a manual override gives, however rare', () => {
+  it('shows a name you gave, however rare', () => {
     const [a, b] = plain(['Beatles', 'The Beatles'])
     expect(
       shownName([

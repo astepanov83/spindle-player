@@ -26,7 +26,7 @@ import {
   type ArtistsFile,
   type By
 } from './artists-file'
-import { maxNames } from './artist-overrides'
+import { maxNames } from './artist-edit'
 
 // an artist: tags as [tag, by]
 const artist = (name: string, nameBy: By, ...tags: [string, By][]): ArtistEntry => ({

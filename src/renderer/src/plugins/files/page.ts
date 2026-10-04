@@ -7,11 +7,7 @@ import {
   type Artist,
   type ArtistTag
 } from '../../../../shared/plugins/files/artists'
-import {
-  cleanNames,
-  editArtist,
-  maxNameLength
-} from '../../../../shared/plugins/files/artist-overrides'
+import { cleanNames, editArtist, maxNameLength } from '../../../../shared/plugins/files/artist-edit'
 import type { Album, Art } from '../../../../shared/library'
 import type { ItemKey } from '../../../../shared/plugins/items'
 import { queueLink } from '../../../../shared/saved-queue'
@@ -366,7 +362,7 @@ function artistBlocks(a: Artist): Block[] {
       }
     ]
   }
-  // tags are listed when an override changed one, or when there are several
+  // tags are listed when a link changed one, or when there are several
   if (a.tags.length > 1 || a.tags.some((t) => t.names))
     head.note = {
       text: 'From tags:',
@@ -587,8 +583,8 @@ function artistAct(a: Artist, id: string, value?: string): void {
   else if (id === 'use-tag') {
     const t = a.tags.find((t) => t.key === value)
     if (!t) return
-    // a grouped tag gets its own name as an override, so the group never takes it again
-    window.libraryApi.setArtists({ [t.key]: t.grouped ? [t.name] : null })
+    // saved as its own name, linked by you, so the AI never links it again
+    window.libraryApi.setArtists({ [t.key]: null })
     // with no other tag, the artist becomes the tag again
     followArtist(a.tags.length > 1 ? a.key : t.key)
   }

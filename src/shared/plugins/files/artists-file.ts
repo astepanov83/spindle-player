@@ -4,7 +4,7 @@
 // Tags match by artistKey, so tags and library.json never change. The AI's
 // progress is in a cache file of its own (artist-ai-cache.json).
 import { artistKey, namesOf, tagOf } from './artists'
-import { cleanNames, isKey, maxNameLength, maxNames, type ArtistChanges } from './artist-overrides'
+import { cleanNames, isKey, maxNameLength, maxNames, type ArtistChanges } from './artist-edit'
 import type { Album, ArtistCredit, Track } from '../../library'
 
 // The AI task's id on the AI service, for AiClient and the plugin list.

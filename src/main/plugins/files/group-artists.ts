@@ -7,8 +7,8 @@ import { artistKey, namesOf, tagOf } from '../../../shared/plugins/files/artists
 import { lookUpArtist } from './artist-photo'
 import { checksOf } from './group'
 
-// One name the task knows: a tag with no manual override, or a name an
-// override gives (so a tag can join it).
+// One name the task knows: a tag with no link by you, or a name you gave a
+// tag (so a tag can join it).
 export interface TaskName {
   // the line's number: its place in the sorted list, from 1
   n: number
@@ -21,7 +21,7 @@ export interface TaskName {
   count: number
   // when `name` was first seen in library order, for a tie
   seen: number
-  // a manual override gives it
+  // you gave it (a link by you in artists.json)
   manual: boolean
 }
 
@@ -73,8 +73,13 @@ export const maxOutput = 8000
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
 // Every name the task knows, sorted and numbered. Names like "Various
-// Artists" and "Unknown artist" match anyone, so they are left out.
-export function taskNames(albums: Album[], tracks: Track[]): TaskName[] {
+// Artists" and "Unknown artist" match anyone, so they are left out. yours:
+// keys of tags with a link by you (yourKeys), which give their names instead.
+export function taskNames(
+  albums: Album[],
+  tracks: Track[],
+  yours: Set<string> = new Set()
+): TaskName[] {
   const byId = new Map(tracks.map((t) => [t.id, t]))
   const byKey = new Map<
     string,
@@ -88,11 +93,12 @@ export function taskNames(albums: Album[], tracks: Track[]): TaskName[] {
   >()
   // credits so far, so spellings of different keys can be told apart on a tie
   let seen = 0
-  // the names a credit gives the task: the tag, or an override's names
+  // the names a credit gives the task: the tag, or the names you gave it. A
+  // tag you kept as it is ("Use tag") shows plain, so it is found by key.
   const namesFor = (c: ArtistCredit): { names: string[]; manual: boolean } =>
-    c.artistTag === undefined || c.grouped
-      ? { names: [tagOf(c)], manual: false }
-      : { names: namesOf(c), manual: true }
+    (c.artistTag !== undefined && !c.grouped) || yours.has(artistKey(tagOf(c)))
+      ? { names: namesOf(c), manual: true }
+      : { names: [tagOf(c)], manual: false }
   const credit = (c: ArtistCredit): Set<string> => {
     const keys = new Set<string>()
     const { names, manual } = namesFor(c)
@@ -254,10 +260,9 @@ export class UnionFind {
   }
 }
 
-// The name a group shows: never one the model picks. A name a manual
-// override gives comes first, so the tags join what the user chose; else the
-// single spelling seen most often, the first seen on a tie (as in
-// listArtists). Each member's own top spelling is the only one that can win.
+// The name a group shows: never one the model picks. A name you gave comes
+// first, so the tags join what the user chose; else the single spelling
+// seen most often, the first seen on a tie (as in listArtists). Each member's own top spelling is the only one that can win.
 export function shownName(members: TaskName[]): string {
   const pool = members.some((m) => m.manual) ? members.filter((m) => m.manual) : members
   let best = pool[0]

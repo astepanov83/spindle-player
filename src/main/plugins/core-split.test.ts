@@ -9,6 +9,8 @@
 // A plugin's folders are src/main/plugins/<id>, src/renderer/src/plugins/<id>
 // and src/shared/plugins/<id>. Everything else is the core, but for the plugin
 // list files below.
+//
+// The same for AI providers (spec "AI models", "Tests"), at the end.
 import { readdirSync, readFileSync } from 'fs'
 import { join, posix, resolve } from 'path'
 import { parse } from 'svelte/compiler'
@@ -273,6 +275,103 @@ describe('the core and the plugins', () => {
       'src/renderer/src/stores/x.test.ts: imports ../plugins/files/store.svelte, of files (core)',
       "src/renderer/src/stores/x.test.ts: names a plugin: 'files:a'",
       "src/renderer/src/plugins/radio/Row.svelte: a .svelte file in a plugin's page half"
+    ])
+  })
+})
+
+// AI providers, like plugins: a provider's folder is src/main/ai/providers/<id>,
+// named by its id. Fails on:
+// - a provider's id in a string of a file outside its folder (any case, as a
+//   word, so 'OpenRouter' and 'openrouter.ai' count); tests may name them,
+// - an import of a provider's folder from outside it,
+// - a plugin's file (where tasks live) that imports from src/main/ai/,
+// - a .svelte file under src/main/ai.
+const providersDir = 'src/main/ai/providers'
+const providerList = `${providersDir}/list.ts`
+// core tests that wire a provider
+const providerTests = ['src/main/ai/service.test.ts']
+const notProviders = [{ file: 'src/shared/settings.ts', text: 'openrouter', why: 'the default' }]
+
+function providerOf(file: string, providers: string[]): string | undefined {
+  return providers.find((id) => file.startsWith(`${providersDir}/${id}/`))
+}
+
+function aiProblems(sources: Source[], providers: string[]): string[] {
+  const out: string[] = []
+  const word = (id: string): RegExp => new RegExp(`\\b${id}\\b`, 'i')
+  for (const src of sources) {
+    const { file } = src
+    if (file.startsWith('src/main/ai/') && file.endsWith('.svelte'))
+      out.push(`${file}: a .svelte file for AI`)
+    const own = providerOf(file, providers)
+    const free = file === providerList || providerTests.includes(file)
+    const { imports, strings } = read(src)
+    for (const spec of imports) {
+      if (!spec.startsWith('.')) continue
+      const target = posix.join(posix.dirname(file), spec.split('?')[0])
+      if (pluginOf(file) && target.startsWith('src/main/ai/'))
+        out.push(`${file}: a plugin imports ${spec}`)
+      const to = providerOf(`${target}/`, providers)
+      if (to && to !== own && !free) out.push(`${file}: imports ${spec}, of provider ${to}`)
+    }
+    if (free || /\.test\.ts$/.test(file)) continue
+    for (const id of providers) {
+      if (id === own) continue
+      for (const s of strings) {
+        if (!word(id).test(s)) continue
+        if (notProviders.some((n) => n.file === file && n.text === s)) continue
+        out.push(`${file}: names provider ${id}: '${s}'`)
+      }
+    }
+  }
+  return out
+}
+
+describe('the AI core, its providers and tasks', () => {
+  it('name providers only in their folder and the provider list', () => {
+    const root = resolve(__dirname, '../../..')
+    const providers = readdirSync(join(root, providersDir), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+    const sources = sourcesUnder(root, 'src')
+    expect(aiProblems(sources, providers)).toEqual([])
+    const files = sources.map((s) => s.file)
+    for (const f of [providerList, ...providerTests, ...notProviders.map((n) => n.file)])
+      expect(files).toContain(f)
+  })
+
+  it('finds a provider named or imported outside its folder', () => {
+    const files = [
+      { file: 'src/main/ai/service.ts', text: "if (id === 'acme') go()" },
+      { file: 'src/main/x.ts', text: "const u = 'https://api.Acme.com/v1'" },
+      { file: 'src/main/ai/pick.ts', text: "import { m } from './providers/acme/models'" },
+      { file: 'src/main/ai/providers/other/a.ts', text: "import { m } from '../acme/models'" },
+      // fine: its own folder, the list, a test, a comment, a longer word
+      { file: 'src/main/ai/providers/acme/a.ts', text: "const u = 'https://acme.com'" },
+      { file: providerList, text: "import { A } from './acme/provider'\nconst a = 'acme'" },
+      { file: 'src/main/ai/x.test.ts', text: "it('asks acme', () => {})" },
+      { file: 'src/main/y.ts', text: "// 'acme'\nconst a = 'acmeish'" }
+    ]
+    expect(aiProblems(files, ['acme', 'other'])).toEqual([
+      "src/main/ai/service.ts: names provider acme: 'acme'",
+      "src/main/x.ts: names provider acme: 'https://api.Acme.com/v1'",
+      'src/main/ai/pick.ts: imports ./providers/acme/models, of provider acme',
+      'src/main/ai/providers/other/a.ts: imports ../acme/models, of provider acme'
+    ])
+  })
+
+  it('finds a task that imports the AI core, and a .svelte file for AI', () => {
+    const files = [
+      { file: 'src/main/plugins/radio/t.ts', text: "import { pick } from '../../ai/pick'" },
+      {
+        file: 'src/main/plugins/radio/u.ts',
+        text: "import type { AiClient } from '../../../shared/ai'"
+      },
+      { file: 'src/main/ai/providers/acme/Key.svelte', text: '<p>x</p>' }
+    ]
+    expect(aiProblems(files, ['acme'])).toEqual([
+      'src/main/plugins/radio/t.ts: a plugin imports ../../ai/pick',
+      'src/main/ai/providers/acme/Key.svelte: a .svelte file for AI'
     ])
   })
 })

@@ -41,6 +41,7 @@ const realClock: Clock = { now: Date.now, sleep }
 interface Login {
   cancelled: boolean
   close?: () => void
+  abort?: () => void
 }
 
 export class OpenRouterProvider implements Provider {
@@ -62,8 +63,9 @@ export class OpenRouterProvider implements Provider {
   #list: ModelInfo[] = []
   #listAt = 0
   #listError: string | undefined
-  // free models that said "no endpoints" since the last answer
-  #noEndpoints = new Set<string>()
+  // asks in a row that said "no endpoints". The service tries 3 models at most
+  // per request, so the whole list is never seen.
+  #noEndpoints = 0
 
   constructor(private readonly clock: Clock = realClock) {}
 
@@ -128,17 +130,14 @@ export class OpenRouterProvider implements Provider {
     if (!ctx) return
     if (id === 'connect' && actionId === 'press') await this.#connect(ctx)
     else if (id === 'cancel' && actionId === 'press') {
-      if (this.#login) {
-        this.#login.cancelled = true
-        this.#login.close?.()
-      }
+      this.#cancelLogin()
     } else if (id === 'disconnect' && actionId === 'press') {
       ctx.secrets.remove('key')
       this.#note = {
         text: 'Disconnected. The key stays in your OpenRouter account: delete it at openrouter.ai, Settings, Keys.',
         error: false
       }
-      this.#noEndpoints.clear()
+      this.#noEndpoints = 0
       ctx.changed()
     } else if (id === 'model' && actionId === 'set' && value !== undefined) {
       ctx.settings.set('model', value)
@@ -191,7 +190,7 @@ export class OpenRouterProvider implements Provider {
           ctx.changed()
         }
       )
-      this.#trackPrivacy(ctx, model, answer, noEndpoints)
+      this.#trackPrivacy(ctx, answer, noEndpoints)
       return answer
     } catch (error) {
       // stop() aborted it, not the caller
@@ -208,10 +207,16 @@ export class OpenRouterProvider implements Provider {
   stop(): void {
     for (const ctl of this.#running) ctl.abort()
     this.#running.clear()
-    if (this.#login) {
-      this.#login.cancelled = true
-      this.#login.close?.()
-    }
+    this.#cancelLogin()
+  }
+
+  #cancelLogin(): void {
+    const login = this.#login
+    if (!login) return
+    login.cancelled = true
+    // stops a key exchange that already started, too
+    login.abort?.()
+    login.close?.()
   }
 
   // aborts with the caller's signal, or with stop()
@@ -224,13 +229,12 @@ export class OpenRouterProvider implements Provider {
   }
 
   #privacyBlocked(): boolean {
-    return this.#list.length > 0 && this.#list.every((m) => this.#noEndpoints.has(m.id))
+    return this.#noEndpoints >= 3
   }
 
-  #trackPrivacy(ctx: ProviderContext, model: ModelInfo, answer: Answer, no?: boolean): void {
+  #trackPrivacy(ctx: ProviderContext, answer: Answer, no?: boolean): void {
     const before = this.#privacyBlocked()
-    if (answer.ok) this.#noEndpoints.clear()
-    else if (no) this.#noEndpoints.add(model.id)
+    this.#noEndpoints = !answer.ok && no ? this.#noEndpoints + 1 : 0
     if (before !== this.#privacyBlocked()) ctx.changed()
   }
 
@@ -274,14 +278,16 @@ export class OpenRouterProvider implements Provider {
     this.#note = undefined
     ctx.changed()
     const ctl = this.#link(new AbortController().signal)
+    login.abort = () => ctl.abort()
     try {
       // PKCE: OpenRouter checks the verifier against the challenge it was given
       const verifier = randomBytes(32).toString('base64url')
       const challenge = createHash('sha256').update(verifier).digest('base64url')
       const cb = await ctx.callbackServer()
       login.close = () => cb.close()
-      if (login.cancelled) cb.close()
       try {
+        // cancelled before the server was up: no browser, no login
+        if (login.cancelled) return
         ctx.openExternal(
           `${site}/auth?callback_url=${encodeURIComponent(cb.url)}` +
             `&code_challenge=${challenge}&code_challenge_method=S256&key_label=${appName}`
@@ -303,10 +309,11 @@ export class OpenRouterProvider implements Provider {
           ctl.signal
         )
         const key = res.status === 200 ? (JSON.parse(res.text) as { key?: unknown }).key : undefined
+        if (login.cancelled) return
         if (typeof key !== 'string' || !key)
           throw new Error(`OpenRouter gave no key (HTTP ${res.status})`)
         ctx.secrets.set('key', key)
-        this.#noEndpoints.clear()
+        this.#noEndpoints = 0
         void this.#refresh()
       } finally {
         cb.close()

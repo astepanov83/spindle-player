@@ -201,6 +201,46 @@ describe('login', () => {
     expect(t.secrets.has('key')).toBe(false)
   })
 
+  it('does not save a key when Cancel comes during the exchange', async () => {
+    const t = setup()
+    const cb = fakeServer()
+    t.ctx.callbackServer = async () => cb.server
+    let seen: AbortSignal | undefined
+    t.replies.push((call) => {
+      seen = call.init.signal ?? undefined
+      return new Promise((resolve, reject) => {
+        seen?.addEventListener('abort', () => reject(new Error('aborted')))
+        // would answer later, as if the key came back anyway
+        setTimeout(() => resolve(json({ key: 'sk-late' })), 20)
+      })
+    })
+    const done = t.provider.act('connect', 'press')
+    await tick()
+    cb.answer(new URLSearchParams({ code: 'c' }))
+    await tick()
+    await t.provider.act('cancel', 'press')
+    await done
+    expect(seen?.aborted).toBe(true)
+    expect(t.secrets.has('key')).toBe(false)
+    expect(t.provider.blocks().some((b) => b.kind === 'status' && b.error)).toBe(false)
+  })
+
+  it('does not open the browser when Cancel comes before the server is up', async () => {
+    const t = setup()
+    const cb = fakeServer()
+    let up!: () => void
+    t.ctx.callbackServer = () => new Promise((resolve) => (up = () => resolve(cb.server)))
+    const done = t.provider.act('connect', 'press')
+    await tick()
+    await t.provider.act('cancel', 'press')
+    up()
+    await done
+    expect(t.opened).toEqual([])
+    expect(cb.server.closed).toBeGreaterThan(0)
+    expect(t.calls).toEqual([])
+    expect(t.provider.blocks()[0]).toMatchObject({ id: 'connect' })
+  })
+
   it('closes the server when stopped while waiting', async () => {
     const t = setup()
     const cb = fakeServer()
@@ -485,7 +525,7 @@ describe('ask', () => {
     expect(JSON.stringify([a, b, t.logs, t.provider.blocks()])).not.toContain('sk-very-secret')
   })
 
-  it('shows the privacy status once every free model has no endpoints', async () => {
+  it('shows the privacy status after 3 asks in a row with no endpoints, as the service asks', async () => {
     const t = setup({ key: 'k' })
     t.replies.push(() => json(models))
     const all = await t.provider.models(noSignal)
@@ -493,15 +533,25 @@ describe('ask', () => {
       t.provider
         .blocks()
         .some((b) => b.kind === 'status' && b.error && b.text.includes('privacy settings'))
-    for (const m of all) {
+    const none = (): void =>
+      void t.replies.push(() => json({ error: { message: 'No endpoints' } }, 404))
+    // each request tries the same top 3 models, never more
+    for (let n = 0; n < 3; n++) {
       expect(hasStatus()).toBe(false)
-      t.replies.push(() => json({ error: { message: 'No endpoints found' } }, 404))
-      await ask(t, m)
+      none()
+      await ask(t, all[n])
     }
     expect(hasStatus()).toBe(true)
     // one good answer clears it
     t.replies.push(() => json(answerBody('{}')))
     await ask(t, all[0])
+    expect(hasStatus()).toBe(false)
+    // another failure in between starts the count again
+    none()
+    none()
+    t.replies.push(() => json({}, 500))
+    none()
+    for (const m of all.slice(0, 4)) await ask(t, m)
     expect(hasStatus()).toBe(false)
   })
 })

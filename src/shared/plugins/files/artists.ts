@@ -1,16 +1,16 @@
 // Who is an artist in the Artists view (ticket 021), from tags the scan
-// already reads, after the artist overrides (ticket 024). The page lists them
-// and the library process looks up their photos with the same list, so both
-// use the same keys.
+// already reads, after the names in artists.json (ticket 069). The page
+// lists them and the library process looks up their photos with the same
+// list, so both use the same keys.
 import type { Album, ArtistCredit, Track } from '../../library'
 
-// A tag an artist comes from, spelled as it was first seen. names: what an
-// override or a group made of it; none when the tag is used as it is.
+// A tag an artist comes from, spelled as it was first seen. names: what a
+// link in artists.json made of it; none when the tag is used as it is.
 export interface ArtistTag {
   key: string
   name: string
   names?: string[]
-  // a group (ticket 068) made the names, not an override
+  // the AI's links made the names (ticket 068), none of yours
   grouped?: true
 }
 

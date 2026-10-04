@@ -7,7 +7,7 @@ export interface Track {
   // seconds
   duration: number
   albumId: string
-  // the tag, or what an artist override made of it (see ArtistCredit)
+  // the tag, or what artists.json made of it (see ArtistCredit)
   artist: string
   artists?: string[]
   artistTag?: string
@@ -38,16 +38,16 @@ export interface Folder {
   parent: number
 }
 
-// An artist credit after the overrides (ticket 024) and groups (ticket 068).
-// `artist` is what is shown: the tag, a new name, or the names of a split
+// An artist credit after artists.json (ticket 069): your renames and splits,
+// and the AI's groups while that task is on. `artist` is what is shown: the tag, a new name, or the names of a split
 // joined by ", ".
 export interface ArtistCredit {
   artist: string
-  // the names, only when an override split the tag into several
+  // the names, only when a split made the tag several artists
   artists?: string[]
-  // the tag as written, only when an override or a group changed it
+  // the tag as written, only when a link changed it
   artistTag?: string
-  // set when an artist group (ticket 068) changed the tag, not an override
+  // set when the AI's links changed the tag (ticket 068), none of yours
   grouped?: true
 }
 

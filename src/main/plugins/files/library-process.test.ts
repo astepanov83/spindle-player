@@ -21,6 +21,7 @@ const start: WorkerStart = {
   overridesPath: '/u/artist-overrides.json',
   groupsPath: '/u/artist-groups.json',
   aiOn: {},
+  aiEnabled: {},
   userAgent: 'Spindle/test',
   keepCovers: [],
   on: true

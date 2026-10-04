@@ -44,8 +44,10 @@ export class LibraryService {
   // names, no audio and no covers made from the music files. The library is
   // still read and given to the page, and the radio's song lookup goes on.
   #on: boolean
-  // AiClient.on of this plugin's tasks, as last sent to the library process
+  // AiClient.on and AiClient.enabled of this plugin's tasks, as last sent to
+  // the library process
   #aiOn: Record<string, boolean>
+  #aiEnabled: Record<string, boolean>
   // the library process's AiClient calls, made here where the key is
   #aiRequests: AiRequests
 
@@ -67,7 +69,9 @@ export class LibraryService {
   ) {
     this.#on = on
     this.#aiOn = this.#tasksOn()
-    // the library process only gets messages, so it is told when on() changes
+    this.#aiEnabled = this.#tasksEnabled()
+    // the library process only gets messages, so it is told when on() or
+    // enabled() changes
     ai?.changed(() => this.#aiChanged())
     this.#aiRequests = new AiRequests(ai, [artistGroupsTask], (m) => this.#post(m))
     if (!this.ffmpeg || !this.ffprobe)
@@ -103,6 +107,7 @@ export class LibraryService {
         overridesPath: join(this.dir, 'artist-overrides.json'),
         groupsPath: join(this.dir, 'artist-groups.json'),
         aiOn: this.#aiOn,
+        aiEnabled: this.#aiEnabled,
         userAgent: this.userAgent,
         keepCovers: this.keepCovers(),
         on: this.#on
@@ -130,11 +135,19 @@ export class LibraryService {
     return { [artistGroupsTask]: this.ai?.on(artistGroupsTask) ?? false }
   }
 
+  #tasksEnabled(): Record<string, boolean> {
+    return { [artistGroupsTask]: this.ai?.enabled(artistGroupsTask) ?? false }
+  }
+
   #aiChanged(): void {
-    const next = this.#tasksOn()
-    if (Object.entries(next).every(([t, on]) => this.#aiOn[t] === on)) return
-    this.#aiOn = next
-    this.#post({ type: 'ai-on', tasks: next })
+    const on = this.#tasksOn()
+    const enabled = this.#tasksEnabled()
+    const same = (a: Record<string, boolean>, b: Record<string, boolean>): boolean =>
+      Object.entries(a).every(([t, v]) => b[t] === v)
+    if (same(on, this.#aiOn) && same(enabled, this.#aiEnabled)) return
+    this.#aiOn = on
+    this.#aiEnabled = enabled
+    this.#post({ type: 'ai-on', tasks: on, enabled })
   }
 
   #post(m: WorkerIn): boolean {

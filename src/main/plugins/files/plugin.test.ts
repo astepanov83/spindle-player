@@ -48,18 +48,22 @@ const { FilesPlugin } = await import('./plugin')
 
 type Handler = (...args: unknown[]) => unknown
 
-// A fake AI service: the tasks switched on, and a way to say on() changed.
+// A fake AI service: the tasks on (ready), those switched on but not ready,
+// and a way to say on() or enabled() changed.
 function fakeAi(): {
   client: AiClient
   tasks: Set<string>
+  notReady: Set<string>
   change(): void
   asked: { task: string; avoid?: string[] }[]
 } {
   const asked: { task: string; avoid?: string[] }[] = []
   const tasks = new Set<string>()
+  const notReady = new Set<string>()
   const listeners = new Set<() => void>()
   const client: AiClient = {
     on: (task) => tasks.has(task),
+    enabled: (task) => tasks.has(task) || notReady.has(task),
     changed: (cb) => {
       listeners.add(cb)
       return () => listeners.delete(cb)
@@ -70,7 +74,7 @@ function fakeAi(): {
       return { ok: true, json: { matches: [] }, model: 'm' }
     }
   }
-  return { client, tasks, change: () => listeners.forEach((f) => f()), asked }
+  return { client, tasks, notReady, change: () => listeners.forEach((f) => f()), asked }
 }
 
 function setup(
@@ -210,20 +214,34 @@ describe('FilesPlugin', () => {
     expect(s.sent()).toContain('scan')
   })
 
-  it('tells the process whether the artist groups task is on, at start and when it changes', () => {
+  it('tells the process whether the artist groups task is on and enabled, at start and when it changes', () => {
     const ai = fakeAi()
     ai.tasks.add('artist-groups')
     setup(true, ai)
     expect(children[0].sent[0]).toMatchObject({
       type: 'start',
-      start: { aiOn: { 'artist-groups': true } }
+      start: { aiOn: { 'artist-groups': true }, aiEnabled: { 'artist-groups': true } }
     })
     // a change that leaves the task as it was sends nothing
     ai.change()
     expect(children[0].sent.filter((m) => m.type === 'ai-on')).toEqual([])
+    // the provider is no longer ready (a refused key): still enabled
     ai.tasks.delete('artist-groups')
+    ai.notReady.add('artist-groups')
     ai.change()
-    expect(children[0].sent.at(-1)).toEqual({ type: 'ai-on', tasks: { 'artist-groups': false } })
+    expect(children[0].sent.at(-1)).toEqual({
+      type: 'ai-on',
+      tasks: { 'artist-groups': false },
+      enabled: { 'artist-groups': true }
+    })
+    // switched off
+    ai.notReady.delete('artist-groups')
+    ai.change()
+    expect(children[0].sent.at(-1)).toEqual({
+      type: 'ai-on',
+      tasks: { 'artist-groups': false },
+      enabled: { 'artist-groups': false }
+    })
   })
   it("makes the library process's AI requests with its AiClient and answers them", async () => {
     const ai = fakeAi()

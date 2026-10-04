@@ -48,6 +48,15 @@ export interface JobDeps {
 
 const task = artistGroupsTask
 
+// the longest wait setTimeout takes
+const maxWaitMs = 2 ** 31 - 1
+// a reset time already past would ask again at once, over and over
+const minWaitMs = 30_000
+
+// How long to wait after a limit before the next run.
+export const limitWaitMs = (retryAt: number, now: number): number =>
+  Math.min(maxWaitMs, Math.max(minWaitMs, retryAt - now))
+
 // An abort rejects ask and maxInput, so it ends the run by throwing; what was
 // saved stays and the next run goes on from `asked`.
 export async function groupArtists(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
@@ -55,6 +64,7 @@ export async function groupArtists(d: JobDeps, signal: AbortSignal): Promise<Job
   if (end.end === 'done') {
     if (end.asked) d.status({ state: 'done', grouped: end.grouped, at: d.now() })
   } else if (end.end === 'limit') d.status({ state: 'limit', at: end.retryAt })
+  // failed is a real failure: one usable model is asked twice, not failed
   else if (end.end === 'network' || end.end === 'failed')
     d.status({ state: 'stopped', error: end.end })
   else d.status(undefined)
@@ -67,8 +77,17 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
   if (!ai.on(task)) return { end: 'off' }
   const chunks = chunksOf(names, groups.asked)
   if (!chunks.length) return { end: 'done', grouped: 0, asked: false }
-  const max = await ai.maxInput(task, maxOutput, signal)
-  if (max === undefined) return { end: 'off' }
+  let max: number | undefined
+  try {
+    max = await ai.maxInput(task, maxOutput, signal)
+  } catch (e) {
+    // a stop still ends the run by throwing
+    signal.throwIfAborted()
+    d.log(`Artist groups: ${e}`)
+    return { end: 'failed' }
+  }
+  // still on: the provider had no model list to give
+  if (max === undefined) return { end: ai.on(task) ? 'network' : 'off' }
   // the LIST is split when a request with it whole would not fit
   let parts = 1
   const fits = (p: number): boolean =>
@@ -123,8 +142,10 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
 }
 
 // One chunk against every part of the LIST, each asked twice: only pairs two
-// models both gave are kept. A second model that can't answer keeps nothing
-// of the chunk, so it is asked again later.
+// models both gave are kept. With only one model to use (a fixed choice, or
+// one that fits) it is asked twice instead, and the two answers must agree.
+// A second answer that fails keeps nothing of the chunk, so it is asked
+// again later.
 async function askChunk(
   ai: AiClient,
   names: TaskName[],
@@ -138,7 +159,8 @@ async function askChunk(
     const req: JsonRequest = { system, user: userText(part, chunk), schema, maxOutput }
     const first = await ai.ask(task, req, signal)
     if (!first.ok) return stopFor(first)
-    const second = await ai.ask(task, req, signal, [first.model])
+    let second = await ai.ask(task, req, signal, [first.model])
+    if (!second.ok && second.avoided) second = await ai.ask(task, req, signal)
     if (!second.ok) return stopFor(second)
     const listIds = new Set(part.map((t) => t.n))
     const both = agreed(

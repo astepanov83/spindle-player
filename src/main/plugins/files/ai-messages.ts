@@ -10,22 +10,28 @@ type Call =
   | { type: 'ai-max-input'; task: string; maxOutput: number }
 type Reply = Extract<WorkerIn, { type: 'ai-reply' }>
 
-// The library process's half. on() is what main last sent ('ai-on').
+// The library process's half. on() and enabled() are what main last sent ('ai-on').
 export class AiOverMessages implements AiClient {
   #next = 0
   #waiting = new Map<number, (r: Reply) => void>()
   #on: Record<string, boolean> = {}
+  #enabled: Record<string, boolean> = {}
   #listeners = new Set<() => void>()
 
   constructor(readonly post: (m: WorkerOut) => void) {}
 
-  setOn(tasks: Record<string, boolean>): void {
+  setOn(tasks: Record<string, boolean>, enabled: Record<string, boolean>): void {
     this.#on = tasks
+    this.#enabled = enabled
     for (const f of [...this.#listeners]) f()
   }
 
   on(task: string): boolean {
     return !!this.#on[task]
+  }
+
+  enabled(task: string): boolean {
+    return !!this.#enabled[task]
   }
 
   changed(cb: () => void): () => void {
@@ -38,7 +44,11 @@ export class AiOverMessages implements AiClient {
     maxOutput: number,
     signal: AbortSignal
   ): Promise<number | undefined> {
-    return (await this.#call({ type: 'ai-max-input', task, maxOutput }, signal)).max
+    const r = await this.#call({ type: 'ai-max-input', task, maxOutput }, signal)
+    // main's maxInput threw: a failure, not the task being off
+    if (r.answer && !r.answer.ok && r.answer.error !== 'off')
+      throw new Error(`maxInput failed${r.answer.detail ? `: ${r.answer.detail}` : ''}`)
+    return r.max
   }
 
   async ask(

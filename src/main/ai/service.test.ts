@@ -104,6 +104,27 @@ describe('AiService with the fake provider', () => {
     expect(await ai.client.ask(task.id, req, signal)).toEqual({ ok: false, error: 'off' })
   })
 
+  it('says enabled by the switch alone, ready or not', async () => {
+    const { ai } = setup()
+    let heard = 0
+    ai.client.changed(() => heard++)
+    expect(ai.client.enabled(task.id)).toBe(false)
+    ai.setTask(task.id, true)
+    expect(heard).toBe(1)
+    // no key yet: enabled, not on
+    expect(ai.client.enabled(task.id)).toBe(true)
+    expect(ai.client.on(task.id)).toBe(false)
+    await ai.act('fake', 'key', 'set', key)
+    expect(ai.client.on(task.id)).toBe(true)
+    // the key gone (a refused key, Disconnect): still enabled
+    await ai.act('fake', 'key', 'remove')
+    expect(ai.client.on(task.id)).toBe(false)
+    expect(ai.client.enabled(task.id)).toBe(true)
+    ai.setTask(task.id, false)
+    expect(ai.client.enabled(task.id)).toBe(false)
+    expect(ai.client.enabled('no-such-task')).toBe(false)
+  })
+
   it('keeps the key in the secrets file only: never in the state, the settings or the log', async () => {
     const { ai, settingsFile, lines, signal } = setup()
     ai.setTask(task.id, true)
@@ -269,6 +290,22 @@ describe('ask', () => {
       ok: false,
       error: 'failed'
     })
+    expect(asked).toEqual(['fake-schema'])
+  })
+
+  it('says avoided, and asks nothing, when every model that fits is avoided', async () => {
+    const asked: string[] = []
+    const answer = (m: ModelInfo): Answer => {
+      asked.push(m.id)
+      return { ok: false, error: 'failed' }
+    }
+    const { ai, signal } = setup({ providers: [ready(answer)], saved: on })
+    const a = await ai.client.ask(task.id, req, signal, ['fake-schema', 'fake-prompt'])
+    expect(a).toMatchObject({ ok: false, error: 'failed', avoided: true })
+    expect(asked).toEqual([])
+    // a model that was asked and failed is not avoided
+    const b = await ai.client.ask(task.id, req, signal, ['fake-prompt'])
+    expect(b).toEqual({ ok: false, error: 'failed' })
     expect(asked).toEqual(['fake-schema'])
   })
 

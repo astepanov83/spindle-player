@@ -106,8 +106,10 @@ export interface WorkerStart {
   overridesPath: string
   // artist spellings grouped by a model (ticket 068)
   groupsPath: string
-  // the files plugin's AI tasks that are on (AiClient.on), by task id; see 'ai-on'
+  // the files plugin's AI tasks that are on (AiClient.on) and switched on
+  // (AiClient.enabled), by task id; see 'ai-on'
   aiOn: Record<string, boolean>
+  aiEnabled: Record<string, boolean>
   // sent with every online request
   userAgent: string
   // covers main uses that the index does not know: station logos (ticket 030)
@@ -170,9 +172,11 @@ export type WorkerIn =
   | { type: 'song-cover'; req: number; artist: string; song: string }
   // main gave up on an ask (a new title came): stop it
   | { type: 'cancel'; req: number }
-  // AiClient.on of the files plugin's AI tasks changed. While the artist
-  // groups task is off, groups are not applied (the file is kept).
-  | { type: 'ai-on'; tasks: Record<string, boolean> }
+  // AiClient.on (tasks) or AiClient.enabled of the files plugin's AI tasks
+  // changed. The artist groups job runs while on; groups are applied while
+  // enabled, so a provider that is not ready does not hide them. Switched
+  // off, they are not applied (the file is kept).
+  | { type: 'ai-on'; tasks: Record<string, boolean>; enabled: Record<string, boolean> }
   // main's answer to an 'ai-ask' (answer) or 'ai-max-input' (max), by its id.
   // A call it was told to cancel gets none.
   | { type: 'ai-reply'; id: number; answer?: Answer; max?: number }

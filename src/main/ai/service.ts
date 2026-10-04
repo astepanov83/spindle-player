@@ -131,6 +131,7 @@ export function createAiService(env: AiEnv): AiService {
 
   const client: AiClient = {
     on: (task) => !!readyFor(task),
+    enabled: taskOn,
     changed: listen,
     async maxInput(task, maxOutput, signal) {
       const p = readyFor(task)
@@ -148,7 +149,8 @@ export function createAiService(env: AiEnv): AiService {
         return { ok: false, error: 'too-big' }
       }
       const picked = pickModels(list, size, req.maxOutput, avoid)
-      if (!picked.length) return { ok: false, error: 'failed', detail: 'every model avoided' }
+      if (!picked.length)
+        return { ok: false, error: 'failed', detail: 'every model avoided', avoided: true }
       return askInTurn(picked, (m) => askOne(p, task, m, req, size, signal), signal)
     }
   }

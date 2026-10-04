@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { AiClient, Answer, JsonRequest } from '../../../shared/ai'
 import type { GroupsStatus } from '../../../shared/library'
 import { noGroups, type ArtistGroups } from '../../../shared/plugins/files/artist-groups'
-import { groupArtists, type JobEnd } from './group-artists-job'
+import { groupArtists, limitWaitMs, type JobEnd } from './group-artists-job'
 import { maxOutput, schema, system, type TaskName } from './group-artists'
 
 interface Call {
@@ -20,6 +20,7 @@ function fakeAi(
   const calls: Call[] = []
   const ai: AiClient = {
     on: () => o.on ?? true,
+    enabled: () => o.on ?? true,
     changed: () => () => {},
     maxInput: async () => ((o.on ?? true) ? (o.max ?? 256_000) : undefined),
     ask: async (task, req, signal, avoid) => {
@@ -149,6 +150,54 @@ describe('the artist groups job', () => {
       expect(j.groups.asked.size).toBe(0)
       expect(j.statuses.at(-1)).toEqual({ state: 'stopped', error: 'failed' })
     })
+    describe('one model to use (a fixed choice, or only one fits)', () => {
+      const avoided: Answer = {
+        ok: false,
+        error: 'failed',
+        detail: 'every model avoided',
+        avoided: true
+      }
+
+      it('asks the same model again and keeps the pairs both answers gave', async () => {
+        const { ai, calls } = fakeAi((c, i) =>
+          c.avoid
+            ? avoided
+            : ok(
+                i === 0
+                  ? [
+                      [2, 1],
+                      [4, 3]
+                    ]
+                  : [
+                      [2, 1],
+                      [4, 5]
+                    ]
+              )
+        )
+        const j = job(ai, plain(['Bjork', 'Björk', 'Beatles', 'The Beatles', 'Abba']))
+        expect(await j.done).toEqual({ end: 'done', grouped: 2, asked: true })
+        expect(calls.map((c) => c.avoid)).toEqual([undefined, ['m1'], undefined])
+        expect(Object.fromEntries(j.groups.groups)).toEqual({ bjork: 'Bjork', björk: 'Bjork' })
+        expect(j.statuses.at(-1)).toEqual({ state: 'done', grouped: 2, at: 1000 })
+      })
+
+      it('keeps nothing when the two answers disagree, and still marks the names asked', async () => {
+        const { ai } = fakeAi((c, i) => (c.avoid ? avoided : ok(i === 0 ? [[2, 1]] : [[3, 1]])))
+        const j = job(ai, plain(['Bjork', 'Björk', 'Bjorky']))
+        expect(await j.done).toEqual({ end: 'done', grouped: 0, asked: true })
+        expect(j.groups.groups.size).toBe(0)
+        expect(j.groups.asked.size).toBe(3)
+      })
+
+      it('stops when the answer again fails', async () => {
+        const { ai } = fakeAi((c, i) =>
+          c.avoid ? avoided : i === 0 ? ok([[2, 1]]) : { ok: false, error: 'failed' }
+        )
+        const j = job(ai, plain(['Bjork', 'Björk']))
+        expect(await j.done).toEqual({ end: 'failed' })
+        expect(j.groups.asked.size).toBe(0)
+      })
+    })
   })
 
   describe('groups', () => {
@@ -238,6 +287,34 @@ describe('the artist groups job', () => {
       expect(j.statuses.at(-1)).toEqual({ state: 'limit', at: 5000 })
     })
 
+    it('failed: a maxInput that throws ends the run as failed, with its line', async () => {
+      const { ai, calls } = fakeAi(both([]))
+      ai.maxInput = async () => Promise.reject(new Error('maxInput failed'))
+      const j = job(ai, plain(['A', 'B']))
+      expect(await j.done).toEqual({ end: 'failed' })
+      expect(calls).toEqual([])
+      expect(j.statuses.at(-1)).toEqual({ state: 'stopped', error: 'failed' })
+    })
+
+    it('network: maxInput gives nothing while the task is still on (no model list)', async () => {
+      const { ai, calls } = fakeAi(both([]))
+      ai.maxInput = async () => undefined
+      const j = job(ai, plain(['A', 'B']))
+      expect(await j.done).toEqual({ end: 'network' })
+      expect(calls).toEqual([])
+      expect(j.statuses.at(-1)).toEqual({ state: 'stopped', error: 'network' })
+    })
+
+    it('a stop during maxInput still throws', async () => {
+      const stop = new AbortController()
+      const { ai } = fakeAi(both([]))
+      ai.maxInput = async () => {
+        stop.abort()
+        throw new Error('aborted')
+      }
+      await expect(job(ai, plain(['A', 'B']), noGroups(), stop.signal).done).rejects.toThrow()
+    })
+
     it('auth: stops with no line of its own (the provider shows its login)', async () => {
       const { ai } = fakeAi(() => ({ ok: false, error: 'auth' }))
       const j = job(ai, plain(['A', 'B']))
@@ -288,5 +365,12 @@ describe('the artist groups job', () => {
       expect(lists.length).toBeGreaterThan(2)
       expect(lists.reduce((a, b) => a + b, 0)).toBe(40 * 2)
     })
+  })
+
+  it('waits at least 30 s after a limit, and at most what setTimeout takes', () => {
+    expect(limitWaitMs(1000 + 3600_000, 1000)).toBe(3600_000)
+    expect(limitWaitMs(500, 1000)).toBe(30_000)
+    expect(limitWaitMs(1000 + 10_000, 1000)).toBe(30_000)
+    expect(limitWaitMs(1e15, 0)).toBe(2 ** 31 - 1)
   })
 })

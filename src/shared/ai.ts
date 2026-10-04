@@ -35,9 +35,12 @@ export interface JsonRequest {
 }
 
 // `json` is parsed but not checked: the task checks the shape itself.
+// `avoided` comes with 'failed' when every model that fits was in `avoid`
+// (a fixed model choice, or only one model takes the request): nothing was
+// sent, and asking again without `avoid` may still answer.
 export type Answer =
   | { ok: true; json: unknown; model: string }
-  | { ok: false; error: AnswerError; retryAt?: number; detail?: string }
+  | { ok: false; error: AnswerError; retryAt?: number; detail?: string; avoided?: true }
 
 // What a task can act on, the same for every provider.
 export type AnswerError =
@@ -56,9 +59,12 @@ export type AnswerError =
 // What a task gets. The same in main and, as messages to main, in the
 // library process, so the key and the network stay in main.
 export interface AiClient {
-  // switched on and the provider is ready
+  // switched on and the provider is ready: the task may ask
   on(task: string): boolean
-  // on() may have changed; gives the function that stops listening
+  // switched on, ready or not: the task keeps using what it saved, e.g.
+  // while a key is gone until the user connects again
+  enabled(task: string): boolean
+  // on() or enabled() may have changed; gives the function that stops listening
   changed(cb: () => void): () => void
   // the biggest request (system + user, tokens) a model takes now, or undefined when off
   maxInput(task: string, maxOutput: number, signal: AbortSignal): Promise<number | undefined>

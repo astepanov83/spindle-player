@@ -19,6 +19,7 @@ function mainAi(answer: Answer = { ok: true, json: { a: 1 }, model: 'm' }): {
   const held = new Promise<void>((r) => (release = r))
   const ai: AiClient = {
     on: () => true,
+    enabled: () => true,
     changed: () => () => {},
     maxInput: async () => 1234,
     ask: async (task, _req, signal, avoid) => {
@@ -114,13 +115,28 @@ describe('AiClient over messages', () => {
     expect(m.calls[0].signal.aborted).toBe(true)
   })
 
-  it('says on() as main last sent it, and tells listeners', () => {
+  it('says on() and enabled() as main last sent them, and tells listeners', () => {
     const w = wire(undefined)
     let heard = 0
     w.client.changed(() => heard++)
     expect(w.client.on('artist-groups')).toBe(false)
-    w.client.setOn({ 'artist-groups': true })
+    expect(w.client.enabled('artist-groups')).toBe(false)
+    // switched on, the provider not ready
+    w.client.setOn({}, { 'artist-groups': true })
+    expect(w.client.on('artist-groups')).toBe(false)
+    expect(w.client.enabled('artist-groups')).toBe(true)
+    w.client.setOn({ 'artist-groups': true }, { 'artist-groups': true })
     expect(w.client.on('artist-groups')).toBe(true)
-    expect(heard).toBe(1)
+    expect(heard).toBe(2)
+  })
+
+  it("rejects maxInput when main's maxInput throws, so it is not read as off", async () => {
+    const signal = new AbortController().signal
+    const ai = { ...mainAi().ai, maxInput: async () => Promise.reject(new Error('x')) }
+    await expect(wire(ai).client.maxInput('artist-groups', 10, signal)).rejects.toThrow(
+      'maxInput failed'
+    )
+    // off is still off
+    expect(await wire(undefined).client.maxInput('artist-groups', 10, signal)).toBeUndefined()
   })
 })

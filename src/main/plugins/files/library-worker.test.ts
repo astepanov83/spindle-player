@@ -42,7 +42,12 @@ beforeEach(async () => {
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-function start(on: boolean, keepCovers: string[] = [], aiOn: Record<string, boolean> = {}): void {
+function start(
+  on: boolean,
+  keepCovers: string[] = [],
+  aiOn: Record<string, boolean> = {},
+  aiEnabled: Record<string, boolean> = aiOn
+): void {
   const s: WorkerStart = {
     indexPath: join(dir, 'library.json'),
     coversDir: join(dir, 'covers'),
@@ -52,6 +57,7 @@ function start(on: boolean, keepCovers: string[] = [], aiOn: Record<string, bool
     overridesPath: join(dir, 'artist-overrides.json'),
     groupsPath: join(dir, 'artist-groups.json'),
     aiOn,
+    aiEnabled,
     userAgent: 'test',
     keepCovers,
     on
@@ -59,6 +65,9 @@ function start(on: boolean, keepCovers: string[] = [], aiOn: Record<string, bool
   send({ type: 'start', start: s })
 }
 
+// the task's on() and enabled() from main; enabled is on unless said
+const aiOn = (tasks: Record<string, boolean>, enabled = tasks): void =>
+  send({ type: 'ai-on', tasks, enabled })
 const scan = (id: number): void => send({ type: 'scan', id, folders: [music], retryFailed: false })
 const scanned = (id: number): boolean => heard.some((m) => m.type === 'scanned' && m.id === id)
 const settle = (ms = 300): Promise<void> => new Promise((r) => setTimeout(r, ms))
@@ -294,11 +303,11 @@ describe('the library process', () => {
       await ready()
       const reply = heard.find((m) => m.type === 'reply' && m.req === 99) as { data: Uint8Array }
       expect(decode(reply.data).tracks?.[0].artist).toBe('Bjork')
-      send({ type: 'ai-on', tasks: { 'artist-groups': true } })
+      aiOn({ 'artist-groups': true })
       await until(() => heard.some((m) => m.type === 'library'))
       const patch = heard.find((m) => m.type === 'library') as { bytes: Uint8Array }
       expect(decode(patch.bytes).tracks?.[0].artist).toBe('Björk')
-      send({ type: 'ai-on', tasks: { 'artist-groups': false } })
+      aiOn({ 'artist-groups': false })
       await until(() => heard.filter((m) => m.type === 'library').length === 2)
       const off = heard.filter((m) => m.type === 'library')[1] as { bytes: Uint8Array }
       expect(decode(off.bytes).tracks?.[0].artist).toBe('Bjork')
@@ -345,7 +354,7 @@ describe('the library process', () => {
         twins()
         start(true)
         await ready()
-        send({ type: 'ai-on', tasks: { 'artist-groups': true } })
+        aiOn({ 'artist-groups': true })
         send({ type: 'ai-reply', id: (await call('ai-max-input', 1)).id, max: 100_000 })
         const first = await call('ai-ask', 1)
         expect(first).toMatchObject({ task: 'artist-groups' })
@@ -372,7 +381,7 @@ describe('the library process', () => {
         start(true)
         await ready()
         scan(1)
-        send({ type: 'ai-on', tasks: { 'artist-groups': true } })
+        aiOn({ 'artist-groups': true })
         await settle(0)
         expect(calls('ai-max-input')).toEqual([])
         send({ type: 'ai-reply', id: (await call('ai-max-input', 1)).id, max: 100_000 })
@@ -398,13 +407,39 @@ describe('the library process', () => {
         start(true, [], { 'artist-groups': true })
         await ready()
         // turned off and on again: a run starts
-        send({ type: 'ai-on', tasks: {} })
-        send({ type: 'ai-on', tasks: { 'artist-groups': true } })
+        aiOn({})
+        aiOn({ 'artist-groups': true })
         send({ type: 'ai-reply', id: (await call('ai-max-input', 1)).id, max: 100_000 })
         const ask = await call('ai-ask', 1)
         scan(1)
         expect(heard.at(-1)).toEqual({ type: 'ai-cancel', id: ask.id })
+        // else the run after the scan posts into the next test's messages
+        aiOn({})
       })
+    })
+
+    it('applies groups while switched on with the provider not ready, and runs no job', async () => {
+      bjorkIndex()
+      start(true, [], {}, { 'artist-groups': true })
+      await ready()
+      const reply = heard.find((m) => m.type === 'reply' && m.req === 99) as { data: Uint8Array }
+      expect(decode(reply.data).tracks?.[0].artist).toBe('Björk')
+      await settle(50)
+      expect(heard.some((m) => m.type === 'ai-max-input')).toBe(false)
+    })
+
+    it('keeps groups shown when the provider stops being ready, and hides them when switched off', async () => {
+      bjorkIndex()
+      start(false, [], { 'artist-groups': true })
+      await ready()
+      // a refused key or Disconnect: no new library, the groups stay
+      aiOn({}, { 'artist-groups': true })
+      await settle(50)
+      expect(heard.filter((m) => m.type === 'library')).toEqual([])
+      aiOn({}, {})
+      await until(() => heard.some((m) => m.type === 'library'))
+      const off = heard.find((m) => m.type === 'library') as { bytes: Uint8Array }
+      expect(decode(off.bytes).tracks?.[0].artist).toBe('Bjork')
     })
 
     it('applies them from the start data when the task is on', async () => {

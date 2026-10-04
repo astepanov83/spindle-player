@@ -58,7 +58,7 @@ import { mergeMoves, type IdMoves } from '../../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
 import { AiOverMessages } from './ai-messages'
 import { taskNames } from './group-artists'
-import { groupArtists } from './group-artists-job'
+import { groupArtists, limitWaitMs } from './group-artists-job'
 import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from '../../covers/cover-names'
 import { CoverFetcher } from './cover-fetch'
@@ -347,8 +347,9 @@ function setOverrides(c: ArtistChanges): void {
 let artistGroups: ArtistGroups = noGroups()
 // none when the file could not be read: it may still be fine, so it is never replaced
 let groupsWriter: JsonFileWriter<unknown> | undefined
-// AiClient.on of the files plugin's tasks, from main (see 'ai-on')
+// AiClient.on and AiClient.enabled of the files plugin's tasks, from main (see 'ai-on')
 let aiOn: Record<string, boolean> = {}
+let aiEnabled: Record<string, boolean> = {}
 
 function loadGroups(s: WorkerStart): void {
   const f = openJsonFile(s.groupsPath, 'Artist groups', knownGroups)
@@ -363,30 +364,33 @@ const saveGroups = (): void => {
   if (on) groupsWriter?.schedule(serializeGroups(artistGroups))
 }
 
-// While the task is off the groups are kept but not shown.
+// While the task is switched off the groups are kept but not shown. A
+// provider that is not ready (a key that lasts until quit, a refused key)
+// does not hide them: only the job waits for it.
 const shownGroups = (): GroupNames =>
-  aiOn[artistGroupsTask] ? artistGroups.groups : new Map<string, string>()
+  aiEnabled[artistGroupsTask] ? artistGroups.groups : new Map<string, string>()
 
 // The task's AiClient: messages to main, which has the key.
 const ai = new AiOverMessages((m) => post(m))
 // the job running, and the wait for a limit to end
 let groupsJob: AbortController | undefined
 let groupsRetry: ReturnType<typeof setTimeout> | undefined
-// the longest wait setTimeout takes
-const maxWaitMs = 2 ** 31 - 1
 
-function setAiOn(tasks: Record<string, boolean>): void {
-  const was = !!aiOn[artistGroupsTask]
+function setAiOn(tasks: Record<string, boolean>, enabled: Record<string, boolean>): void {
+  const wasOn = !!aiOn[artistGroupsTask]
+  const wasShown = !!aiEnabled[artistGroupsTask]
   aiOn = tasks
-  ai.setOn(tasks)
-  const now = !!aiOn[artistGroupsTask]
-  if (was === now) return
-  if (now) startGroupsJob()
-  else {
-    stopGroupsJob()
-    setStatus({ groups: undefined })
+  aiEnabled = enabled
+  ai.setOn(tasks, enabled)
+  const nowOn = !!aiOn[artistGroupsTask]
+  if (wasOn !== nowOn) {
+    if (nowOn) startGroupsJob()
+    else {
+      stopGroupsJob()
+      setStatus({ groups: undefined })
+    }
   }
-  if (!artistGroups.groups.size) return
+  if (wasShown === !!aiEnabled[artistGroupsTask] || !artistGroups.groups.size) return
   dirty = true
   publisher.now()
 }
@@ -432,8 +436,7 @@ function startGroupsJob(): void {
     .then(
       (end) => {
         if (end.end !== 'limit' || end.retryAt === undefined || stop.signal.aborted) return
-        const wait = Math.min(maxWaitMs, Math.max(0, end.retryAt - Date.now()))
-        groupsRetry = setTimeout(startGroupsJob, wait)
+        groupsRetry = setTimeout(startGroupsJob, limitWaitMs(end.retryAt, Date.now()))
       },
       (e) => {
         // a stop throws the abort error; what was saved stays
@@ -999,7 +1002,8 @@ port.on('message', (e: Electron.MessageEvent) => {
       keptEdits++
       on = m.start.on
       aiOn = m.start.aiOn
-      ai.setOn(aiOn)
+      aiEnabled = m.start.aiEnabled
+      ai.setOn(aiOn, aiEnabled)
       started(m.start)
       pruneWhileOff()
       break
@@ -1039,7 +1043,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       void ready.then(() => setOverrides(m.changes))
       break
     case 'ai-on':
-      void ready.then(() => setAiOn(m.tasks))
+      void ready.then(() => setAiOn(m.tasks, m.enabled))
       break
     case 'ai-reply':
       ai.reply(m)

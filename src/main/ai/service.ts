@@ -109,6 +109,8 @@ export function createAiService(env: AiEnv): AiService {
     size: number,
     signal: AbortSignal
   ): Promise<Answer> => {
+    // Switched off or away while an earlier model ran: nothing more goes to it.
+    if (readyFor(task) !== p) return { ok: false, error: 'off' }
     const t0 = Date.now()
     let answer: Answer
     try {
@@ -118,6 +120,9 @@ export function createAiService(env: AiEnv): AiService {
       // a provider should answer, not throw; next model
       answer = { ok: false, error: 'failed', detail: String(error) }
     }
+    // stop() aborted it, or the task was turned off: not a failure to go on
+    // from. Not ready() here: a refused key must still read 'auth'.
+    if (!taskOn(task) || chosen() !== p) answer = { ok: false, error: 'off' }
     const result = answer.ok ? 'ok' : answer.error
     // never the prompt, the reply or a key
     env.log(`AI ${task}: ${m.id}, ${size} tokens in, ${Date.now() - t0} ms: ${result}`)

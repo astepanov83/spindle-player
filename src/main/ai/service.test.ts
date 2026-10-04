@@ -272,6 +272,34 @@ describe('ask', () => {
     expect(asked).toEqual(['fake-schema'])
   })
 
+  it.each([
+    ['the provider is switched', (ai: AiService) => ai.setProvider('b')],
+    ['the task is turned off', (ai: AiService) => ai.setTask(task.id, false)]
+  ])('sends nothing more once %s mid-ask', async (_, change) => {
+    const asked: string[] = []
+    // made after the provider, which needs it
+    const late: { ai?: AiService } = {}
+    const answer = (m: ModelInfo): Answer => {
+      asked.push(m.id)
+      change(late.ai!)
+      // what a stopped provider's aborted request comes back as
+      return { ok: false, error: 'failed' }
+    }
+    const s = setup({ providers: [ready(answer), plainProvider('b')], saved: on })
+    late.ai = s.ai
+    expect(await s.ai.client.ask(task.id, req, s.signal)).toEqual({ ok: false, error: 'off' })
+    expect(asked).toEqual(['fake-schema'])
+  })
+
+  it('still says auth when the refused key makes the provider not ready', async () => {
+    const p = ready(() => {
+      p.ready = () => false
+      return { ok: false, error: 'auth' }
+    })
+    const { ai, signal } = setup({ providers: [p], saved: on })
+    expect(await ai.client.ask(task.id, req, signal)).toEqual({ ok: false, error: 'auth' })
+  })
+
   it('counts a provider that throws as failed for that model', async () => {
     const { ai, signal } = setup({
       providers: [

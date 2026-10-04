@@ -5,7 +5,7 @@
   import { pathEnds } from '../ui/path-ends'
   import { actOnSetting } from '../plugins'
   import type { SettingBlock } from '../../../shared/setting-blocks'
-  import { optionText, textToSend } from './setting-input'
+  import { optionText, shownText, textToSend, type Draft } from './setting-input'
   import Icon from '../ui/Icon.svelte'
   import Spinner from '../ui/Spinner.svelte'
 
@@ -51,25 +51,26 @@
   const act = (id: string, actionId: string, value?: string): void =>
     actOnSetting(plugin, id, actionId, value)
 
-  // What is typed in a text box and not sent yet, by block id; what was sent
-  // last (so Enter and then blur send once); and the secret boxes that are
-  // open again after "Change".
-  let drafts: Record<string, string> = $state({})
-  let sent: Record<string, string> = {}
+  // What is typed in a text box and not sent yet, by block id, and what was
+  // sent last (so Enter and then blur send once). Secrets are kept apart: the
+  // page drops one as soon as it is sent. `changing`: the secret boxes that
+  // are open again after "Change".
+  let drafts: Record<string, Draft> = $state({})
+  let sent: Record<string, Draft> = {}
+  let secrets: Record<string, string> = $state({})
   let changing: Record<string, boolean> = $state({})
 
-  function send(id: string, known: string): void {
-    const text = textToSend(drafts[id], sent[id] ?? known)
+  function send(id: string, value: string): void {
+    const text = textToSend(drafts[id], value, sent[id])
     if (text === undefined) return
-    sent[id] = text
+    sent[id] = { text, base: value }
     act(id, 'set', text)
   }
 
-  // A secret is not kept in the page after it is sent.
   function sendSecret(id: string): void {
-    const text = drafts[id]
+    const text = secrets[id]
     if (!text) return
-    delete drafts[id]
+    delete secrets[id]
     changing[id] = false
     act(id, 'set', text)
   }
@@ -166,8 +167,12 @@
           spellcheck="false"
           placeholder={b.placeholder}
           disabled={b.disabled}
-          value={b.secret ? (drafts[b.id] ?? '') : (drafts[b.id] ?? b.value ?? '')}
-          oninput={(e) => (drafts[b.id] = e.currentTarget.value)}
+          value={b.secret ? (secrets[b.id] ?? '') : shownText(drafts[b.id], b.value ?? '')}
+          oninput={(e) => {
+            const text = e.currentTarget.value
+            if (b.secret) secrets[b.id] = text
+            else drafts[b.id] = { text, base: b.value ?? '' }
+          }}
           onkeydown={(e) => {
             if (e.key !== 'Enter') return
             if (b.secret) sendSecret(b.id)

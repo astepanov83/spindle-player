@@ -4,13 +4,20 @@ import { promises as dns } from 'dns'
 import { join } from 'path'
 import { app, BrowserWindow, nativeTheme, net, safeStorage, session, shell } from 'electron'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { PlaybackChannel, PlaylistChannel, SettingsChannel, WinChannel } from '../shared/ipc'
+import {
+  AiChannel,
+  PlaybackChannel,
+  PlaylistChannel,
+  SettingsChannel,
+  WinChannel
+} from '../shared/ipc'
 import { plugins as pluginList } from '../shared/plugins'
 import { pageSettings } from '../shared/settings'
 import { canOpenExternal } from '../shared/web-link'
 import { callbackServer } from './ai/callback-server'
 import { createProviders } from './ai/providers/list'
 import { FileSecrets } from './ai/secrets'
+import { aiPageCalls } from './ai/page-calls'
 import { createAiService, type AiService } from './ai/service'
 import { coverRoute, handleProtocol, registerScheme } from './protocol'
 import { CoverCache } from './covers/cover-cache'
@@ -186,6 +193,14 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     callbackServer: () => callbackServer(),
     log
   })
+  const aiCalls = aiPageCalls(ai)
+  page.handle(AiChannel.load, () => ai!.state())
+  page.on(AiChannel.act, (_, provider, id, actionId, value) =>
+    aiCalls.act(provider, id, actionId, value)
+  )
+  page.on(AiChannel.setTask, (_, task, on) => aiCalls.setTask(task, on))
+  page.on(AiChannel.setProvider, (_, id) => aiCalls.setProvider(id))
+  ai.onState(() => toPage(AiChannel.state, ai!.state()))
   // made first: a plugin may open files now that another's start asks about (the cover prune)
   plugins = createPlugins({ userData, log })
   const ctx = {

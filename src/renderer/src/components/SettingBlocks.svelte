@@ -4,6 +4,8 @@
   import type { PluginId } from '../../../shared/plugins'
   import { pathEnds } from '../ui/path-ends'
   import { actOnSetting } from '../plugins'
+  import { ai, actOnAi } from '../ai.svelte'
+  import { aiBlocks, aiTarget } from '../ai-blocks'
   import type { SettingBlock } from '../../../shared/setting-blocks'
   import { optionText, shownText, textToSend, type Draft } from './setting-input'
   import Icon from '../ui/Icon.svelte'
@@ -25,7 +27,9 @@
   // reader hears the first line that comes.
   const parts = $derived.by(() => {
     const out: Part[] = []
-    for (const b of blocks) {
+    // an `ai` block becomes its switch and setup, drawn like any other blocks
+    const flat = blocks.flatMap((b) => (b.kind === 'ai' ? aiBlocks(b.task, ai.state) : [b]))
+    for (const b of flat) {
       const last = out[out.length - 1]
       if (b.kind === 'button')
         if (last?.kind === 'buttons') last.buttons.push(b)
@@ -48,8 +52,9 @@
   // The row that is asked to confirm its removal, one at a time.
   let asking: string | null = $state(null)
 
+  // the AI blocks' ids say so; they go to the AI service, not to the plugin
   const act = (id: string, actionId: string, value?: string): void =>
-    actOnSetting(plugin, id, actionId, value)
+    aiTarget(id) ? actOnAi(id, actionId, value) : actOnSetting(plugin, id, actionId, value)
 
   // What is typed in a text box and not sent yet, by block id, and what was
   // sent last (so Enter and then blur send once). Secrets are kept apart: the
@@ -212,7 +217,6 @@
       {#if b.about}<p class="hint" id="{uid}-{b.id}-about">{b.about}</p>{/if}
     </div>
   {/if}
-  <!-- an `ai` block is drawn by the AI setup (a later task); nothing yet -->
 {/each}
 
 <style>

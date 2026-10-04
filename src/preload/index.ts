@@ -1,15 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
+  AiChannel,
   PlaybackChannel,
   PlaylistChannel,
   SettingsChannel,
   WinChannel,
+  type AiApi,
   type PlaybackApi,
   type PlaylistsApi,
   type SettingsApi,
   type WinApi
 } from '../shared/ipc'
-import { invoke, send } from './ipc'
+import type { AiState } from '../shared/ai'
+import { invoke, latest, send } from './ipc'
 import { pluginApis } from './plugins'
 
 // The window is sandboxed, so this file may only use contextBridge, ipcRenderer
@@ -65,7 +68,20 @@ const playbackApi: PlaybackApi = {
   log: (text) => send(PlaybackChannel.log, text)
 }
 
+// Asked for early like the settings; a state pushed before the page listens is kept.
+const aiState = invoke(AiChannel.load)
+const onAiState = latest<AiState>(AiChannel.state)
+
+const aiApi: AiApi = {
+  load: () => aiState,
+  onState: onAiState,
+  act: (provider, id, actionId, value) => send(AiChannel.act, provider, id, actionId, value),
+  setTask: (task, on) => send(AiChannel.setTask, task, on),
+  setProvider: (id) => send(AiChannel.setProvider, id)
+}
+
 contextBridge.exposeInMainWorld('win', win)
+contextBridge.exposeInMainWorld('aiApi', aiApi)
 contextBridge.exposeInMainWorld('playlistsApi', playlistsApi)
 contextBridge.exposeInMainWorld('playbackApi', playbackApi)
 contextBridge.exposeInMainWorld('settingsApi', settingsApi)

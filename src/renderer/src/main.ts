@@ -9,6 +9,7 @@ import './assets/text.css'
 import './assets/controls.css'
 
 import App from './App.svelte'
+import { startAi } from './ai.svelte'
 import { playlists } from './stores/playlists.svelte'
 import { queues } from './stores/queues.svelte'
 import { queue } from './stores/queue.svelte'
@@ -46,6 +47,8 @@ const [saved, lists, lastQueue, started] = await Promise.all([
   startPlugins()
 ])
 loadSettings(saved.value, saved.ok)
+// not waited for: Settings shows the AI part when it arrives
+startAi(window.aiApi)
 
 // Ids a plugin moved are renamed before the playlists and the queue load, so
 // the queue doesn't drop those songs.

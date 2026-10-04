@@ -3,6 +3,7 @@
 import { plugins, type PluginId } from '../../../shared/plugins'
 import type { IdMoves } from '../../../shared/id-moves'
 import type { ItemKey } from '../../../shared/plugins/items'
+import type { SettingBlock } from '../../../shared/setting-blocks'
 import { library, playlistsTab, type NavTab } from '../stores/library.svelte'
 import { pluginOn } from '../stores/settings.svelte'
 import { filesHalf } from './files'
@@ -20,8 +21,7 @@ import type {
   LivePlugin,
   PageAddress,
   PageHalf,
-  Playable,
-  SettingBlock
+  Playable
 } from './types'
 
 const halves: Record<PluginId, PageHalf> = { files: filesHalf, radio: radioHalf, mfp: mfpHalf }

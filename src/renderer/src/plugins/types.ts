@@ -5,6 +5,7 @@ import type { Art } from '../../../shared/library'
 import type { PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
+import type { SettingBlock } from '../../../shared/setting-blocks'
 import type { EngineEvents } from '../audio/engine'
 import type { IconName } from '../ui/icons'
 import type { Sort } from '../library/views'
@@ -313,30 +314,6 @@ export interface FoundGroup {
   plugin: PluginId
   group: SearchGroup
 }
-
-// What a plugin shows in Settings: data again, drawn by the core
-// (components/SettingBlocks.svelte). Spec "Settings".
-export type SettingBlock =
-  // a small heading over the blocks of a section
-  | { kind: 'title'; text: string }
-  // a line of text; `busy`: with a spinner
-  | { kind: 'status'; text: string; busy?: boolean }
-  // `remove` is the button's label on each row; `confirm`, when there, asks
-  // first with that label. `paths`: the titles are paths, cut in the middle.
-  // act: `remove` with the row's id.
-  | {
-      kind: 'list'
-      id: string
-      rows: { id: string; title: string; note?: string }[]
-      remove?: string
-      confirm?: string
-      paths?: boolean
-      disabled?: boolean
-    }
-  // buttons side by side when they follow each other. act: `press`
-  | { kind: 'button'; id: string; label: string; disabled?: boolean }
-  // act: `set` with 'true' or 'false'
-  | { kind: 'switch'; id: string; label: string; on: boolean }
 
 // A list block for a plugin's own array: its tiles and rows are typed by it.
 export const tilesBlock = <T>(b: Omit<TilesBlock<T>, 'kind'>): TilesBlock =>

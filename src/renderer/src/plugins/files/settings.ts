@@ -3,7 +3,7 @@
 // its lines next to the chips and under the cover lookup setting.
 import { canRescan, fetchBusy, fetchLine, photoLine, scanLine, statusLines } from './scan-text'
 import { files } from './store.svelte'
-import type { SettingBlock } from '../types'
+import type { SettingBlock } from '../../../../shared/setting-blocks'
 
 export function filesSettings(): SettingBlock[] {
   const s = files.status

@@ -2,10 +2,16 @@
 import './pool-size'
 import { promises as dns } from 'dns'
 import { join } from 'path'
-import { app, BrowserWindow, nativeTheme, net, session } from 'electron'
+import { app, BrowserWindow, nativeTheme, net, safeStorage, session, shell } from 'electron'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { PlaybackChannel, PlaylistChannel, SettingsChannel, WinChannel } from '../shared/ipc'
+import { plugins as pluginList } from '../shared/plugins'
 import { pageSettings } from '../shared/settings'
+import { canOpenExternal } from '../shared/web-link'
+import { callbackServer } from './ai/callback-server'
+import { createProviders } from './ai/providers/list'
+import { FileSecrets } from './ai/secrets'
+import { createAiService, type AiService } from './ai/service'
 import { coverRoute, handleProtocol, registerScheme } from './protocol'
 import { CoverCache } from './covers/cover-cache'
 import { pageIpc } from './page-ipc'
@@ -30,6 +36,8 @@ let plugins: MainPlugin[] = []
 let main: MainWindow | null = null
 // the core's cover cache, for every plugin; made at start whatever is on
 let coverCache: CoverCache | undefined
+// language models for the plugins' tasks; made at start whatever is on
+let ai: AiService | undefined
 // kept here so it isn't garbage collected, which would remove the icon
 let tray: Electron.Tray | null = null
 
@@ -165,6 +173,19 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   coverCache = new CoverCache(join(userData, 'covers'), join(__dirname, '../preload/covers.js'))
   const covers = new Covers(coverCache)
   const routes = new Map<string, Route>([['cover', coverRoute(covers)]])
+  const netFetch = ((url, init) => net.fetch(url as string, init)) as typeof fetch
+  ai = createAiService({
+    providers: createProviders(),
+    tasks: pluginList.flatMap((p) => p.aiTasks ?? []),
+    settings: { get: () => store.get().ai, set: (v) => store.setAi(v) },
+    secrets: new FileSecrets(join(userData, 'ai-secrets.json'), safeStorage, log),
+    fetch: netFetch,
+    openExternal: (url) => {
+      if (canOpenExternal(url)) void shell.openExternal(url)
+    },
+    callbackServer: () => callbackServer(),
+    log
+  })
   // made first: a plugin may open files now that another's start asks about (the cover prune)
   plugins = createPlugins({ userData, log })
   const ctx = {
@@ -175,10 +196,11 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     toPage,
     page,
     route: (host: string, handler: Route) => routes.set(host, handler),
-    fetch: ((url, init) => net.fetch(url as string, init)) as typeof fetch,
+    fetch: netFetch,
     request: (o: Electron.ClientRequestConstructorOptions) => net.request(o),
     dns,
-    covers
+    covers,
+    ai: ai.client
   }
   for (const p of plugins)
     p.start({
@@ -219,6 +241,7 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
 // Last chance to write a change still waiting for its delay. Some plugins
 // save on their own, so quitting waits for their answer (2s at most).
 app.on('will-quit', (e) => {
+  ai?.stop()
   store?.flushSync()
   playlists?.flushSync()
   savedQueue?.flushSync()

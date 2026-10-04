@@ -1,3 +1,4 @@
+import type { AiClient } from '../../shared/ai'
 import type { IdMoves } from '../../shared/id-moves'
 import type { PluginId } from '../../shared/plugins'
 import type { PageIpc } from '../page-ipc'
@@ -57,6 +58,8 @@ export interface PluginContext {
   covers: CoverProvider
   // ids a rescan moved: renamed in the playlists and the queue; false when a write failed
   idsMoved(moves: IdMoves): boolean
+  // asks a language model for its tasks (aiTasks in the plugin list)
+  ai: AiClient
 }
 
 export interface CoverProvider {

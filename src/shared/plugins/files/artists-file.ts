@@ -215,15 +215,19 @@ const snapshot = (f: ArtistsFile): string => JSON.stringify(f.artists)
 
 // The page's changes (Edit artist, "Use tag") as links by you. Each tag gets
 // its names, and its old links go, the AI's too. null: the tag as its own
-// name, so the AI leaves it alone. True when something changed.
+// name, so the AI leaves it alone. Names are what the user typed, so their
+// spelling wins over the saved one (one artist per name key, so a tag pinned
+// with "Use tag" follows a new spelling of its name). True when something changed.
 export function applyChanges(f: ArtistsFile, c: ArtistChanges, spelling: Spelling): boolean {
   const before = snapshot(f)
   for (const [key, names] of Object.entries(c)) {
     if (!isKey(key)) continue
     const tag = spelling(key) ?? key
     unlink(f, key)
-    if (names === null || (names.length === 1 && names[0] === tag)) linkYours(f, tag, [tag], false)
-    else linkYours(f, tag, cleanNames(names), true)
+    // an artist left with no links must not lend its spelling to the new ones
+    dropEmpty(f)
+    const own = names === null || (names.length === 1 && names[0] === tag)
+    linkYours(f, tag, own ? [tag] : cleanNames(names), true)
   }
   dropEmpty(f)
   return snapshot(f) !== before
@@ -255,7 +259,7 @@ export function addAiGroup(
         if (b.tags.some((l) => l.by === 'ai' && keyOf(l) === k)) touched.add(b)
   }
   const list = [...touched]
-  let target = list.find((a) => a.nameBy === 'you') ?? list[0]
+  let target = list.find((a) => a.nameBy === 'you') ?? list[0] ?? byName(f, artistKey(clean))
   if (!target) f.artists.push((target = { name: clean, nameBy: 'ai', tags: [] }))
   for (const a of list) {
     if (a === target || a.nameBy === 'you') continue
@@ -319,6 +323,8 @@ export function convertOld(
   for (const [key, name] of groups.groups) {
     const clean = cleanName(name)
     if (!isKey(key) || !clean || overrides.has(key)) continue
+    // an override's name the task asked about, not a tag
+    if (spelling(key) === undefined && byName(f, key)) continue
     let a = byName(f, artistKey(clean))
     if (!a) f.artists.push((a = { name: clean, nameBy: 'ai', tags: [] }))
     addLink(a, spelling(key) ?? key, 'ai')

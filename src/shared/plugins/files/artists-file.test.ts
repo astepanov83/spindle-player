@@ -254,6 +254,26 @@ describe('applyChanges', () => {
     expect(shown(f)).toEqual({ 'bjork(live)': { names: ['Bjork'], byAi: true } })
   })
 
+  it('Use tag undoes a rename that only changed case', () => {
+    const f = file(artist('BJORK', 'you', ['bjork', 'you']))
+    expect(shown(f)).toEqual({ bjork: { names: ['BJORK'], byAi: false } })
+    expect(applyChanges(f, { bjork: null }, spell('bjork'))).toBe(true)
+    expect(f).toEqual(file(artist('bjork', 'you', ['bjork', 'you'])))
+    expect(shown(f)).toEqual({})
+  })
+
+  it('a new spelling of a pinned tag name respells that artist', () => {
+    // one artist per name key: the tag pinned with Use tag follows the new
+    // spelling, so "Kino" now shows as "KINO"
+    const f = file(artist('Kino', 'you', ['Kino', 'you']))
+    applyChanges(f, { 'kino!': ['KINO'] }, spell('Kino', 'Kino!'))
+    expect(f).toEqual(file(artist('KINO', 'you', ['Kino', 'you'], ['Kino!', 'you'])))
+    expect(shown(f)).toEqual({
+      kino: { names: ['KINO'], byAi: false },
+      'kino!': { names: ['KINO'], byAi: false }
+    })
+  })
+
   it('a name equal to the tag is the same as Use tag', () => {
     const f = file(artist('Кино', 'you', ['Kino', 'you']))
     applyChanges(f, { kino: ['Kino'] }, tags)
@@ -327,6 +347,14 @@ describe('addAiGroup', () => {
     const f = file(artist('Кино', 'you', ['Kino', 'you']))
     addAiGroup(f, ['кино', 'kino!'], 'Кино', spell('Kino', 'Kino!'))
     expect(f).toEqual(file(artist('Кино', 'you', ['Kino', 'you'], ['Kino!', 'ai'])))
+  })
+
+  it('joins the artist with its name when no key touches one', () => {
+    const f = file(artist('Björk', 'you', ['bjork (live)', 'you']))
+    addAiGroup(f, ['bjork', 'bjork!'], 'Björk', spell('Bjork', 'Bjork!', 'bjork (live)'))
+    expect(f).toEqual(
+      file(artist('Björk', 'you', ['bjork (live)', 'you'], ['Bjork', 'ai'], ['Bjork!', 'ai']))
+    )
   })
 
   it('does nothing without a name or a key', () => {
@@ -425,6 +453,27 @@ describe('convertOld', () => {
     const s = shown(artists)
     expect(s['sadness,alongmemories']).toEqual({ names: ['Sadness'], byAi: false })
     expect(s['magogaio/sadness']).toEqual({ names: ['Magogaio', 'Sadness'], byAi: false })
+  })
+
+  it('does not link a group key that is only an override name', () => {
+    // old usedKeys put override names in the groups too
+    const overrides = new Map(Object.entries({ kino: ['Кино'] }))
+    const groups = {
+      groups: new Map(Object.entries({ кино: 'Кино', 'kino!': 'Кино' })),
+      asked: new Set<string>()
+    }
+    const { artists } = convertOld(overrides, groups, spell('Kino', 'Kino!'))
+    expect(artists).toEqual(file(artist('Кино', 'you', ['Kino', 'you'], ['Kino!', 'ai'])))
+  })
+
+  it('makes one artist of override names that differ only by case', () => {
+    const overrides = new Map(Object.entries({ a: ['Foo'], b: ['FOO'] }))
+    const { artists } = convertOld(
+      overrides,
+      { groups: new Map(), asked: new Set() },
+      spell('A', 'B')
+    )
+    expect(artists).toEqual(file(artist('Foo', 'you', ['A', 'you'], ['B', 'you'])))
   })
 
   it('keeps a key no album or song has as its tag, and a Use tag override as one', () => {

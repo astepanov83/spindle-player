@@ -1,0 +1,507 @@
+import { createHash } from 'crypto'
+import { describe, expect, it, vi } from 'vitest'
+import type { Answer, JsonRequest } from '../../../../shared/ai'
+import type { SettingBlock } from '../../../../shared/setting-blocks'
+import type { CallbackServer, ModelInfo, ProviderContext } from '../../types'
+import models from './fixtures/models.json'
+import { OpenRouterProvider } from './provider'
+
+const noSignal = new AbortController().signal
+const req: JsonRequest = { system: 'sys', user: 'usr', schema: { type: 'object' }, maxOutput: 500 }
+
+interface Call {
+  url: string
+  init: RequestInit
+}
+
+type Setup = ReturnType<typeof setup>
+
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+function setup(opts: { key?: string; model?: string } = {}) {
+  const secrets = new Map<string, string>()
+  const settings = new Map<string, string>()
+  if (opts.model) settings.set('model', opts.model)
+  const calls: Call[] = []
+  const replies: ((call: Call) => Response | Promise<Response>)[] = []
+  const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    const call = { url: String(url), init: init ?? {} }
+    calls.push(call)
+    const next = replies.shift()
+    if (!next) throw new Error('no reply planned')
+    return next(call)
+  })
+  let now = 1_000_000
+  const sleeps: number[] = []
+  const clock = {
+    now: () => now,
+    sleep: async (ms: number) => {
+      sleeps.push(ms)
+      now += ms
+    }
+  }
+  const logs: string[] = []
+  const changed = vi.fn()
+  const opened: string[] = []
+  const ctx: ProviderContext = {
+    secrets: {
+      get: (n) => secrets.get(n),
+      set: (n, v) => void secrets.set(n, v),
+      remove: (n) => void secrets.delete(n)
+    },
+    settings: { get: (n) => settings.get(n), set: (n, v) => void settings.set(n, v) },
+    fetch: fetch as unknown as typeof globalThis.fetch,
+    openExternal: (u) => void opened.push(u),
+    callbackServer: async () => {
+      throw new Error('not planned')
+    },
+    log: (t) => void logs.push(t),
+    changed
+  }
+  const provider = new OpenRouterProvider(clock)
+  // the key comes after start, so no list is asked for on its own
+  provider.start(ctx)
+  if (opts.key) secrets.set('key', opts.key)
+  return {
+    provider,
+    ctx,
+    secrets,
+    settings,
+    calls,
+    replies,
+    sleeps,
+    logs,
+    changed,
+    opened,
+    advance: (ms: number) => void (now += ms)
+  }
+}
+
+const json = (body: unknown, status = 200, headers: Record<string, string> = {}): Response =>
+  new Response(JSON.stringify(body), { status, headers })
+
+const answerBody = (content: string): unknown => ({ choices: [{ message: { content } }] })
+
+const model = (over: Partial<ModelInfo> = {}): ModelInfo => ({
+  id: 'm/x:free',
+  name: 'X',
+  context: 100000,
+  maxOutput: 5000,
+  json: 'schema',
+  ...over
+})
+
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+function fakeServer() {
+  let answer!: (q: URLSearchParams) => void
+  let fail!: (e: Error) => void
+  const code = new Promise<URLSearchParams>((res, rej) => {
+    answer = res
+    fail = rej
+  })
+  code.catch(() => {})
+  const server: CallbackServer & { closed: number } = {
+    url: 'http://127.0.0.1:5555/callback',
+    code,
+    closed: 0,
+    close() {
+      server.closed++
+      fail(new Error('Closed'))
+    }
+  }
+  return { server, answer, fail }
+}
+
+const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
+
+describe('login', () => {
+  it('opens the auth address with the challenge of the verifier, swaps the code for a key', async () => {
+    const t = setup()
+    const cb = fakeServer()
+    t.ctx.callbackServer = async () => cb.server
+    t.replies.push(() => json({ key: 'sk-secret' }))
+    expect(t.provider.ready()).toBe(false)
+    const done = t.provider.act('connect', 'press')
+    await tick()
+    expect(t.provider.blocks()).toEqual([
+      { kind: 'status', text: 'Waiting for the browser…', busy: true },
+      { kind: 'button', id: 'cancel', label: 'Cancel' }
+    ])
+    const url = new URL(t.opened[0])
+    expect(url.origin + url.pathname).toBe('https://openrouter.ai/auth')
+    expect(url.searchParams.get('callback_url')).toBe(cb.server.url)
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256')
+    expect(url.searchParams.get('key_label')).toBe('Spindle')
+    cb.answer(new URLSearchParams({ code: 'the-code' }))
+    await done
+
+    const body = JSON.parse(String(t.calls[0].init.body))
+    expect(t.calls[0].url).toBe('https://openrouter.ai/api/v1/auth/keys')
+    expect(body.code).toBe('the-code')
+    expect(body.code_challenge_method).toBe('S256')
+    const challenge = createHash('sha256').update(body.code_verifier).digest('base64url')
+    expect(url.searchParams.get('code_challenge')).toBe(challenge)
+    expect(t.secrets.get('key')).toBe('sk-secret')
+    expect(t.provider.ready()).toBe(true)
+    expect(cb.server.closed).toBeGreaterThan(0)
+    expect(t.provider.blocks()[0]).toEqual({ kind: 'status', text: 'Connected' })
+  })
+
+  const fails = async (
+    reply: (t: Setup, cb: ReturnType<typeof fakeServer>) => void
+  ): Promise<{ t: Setup; cb: ReturnType<typeof fakeServer> }> => {
+    const t = setup()
+    const cb = fakeServer()
+    t.ctx.callbackServer = async () => cb.server
+    const done = t.provider.act('connect', 'press')
+    await tick()
+    reply(t, cb)
+    await done
+    return { t, cb }
+  }
+  const errorLine = (t: Setup): string => {
+    const b = t.provider.blocks()
+    expect(b[0]).toMatchObject({ kind: 'button', id: 'connect' })
+    return (b.find((x) => x.kind === 'status' && x.error) as { text: string }).text
+  }
+
+  it('says so when the browser comes back with no code', async () => {
+    const { t } = await fails((_t, cb) => cb.answer(new URLSearchParams({ error: 'denied' })))
+    expect(errorLine(t)).toContain('no code')
+    expect(t.secrets.has('key')).toBe(false)
+  })
+
+  it('says so when the exchange fails, without the code or verifier in the text', async () => {
+    const { t } = await fails((t, cb) => {
+      t.replies.push(() => json({ error: { message: 'bad code-1234' } }, 400))
+      cb.answer(new URLSearchParams({ code: 'code-1234' }))
+    })
+    const text = errorLine(t)
+    expect(text).toContain('HTTP 400')
+    expect(text).not.toContain('code-1234')
+    expect(t.logs.join()).not.toContain('code-1234')
+    expect(t.secrets.has('key')).toBe(false)
+  })
+
+  it('says so when the login runs out of time', async () => {
+    const { t } = await fails((_t, cb) => cb.fail(new Error('No answer from the login in time')))
+    expect(errorLine(t)).toContain('in time')
+  })
+
+  it('closes the waiting server on Cancel and shows Connect again, with no error', async () => {
+    const t = setup()
+    const cb = fakeServer()
+    t.ctx.callbackServer = async () => cb.server
+    const done = t.provider.act('connect', 'press')
+    await tick()
+    await t.provider.act('cancel', 'press')
+    await done
+    expect(cb.server.closed).toBeGreaterThan(0)
+    expect(t.provider.blocks().some((b) => b.kind === 'status' && b.error)).toBe(false)
+    expect(t.provider.blocks()[0]).toMatchObject({ id: 'connect' })
+    expect(t.secrets.has('key')).toBe(false)
+  })
+
+  it('closes the server when stopped while waiting', async () => {
+    const t = setup()
+    const cb = fakeServer()
+    t.ctx.callbackServer = async () => cb.server
+    const done = t.provider.act('connect', 'press')
+    await tick()
+    t.provider.stop()
+    await done
+    expect(cb.server.closed).toBeGreaterThan(0)
+  })
+
+  it('removes the key on Disconnect and says where to delete it', async () => {
+    const t = setup({ key: 'sk-1' })
+    await t.provider.act('disconnect', 'press')
+    expect(t.secrets.has('key')).toBe(false)
+    const text = t.provider
+      .blocks()
+      .map((b) => ('text' in b ? b.text : ''))
+      .join('|')
+    expect(text).toContain('openrouter.ai, Settings, Keys')
+  })
+})
+
+describe('models', () => {
+  const list = async (t: Setup): Promise<ModelInfo[]> => {
+    t.replies.push(() => json(models))
+    return t.provider.models(noSignal)
+  }
+
+  it('keeps only :free models, largest context first', async () => {
+    const t = setup({ key: 'k' })
+    const all = await list(t)
+    expect(t.calls[0].url).toBe('https://openrouter.ai/api/v1/models')
+    expect(all.every((m) => m.id.endsWith(':free'))).toBe(true)
+    expect(all).toHaveLength(7)
+    const sizes = all.map((m) => m.context)
+    expect(sizes).toEqual([...sizes].sort((a, b) => b - a))
+    expect(all[0].id).toBe('thinkingmachines/inkling-small:free')
+  })
+
+  it('says schema when response_format or structured_outputs is supported', async () => {
+    const all = await list(setup())
+    const kind = (id: string): string | undefined => all.find((m) => m.id === id)?.json
+    expect(kind('apodex/apodex-1.1-mini:free')).toBe('schema')
+    expect(kind('qwen/qwen3.8-27b:free')).toBe('schema')
+    expect(kind('google/gemma-4-31b-it:free')).toBe('schema')
+    expect(kind('thinkingmachines/inkling-small:free')).toBe('prompt')
+  })
+
+  it('takes limits from top_provider, else the context and a quarter of it', async () => {
+    const all = await list(setup())
+    const by = (id: string): ModelInfo => all.find((m) => m.id === id)!
+    expect(by('liquid/lfm-2.5-2.6b:free')).toMatchObject({ context: 65536, maxOutput: 8192 })
+    // top_provider with nulls
+    expect(by('nvidia/nemotron-3-super-120b-a12b:free')).toMatchObject({
+      context: 131072,
+      maxOutput: 32768
+    })
+    // no top_provider at all
+    expect(by('poolside/laguna-s-2.1:free')).toMatchObject({ context: 262144, maxOutput: 65536 })
+  })
+
+  it('asks the list once an hour', async () => {
+    const t = setup()
+    await list(t)
+    await t.provider.models(noSignal)
+    expect(t.calls).toHaveLength(1)
+    t.advance(61 * 60 * 1000)
+    await list(t)
+    expect(t.calls).toHaveLength(2)
+  })
+
+  it('returns only the fixed model', async () => {
+    const t = setup({ model: 'qwen/qwen3.8-27b:free' })
+    const all = await list(t)
+    expect(all.map((m) => m.id)).toEqual(['qwen/qwen3.8-27b:free'])
+  })
+
+  it('goes back to the best free model when the fixed one is gone', async () => {
+    const t = setup({ model: 'gone/model:free' })
+    const all = await list(t)
+    expect(all).toHaveLength(7)
+  })
+
+  it('gives the model choice in the blocks, and sets it', async () => {
+    const t = setup({ key: 'k', model: 'qwen/qwen3.8-27b:free' })
+    await list(t)
+    const choice = (): SettingBlock | undefined =>
+      t.provider.blocks().find((b) => b.kind === 'choice')
+    expect(choice()).toMatchObject({ value: 'qwen/qwen3.8-27b:free' })
+    const options = (choice() as { options: { id: string }[] }).options
+    expect(options[0]).toEqual({ id: 'auto', label: 'Best free model' })
+    expect(options).toHaveLength(8)
+    await t.provider.act('model', 'set', 'auto')
+    expect(t.settings.get('model')).toBe('auto')
+    expect(choice()).toMatchObject({ value: 'auto' })
+  })
+
+  it('shows an error and keeps the last list when the list fails', async () => {
+    const t = setup({ key: 'k' })
+    await list(t)
+    t.advance(2 * 60 * 60 * 1000)
+    t.replies.push(() => json({}, 500))
+    await expect(t.provider.models(noSignal)).rejects.toThrow('HTTP 500')
+    const blocks = t.provider.blocks()
+    expect(blocks.some((b) => b.kind === 'status' && b.error)).toBe(true)
+    expect(
+      (blocks.find((b) => b.kind === 'choice') as { options: unknown[] }).options
+    ).toHaveLength(8)
+  })
+})
+
+describe('ask', () => {
+  const ask = (t: Setup, m = model(), signal = noSignal): Promise<Answer> =>
+    t.provider.ask(m, req, signal)
+
+  it('sends the schema as response_format to a schema model', async () => {
+    const t = setup({ key: 'sk-1' })
+    t.replies.push(() => json(answerBody('{"a":1}')))
+    const answer = await ask(t)
+    expect(answer).toEqual({ ok: true, json: { a: 1 }, model: 'm/x:free' })
+    const { url, init } = t.calls[0]
+    expect(url).toBe('https://openrouter.ai/api/v1/chat/completions')
+    expect(init.headers).toMatchObject({
+      Authorization: 'Bearer sk-1',
+      'HTTP-Referer': expect.any(String),
+      'X-Title': 'Spindle'
+    })
+    expect(JSON.parse(String(init.body))).toEqual({
+      model: 'm/x:free',
+      messages: [
+        { role: 'system', content: 'sys' },
+        { role: 'user', content: 'usr' }
+      ],
+      temperature: 0,
+      max_tokens: 500,
+      response_format: {
+        type: 'json_schema',
+        json_schema: { name: 'answer', strict: true, schema: { type: 'object' } }
+      }
+    })
+  })
+
+  it('puts the schema in the system text for a prompt model', async () => {
+    const t = setup({ key: 'sk-1' })
+    t.replies.push(() => json(answerBody('```json\n{"a":1}\n```')))
+    const answer = await ask(t, model({ json: 'prompt' }))
+    expect(answer).toMatchObject({ ok: true, json: { a: 1 } })
+    const body = JSON.parse(String(t.calls[0].init.body))
+    expect(body.response_format).toBeUndefined()
+    expect(body.messages[0].content).toContain('sys')
+    expect(body.messages[0].content).toContain('{"type":"object"}')
+  })
+
+  it('maps 401 and 403 to auth and forgets the key', async () => {
+    for (const status of [401, 403]) {
+      const t = setup({ key: 'sk-1' })
+      t.replies.push(() => json({ error: { message: 'no' } }, status))
+      expect(await ask(t)).toMatchObject({ ok: false, error: 'auth' })
+      expect(t.secrets.has('key')).toBe(false)
+      expect(t.provider.blocks()[0]).toMatchObject({ id: 'connect' })
+    }
+  })
+
+  it('maps 429 to limit with retryAt from Retry-After or X-RateLimit-Reset', async () => {
+    const t = setup({ key: 'k' })
+    t.replies.push(() => json({}, 429, { 'Retry-After': '30' }))
+    expect(await ask(t)).toMatchObject({ ok: false, error: 'limit', retryAt: 1_000_000 + 30_000 })
+    t.replies.push(() => json({}, 429, { 'X-RateLimit-Reset': '1900000000000' }))
+    expect(await ask(t)).toMatchObject({ ok: false, error: 'limit', retryAt: 1900000000000 })
+    t.replies.push(() => json({}, 429))
+    const none = await ask(t)
+    expect(none).toMatchObject({ ok: false, error: 'limit' })
+    expect(none.ok === false && none.retryAt).toBeUndefined()
+  })
+
+  it('maps 404, no endpoints, response_format errors, 5xx and a non-JSON reply to failed', async () => {
+    const cases: Response[] = [
+      json({ error: { message: 'nothing here' } }, 404),
+      json({ error: { message: 'No endpoints found for x' } }, 400),
+      json({ error: { message: 'response_format is not supported' } }, 400),
+      json({}, 500),
+      json({}, 503),
+      json(answerBody('sorry, I cannot')),
+      json({ choices: [] }),
+      json({ error: { code: 502, message: 'upstream' } }, 200)
+    ]
+    for (const reply of cases) {
+      const t = setup({ key: 'k' })
+      t.replies.push(() => reply)
+      expect(await ask(t)).toMatchObject({ ok: false, error: 'failed' })
+      expect(t.secrets.get('key')).toBe('k')
+    }
+  })
+
+  it('maps a throwing fetch to network', async () => {
+    const t = setup({ key: 'sk-1' })
+    t.replies.push(() => {
+      throw new Error('ECONNRESET')
+    })
+    expect(await ask(t)).toMatchObject({ ok: false, error: 'network', detail: 'ECONNRESET' })
+  })
+
+  it('maps a request with no answer in 60 s to network', async () => {
+    vi.useFakeTimers()
+    try {
+      const t = setup({ key: 'k' })
+      t.replies.push(
+        (call) =>
+          new Promise((_, reject) => {
+            call.init.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+          })
+      )
+      const pending = ask(t)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(await pending).toMatchObject({
+        ok: false,
+        error: 'network',
+        detail: 'no answer in 60 s'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rethrows the abort of the caller', async () => {
+    const t = setup({ key: 'k' })
+    const ctl = new AbortController()
+    t.replies.push(
+      (call) =>
+        new Promise((_, reject) => {
+          call.init.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+        })
+    )
+    const pending = ask(t, model(), ctl.signal)
+    await tick()
+    ctl.abort()
+    await expect(pending).rejects.toBeDefined()
+  })
+
+  it('answers off when stop() aborts it', async () => {
+    const t = setup({ key: 'k' })
+    t.replies.push(
+      (call) =>
+        new Promise((_, reject) => {
+          call.init.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+        })
+    )
+    const pending = ask(t)
+    await tick()
+    t.provider.stop()
+    expect(await pending).toMatchObject({ ok: false, error: 'off' })
+  })
+
+  it('keeps 3.5 s between requests', async () => {
+    const t = setup({ key: 'k' })
+    for (let i = 0; i < 3; i++) t.replies.push(() => json(answerBody('{}')))
+    await ask(t)
+    await ask(t)
+    t.advance(1000)
+    await ask(t)
+    expect(t.sleeps).toEqual([3500, 2500])
+  })
+
+  it('does not wait when enough time has passed', async () => {
+    const t = setup({ key: 'k' })
+    for (let i = 0; i < 2; i++) t.replies.push(() => json(answerBody('{}')))
+    await ask(t)
+    t.advance(4000)
+    await ask(t)
+    expect(t.sleeps).toEqual([])
+  })
+
+  it('never logs or returns the key', async () => {
+    const t = setup({ key: 'sk-very-secret' })
+    t.replies.push(() => json({ error: { message: 'bad' } }, 500))
+    t.replies.push(() => {
+      throw new Error('boom')
+    })
+    const a = await ask(t)
+    const b = await ask(t)
+    expect(JSON.stringify([a, b, t.logs, t.provider.blocks()])).not.toContain('sk-very-secret')
+  })
+
+  it('shows the privacy status once every free model has no endpoints', async () => {
+    const t = setup({ key: 'k' })
+    t.replies.push(() => json(models))
+    const all = await t.provider.models(noSignal)
+    const hasStatus = (): boolean =>
+      t.provider
+        .blocks()
+        .some((b) => b.kind === 'status' && b.error && b.text.includes('privacy settings'))
+    for (const m of all) {
+      expect(hasStatus()).toBe(false)
+      t.replies.push(() => json({ error: { message: 'No endpoints found' } }, 404))
+      await ask(t, m)
+    }
+    expect(hasStatus()).toBe(true)
+    // one good answer clears it
+    t.replies.push(() => json(answerBody('{}')))
+    await ask(t, all[0])
+    expect(hasStatus()).toBe(false)
+  })
+})

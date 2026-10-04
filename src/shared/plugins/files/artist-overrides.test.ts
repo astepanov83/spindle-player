@@ -132,6 +132,13 @@ describe('creditOf', () => {
       expect(creditOf('Björk', new Map(), groups)).toEqual({ artist: 'Björk' })
     })
 
+    it('shows an override that is the tag itself as the plain tag, keeping the group off', () => {
+      const own = overrides({ bjork: ['Bjork'] })
+      expect(creditOf('Bjork', own, groups)).toEqual({ artist: 'Bjork' })
+      // another spelling of the same key is still renamed
+      expect(creditOf('BJORK', own, groups)).toEqual({ artist: 'Bjork', artistTag: 'BJORK' })
+    })
+
     it('lets a manual override win over the group', () => {
       expect(creditOf('kino', o, groups)).toEqual({ artist: 'Кино', artistTag: 'kino' })
     })

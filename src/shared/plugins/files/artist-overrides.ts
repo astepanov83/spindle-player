@@ -119,6 +119,8 @@ export function creditOf(
       ? { artist: tag }
       : { artist: name, artistTag: tag, grouped: true }
   }
+  // the tag's own name, as "Use tag" on a grouped tag saves it: no change to show
+  if (names.length === 1 && names[0] === tag) return { artist: tag }
   const c: ArtistCredit = { artist: names.join(', '), artistTag: tag }
   if (names.length > 1) c.artists = names
   return c

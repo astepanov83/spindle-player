@@ -495,10 +495,19 @@ describe('artist groups (ticket 068)', () => {
   })
 
   it('lets a manual override win over a group', () => {
+    const o = { kino: ['KINO'] }
+    const { data } = build(files, undefined, () => true, undefined, undefined, o, g)
+    expect(albumOf(data, 'Blood')).toMatchObject({ artist: 'KINO', artistTag: 'Kino' })
+    expect(albumOf(data, 'Blood')).not.toHaveProperty('grouped')
+  })
+
+  it('shows a tag whose override is its own name (Use tag) as the plain tag', () => {
     const o = { kino: ['Kino'] }
     const { data } = build(files, undefined, () => true, undefined, undefined, o, g)
-    expect(albumOf(data, 'Blood')).toMatchObject({ artist: 'Kino', artistTag: 'Kino' })
-    expect(albumOf(data, 'Blood')).not.toHaveProperty('grouped')
+    const blood = albumOf(data, 'Blood')
+    expect(blood.artist).toBe('Kino')
+    expect(blood).not.toHaveProperty('artistTag')
+    expect(blood).not.toHaveProperty('grouped')
   })
 
   it('keeps album ids, since albums are still grouped by the tags', () => {

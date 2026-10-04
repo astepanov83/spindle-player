@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Album, LibraryData, Track } from '../../../../shared/library'
 import { defaultPalettes } from '../../../../shared/palette'
+import { creditOf } from '../../../../shared/plugins/files/artist-overrides'
 import type { Block, HeadBlock, PageRow, RowsBlock, SongsBlock, TilesBlock } from '../types'
 
 const api = {
@@ -335,6 +336,22 @@ describe('a grouped tag (ticket 068)', () => {
 
   it("Use tag saves the tag's own name, so the group can't take it again", () => {
     page.filesAct('artist/marinavale', 'use-tag', 'marinavail')
-    expect(api.setArtists).toHaveBeenCalledWith({ marinavail: ['Marina Vail'] })
+    const sent = api.setArtists.mock.calls[0][0] as Record<string, string[]>
+    expect(sent).toEqual({ marinavail: ['Marina Vail'] })
+    // the library built with that override and the group still saved
+    const groups = new Map([['marinavail', 'Marina Vale']])
+    const o = new Map(Object.entries(sent))
+    const d = lib()
+    const credit = creditOf('Marina Vail', o, groups)
+    d.albums.push(album('c', ['c1'], credit))
+    d.tracks.push(track('c1', 'c', credit))
+    files.load(d)
+    // its own artist, from the tag as it is: no "From tags" line to undo it
+    const [h] = page.filesPage('artists', 'artist/marinavail', '')
+    expect(head(h).title).toBe('Marina Vail')
+    expect(head(h).note).toBeUndefined()
+    expect(files.getArtist('marinavale')?.tags).toEqual([
+      { key: 'marinavale', name: 'Marina Vale' }
+    ])
   })
 })

@@ -2,6 +2,7 @@
 import type { IdMoves } from '../../../shared/id-moves'
 import type { ScanStatus } from '../../../shared/library'
 import type { ArtistChanges } from '../../../shared/plugins/files/artist-overrides'
+import type { Answer, JsonRequest } from '../../../shared/ai'
 import type { CoverSource } from '../../../shared/settings'
 import type { ThemePalettes } from '../../../shared/palette'
 import type { CueSheet } from './cue'
@@ -172,6 +173,9 @@ export type WorkerIn =
   // AiClient.on of the files plugin's AI tasks changed. While the artist
   // groups task is off, groups are not applied (the file is kept).
   | { type: 'ai-on'; tasks: Record<string, boolean> }
+  // main's answer to an 'ai-ask' (answer) or 'ai-max-input' (max), by its id.
+  // A call it was told to cancel gets none.
+  | { type: 'ai-reply'; id: number; answer?: Answer; max?: number }
   // Music files turned on or off. Off: no scan, no album or artist lookup, and
   // no writes to the index, fetched-covers.json, artist-overrides.json or
   // artist-groups.json.
@@ -202,3 +206,8 @@ export type WorkerOut =
   // path; sent before the library with the new ids, and again at start until
   // main answers 'ids-saved'
   | { type: 'ids-moved'; moves: IdMoves }
+  // AiClient calls of the files plugin's tasks (ticket 068): main makes them
+  // and answers with 'ai-reply'. ai-cancel: the job was stopped.
+  | { type: 'ai-ask'; id: number; task: string; req: JsonRequest; avoid?: string[] }
+  | { type: 'ai-max-input'; id: number; task: string; maxOutput: number }
+  | { type: 'ai-cancel'; id: number }

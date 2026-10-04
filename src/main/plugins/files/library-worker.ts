@@ -56,6 +56,9 @@ import { ScanChain, Stopped } from './scan-chain'
 import { confirmMoves } from './moves'
 import { mergeMoves, type IdMoves } from '../../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
+import { AiOverMessages } from './ai-messages'
+import { taskNames } from './group-artists'
+import { groupArtists } from './group-artists-job'
 import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from '../../covers/cover-names'
 import { CoverFetcher } from './cover-fetch'
@@ -364,12 +367,80 @@ const saveGroups = (): void => {
 const shownGroups = (): GroupNames =>
   aiOn[artistGroupsTask] ? artistGroups.groups : new Map<string, string>()
 
+// The task's AiClient: messages to main, which has the key.
+const ai = new AiOverMessages((m) => post(m))
+// the job running, and the wait for a limit to end
+let groupsJob: AbortController | undefined
+let groupsRetry: ReturnType<typeof setTimeout> | undefined
+// the longest wait setTimeout takes
+const maxWaitMs = 2 ** 31 - 1
+
 function setAiOn(tasks: Record<string, boolean>): void {
   const was = !!aiOn[artistGroupsTask]
   aiOn = tasks
-  if (was === !!aiOn[artistGroupsTask] || !artistGroups.groups.size) return
+  ai.setOn(tasks)
+  const now = !!aiOn[artistGroupsTask]
+  if (was === now) return
+  if (now) startGroupsJob()
+  else {
+    stopGroupsJob()
+    setStatus({ groups: undefined })
+  }
+  if (!artistGroups.groups.size) return
   dirty = true
   publisher.now()
+}
+
+function stopGroupsJob(): void {
+  // its progress would stay up; the next run shows its own
+  if (groupsJob && status.groups?.state === 'running') setStatus({ groups: undefined })
+  groupsJob?.abort()
+  groupsJob = undefined
+  clearTimeout(groupsRetry)
+  groupsRetry = undefined
+}
+
+// After a scan that ran to the end, when the task turns on, and when a limit
+// ends. One job at a time; it goes on from the keys already asked.
+function startGroupsJob(): void {
+  if (!on || closing || groupsJob || !aiOn[artistGroupsTask]) return
+  clearTimeout(groupsRetry)
+  groupsRetry = undefined
+  // the names come from the library as it is now
+  if (dirty) publisher.now()
+  const stop = new AbortController()
+  groupsJob = stop
+  groupArtists(
+    {
+      ai,
+      names: taskNames(built.data.albums, built.data.tracks),
+      groups: artistGroups,
+      saved: () => {
+        saveGroups()
+        // setAiOn shows nothing new when there were no groups, so it is done here
+        dirty = true
+        publisher.now()
+      },
+      status: (groups) => setStatus({ groups }),
+      log,
+      now: () => Date.now()
+    },
+    stop.signal
+  )
+    .then(
+      (end) => {
+        if (end.end !== 'limit' || end.retryAt === undefined || stop.signal.aborted) return
+        const wait = Math.min(maxWaitMs, Math.max(0, end.retryAt - Date.now()))
+        groupsRetry = setTimeout(startGroupsJob, wait)
+      },
+      (e) => {
+        // a stop throws the abort error; what was saved stays
+        if (!stop.signal.aborted) log(`Artist groups failed: ${e}`)
+      }
+    )
+    .finally(() => {
+      if (groupsJob === stop) groupsJob = undefined
+    })
 }
 
 // Groups albums, for the page and the lookups.
@@ -710,6 +781,7 @@ function setOn(next: boolean): void {
   if (!next) {
     chain.stop()
     fetcher?.hold()
+    stopGroupsJob()
     saveIndex()
     writer?.flushSync()
     fetchedWriter?.flushSync()
@@ -861,6 +933,7 @@ async function scan(
     const credits = [...built.data.albums, ...built.data.tracks]
     if (dropUnused(overrides, tagKeys(credits))) saveOverrides()
     if (dropUnusedGroups(artistGroups, usedKeys(credits))) saveGroups()
+    startGroupsJob()
   }
   setStatus({ phase: 'idle', done: 0, total: 0, read: undefined, scanFailed: failed })
   post({ type: 'scanned', id })
@@ -909,6 +982,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       keptEdits++
       on = m.start.on
       aiOn = m.start.aiOn
+      ai.setOn(aiOn)
       started(m.start)
       pruneWhileOff()
       break
@@ -920,6 +994,8 @@ port.on('message', (e: Electron.MessageEvent) => {
     case 'scan':
       // main asks for none while off
       if (!on) break
+      // it goes on after this scan, from the keys already asked
+      stopGroupsJob()
       // a manual Rescan looks up every miss again
       if (m.retryFailed) {
         const albums = dropNotFound(fetched)
@@ -947,6 +1023,9 @@ port.on('message', (e: Electron.MessageEvent) => {
       break
     case 'ai-on':
       void ready.then(() => setAiOn(m.tasks))
+      break
+    case 'ai-reply':
+      ai.reply(m)
       break
     case 'resume':
       // a new window: go on unless a scan runs (it releases when done) or none
@@ -1010,6 +1089,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       fetchedWriter?.flushSync()
       overridesWriter?.flushSync()
       groupsWriter?.flushSync()
+      stopGroupsJob()
       closing = true
       clearTimeout(offPrune)
       chain.close()

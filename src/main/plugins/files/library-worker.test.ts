@@ -298,6 +298,71 @@ describe('the library process', () => {
       expect(saved()).toEqual(bjork)
     })
 
+    describe('the job', () => {
+      // "Bjork" once and "Björk" twice, so "Björk" is the name shown
+      function twins(): void {
+        const ix = emptyIndex()
+        const add = (name: string, artist: string, album: string): void => {
+          const path = join(music, name)
+          ix.files.set(path, { path, mtime: 1, size: 1, duration: 0, artist, album, title: name })
+        }
+        add('1.mp3', 'Bjork', 'Debut')
+        add('2.mp3', 'Björk', 'Homogenic')
+        add('3.mp3', 'Björk', 'Post')
+        writeFileSync(join(dir, 'library.json'), JSON.stringify(serializeIndex(ix)))
+      }
+      const calls = (type: string): (WorkerOut & { id: number })[] =>
+        heard.filter((m) => m.type === type) as (WorkerOut & { id: number })[]
+      async function call(type: string, n: number): Promise<WorkerOut & { id: number }> {
+        await until(() => calls(type).length >= n)
+        return calls(type)[n - 1]
+      }
+      const answer = (model: string): unknown => ({
+        ok: true,
+        model,
+        json: { matches: [{ check: 1, same: 2, why: 'accent' }] }
+      })
+
+      it('runs when the task turns on, asking main, then saves and shows the group', async () => {
+        twins()
+        start(true)
+        await ready()
+        send({ type: 'ai-on', tasks: { 'artist-groups': true } })
+        send({ type: 'ai-reply', id: (await call('ai-max-input', 1)).id, max: 100_000 })
+        const first = await call('ai-ask', 1)
+        expect(first).toMatchObject({ task: 'artist-groups' })
+        send({ type: 'ai-reply', id: first.id, answer: answer('m1') as never })
+        const second = await call('ai-ask', 2)
+        expect(second).toMatchObject({ avoid: ['m1'] })
+        send({ type: 'ai-reply', id: second.id, answer: answer('m2') as never })
+        await until(() =>
+          heard.some((m) => m.type === 'status' && m.status.groups?.state === 'done')
+        )
+        const last = heard.filter((m) => m.type === 'library').at(-1) as { bytes: Uint8Array }
+        // a patch: only the song tagged "Bjork" changed
+        expect(decode(last.bytes).tracks?.map((t) => t.artist)).toEqual(['Björk'])
+        send({ type: 'flush' })
+        expect(saved()).toEqual({
+          version: 1,
+          groups: { bjork: 'Björk', björk: 'Björk' },
+          asked: ['bjork', 'björk']
+        })
+      })
+
+      it('is stopped by a new scan', async () => {
+        twins()
+        start(true, [], { 'artist-groups': true })
+        await ready()
+        // turned off and on again: a run starts
+        send({ type: 'ai-on', tasks: {} })
+        send({ type: 'ai-on', tasks: { 'artist-groups': true } })
+        send({ type: 'ai-reply', id: (await call('ai-max-input', 1)).id, max: 100_000 })
+        const ask = await call('ai-ask', 1)
+        scan(1)
+        expect(heard.at(-1)).toEqual({ type: 'ai-cancel', id: ask.id })
+      })
+    })
+
     it('applies them from the start data when the task is on', async () => {
       bjorkIndex()
       start(false, [], { 'artist-groups': true })

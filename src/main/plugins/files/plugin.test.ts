@@ -8,7 +8,7 @@ import type { WorkerIn, WorkerOut } from './types'
 import type { AiClient } from '../../../shared/ai'
 
 // the library processes made, with what main sent each
-const children: { sent: WorkerIn[] }[] = []
+const children: { sent: WorkerIn[]; emit(m: WorkerOut): void }[] = []
 
 // A process that answers every ask at once: a library with nothing in it, no song cover.
 function answer(m: WorkerIn): WorkerOut | undefined {
@@ -27,7 +27,7 @@ vi.mock('electron', () => ({
     fork: () => {
       const listeners = new Map<string, (m: unknown) => void>()
       const sent: WorkerIn[] = []
-      children.push({ sent })
+      children.push({ sent, emit: (m) => listeners.get('message')?.(m) })
       return {
         postMessage: (m: WorkerIn) => {
           sent.push(m)
@@ -49,7 +49,13 @@ const { FilesPlugin } = await import('./plugin')
 type Handler = (...args: unknown[]) => unknown
 
 // A fake AI service: the tasks switched on, and a way to say on() changed.
-function fakeAi(): { client: AiClient; tasks: Set<string>; change(): void } {
+function fakeAi(): {
+  client: AiClient
+  tasks: Set<string>
+  change(): void
+  asked: { task: string; avoid?: string[] }[]
+} {
+  const asked: { task: string; avoid?: string[] }[] = []
   const tasks = new Set<string>()
   const listeners = new Set<() => void>()
   const client: AiClient = {
@@ -59,9 +65,12 @@ function fakeAi(): { client: AiClient; tasks: Set<string>; change(): void } {
       return () => listeners.delete(cb)
     },
     maxInput: async () => undefined,
-    ask: async () => ({ ok: false, error: 'off' })
+    ask: async (task, _req, _signal, avoid) => {
+      asked.push({ task, avoid })
+      return { ok: true, json: { matches: [] }, model: 'm' }
+    }
   }
-  return { client, tasks, change: () => listeners.forEach((f) => f()) }
+  return { client, tasks, change: () => listeners.forEach((f) => f()), asked }
 }
 
 function setup(
@@ -215,5 +224,18 @@ describe('FilesPlugin', () => {
     ai.tasks.delete('artist-groups')
     ai.change()
     expect(children[0].sent.at(-1)).toEqual({ type: 'ai-on', tasks: { 'artist-groups': false } })
+  })
+  it("makes the library process's AI requests with its AiClient and answers them", async () => {
+    const ai = fakeAi()
+    setup(true, ai)
+    const req = { system: 's', user: 'u', schema: {}, maxOutput: 1 }
+    children[0].emit({ type: 'ai-ask', id: 4, task: 'artist-groups', req, avoid: ['x'] })
+    children[0].emit({ type: 'ai-ask', id: 5, task: 'other', req })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(ai.asked).toEqual([{ task: 'artist-groups', avoid: ['x'] }])
+    expect(children[0].sent.filter((m) => m.type === 'ai-reply')).toEqual([
+      { type: 'ai-reply', id: 5, answer: { ok: false, error: 'off' } },
+      { type: 'ai-reply', id: 4, answer: { ok: true, json: { matches: [] }, model: 'm' } }
+    ])
   })
 })

@@ -1,6 +1,6 @@
 // The scan status lines for the settings sheet and the empty library.
 import type { DropResult } from '../../../../shared/plugins/files/ipc'
-import type { FetchStatus, ScanStatus } from '../../../../shared/library'
+import type { FetchStatus, GroupsStatus, ScanStatus } from '../../../../shared/library'
 import { rootName } from './folders'
 import { pathEnds } from '../../ui/path-ends'
 
@@ -93,6 +93,45 @@ export function photoLine(f: FetchStatus | undefined): string | undefined {
   if (a.notFound) parts.push(`${n(a.notFound)} not found`)
   if (a.left) parts.push(`${n(a.left)} left`)
   return parts.join(' · ')
+}
+
+const clock = (at: number): string =>
+  new Date(at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+const sameDay = (a: number, b: number): boolean =>
+  new Date(a).toDateString() === new Date(b).toDateString()
+
+// The artist groups task's line under its switch (ticket 068).
+export function groupsLine(
+  g: GroupsStatus | undefined,
+  now = Date.now()
+): { text: string; busy?: true; error?: true } | undefined {
+  if (!g) return undefined
+  switch (g.state) {
+    case 'running':
+      return { text: `Checked ${n(g.checked)} of ${n(g.total)} names`, busy: true }
+    case 'done':
+      return { text: `Grouped ${plural(g.grouped, 'artist', 'artists')}, ${clock(g.at)}` }
+    case 'limit': {
+      const when =
+        g.at === undefined
+          ? 'after the next scan'
+          : sameDay(g.at, now)
+            ? `at ${clock(g.at)}`
+            : sameDay(g.at, now + 24 * 3600_000)
+              ? 'tomorrow'
+              : `${new Date(g.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+      return { text: `Waiting for the limit, goes on ${when}` }
+    }
+    case 'stopped':
+      return {
+        text:
+          g.error === 'network'
+            ? 'Could not reach the service. Tries again after the next scan.'
+            : 'The service gave no usable answer. Tries again after the next scan.',
+        error: true
+      }
+  }
 }
 
 // What the main window says when a scan ends badly (ticket 045): the scan

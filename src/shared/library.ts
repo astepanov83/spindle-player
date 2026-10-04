@@ -139,6 +139,17 @@ export interface FetchStatus extends FetchCounts {
   artists?: FetchCounts
 }
 
+// The artist groups task (ticket 068), as the library process last ran it.
+export type GroupsStatus =
+  // checked: names asked about so far, of total
+  | { state: 'running'; checked: number; total: number }
+  // grouped: names put in a group this run; at: when it ended (ms since 1970)
+  | { state: 'done'; grouped: number; at: number }
+  // a rate or daily limit; at: when it goes on, when known
+  | { state: 'limit'; at?: number }
+  // stopped this run; the next finished scan tries again
+  | { state: 'stopped'; error: 'network' | 'failed' }
+
 export interface ScanStatus {
   folders: string[]
   phase: ScanPhase
@@ -163,4 +174,6 @@ export interface ScanStatus {
   settingsUnreadable?: boolean
   // the online cover lookup; missing while it is off
   fetch?: FetchStatus
+  // missing while the task is off and before it first runs
+  groups?: GroupsStatus
 }

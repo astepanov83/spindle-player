@@ -1,8 +1,19 @@
 // The files plugin's blocks in Settings: the music folders, Add folder and
 // Rescan, and what the scan says. Main owns the list; this only asks. Also
-// its lines next to the chips and under the cover lookup setting.
-import { canRescan, fetchBusy, fetchLine, photoLine, scanLine, statusLines } from './scan-text'
+// its lines next to the chips and under the cover lookup setting, and the
+// artist groups task's place (ticket 068).
+import {
+  canRescan,
+  fetchBusy,
+  fetchLine,
+  groupsLine,
+  photoLine,
+  scanLine,
+  statusLines
+} from './scan-text'
 import { files } from './store.svelte'
+import { ai } from '../../ai.svelte'
+import { artistGroupsTask } from '../../../../shared/plugins/files/artist-groups'
 import type { SettingBlock } from '../../../../shared/setting-blocks'
 
 export function filesSettings(): SettingBlock[] {
@@ -27,8 +38,16 @@ export function filesSettings(): SettingBlock[] {
     },
     { kind: 'button', id: 'add', label: 'Add folder', disabled: locked },
     { kind: 'button', id: 'rescan', label: 'Rescan', disabled: !canRescan(s, files.loadFailed) },
-    ...statusLines(s, files.loadFailed).map((text): SettingBlock => ({ kind: 'status', text }))
+    ...statusLines(s, files.loadFailed).map((text): SettingBlock => ({ kind: 'status', text })),
+    { kind: 'ai', task: artistGroupsTask },
+    ...groupsBlocks()
   ]
+}
+
+// The task's own line follows its switch and setup, only while it is on.
+function groupsBlocks(): SettingBlock[] {
+  const line = ai.state?.tasks[artistGroupsTask]?.on ? groupsLine(files.status.groups) : undefined
+  return line ? [{ kind: 'status', ...line }] : []
 }
 
 export function filesActSetting(id: string, actionId: string, value?: string): void {

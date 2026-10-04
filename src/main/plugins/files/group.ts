@@ -153,7 +153,8 @@ function withoutTracks(al: Album & { tracks: Track[] }): Album {
 // A few of the artist's titles to check a found artist by: two of their
 // albums, then their songs on other albums, then their own songs. Deezer
 // lacks some albums in some countries but has a song of them elsewhere.
-function checksOf(albums: Album[], also: Track[], songs: Track[]): ArtistCheck[] {
+// The artist groups task sends the first two (ticket 068).
+export function checksOf(albums: Album[], also: Track[], songs: Track[]): ArtistCheck[] {
   const out: ArtistCheck[] = []
   const seen = new Set<string>()
   const add = (kind: ArtistCheck['kind'], title: string): void => {

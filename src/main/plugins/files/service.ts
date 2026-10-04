@@ -15,6 +15,7 @@ import { ffmpegTool } from '../../ffmpeg-path'
 import type { SettingsStore } from '../../settings-store'
 import type { CoverCache } from '../../covers/cover-cache'
 import { addDropped } from './dropped'
+import { AiRequests } from './ai-messages'
 import { LibraryClient } from './library-client'
 import { LibraryProcess } from './library-process'
 import { RestartBudget } from '../../restart'
@@ -45,6 +46,8 @@ export class LibraryService {
   #on: boolean
   // AiClient.on of this plugin's tasks, as last sent to the library process
   #aiOn: Record<string, boolean>
+  // the library process's AiClient calls, made here where the key is
+  #aiRequests: AiRequests
 
   constructor(
     readonly store: SettingsStore,
@@ -66,6 +69,7 @@ export class LibraryService {
     this.#aiOn = this.#tasksOn()
     // the library process only gets messages, so it is told when on() changes
     ai?.changed(() => this.#aiChanged())
+    this.#aiRequests = new AiRequests(ai, [artistGroupsTask], (m) => this.#post(m))
     if (!this.ffmpeg || !this.ffprobe)
       console.error(
         'ffmpeg or ffprobe not found (npm run fetch-ffmpeg); APE, WMA and the like will not play'
@@ -107,7 +111,10 @@ export class LibraryService {
       new RestartBudget(3, 60000),
       {
         message: (m) => this.#onMessage(m),
-        exit: (code, after) => this.#client.onExit(code, after),
+        exit: (code, after) => {
+          this.#aiRequests.stopAll()
+          this.#client.onExit(code, after)
+        },
         // a new process starts at full speed; tell it if a song is playing
         started: () => {
           if (this.#playing) this.#sendPlaying()
@@ -136,7 +143,7 @@ export class LibraryService {
   }
 
   #onMessage(m: WorkerOut): void {
-    if (this.#client.onMessage(m)) return
+    if (this.#client.onMessage(m) || this.#aiRequests.onMessage(m)) return
     switch (m.type) {
       case 'library':
         // JSON bytes the page parses; main never reads them

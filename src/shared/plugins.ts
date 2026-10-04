@@ -1,5 +1,6 @@
 import type { AiTaskInfo } from './ai'
 import type { FilesChannels, LibraryApi } from './plugins/files/ipc'
+import { artistGroupsTask } from './plugins/files/artist-groups'
 import type { MfpApi, MfpChannels } from './plugins/mfp/ipc'
 import type { RadioApi, RadioChannels } from './plugins/radio/ipc'
 import { stationIdPattern } from './plugins/radio/ids'
@@ -38,7 +39,15 @@ export const plugins: PluginInfo[] = [
     defaultOn: true,
     itemKind: 'track',
     offText: 'Music files are off',
-    linkKinds: ['album', 'artist', 'folder']
+    linkKinds: ['album', 'artist', 'folder'],
+    aiTasks: [
+      {
+        id: artistGroupsTask,
+        name: 'Group artist spellings',
+        about: 'Artists spelled differently in tags are shown as one.',
+        sends: 'Sends artist names and up to two album titles each to the service.'
+      }
+    ]
   },
   {
     id: 'radio',

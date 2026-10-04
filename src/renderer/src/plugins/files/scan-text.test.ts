@@ -6,6 +6,7 @@ import {
   dropText,
   fetchBusy,
   fetchLine,
+  groupsLine,
   libraryProblem,
   photoLine,
   notLoadedText,
@@ -292,5 +293,49 @@ describe('dropText', () => {
 
   it('says nothing when nothing came', () => {
     expect(dropText(r({}))).toBeUndefined()
+  })
+})
+
+describe('groupsLine', () => {
+  // 10:42 local time, and 8:00 the same day
+  const at = new Date(2026, 9, 4, 10, 42).getTime()
+  const now = new Date(2026, 9, 4, 8, 0).getTime()
+
+  it('says nothing before the task ran', () => {
+    expect(groupsLine(undefined)).toBeUndefined()
+  })
+
+  it('says how far a run got, with a spinner', () => {
+    expect(groupsLine({ state: 'running', checked: 600, total: 3000 })).toEqual({
+      text: 'Checked 600 of 3,000 names',
+      busy: true
+    })
+  })
+
+  it('says how many it grouped and when', () => {
+    expect(groupsLine({ state: 'done', grouped: 12, at })?.text).toBe('Grouped 12 artists, 10:42')
+    expect(groupsLine({ state: 'done', grouped: 1, at })?.text).toBe('Grouped 1 artist, 10:42')
+  })
+
+  it('says when it goes on after a limit', () => {
+    expect(groupsLine({ state: 'limit', at }, now)?.text).toBe(
+      'Waiting for the limit, goes on at 10:42'
+    )
+    expect(groupsLine({ state: 'limit', at: at + 24 * 3600_000 }, now)?.text).toBe(
+      'Waiting for the limit, goes on tomorrow'
+    )
+    expect(groupsLine({ state: 'limit' }, now)?.text).toBe(
+      'Waiting for the limit, goes on after the next scan'
+    )
+  })
+
+  it('says a run stopped, as an error', () => {
+    expect(groupsLine({ state: 'stopped', error: 'network' })).toEqual({
+      text: 'Could not reach the service. Tries again after the next scan.',
+      error: true
+    })
+    expect(groupsLine({ state: 'stopped', error: 'failed' })?.text).toBe(
+      'The service gave no usable answer. Tries again after the next scan.'
+    )
   })
 })

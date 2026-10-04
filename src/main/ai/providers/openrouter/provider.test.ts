@@ -395,14 +395,42 @@ describe('ask', () => {
     expect(body.messages[0].content).toContain('{"type":"object"}')
   })
 
-  it('maps 401 and 403 to auth and forgets the key', async () => {
-    for (const status of [401, 403]) {
-      const t = setup({ key: 'sk-1' })
-      t.replies.push(() => json({ error: { message: 'no' } }, status))
-      expect(await ask(t)).toMatchObject({ ok: false, error: 'auth' })
-      expect(t.secrets.has('key')).toBe(false)
-      expect(t.provider.blocks()[0]).toMatchObject({ id: 'connect' })
+  it('maps 401 to auth and forgets the key', async () => {
+    const t = setup({ key: 'sk-1' })
+    t.replies.push(() => json({ error: { message: 'no' } }, 401))
+    expect(await ask(t)).toMatchObject({ ok: false, error: 'auth' })
+    expect(t.secrets.has('key')).toBe(false)
+    expect(t.provider.blocks()[0]).toMatchObject({ id: 'connect' })
+  })
+
+  it('maps 403 (a moderation flag or guardrail) to failed and keeps the key', async () => {
+    const t = setup({ key: 'sk-1' })
+    t.replies.push(() => json({ error: { code: 403, message: 'flagged' } }, 403))
+    expect(await ask(t)).toMatchObject({ ok: false, error: 'failed', detail: 'HTTP 403: flagged' })
+    t.replies.push(() => json({}, 403))
+    expect(await ask(t)).toMatchObject({ ok: false, error: 'failed', detail: 'HTTP 403' })
+    expect(t.secrets.has('key')).toBe(true)
+    expect(t.provider.ready()).toBe(true)
+  })
+
+  it('reads the reset time of the free daily limit from the body', async () => {
+    const t = setup({ key: 'k' })
+    const daily = {
+      error: {
+        message: 'Rate limit exceeded: free-models-per-day',
+        code: 429,
+        metadata: { headers: { 'X-RateLimit-Reset': '1777420800000' } }
+      }
     }
+    t.replies.push(() => json(daily, 429))
+    expect(await ask(t)).toMatchObject({ ok: false, error: 'limit', retryAt: 1777420800000 })
+    // the real headers come first
+    t.replies.push(() => json(daily, 429, { 'X-RateLimit-Reset': '1900000000000' }))
+    expect(await ask(t)).toMatchObject({ ok: false, error: 'limit', retryAt: 1900000000000 })
+    const t2 = setup({ key: 'k' })
+    const after = { error: { code: 429, metadata: { headers: { 'Retry-After': '60' } } } }
+    t2.replies.push(() => json(after, 429))
+    expect(await ask(t2)).toMatchObject({ ok: false, error: 'limit', retryAt: 1_000_000 + 60_000 })
   })
 
   it('maps 429 to limit with retryAt from Retry-After or X-RateLimit-Reset', async () => {

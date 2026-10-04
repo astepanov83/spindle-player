@@ -41,7 +41,7 @@ export interface ProviderContext {
   fetch: typeof fetch
   // https only
   openExternal(url: string): void
-  // a one-off localhost server for a login's redirect
+  // a one-off server on 127.0.0.1 for a login's redirect
   callbackServer(): Promise<CallbackServer>
   log(text: string): void
   // blocks or ready() changed: the core sends the page new state

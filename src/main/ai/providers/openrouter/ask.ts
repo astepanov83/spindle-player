@@ -30,17 +30,19 @@ export function requestBody(model: ModelInfo, req: JsonRequest): Record<string, 
 
 export const chatUrl = `${api}/chat/completions`
 
+type HeaderGet = (name: string) => string | null | undefined
+
 // When the limit lifts, in ms since 1970. Retry-After is seconds or a date;
 // X-RateLimit-Reset is a time in ms.
-export function retryAt(headers: Headers, now: number): number | undefined {
-  const after = headers.get('retry-after')
+export function retryAt(header: HeaderGet, now: number): number | undefined {
+  const after = header('retry-after')
   if (after) {
     const secs = Number(after)
     if (Number.isFinite(secs)) return now + secs * 1000
     const date = Date.parse(after)
     if (!Number.isNaN(date)) return date
   }
-  const reset = Number(headers.get('x-ratelimit-reset'))
+  const reset = Number(header('x-ratelimit-reset'))
   if (reset > 1e12) return reset
   if (reset > 1e9) return reset * 1000
   return undefined
@@ -53,7 +55,19 @@ export interface Result {
 }
 
 interface ErrorBody {
-  error?: { code?: unknown; message?: unknown }
+  error?: { code?: unknown; message?: unknown; metadata?: { headers?: unknown } }
+}
+
+// The free daily limit's 429 has its reset time only in the body, under
+// error.metadata.headers, with any case of names.
+function bodyHeaders(body: ErrorBody | undefined): HeaderGet {
+  const h = body?.error?.metadata?.headers
+  if (!h || typeof h !== 'object') return () => undefined
+  const lower = new Map(Object.entries(h).map(([k, v]) => [k.toLowerCase(), v]))
+  return (name) => {
+    const v = lower.get(name)
+    return typeof v === 'string' || typeof v === 'number' ? String(v) : undefined
+  }
 }
 
 const parse = (text: string): unknown => {
@@ -88,12 +102,15 @@ export function answerFor(
     noEndpoints
   })
 
-  if (code === 401 || code === 403) {
+  // 403 is a moderation flag or a guardrail block, not a bad key: next model
+  if (code === 401) {
     onAuth()
-    return fail({ error: 'auth', detail: `HTTP ${code}` })
+    return fail({ error: 'auth', detail: 'HTTP 401' })
   }
-  if (code === 429)
-    return fail({ error: 'limit', retryAt: retryAt(headers, now), detail: 'HTTP 429' })
+  if (code === 429) {
+    const at = retryAt((n) => headers.get(n), now) ?? retryAt(bodyHeaders(body), now)
+    return fail({ error: 'limit', retryAt: at, detail: 'HTTP 429' })
+  }
   if (code !== 200 || body?.error) {
     const noEndpoints = code === 404 || /no endpoints/i.test(message)
     const detail = `HTTP ${code}${message ? `: ${message}` : ''}`.slice(0, 300)

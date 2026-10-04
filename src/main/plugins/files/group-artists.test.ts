@@ -10,6 +10,7 @@ import {
   pairsOf,
   shownName,
   splitList,
+  system,
   taskNames,
   UnionFind,
   userText,
@@ -52,6 +53,14 @@ const plain = (list: string[]): TaskName[] =>
   }))
 
 describe('the request', () => {
+  // every CHECK name is in LIST too, so a model left alone pairs each name
+  // with itself (seen on the user's library); the code drops those pairs
+  it('tells the model to pick a different line and leave out names with no match', () => {
+    expect(system).toContain('find a different line in LIST')
+    expect(system).toContain('Never answer a line with its own number.')
+    expect(system).toContain('Leave out lines with no match.')
+  })
+
   it('numbers the names in name order, the same whatever order the files come in', () => {
     const files = [song('Björk', 'Homogenic'), song('Beatles', 'Revolver'), song('Bjork', 'Debut')]
     const a = names(files)

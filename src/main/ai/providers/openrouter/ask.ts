@@ -55,7 +55,11 @@ export interface Result {
 }
 
 interface ErrorBody {
-  error?: { code?: unknown; message?: unknown; metadata?: { headers?: unknown } }
+  error?: {
+    code?: unknown
+    message?: unknown
+    metadata?: { headers?: unknown; provider_name?: unknown }
+  }
 }
 
 // The free daily limit's 429 has its reset time only in the body, under
@@ -107,6 +111,13 @@ export function answerFor(
     onAuth()
     return fail({ error: 'auth', detail: 'HTTP 401' })
   }
+  // a 429 that names the model's provider means that one model is busy, not
+  // that the account hit its limit: the next model is tried
+  if (code === 429 && typeof body?.error?.metadata?.provider_name === 'string')
+    return fail({
+      error: 'failed',
+      detail: `HTTP 429: ${body.error.metadata.provider_name} is busy`
+    })
   if (code === 429) {
     const at = retryAt((n) => headers.get(n), now) ?? retryAt(bodyHeaders(body), now)
     return fail({ error: 'limit', retryAt: at, detail: 'HTTP 429' })

@@ -31,7 +31,8 @@ export const chunkSize = 200
 export const system = `You get artist names from one person's music library. The tags were typed by
 different people, so one artist can appear under several spellings.
 
-For each line under CHECK, find the line in LIST that is the same artist, if any.
+For each line under CHECK, find a different line in LIST that is the same artist,
+if any. Never answer a line with its own number. Leave out lines with no match.
 
 Same artist:
 - spelling, accents or punctuation: Bjork / Björk, Guns N Roses / Guns N' Roses

@@ -433,6 +433,26 @@ describe('ask', () => {
     expect(await ask(t2)).toMatchObject({ ok: false, error: 'limit', retryAt: 1_000_000 + 60_000 })
   })
 
+  // seen on the user's machine: one model's provider was busy, the account was fine
+  it('maps a 429 from a busy model provider to failed, so the next model is tried', async () => {
+    const t = setup({ key: 'k' })
+    const busy = {
+      error: {
+        message: 'Provider returned error',
+        code: 429,
+        metadata: {
+          raw: 'qwen/qwen3.8-27b:free is temporarily rate-limited upstream. Please retry shortly',
+          provider_name: 'ModelRun',
+          is_byok: false,
+          limit_source: 'upstream_provider_shared_pool'
+        }
+      }
+    }
+    t.replies.push(() => json(busy, 429))
+    expect(await ask(t)).toMatchObject({ ok: false, error: 'failed' })
+    expect(t.secrets.get('key')).toBe('k')
+  })
+
   it('maps 429 to limit with retryAt from Retry-After or X-RateLimit-Reset', async () => {
     const t = setup({ key: 'k' })
     t.replies.push(() => json({}, 429, { 'Retry-After': '30' }))

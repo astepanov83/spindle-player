@@ -2,19 +2,26 @@ import { describe, expect, it } from 'vitest'
 import {
   addAiGroup,
   addAsked,
+  aiKeys,
   applyChanges,
   convertOld,
+  creditOf,
   knownArtists,
   knownCache,
   noArtists,
   noCache,
   parseArtists,
   parseCache,
+  parseOldGroups,
+  parseOldOverrides,
   prune,
   pruneCache,
   resolve,
   serializeArtists,
   serializeCache,
+  tagSpellings,
+  usedKeys,
+  yourKeys,
   type ArtistEntry,
   type ArtistsFile,
   type By
@@ -494,5 +501,116 @@ describe('convertOld', () => {
       gone: { names: ['Gone Band'], byAi: false },
       old: { names: ['Old'], byAi: true }
     })
+  })
+})
+
+describe('creditOf', () => {
+  const f = file(
+    artist('Кино', 'you', ['kino', 'you']),
+    artist('Sadness', 'you', ['Sadness, Stellafera', 'you']),
+    artist('Stellafera', 'you', ['Sadness, Stellafera', 'you']),
+    artist('Björk', 'ai', ['Bjork', 'ai'], ['Björk', 'ai']),
+    artist('Bjork', 'you', ['Bjork!', 'you'])
+  )
+  const on = resolve(f, true)
+
+  it('keeps a tag with no link as it is', () => {
+    expect(creditOf('Queen', on)).toEqual({ artist: 'Queen' })
+    expect(creditOf('Queen', new Map())).toEqual({ artist: 'Queen' })
+  })
+
+  it('renames, matching the tag by key', () => {
+    expect(creditOf('KINO', on)).toEqual({ artist: 'Кино', artistTag: 'KINO' })
+  })
+
+  it('splits, showing the names joined in file order', () => {
+    expect(creditOf('Sadness, Stellafera', on)).toEqual({
+      artist: 'Sadness, Stellafera',
+      artists: ['Sadness', 'Stellafera'],
+      artistTag: 'Sadness, Stellafera'
+    })
+  })
+
+  it('does not look the new names up again', () => {
+    // "Bjork!" shows as "Bjork", which is not then grouped as "Björk"
+    expect(creditOf('Bjork!', on)).toEqual({ artist: 'Bjork', artistTag: 'Bjork!' })
+  })
+
+  it("marks an AI link grouped, and leaves a tag spelled as the AI's name as it is", () => {
+    expect(creditOf('Bjork', on)).toEqual({ artist: 'Björk', artistTag: 'Bjork', grouped: true })
+    expect(creditOf('Björk', on)).toEqual({ artist: 'Björk' })
+  })
+
+  it('shows AI links only while the AI is on', () => {
+    expect(creditOf('Bjork', resolve(f, false))).toEqual({ artist: 'Bjork' })
+  })
+
+  it('shows a tag you kept as its own name (Use tag) as the plain tag, the AI kept off', () => {
+    const own = file(artist('Bjork', 'you', ['Bjork', 'you'], ['Bjork', 'ai']))
+    expect(creditOf('Bjork', resolve(own, true))).toEqual({ artist: 'Bjork' })
+    expect(creditOf('BJORK', resolve(own, true))).toEqual({ artist: 'BJORK' })
+  })
+})
+
+describe('the keys the library process needs', () => {
+  const f = file(
+    artist('Björk', 'you', ['Bjork', 'ai'], ['bjork (live)', 'you']),
+    artist('Kino', 'you', ['Kino', 'you'])
+  )
+
+  it('lists the tags with a link by you, and with a link by the AI', () => {
+    expect(yourKeys(f)).toEqual(new Set(['bjork(live)', 'kino']))
+    expect(aiKeys(f)).toEqual(new Set(['bjork']))
+  })
+
+  it('keeps the tags and the names you gave, not the names the AI gave', () => {
+    expect(
+      usedKeys([
+        { artist: 'Queen' },
+        { artist: 'Sadness, Stellafera', artists: ['Sadness', 'Stellafera'], artistTag: 's & s' },
+        { artist: 'Björk', artistTag: 'Bjork', grouped: true }
+      ])
+    ).toEqual(new Set(['queen', 's&s', 'sadness', 'stellafera', 'bjork']))
+  })
+
+  it("spells each tag key as it was first seen, the album's tag before its songs'", () => {
+    const albums = [
+      { artist: 'Queen', trackIds: ['1', '2'] },
+      { artist: 'Кино', artistTag: 'KINO', trackIds: ['3'] }
+    ] as never[]
+    const tracks: Record<string, unknown> = {
+      1: { artist: 'QUEEN' },
+      2: { artist: 'Freddie' },
+      3: { artist: 'Кино', artistTag: 'kino' }
+    }
+    expect(tagSpellings(albums, (id) => tracks[id] as never)).toEqual(
+      new Map([
+        ['queen', 'Queen'],
+        ['freddie', 'Freddie'],
+        ['kino', 'KINO']
+      ])
+    )
+  })
+})
+
+describe('the old files', () => {
+  it('reads artist-overrides.json, skipping keys artistKey would not make and empty lists', () => {
+    const o = parseOldOverrides({
+      version: 1,
+      artists: { 'Big Name': ['X'], ok: [' Y '], empty: [], bad: 'Z' }
+    })
+    expect(o).toEqual(new Map([['ok', ['Y']]]))
+    expect(parseOldOverrides({ version: 2, artists: { a: ['A'] } }).size).toBe(0)
+    expect(parseOldOverrides(undefined).size).toBe(0)
+  })
+
+  it('reads artist-groups.json, skipping bad keys and names', () => {
+    const g = parseOldGroups({
+      version: 1,
+      groups: { 'Big Name': 'X', ok: ' Y ', empty: '  ', bad: 3 },
+      asked: ['ok', 'Not A Key', 7]
+    })
+    expect(g).toEqual({ groups: new Map([['ok', 'Y']]), asked: new Set(['ok']) })
+    expect(parseOldGroups({ version: 1, groups: {} }).groups.size).toBe(0)
   })
 })

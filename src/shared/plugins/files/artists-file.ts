@@ -3,16 +3,12 @@
 // user's renames and splits (ticket 024) and the AI's groups (ticket 068).
 // Tags match by artistKey, so tags and library.json never change. The AI's
 // progress is in a cache file of its own (artist-ai-cache.json).
-import { artistKey } from './artists'
-import {
-  cleanNames,
-  isKey,
-  maxNameLength,
-  maxNames,
-  type ArtistChanges,
-  type ArtistOverrides
-} from './artist-overrides'
-import type { ArtistGroups } from './artist-groups'
+import { artistKey, namesOf, tagOf } from './artists'
+import { cleanNames, isKey, maxNameLength, maxNames, type ArtistChanges } from './artist-overrides'
+import type { Album, ArtistCredit, Track } from '../../library'
+
+// The AI task's id on the AI service, for AiClient and the plugin list.
+export const artistGroupsTask = 'artist-groups'
 
 export type By = 'you' | 'ai'
 
@@ -174,6 +170,66 @@ export function resolve(f: ArtistsFile, aiOn: boolean): Map<string, Shown> {
   return out
 }
 
+// What an artist tag is shown as. An AI link to the tag's own spelling (the
+// AI named an artist after one of its tags) shows plain, as no change.
+export function creditOf(tag: string, shown: Map<string, Shown>): ArtistCredit {
+  const s = shown.size ? shown.get(artistKey(tag)) : undefined
+  if (!s || (s.names.length === 1 && s.names[0] === tag)) return { artist: tag }
+  const c: ArtistCredit = { artist: s.names.join(', '), artistTag: tag }
+  if (s.names.length > 1) c.artists = s.names
+  if (s.byAi) c.grouped = true
+  return c
+}
+
+// The keys of tags with a link by you: the AI job leaves them out and asks
+// about the names you gave instead.
+export function yourKeys(f: ArtistsFile): Set<string> {
+  const out = new Set<string>()
+  for (const a of f.artists) for (const l of a.tags) if (l.by === 'you') out.add(keyOf(l))
+  return out
+}
+
+// The keys of tags with a link by the AI, to count what a run grouped.
+export function aiKeys(f: ArtistsFile): Set<string> {
+  const out = new Set<string>()
+  for (const a of f.artists) for (const l of a.tags) if (l.by === 'ai') out.add(keyOf(l))
+  return out
+}
+
+// The keys the files may keep: every artist tag in the library, and the
+// names you gave, since the AI job asks about those too (a tag can join
+// them). For prune and pruneCache.
+export function usedKeys(credits: Iterable<ArtistCredit>): Set<string> {
+  const out = new Set<string>()
+  for (const c of credits) {
+    out.add(artistKey(tagOf(c)))
+    if (c.artistTag !== undefined && !c.grouped) for (const n of namesOf(c)) out.add(artistKey(n))
+  }
+  return out
+}
+
+// Each tag key's spelling, the first one seen in the order the Artists view
+// reads them, so it matches the tag names the page shows and sends.
+export function tagSpellings(
+  albums: Album[],
+  track: (id: string) => Track | undefined
+): Map<string, string> {
+  const out = new Map<string, string>()
+  const add = (c: ArtistCredit): void => {
+    const tag = tagOf(c)
+    const key = artistKey(tag)
+    if (key && !out.has(key)) out.set(key, tag)
+  }
+  for (const al of albums) {
+    add(al)
+    for (const id of al.trackIds) {
+      const t = track(id)
+      if (t) add(t)
+    }
+  }
+  return out
+}
+
 // Removes a tag's links, all of them or only the AI's.
 function unlink(f: ArtistsFile, key: string, onlyAi = false): void {
   for (const a of f.artists)
@@ -304,14 +360,52 @@ export function pruneCache(c: ArtistAiCache, used: Set<string>): boolean {
   return c.asked.size !== before
 }
 
+// --- the old files, read once to move them (see convertOld) ---
+
+// artist-overrides.json (024): tag key -> the names to show
+export type OldOverrides = Map<string, string[]>
+// artist-groups.json (068): tag key -> the name to show, and the keys asked
+export interface OldGroups {
+  groups: Map<string, string>
+  asked: Set<string>
+}
+
+export const knownOldOverrides = (raw: unknown): boolean =>
+  isObject(raw) && raw.version === version && isObject(raw.artists)
+
+export const knownOldGroups = (raw: unknown): boolean =>
+  isObject(raw) && raw.version === version && isObject(raw.groups) && Array.isArray(raw.asked)
+
+export function parseOldOverrides(raw: unknown): OldOverrides {
+  const out: OldOverrides = new Map()
+  if (!knownOldOverrides(raw)) return out
+  for (const [k, v] of Object.entries((raw as { artists: Record<string, unknown> }).artists)) {
+    const names = cleanNames(v)
+    if (isKey(k) && names.length) out.set(k, names)
+  }
+  return out
+}
+
+export function parseOldGroups(raw: unknown): OldGroups {
+  const out: OldGroups = { groups: new Map(), asked: new Set() }
+  if (!knownOldGroups(raw)) return out
+  const { groups, asked } = raw as { groups: Record<string, unknown>; asked: unknown[] }
+  for (const [k, v] of Object.entries(groups)) {
+    const name = cleanName(v)
+    if (isKey(k) && name) out.groups.set(k, name)
+  }
+  for (const k of asked) if (typeof k === 'string' && isKey(k)) out.asked.add(k)
+  return out
+}
+
 // The one-time move from artist-overrides.json (024) and artist-groups.json
 // (068). An override is a link by you (one that is the tag's own name, as
 // "Use tag" saved it, stays one); a group is a link by the AI unless the tag
 // has an override, as an override always won. A key no album or song has
 // keeps the key as its tag: it still matches.
 export function convertOld(
-  overrides: ArtistOverrides,
-  groups: ArtistGroups,
+  overrides: OldOverrides,
+  groups: OldGroups,
   spelling: Spelling
 ): { artists: ArtistsFile; cache: ArtistAiCache } {
   const f = noArtists()

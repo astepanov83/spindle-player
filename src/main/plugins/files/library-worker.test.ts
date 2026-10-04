@@ -1,12 +1,20 @@
 // The library process with Music files off: it reads the index and answers,
 // but scans nothing and writes none of its files. Run in this process on a
 // fake parent port, with the online lookup off.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyIndex, serializeIndex } from './merge'
-import type { WorkerIn, WorkerOut, WorkerStart } from './types'
+import { readerVersion, type WorkerIn, type WorkerOut, type WorkerStart } from './types'
 
 let dir: string
 let music: string
@@ -299,12 +307,22 @@ describe('the library process', () => {
     })
 
     describe('the job', () => {
-      // "Bjork" once and "Björk" twice, so "Björk" is the name shown
-      function twins(): void {
-        const ix = emptyIndex()
+      // "Bjork" once and "Björk" twice, so "Björk" is the name shown. onDisk:
+      // the files exist as the index has them, so a scan keeps their tags.
+      function twins(onDisk = false): void {
+        // read by this tag reader, so a scan doesn't read the files again
+        const ix = { ...emptyIndex(), reader: readerVersion }
         const add = (name: string, artist: string, album: string): void => {
           const path = join(music, name)
-          ix.files.set(path, { path, mtime: 1, size: 1, duration: 0, artist, album, title: name })
+          let mtime = 1
+          let size = 1
+          if (onDisk) {
+            writeFileSync(path, 'x')
+            const st = statSync(path, { bigint: true })
+            mtime = Number(st.mtimeMs)
+            size = Number(st.size)
+          }
+          ix.files.set(path, { path, mtime, size, duration: 0, artist, album, title: name })
         }
         add('1.mp3', 'Bjork', 'Debut')
         add('2.mp3', 'Björk', 'Homogenic')
@@ -347,6 +365,32 @@ describe('the library process', () => {
           groups: { bjork: 'Björk', björk: 'Björk' },
           asked: ['bjork', 'björk']
         })
+      })
+
+      it('turned on during a scan, runs once after the scan ends', async () => {
+        twins(true)
+        start(true)
+        await ready()
+        scan(1)
+        send({ type: 'ai-on', tasks: { 'artist-groups': true } })
+        await settle(0)
+        expect(calls('ai-max-input')).toEqual([])
+        send({ type: 'ai-reply', id: (await call('ai-max-input', 1)).id, max: 100_000 })
+        const at = (type: string): number => heard.findIndex((m) => m.type === type)
+        expect(scanned(1)).toBe(true)
+        expect(at('scanned')).toBeLessThan(at('ai-max-input'))
+        const first = await call('ai-ask', 1)
+        send({ type: 'ai-reply', id: first.id, answer: answer('m1') as never })
+        const second = await call('ai-ask', 2)
+        send({ type: 'ai-reply', id: second.id, answer: answer('m2') as never })
+        await until(() =>
+          heard.some((m) => m.type === 'status' && m.status.groups?.state === 'done')
+        )
+        await settle(50)
+        expect(calls('ai-max-input')).toHaveLength(1)
+        expect(calls('ai-ask')).toHaveLength(2)
+        send({ type: 'flush' })
+        expect(saved().groups).toEqual({ bjork: 'Björk', björk: 'Björk' })
       })
 
       it('is stopped by a new scan', async () => {

@@ -48,6 +48,7 @@ const plain = (list: string[]): TaskName[] =>
     name,
     titles: [`${name} album`, `${name} single`],
     count: 1,
+    seen: i,
     manual: false
   }))
 
@@ -98,8 +99,8 @@ describe('the request', () => {
     expect(kino.name).toBe('Kino')
     // its own albums, then the song on another artist's album
     expect(kino.titles).toEqual(['Gruppa krovi', 'Nachalnik'])
-    // one per album and per song
-    expect(kino.count).toBe(7)
+    // "Kino" itself: one per album and per song
+    expect(kino.count).toBe(5)
   })
 
   it('writes LIST with one title and CHECK with two, numbered as in the full list', () => {
@@ -186,6 +187,22 @@ describe('groups', () => {
       [2, 3, 17],
       [5, 6]
     ])
+  })
+
+  it('compares single spellings, not the totals of each name', () => {
+    // "Bjork" x3 and "BJORK" x3 are one name (6 in all), "Björk" x5 another
+    const files = [
+      ...['A', 'B', 'C'].map((a) => song('Bjork', a)),
+      ...['D', 'E', 'F'].map((a) => song('BJORK', a)),
+      ...['G', 'H', 'I', 'J', 'K'].map((a) => song('Björk', a))
+    ].map((f, i) => ({ ...f, title: `t${i}` }))
+    expect(shownName(names(files))).toBe('Björk')
+  })
+
+  it('shows the first seen of two spellings as common as each other', () => {
+    const list = names([song('Björk', 'A'), song('Bjork', 'B')])
+    expect(list.map((t) => t.name)).toEqual(['Bjork', 'Björk'])
+    expect(shownName(list)).toBe('Björk')
   })
 
   it('shows the spelling seen most often, the first on a tie', () => {

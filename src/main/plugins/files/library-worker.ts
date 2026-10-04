@@ -401,9 +401,11 @@ function stopGroupsJob(): void {
 }
 
 // After a scan that ran to the end, when the task turns on, and when a limit
-// ends. One job at a time; it goes on from the keys already asked.
+// ends. One job at a time; it goes on from the keys already asked. Never while
+// a scan or its prune runs: the library is half built, and the scan's end
+// starts it.
 function startGroupsJob(): void {
-  if (!on || closing || groupsJob || !aiOn[artistGroupsTask]) return
+  if (!on || closing || groupsJob || chain.busy || !aiOn[artistGroupsTask]) return
   clearTimeout(groupsRetry)
   groupsRetry = undefined
   // the names come from the library as it is now
@@ -837,13 +839,14 @@ function movedIds(ids: IdMoves, files: number): void {
 }
 
 // Walks, stats and reads the music folders (see scan-files.ts). New and
-// changed songs reach the page as they are read (publish.ts).
+// changed songs reach the page as they are read (publish.ts). True when it
+// ran to the end; a stopped scan throws.
 async function scan(
   folders: string[],
   retryFailed: boolean,
   gen: number,
   id: number
-): Promise<void> {
+): Promise<boolean> {
   const t0 = performance.now()
   scanStart = t0
   firstSent = undefined
@@ -933,7 +936,6 @@ async function scan(
     const credits = [...built.data.albums, ...built.data.tracks]
     if (dropUnused(overrides, tagKeys(credits))) saveOverrides()
     if (dropUnusedGroups(artistGroups, usedKeys(credits))) saveGroups()
-    startGroupsJob()
   }
   setStatus({ phase: 'idle', done: 0, total: 0, read: undefined, scanFailed: failed })
   post({ type: 'scanned', id })
@@ -947,6 +949,21 @@ async function scan(
       firstSent
     )
   )
+  return !failed
+}
+
+// The artist groups job runs once a scan that ran to the end and its prune
+// are done. A newer scan asked for meanwhile keeps the chain busy, so its own
+// end starts the job.
+function scanThenGroups(folders: string[], retryFailed: boolean, id: number): void {
+  let ended = false
+  void chain
+    .request(async (gen) => {
+      ended = await scan(folders, retryFailed, gen, id)
+    })
+    .then(() => {
+      if (ended) startGroupsJob()
+    })
 }
 
 // --- lookups for the protocol ---
@@ -1001,7 +1018,7 @@ port.on('message', (e: Electron.MessageEvent) => {
         const albums = dropNotFound(fetched)
         if (dropNotFound(photos) || albums) saveFetched()
       }
-      void chain.request((gen) => scan(m.folders, m.retryFailed, gen, m.id))
+      scanThenGroups(m.folders, m.retryFailed, m.id)
       break
     case 'fetch-covers':
       setFetch(m.on, m.sources)

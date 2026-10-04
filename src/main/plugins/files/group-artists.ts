@@ -17,8 +17,10 @@ export interface TaskName {
   name: string
   // up to two album or song titles, albums first
   titles: string[]
-  // how often it is credited, one per album and per song
+  // how often `name` itself is credited, one per album and per song
   count: number
+  // when `name` was first seen in library order, for a tie
+  seen: number
   // a manual override gives it
   manual: boolean
 }
@@ -76,8 +78,16 @@ export function taskNames(albums: Album[], tracks: Track[]): TaskName[] {
   const byId = new Map(tracks.map((t) => [t.id, t]))
   const byKey = new Map<
     string,
-    { spellings: Map<string, number>; manual: boolean; own: Album[]; also: Track[]; songs: Track[] }
+    {
+      spellings: Map<string, { n: number; seen: number }>
+      manual: boolean
+      own: Album[]
+      also: Track[]
+      songs: Track[]
+    }
   >()
+  // credits so far, so spellings of different keys can be told apart on a tie
+  let seen = 0
   // the names a credit gives the task: the tag, or an override's names
   const namesFor = (c: ArtistCredit): { names: string[]; manual: boolean } =>
     c.artistTag === undefined || c.grouped
@@ -86,13 +96,16 @@ export function taskNames(albums: Album[], tracks: Track[]): TaskName[] {
   const credit = (c: ArtistCredit): Set<string> => {
     const keys = new Set<string>()
     const { names, manual } = namesFor(c)
+    seen++
     for (const name of names) {
       const key = artistKey(name)
       if (!key || keys.has(key)) continue
       keys.add(key)
       let e = byKey.get(key)
       if (!e) byKey.set(key, (e = { spellings: new Map(), manual, own: [], also: [], songs: [] }))
-      e.spellings.set(name, (e.spellings.get(name) ?? 0) + 1)
+      const sp = e.spellings.get(name)
+      if (sp) sp.n++
+      else e.spellings.set(name, { n: 1, seen })
       e.manual ||= manual
     }
     return keys
@@ -113,21 +126,18 @@ export function taskNames(albums: Album[], tracks: Track[]): TaskName[] {
   const out: TaskName[] = []
   for (const [key, e] of byKey) {
     let name = ''
-    let best = 0
-    let count = 0
+    let best = { n: 0, seen: 0 }
     // the first one seen wins a tie, as in listArtists
-    for (const [s, c] of e.spellings) {
-      count += c
-      if (c > best) {
+    for (const [s, c] of e.spellings)
+      if (c.n > best.n) {
         best = c
         name = s
       }
-    }
     if (!lookUpArtist(name)) continue
     const titles = checksOf(e.own, e.also, e.songs)
       .slice(0, 2)
       .map((c) => c.title)
-    out.push({ n: 0, key, name, titles, count, manual: e.manual })
+    out.push({ n: 0, key, name, titles, count: best.n, seen: best.seen, manual: e.manual })
   }
   out.sort((x, y) => collator.compare(x.name, y.name) || (x.key < y.key ? -1 : 1))
   out.forEach((t, i) => (t.n = i + 1))
@@ -246,10 +256,12 @@ export class UnionFind {
 
 // The name a group shows: never one the model picks. A name a manual
 // override gives comes first, so the tags join what the user chose; else the
-// spelling seen most often, the first in the list on a tie.
+// single spelling seen most often, the first seen on a tie (as in
+// listArtists). Each member's own top spelling is the only one that can win.
 export function shownName(members: TaskName[]): string {
   const pool = members.some((m) => m.manual) ? members.filter((m) => m.manual) : members
   let best = pool[0]
-  for (const m of pool) if (m.count > best.count) best = m
+  for (const m of pool)
+    if (m.count > best.count || (m.count === best.count && m.seen < best.seen)) best = m
   return best.name
 }

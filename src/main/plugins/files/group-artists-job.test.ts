@@ -48,6 +48,7 @@ const plain = (list: string[], counts: number[] = []): TaskName[] =>
     name,
     titles: [`${name} album`],
     count: counts[i] ?? 1,
+    seen: i,
     manual: false
   }))
 

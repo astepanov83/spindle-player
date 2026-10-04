@@ -29,12 +29,21 @@ function build(
   has: (hash: string) => boolean = () => true,
   fetched?: Fetched,
   photos?: Fetched,
-  overrides?: Record<string, string[]>
+  overrides?: Record<string, string[]>,
+  groups?: Record<string, string>
 ): ReturnType<typeof buildLibrary> {
   const ix = emptyIndex()
   for (const f of files) ix.files.set(f.path, f)
   setup?.(ix)
-  return buildLibrary(ix, has, fetched, [], photos, new Map(Object.entries(overrides ?? {})))
+  return buildLibrary(
+    ix,
+    has,
+    fetched,
+    [],
+    photos,
+    new Map(Object.entries(overrides ?? {})),
+    new Map(Object.entries(groups ?? {}))
+  )
 }
 
 describe('buildLibrary', () => {
@@ -455,6 +464,53 @@ describe('artist overrides (ticket 024)', () => {
       { kind: 'album', title: 'Split' },
       { kind: 'song', title: '2' }
     ])
+  })
+})
+
+describe('artist groups (ticket 068)', () => {
+  const files = [
+    entry('/m/a/1.mp3', { album: 'Debut', artist: 'Bjork' }),
+    entry('/m/b/1.mp3', { album: 'Homogenic', artist: 'Björk' }),
+    entry('/m/c/1.mp3', { album: 'Blood', artist: 'Kino', title: 'Blood' }),
+    entry('/m/d/1.mp3', { album: 'Gruppa krovi', artist: 'Кино' })
+  ]
+  const g = { bjork: 'Björk', björk: 'Björk', kino: 'Кино', кино: 'Кино' }
+  const albumOf = (d: LibraryData, title: string): LibraryData['albums'][number] =>
+    d.albums.find((a) => a.title === title)!
+
+  it('shows the group name on albums and songs, with the tag kept beside it', () => {
+    const { data } = build(files, undefined, () => true, undefined, undefined, undefined, g)
+    expect(albumOf(data, 'Debut')).toMatchObject({
+      artist: 'Björk',
+      artistTag: 'Bjork',
+      grouped: true
+    })
+    expect(data.tracks.find((t) => t.title === 'Blood')).toMatchObject({
+      artist: 'Кино',
+      artistTag: 'Kino',
+      grouped: true
+    })
+    // spelled as the group name: as it is
+    expect(albumOf(data, 'Homogenic')).not.toHaveProperty('artistTag')
+  })
+
+  it('lets a manual override win over a group', () => {
+    const o = { kino: ['Kino'] }
+    const { data } = build(files, undefined, () => true, undefined, undefined, o, g)
+    expect(albumOf(data, 'Blood')).toMatchObject({ artist: 'Kino', artistTag: 'Kino' })
+    expect(albumOf(data, 'Blood')).not.toHaveProperty('grouped')
+  })
+
+  it('keeps album ids, since albums are still grouped by the tags', () => {
+    const ids = (d: LibraryData): string[] => d.albums.map((a) => a.id).sort()
+    const grouped = build(files, undefined, () => true, undefined, undefined, undefined, g)
+    expect(ids(grouped.data)).toEqual(ids(build(files).data))
+  })
+
+  it('looks artist photos up by the group name, album covers by the tags', () => {
+    const { queries, artists } = build(files, undefined, () => false, undefined, undefined, {}, g)
+    expect(artists.map((a) => a.name)).toEqual(['Björk', 'Кино'])
+    expect(queries.map((q) => q.artist).sort()).toEqual(['Bjork', 'Björk', 'Kino', 'Кино'])
   })
 })
 

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { LibraryChannel } from '../../../shared/plugins/files/ipc'
 import type { CoverHelper, PluginContext } from '../types'
 import type { WorkerIn, WorkerOut } from './types'
+import type { AiClient } from '../../../shared/ai'
 
 // the library processes made, with what main sent each
 const children: { sent: WorkerIn[] }[] = []
@@ -47,7 +48,26 @@ const { FilesPlugin } = await import('./plugin')
 
 type Handler = (...args: unknown[]) => unknown
 
-function setup(on: boolean): {
+// A fake AI service: the tasks switched on, and a way to say on() changed.
+function fakeAi(): { client: AiClient; tasks: Set<string>; change(): void } {
+  const tasks = new Set<string>()
+  const listeners = new Set<() => void>()
+  const client: AiClient = {
+    on: (task) => tasks.has(task),
+    changed: (cb) => {
+      listeners.add(cb)
+      return () => listeners.delete(cb)
+    },
+    maxInput: async () => undefined,
+    ask: async () => ({ ok: false, error: 'off' })
+  }
+  return { client, tasks, change: () => listeners.forEach((f) => f()) }
+}
+
+function setup(
+  on: boolean,
+  ai = fakeAi()
+): {
   plugin: InstanceType<typeof FilesPlugin>
   call(channel: string, ...args: unknown[]): Promise<unknown>
   media(id: string): Promise<Response>
@@ -88,7 +108,8 @@ function setup(on: boolean): {
     covers: {
       get: () => ({ cache: { dir: '/nowhere/covers' } }),
       provide: (h: CoverHelper) => (helper = h)
-    }
+    },
+    ai: ai.client
   } as unknown as PluginContext
   const plugin = new FilesPlugin({ keptByOthers: () => [] })
   plugin.start(ctx)
@@ -178,5 +199,21 @@ describe('FilesPlugin', () => {
     expect(s.sent()).not.toContain('scan')
     await loadPage(s)
     expect(s.sent()).toContain('scan')
+  })
+
+  it('tells the process whether the artist groups task is on, at start and when it changes', () => {
+    const ai = fakeAi()
+    ai.tasks.add('artist-groups')
+    setup(true, ai)
+    expect(children[0].sent[0]).toMatchObject({
+      type: 'start',
+      start: { aiOn: { 'artist-groups': true } }
+    })
+    // a change that leaves the task as it was sends nothing
+    ai.change()
+    expect(children[0].sent.filter((m) => m.type === 'ai-on')).toEqual([])
+    ai.tasks.delete('artist-groups')
+    ai.change()
+    expect(children[0].sent.at(-1)).toEqual({ type: 'ai-on', tasks: { 'artist-groups': false } })
   })
 })

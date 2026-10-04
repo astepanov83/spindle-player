@@ -39,7 +39,8 @@ export class FilesPlugin implements MainPlugin {
       ctx.covers.get().cache,
       this.o.keptByOthers,
       ctx.userData,
-      this.#on
+      this.#on,
+      ctx.ai
     )
     this.#library = library
     ctx.covers.provide({

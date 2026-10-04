@@ -4,6 +4,7 @@
 // it groups albums. New names are not looked up again, so there are no chains.
 import { artistKey, tagOf, type Artist } from './artists'
 import type { ArtistCredit } from '../../library'
+import type { GroupNames } from './artist-groups'
 
 // tag key -> the names to show instead
 export type ArtistOverrides = Map<string, string[]>
@@ -35,7 +36,7 @@ export function cleanNames(names: unknown): string[] {
 }
 
 // A key as artistKey makes it, so a hand-made file can't hold two spellings of one.
-const isKey = (k: string): boolean =>
+export const isKey = (k: string): boolean =>
   k.length > 0 && k.length <= maxNameLength && artistKey(k) === k
 
 // A file this build can read.
@@ -100,10 +101,24 @@ export function dropUnused(o: ArtistOverrides, used: Set<string>): boolean {
   return changed
 }
 
-// What an artist tag is shown as.
-export function creditOf(tag: string, o: ArtistOverrides): ArtistCredit {
-  const names = o.size ? o.get(artistKey(tag)) : undefined
-  if (!names) return { artist: tag }
+const noGroups: GroupNames = new Map()
+
+// What an artist tag is shown as. An override wins over a group (ticket 068),
+// so a group the user undid with "Use tag" never comes back.
+export function creditOf(
+  tag: string,
+  o: ArtistOverrides,
+  groups: GroupNames = noGroups
+): ArtistCredit {
+  if (!o.size && !groups.size) return { artist: tag }
+  const key = artistKey(tag)
+  const names = o.get(key)
+  if (!names) {
+    const name = groups.get(key)
+    return name === undefined || name === tag
+      ? { artist: tag }
+      : { artist: name, artistTag: tag, grouped: true }
+  }
   const c: ArtistCredit = { artist: names.join(', '), artistTag: tag }
   if (names.length > 1) c.artists = names
   return c
@@ -131,7 +146,8 @@ export function editArtist(a: Artist, names: string[]): ArtistChanges {
       continue
     }
     const next = cleanNames(t.names.flatMap((n) => (artistKey(n) === a.key ? clean : [n])))
-    out[t.key] = next.length === 1 && next[0] === t.name ? null : next
+    // no override would put a grouped tag back in its group
+    out[t.key] = next.length === 1 && next[0] === t.name && !t.grouped ? null : next
   }
   return out
 }

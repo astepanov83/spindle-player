@@ -8,6 +8,8 @@ import { LibraryChannel, type DropResult } from '../../../shared/plugins/files/i
 import type { IdMoves } from '../../../shared/id-moves'
 import type { ScanStatus } from '../../../shared/library'
 import { parseChanges } from '../../../shared/plugins/files/artist-overrides'
+import { artistGroupsTask } from '../../../shared/plugins/files/artist-groups'
+import type { AiClient } from '../../../shared/ai'
 import type { CoverSource } from '../../../shared/settings'
 import { ffmpegTool } from '../../ffmpeg-path'
 import type { SettingsStore } from '../../settings-store'
@@ -41,6 +43,8 @@ export class LibraryService {
   // names, no audio and no covers made from the music files. The library is
   // still read and given to the page, and the radio's song lookup goes on.
   #on: boolean
+  // AiClient.on of this plugin's tasks, as last sent to the library process
+  #aiOn: Record<string, boolean>
 
   constructor(
     readonly store: SettingsStore,
@@ -54,9 +58,14 @@ export class LibraryService {
     // covers other plugins keep that the index does not know (station logos), for the prune
     readonly keepCovers: () => string[] = () => [],
     readonly dir = app.getPath('userData'),
-    on = true
+    on = true,
+    // the AI service, for the library process's tasks (ticket 068)
+    readonly ai?: AiClient
   ) {
     this.#on = on
+    this.#aiOn = this.#tasksOn()
+    // the library process only gets messages, so it is told when on() changes
+    ai?.changed(() => this.#aiChanged())
     if (!this.ffmpeg || !this.ffprobe)
       console.error(
         'ffmpeg or ffprobe not found (npm run fetch-ffmpeg); APE, WMA and the like will not play'
@@ -88,6 +97,8 @@ export class LibraryService {
         fetch: { on: this.store.live().fetchCovers, sources: this.store.live().coverSources },
         fetchedPath: join(this.dir, 'fetched-covers.json'),
         overridesPath: join(this.dir, 'artist-overrides.json'),
+        groupsPath: join(this.dir, 'artist-groups.json'),
+        aiOn: this.#aiOn,
         userAgent: this.userAgent,
         keepCovers: this.keepCovers(),
         on: this.#on
@@ -106,6 +117,17 @@ export class LibraryService {
       flushWaitMs
     )
     this.#proc.start()
+  }
+
+  #tasksOn(): Record<string, boolean> {
+    return { [artistGroupsTask]: this.ai?.on(artistGroupsTask) ?? false }
+  }
+
+  #aiChanged(): void {
+    const next = this.#tasksOn()
+    if (Object.entries(next).every(([t, on]) => this.#aiOn[t] === on)) return
+    this.#aiOn = next
+    this.#post({ type: 'ai-on', tasks: next })
   }
 
   #post(m: WorkerIn): boolean {

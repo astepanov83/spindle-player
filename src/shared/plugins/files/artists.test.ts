@@ -107,13 +107,14 @@ describe('listArtists', () => {
 
 describe('listArtists with overrides (ticket 024)', () => {
   // the album and its songs as the library process sends them
-  function credited(o: Record<string, string[]>, al: Album): Album {
+  function credited(o: Record<string, string[]>, al: Album, g: Record<string, string> = {}): Album {
     const m: ArtistOverrides = new Map(Object.entries(o))
+    const groups = new Map(Object.entries(g))
     for (const id of al.trackIds) {
       const t = tracks.get(id)!
-      tracks.set(id, { ...t, ...creditOf(t.artist, m) })
+      tracks.set(id, { ...t, ...creditOf(t.artist, m, groups) })
     }
-    return { ...al, ...creditOf(al.artist, m) }
+    return { ...al, ...creditOf(al.artist, m, groups) }
   }
   const split = { 'sadness,stellafera': ['Sadness', 'Stellafera'] }
 
@@ -150,6 +151,15 @@ describe('listArtists with overrides (ticket 024)', () => {
     expect(sadness.tags).toEqual([
       { key: 'sadness', name: 'Sadness' },
       { key: 'sadness,stellafera', name: 'sadness, stellafera', names: ['Sadness', 'Stellafera'] }
+    ])
+  })
+
+  it('marks a tag a group (ticket 068) changed', () => {
+    const [bjork] = list(credited({}, album('a', 'Bjork'), { bjork: 'Björk' }), album('b', 'Björk'))
+    expect(bjork).toMatchObject({ name: 'Björk', albums: ['a', 'b'] })
+    expect(bjork.tags).toEqual([
+      { key: 'björk', name: 'Björk' },
+      { key: 'bjork', name: 'Bjork', names: ['Björk'], grouped: true }
     ])
   })
 })

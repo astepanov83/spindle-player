@@ -16,6 +16,17 @@ import {
   type ArtistChanges,
   type ArtistOverrides
 } from '../../../shared/plugins/files/artist-overrides'
+import {
+  artistGroupsTask,
+  dropUnusedGroups,
+  knownGroups,
+  noGroups,
+  parseGroups,
+  serializeGroups,
+  usedKeys,
+  type ArtistGroups,
+  type GroupNames
+} from '../../../shared/plugins/files/artist-groups'
 import type { ScanStatus } from '../../../shared/library'
 import type { CoverSource } from '../../../shared/settings'
 import { JsonFileWriter, openJsonFile, readJsonFile } from '../../json-file'
@@ -88,8 +99,8 @@ const statPace = new Pacer(16, 2, false, undefined, undefined, turns)
 const readPace = new Pacer(4, 1, true, undefined, undefined, turns)
 
 // Music files is on. Off: no scan, no album or artist lookup, and the index,
-// fetched-covers.json and artist-overrides.json are not written. The radio's
-// song cover lookups go on (see 'set-on').
+// fetched-covers.json, artist-overrides.json and artist-groups.json are not
+// written. The radio's song cover lookups go on (see 'set-on').
 let on = true
 
 let playing = false
@@ -328,10 +339,51 @@ function setOverrides(c: ArtistChanges): void {
   publisher.now()
 }
 
+// --- artist spellings grouped by a model (ticket 068) ---
+
+let artistGroups: ArtistGroups = noGroups()
+// none when the file could not be read: it may still be fine, so it is never replaced
+let groupsWriter: JsonFileWriter<unknown> | undefined
+// AiClient.on of the files plugin's tasks, from main (see 'ai-on')
+let aiOn: Record<string, boolean> = {}
+
+function loadGroups(s: WorkerStart): void {
+  const f = openJsonFile(s.groupsPath, 'Artist groups', knownGroups)
+  artistGroups = parseGroups(f.value)
+  if (f.canWrite)
+    groupsWriter = new JsonFileWriter<unknown>(s.groupsPath, 1000, (e) =>
+      log(`Could not save ${s.groupsPath}: ${e}`)
+    )
+}
+
+const saveGroups = (): void => {
+  if (on) groupsWriter?.schedule(serializeGroups(artistGroups))
+}
+
+// While the task is off the groups are kept but not shown.
+const shownGroups = (): GroupNames =>
+  aiOn[artistGroupsTask] ? artistGroups.groups : new Map<string, string>()
+
+function setAiOn(tasks: Record<string, boolean>): void {
+  const was = !!aiOn[artistGroupsTask]
+  aiOn = tasks
+  if (was === !!aiOn[artistGroupsTask] || !artistGroups.groups.size) return
+  dirty = true
+  publisher.now()
+}
+
 // Groups albums, for the page and the lookups.
 function build(): void {
   dirty = false
-  built = buildLibrary(ix, (h) => cached.has(h), fetched, status.folders, photos, overrides)
+  built = buildLibrary(
+    ix,
+    (h) => cached.has(h),
+    fetched,
+    status.folders,
+    photos,
+    overrides,
+    shownGroups()
+  )
   let failed = 0
   for (const e of ix.files.values()) if (e.error) failed++
   setStatus({ tracks: built.data.tracks.length, albums: built.data.albums.length, failed })
@@ -662,6 +714,7 @@ function setOn(next: boolean): void {
     writer?.flushSync()
     fetchedWriter?.flushSync()
     overridesWriter?.flushSync()
+    groupsWriter?.flushSync()
   }
   on = next
   if (on && fetchedChangedOff) {
@@ -805,8 +858,9 @@ async function scan(
     const albums = dropGone(fetched, new Set(built.data.albums.map((a) => a.id)))
     const artists = dropGone(photos, new Set(built.artists.map((a) => a.id)))
     if (albums || artists) saveFetched()
-    const used = tagKeys([...built.data.albums, ...built.data.tracks])
-    if (dropUnused(overrides, used)) saveOverrides()
+    const credits = [...built.data.albums, ...built.data.tracks]
+    if (dropUnused(overrides, tagKeys(credits))) saveOverrides()
+    if (dropUnusedGroups(artistGroups, usedKeys(credits))) saveGroups()
   }
   setStatus({ phase: 'idle', done: 0, total: 0, read: undefined, scanFailed: failed })
   post({ type: 'scanned', id })
@@ -854,6 +908,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       keptCovers = m.start.keepCovers
       keptEdits++
       on = m.start.on
+      aiOn = m.start.aiOn
       started(m.start)
       pruneWhileOff()
       break
@@ -889,6 +944,9 @@ port.on('message', (e: Electron.MessageEvent) => {
       break
     case 'artist-overrides':
       void ready.then(() => setOverrides(m.changes))
+      break
+    case 'ai-on':
+      void ready.then(() => setAiOn(m.tasks))
       break
     case 'resume':
       // a new window: go on unless a scan runs (it releases when done) or none
@@ -951,6 +1009,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       stopSongLookups()
       fetchedWriter?.flushSync()
       overridesWriter?.flushSync()
+      groupsWriter?.flushSync()
       closing = true
       clearTimeout(offPrune)
       chain.close()
@@ -981,7 +1040,7 @@ port.on('message', (e: Electron.MessageEvent) => {
 // covers and may be at it now (a restart), so only old ones go there.
 async function removeStrayTemp(): Promise<void> {
   const dir = dirname(start.indexPath)
-  const names = [basename(start.indexPath), basename(start.overridesPath)]
+  const names = [start.indexPath, start.overridesPath, start.groupsPath].map((p) => basename(p))
   try {
     for (const n of await readdir(dir))
       if (names.some((f) => n.startsWith(f + '.')) && n.endsWith('.tmp'))
@@ -1002,6 +1061,7 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   await removeStrayTemp()
   await loadCached()
   loadOverrides(s)
+  loadGroups(s)
   await startFetcher(s)
   const r = readJsonFile(start.indexPath)
   // the index is only a cache of the music files, so it is made again either way

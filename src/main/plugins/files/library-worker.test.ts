@@ -34,7 +34,7 @@ beforeEach(async () => {
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-function start(on: boolean, keepCovers: string[] = []): void {
+function start(on: boolean, keepCovers: string[] = [], aiOn: Record<string, boolean> = {}): void {
   const s: WorkerStart = {
     indexPath: join(dir, 'library.json'),
     coversDir: join(dir, 'covers'),
@@ -42,6 +42,8 @@ function start(on: boolean, keepCovers: string[] = []): void {
     fetch: { on: false, sources: { musicbrainz: false, deezer: false, itunes: false } },
     fetchedPath: join(dir, 'fetched-covers.json'),
     overridesPath: join(dir, 'artist-overrides.json'),
+    groupsPath: join(dir, 'artist-groups.json'),
+    aiOn,
     userAgent: 'test',
     keepCovers,
     on
@@ -76,7 +78,12 @@ describe('the library process', () => {
     expect(scanned(1)).toBe(false)
     expect(heard.some((m) => m.type === 'reply' && m.req === 7 && m.data)).toBe(true)
     send({ type: 'flush' })
-    for (const f of ['library.json', 'fetched-covers.json', 'artist-overrides.json'])
+    for (const f of [
+      'library.json',
+      'fetched-covers.json',
+      'artist-overrides.json',
+      'artist-groups.json'
+    ])
       expect(existsSync(join(dir, f))).toBe(false)
   })
 
@@ -202,6 +209,101 @@ describe('the library process', () => {
       await wait()
       await settle()
       expect(has('c')).toBe(true)
+    })
+  })
+
+  describe('artist-groups.json (ticket 068)', () => {
+    const groupsPath = (): string => join(dir, 'artist-groups.json')
+    const saved = (): { groups: Record<string, string>; asked: string[] } =>
+      JSON.parse(readFileSync(groupsPath(), 'utf8'))
+    const decode = (b: Uint8Array): { tracks?: { artist: string }[] } =>
+      JSON.parse(new TextDecoder().decode(b))
+    // the song in the music folder has no tags: its artist is "Unknown artist"
+    const write = (v: unknown): void =>
+      writeFileSync(groupsPath(), typeof v === 'string' ? v : JSON.stringify(v))
+    const twoKeys = {
+      version: 1,
+      groups: { unknownartist: 'Nobody', gone: 'Gone' },
+      asked: ['unknownartist', 'gone']
+    }
+
+    async function ready(): Promise<void> {
+      send({ type: 'get-library', req: 99 })
+      await until(() => heard.some((m) => m.type === 'reply' && m.req === 99))
+    }
+
+    it('drops keys of tags that are gone after a scan that ran to the end', async () => {
+      write(twoKeys)
+      start(true)
+      scan(1)
+      await until(() => scanned(1))
+      send({ type: 'flush' })
+      expect(saved()).toEqual({
+        version: 1,
+        groups: { unknownartist: 'Nobody' },
+        asked: ['unknownartist']
+      })
+    })
+
+    it('keeps them after a scan that was cut short', async () => {
+      write(twoKeys)
+      start(true)
+      scan(1)
+      send({ type: 'stop' })
+      await settle()
+      send({ type: 'flush' })
+      expect(scanned(1)).toBe(false)
+      expect(saved()).toEqual(twoKeys)
+    })
+
+    it('sets a broken file aside', async () => {
+      write('{ not json')
+      start(true)
+      await ready()
+      expect(readFileSync(groupsPath() + '.broken', 'utf8')).toBe('{ not json')
+    })
+
+    it('sets a file of another version aside', async () => {
+      write({ version: 2, groups: {}, asked: [] })
+      start(true)
+      await ready()
+      expect(existsSync(groupsPath() + '.unknown')).toBe(true)
+    })
+
+    // an index with one song tagged "Bjork", and a group for it
+    const bjork = { version: 1, groups: { bjork: 'Björk' }, asked: ['bjork'] }
+    function bjorkIndex(): void {
+      const ix = emptyIndex()
+      const path = join(music, 'a.mp3')
+      ix.files.set(path, { path, mtime: 1, size: 1, duration: 0, artist: 'Bjork' })
+      writeFileSync(join(dir, 'library.json'), JSON.stringify(serializeIndex(ix)))
+      write(bjork)
+    }
+
+    it('applies groups only while the task is on, and republishes when that changes', async () => {
+      bjorkIndex()
+      start(false)
+      await ready()
+      const reply = heard.find((m) => m.type === 'reply' && m.req === 99) as { data: Uint8Array }
+      expect(decode(reply.data).tracks?.[0].artist).toBe('Bjork')
+      send({ type: 'ai-on', tasks: { 'artist-groups': true } })
+      await until(() => heard.some((m) => m.type === 'library'))
+      const patch = heard.find((m) => m.type === 'library') as { bytes: Uint8Array }
+      expect(decode(patch.bytes).tracks?.[0].artist).toBe('Björk')
+      send({ type: 'ai-on', tasks: { 'artist-groups': false } })
+      await until(() => heard.filter((m) => m.type === 'library').length === 2)
+      const off = heard.filter((m) => m.type === 'library')[1] as { bytes: Uint8Array }
+      expect(decode(off.bytes).tracks?.[0].artist).toBe('Bjork')
+      // switched off, the file is kept
+      expect(saved()).toEqual(bjork)
+    })
+
+    it('applies them from the start data when the task is on', async () => {
+      bjorkIndex()
+      start(false, [], { 'artist-groups': true })
+      await ready()
+      const reply = heard.find((m) => m.type === 'reply' && m.req === 99) as { data: Uint8Array }
+      expect(decode(reply.data).tracks?.[0].artist).toBe('Björk')
     })
   })
 })

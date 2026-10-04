@@ -319,7 +319,7 @@ const artistPlayIds = (a: Artist): ItemKey[] =>
   )
 
 const tagNote = (t: ArtistTag): string =>
-  !t.names ? '' : t.names.length > 1 ? ' (split)' : ' (renamed)'
+  t.grouped ? ' (grouped)' : !t.names ? '' : t.names.length > 1 ? ' (split)' : ' (renamed)'
 
 // An artist: their picture and name, their albums as covers, then their
 // songs on other albums. Edit renames or splits them (ticket 024).
@@ -587,7 +587,8 @@ function artistAct(a: Artist, id: string, value?: string): void {
   else if (id === 'use-tag') {
     const t = a.tags.find((t) => t.key === value)
     if (!t) return
-    window.libraryApi.setArtists({ [t.key]: null })
+    // a grouped tag gets its own name as an override, so the group never takes it again
+    window.libraryApi.setArtists({ [t.key]: t.grouped ? [t.name] : null })
     // with no other tag, the artist becomes the tag again
     followArtist(a.tags.length > 1 ? a.key : t.key)
   }

@@ -112,6 +112,30 @@ describe('creditOf', () => {
     const chain = overrides({ a: ['B'], b: ['C'] })
     expect(creditOf('A', chain).artist).toBe('B')
   })
+
+  describe('with artist groups (ticket 068)', () => {
+    const groups = new Map([
+      ['bjork', 'Björk'],
+      ['kino', 'Kino'],
+      ['björk', 'Björk']
+    ])
+
+    it('shows the group name for a tag with no override, marked grouped', () => {
+      expect(creditOf('Bjork', new Map(), groups)).toEqual({
+        artist: 'Björk',
+        artistTag: 'Bjork',
+        grouped: true
+      })
+    })
+
+    it('leaves a tag that is spelled as the group name as it is', () => {
+      expect(creditOf('Björk', new Map(), groups)).toEqual({ artist: 'Björk' })
+    })
+
+    it('lets a manual override win over the group', () => {
+      expect(creditOf('kino', o, groups)).toEqual({ artist: 'Кино', artistTag: 'kino' })
+    })
+  })
 })
 
 describe('tagKeys', () => {
@@ -165,5 +189,13 @@ describe('editArtist', () => {
   it('goes back to the tag when the names are the tag again', () => {
     const a = artist('Кино', [{ key: 'kino', name: 'kino', names: ['Кино'] }])
     expect(editArtist(a, ['kino'])).toEqual({ kino: null })
+  })
+
+  it("saves a grouped tag's own name, so it does not go back to its group", () => {
+    const a = artist('Björk', [
+      { key: 'björk', name: 'Björk' },
+      { key: 'bjork', name: 'Bjork', names: ['Björk'], grouped: true }
+    ])
+    expect(editArtist(a, ['Bjork'])).toEqual({ björk: ['Bjork'], bjork: ['Bjork'] })
   })
 })

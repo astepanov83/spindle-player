@@ -103,6 +103,10 @@ export interface WorkerStart {
   fetchedPath: string
   // artist names changed by hand (ticket 024)
   overridesPath: string
+  // artist spellings grouped by a model (ticket 068)
+  groupsPath: string
+  // the files plugin's AI tasks that are on (AiClient.on), by task id; see 'ai-on'
+  aiOn: Record<string, boolean>
   // sent with every online request
   userAgent: string
   // covers main uses that the index does not know: station logos (ticket 030)
@@ -165,8 +169,12 @@ export type WorkerIn =
   | { type: 'song-cover'; req: number; artist: string; song: string }
   // main gave up on an ask (a new title came): stop it
   | { type: 'cancel'; req: number }
+  // AiClient.on of the files plugin's AI tasks changed. While the artist
+  // groups task is off, groups are not applied (the file is kept).
+  | { type: 'ai-on'; tasks: Record<string, boolean> }
   // Music files turned on or off. Off: no scan, no album or artist lookup, and
-  // no writes to the index, fetched-covers.json or artist-overrides.json.
+  // no writes to the index, fetched-covers.json, artist-overrides.json or
+  // artist-groups.json.
   // Song cover lookups for the radio go on.
   | { type: 'set-on'; on: boolean }
 

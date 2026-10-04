@@ -18,6 +18,8 @@ vi.mock('electron', () => ({ app: { getPath: () => '/nowhere' } }))
 const { SettingsStore } = await import('./settings-store')
 const { isKnownSettingsFile } = await import('../shared/settings')
 const { PlaylistFile, QueueFile } = await import('./page-files')
+const { oldIds } = await import('./plugins/old-ids')
+const { shortHash } = await import('./ids')
 
 let dir: string
 beforeEach(() => {
@@ -129,20 +131,20 @@ describe('SettingsStore window sizes', () => {
 describe('PlaylistFile', () => {
   it('keeps a copy of a playlists file from a newer version before the first save', () => {
     const path = join(dir, 'playlists.json')
-    const v2 = JSON.stringify({ version: 2, playlists: [{ id: 'a', name: 'Mix', trackIds: [] }] })
-    writeFileSync(path, v2)
-    const file = new PlaylistFile(path)
+    const v3 = JSON.stringify({ version: 3, playlists: [{ id: 'a', name: 'Mix', items: [] }] })
+    writeFileSync(path, v3)
+    const file = new PlaylistFile(oldIds, path)
     file.setFromPage([])
     file.flushSync()
-    expect(readFileSync(`${path}.unknown`, 'utf8')).toBe(v2)
-    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ version: 1, playlists: [] })
+    expect(readFileSync(`${path}.unknown`, 'utf8')).toBe(v3)
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ version: 2, playlists: [] })
   })
 
   it('never writes a playlists file it could not read', () => {
     const path = join(dir, 'playlists.json')
     mkdirSync(path)
-    const file = new PlaylistFile(path)
-    file.setFromPage([{ id: 'a', name: 'Mix', trackIds: [] }])
+    const file = new PlaylistFile(oldIds, path)
+    file.setFromPage([{ id: 'a', name: 'Mix', items: [] }])
     expect(file.get()).toHaveLength(1)
     file.flushSync()
     expect(readdirSync(path)).toEqual([])
@@ -150,16 +152,16 @@ describe('PlaylistFile', () => {
 
   it('renames songs whose ids changed and saves the file', () => {
     const path = join(dir, 'playlists.json')
-    const file = new PlaylistFile(path)
+    const file = new PlaylistFile(oldIds, path)
     file.setFromPage([
-      { id: 'p', name: 'Mix', trackIds: ['old', 'x'] },
-      { id: 'q', name: 'Other', trackIds: ['y'] }
+      { id: 'p', name: 'Mix', items: ['files:old', 'files:x', 'mfp:old'] },
+      { id: 'q', name: 'Other', items: ['files:y'] }
     ])
     file.flushSync()
-    file.moveIds({ old: 'new' })
+    file.moveIds('files', { old: 'new' })
     expect(JSON.parse(readFileSync(path, 'utf8')).playlists).toEqual([
-      { id: 'p', name: 'Mix', trackIds: ['new', 'x'] },
-      { id: 'q', name: 'Other', trackIds: ['y'] }
+      { id: 'p', name: 'Mix', items: ['files:new', 'files:x', 'mfp:old'] },
+      { id: 'q', name: 'Other', items: ['files:y'] }
     ])
     expect(readdirSync(dir)).toEqual(['playlists.json'])
   })
@@ -169,81 +171,224 @@ describe('moveIds when the new ids can not be written', () => {
   it('says so for a file it could not read (no writer this session)', () => {
     const path = join(dir, 'playlists.json')
     mkdirSync(path)
-    const file = new PlaylistFile(path)
-    file.setFromPage([{ id: 'p', name: 'Mix', trackIds: ['old'] }])
-    expect(file.moveIds({ old: 'new' })).toBe(false)
+    const file = new PlaylistFile(oldIds, path)
+    file.setFromPage([{ id: 'p', name: 'Mix', items: ['files:old'] }])
+    expect(file.moveIds('files', { old: 'new' })).toBe(false)
     // nothing to rename is no failure
-    expect(file.moveIds({ zz: 'yy' })).toBe(true)
+    expect(file.moveIds('files', { zz: 'yy' })).toBe(true)
   })
 
   it.skipIf(process.getuid?.() === 0)('says so when the write fails', () => {
     const sub = join(dir, 'ro')
     mkdirSync(sub)
-    const file = new QueueFile(join(sub, 'queue.json'))
-    file.setFromPage({ items: ['old'], index: 0, from: '', pos: 0 })
+    const file = new QueueFile(oldIds, join(sub, 'queue.json'))
+    file.setFromPage({ items: ['files:old'], index: 0, from: '', pos: 0 })
     chmodSync(sub, 0o500)
     try {
-      expect(file.moveIds({ old: 'new' })).toBe(false)
+      expect(file.moveIds('files', { old: 'new' })).toBe(false)
     } finally {
       chmodSync(sub, 0o700)
     }
   })
 
   it('says it worked when both are on disk', () => {
-    const file = new QueueFile(join(dir, 'queue.json'))
-    file.setFromPage({ items: ['old'], index: 0, from: '', pos: 0 })
-    expect(file.moveIds({ old: 'new' })).toBe(true)
+    const file = new QueueFile(oldIds, join(dir, 'queue.json'))
+    file.setFromPage({ items: ['files:old'], index: 0, from: '', pos: 0 })
+    expect(file.moveIds('files', { old: 'new' })).toBe(true)
   })
+})
+
+const queues = (track: object, more: object = {}): object => ({
+  version: 2,
+  track,
+  live: { current: null },
+  active: 'track',
+  ...more
 })
 
 describe('QueueFile', () => {
   it('moves the place without the list, and ignores a bad place', () => {
     const path = join(dir, 'queue.json')
-    const file = new QueueFile(path)
-    file.setFromPage({ items: ['a', 'b'], index: 0, from: 'X', pos: 0 })
+    const file = new QueueFile(oldIds, path)
+    file.setFromPage({ items: ['files:a', 'files:b'], index: 0, from: 'X', pos: 0 })
     file.setPlace({ index: 1, pos: 4 })
     file.setPlace({ index: 5, pos: 1 })
     file.flushSync()
-    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
-      items: ['a', 'b'],
-      index: 1,
-      from: 'X',
-      pos: 4
-    })
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(
+      queues({ items: ['files:a', 'files:b'], index: 1, from: 'X', pos: 4 })
+    )
   })
 
   it('renames songs whose ids changed and keeps the place', () => {
     const path = join(dir, 'queue.json')
-    const file = new QueueFile(path)
-    file.setFromPage({ items: ['a', 'old'], index: 1, from: 'X', pos: 7 })
-    file.moveIds({ old: 'new' })
+    const file = new QueueFile(oldIds, path)
+    file.setFromPage({ items: ['files:a', 'files:old', 'mfp:old'], index: 1, from: 'X', pos: 7 })
+    file.moveIds('files', { old: 'new' })
     // on disk at once, before the library process is told
-    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
-      items: ['a', 'new'],
-      index: 1,
-      from: 'X',
-      pos: 7
-    })
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(
+      queues({ items: ['files:a', 'files:new', 'mfp:old'], index: 1, from: 'X', pos: 7 })
+    )
   })
 
-  it('keeps radio apart from the list: a new list or place leaves it', () => {
+  it('keeps the live item apart from the list: a new list or place leaves it', () => {
     const path = join(dir, 'queue.json')
-    const file = new QueueFile(path)
-    file.setFromPage({ items: ['a', 'b'], index: 0, from: 'X', pos: 0 })
-    file.setPlaying({ kind: 'radio', station: 'metal-only' })
-    file.setFromPage({ items: ['c'], index: 0, from: 'Y', pos: 0 })
+    const file = new QueueFile(oldIds, path)
+    file.setFromPage({ items: ['files:a', 'files:b'], index: 0, from: 'X', pos: 0 })
+    file.setPlaying({ active: 'live', current: 'radio:metal-only' })
+    file.setFromPage({ items: ['files:c'], index: 0, from: 'Y', pos: 0 })
     file.setPlace({ index: 0, pos: 9 })
     file.flushSync()
-    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
-      items: ['c'],
-      index: 0,
-      from: 'Y',
-      pos: 9,
+    const live = { live: { current: 'radio:metal-only' }, active: 'live' }
+    const track = { items: ['files:c'], index: 0, from: 'Y', pos: 9 }
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(queues(track, live))
+    file.setPlaying({ active: 'track' })
+    file.flushSync()
+    expect(JSON.parse(readFileSync(path, 'utf8')).active).toBe('track')
+  })
+})
+
+describe('files from before item keys (ticket 055)', () => {
+  let warn: ReturnType<typeof vi.spyOn>
+  beforeEach(() => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  // one episode with two rows: its songs' ids are made as the library makes them
+  function writeMfp(): { song: string; album: string } {
+    const episode = {
+      slug: 'corticyte',
+      number: 79,
+      title: '79: Corticyte',
+      artist: 'Corticyte',
+      url: 'https://datashat.net/music_for_programming_79-corticyte.mp3',
+      bytes: 1,
+      duration: 3600,
+      date: null,
+      tracks: [
+        { artist: 'A', title: 'One' },
+        { artist: 'B', title: 'Two' }
+      ],
+      link: 'https://musicforprogramming.net/corticyte'
+    }
+    writeFileSync(
+      join(dir, 'mfp.json'),
+      JSON.stringify({ version: 1, fetchedAt: 0, episodes: [episode] })
+    )
+    return { song: shortHash('mfp:corticyte#1'), album: shortHash('mfp:corticyte') }
+  }
+
+  it('converts an old queue, keeps the old file aside, and writes the new one at once', () => {
+    const mfp = writeMfp()
+    const path = join(dir, 'queue.json')
+    const old = JSON.stringify({
+      items: ['t1', mfp.song],
+      index: 1,
+      from: '79: Corticyte',
+      link: { kind: 'album', id: mfp.album },
+      pos: 12.5,
       kind: 'radio',
       station: 'metal-only'
     })
-    file.setPlaying({ kind: 'queue' })
+    writeFileSync(path, old)
+    const file = new QueueFile(oldIds, path)
+    const want = queues(
+      {
+        items: ['files:t1', `mfp:${mfp.song}`],
+        index: 1,
+        from: '79: Corticyte',
+        link: { plugin: 'mfp', page: `episode/${mfp.album}` },
+        pos: 12.5
+      },
+      { live: { current: 'radio:metal-only' }, active: 'live' }
+    )
+    expect(file.get()).toEqual(want)
+    expect(readFileSync(`${path}.unknown`, 'utf8')).toBe(old)
+    expect(readFileSync(join(dir, 'queue.v1.json'), 'utf8')).toBe(old)
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(want)
+    expect(warn).toHaveBeenCalledWith('Converting old queue.json to version 2')
+    // the next start reads it as it is
+    warn.mockClear()
+    expect(new QueueFile(oldIds, path).get()).toEqual(want)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('converts old playlists the same way', () => {
+    const mfp = writeMfp()
+    const path = join(dir, 'playlists.json')
+    const old = JSON.stringify({
+      version: 1,
+      playlists: [{ id: 'p', name: 'Mix', trackIds: ['t1', mfp.song, 't1'] }]
+    })
+    writeFileSync(path, old)
+    const want = [{ id: 'p', name: 'Mix', items: ['files:t1', `mfp:${mfp.song}`] }]
+    expect(new PlaylistFile(oldIds, path).get()).toEqual(want)
+    expect(readFileSync(`${path}.unknown`, 'utf8')).toBe(old)
+    expect(readFileSync(join(dir, 'playlists.v1.json'), 'utf8')).toBe(old)
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ version: 2, playlists: want })
+  })
+
+  it('never writes over the v1 copy, which outlives an older build run in between', () => {
+    const path = join(dir, 'playlists.json')
+    const first = JSON.stringify({
+      version: 1,
+      playlists: [{ id: 'p', name: 'Mix', trackIds: ['t1'] }]
+    })
+    writeFileSync(path, first)
+    new PlaylistFile(oldIds, path)
+    // an older build read version 2 as unknown, started empty and saved
+    const emptied = JSON.stringify({ version: 1, playlists: [] })
+    writeFileSync(path, emptied)
+    expect(new PlaylistFile(oldIds, path).get()).toEqual([])
+    expect(readFileSync(`${path}.unknown`, 'utf8')).toBe(emptied)
+    expect(readFileSync(join(dir, 'playlists.v1.json'), 'utf8')).toBe(first)
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ version: 2, playlists: [] })
+  })
+
+  it('gives every id to files when mfp.json is missing or broken', () => {
+    const song = shortHash('mfp:corticyte#1')
+    const old = { version: 1, playlists: [{ id: 'p', name: 'Mix', trackIds: [song] }] }
+    const path = join(dir, 'playlists.json')
+    for (const mfp of [undefined, '{', '{"version":1,"episodes":"x"}']) {
+      rmSync(join(dir, 'mfp.json'), { force: true })
+      if (mfp !== undefined) writeFileSync(join(dir, 'mfp.json'), mfp)
+      writeFileSync(path, JSON.stringify(old))
+      expect(new PlaylistFile(oldIds, path).get()[0].items).toEqual([`files:${song}`])
+    }
+  })
+
+  it('starts empty from a broken old file and keeps it as .broken', () => {
+    const path = join(dir, 'queue.json')
+    writeFileSync(path, '{"items":["t1"')
+    const file = new QueueFile(oldIds, path)
+    expect(file.get()).toEqual(queues({ items: [], index: 0, from: '', pos: 0 }))
+    expect(readFileSync(`${path}.broken`, 'utf8')).toBe('{"items":["t1"')
+  })
+
+  it('keeps the old file as it is when no copy can be made, and does not write over it', () => {
+    const path = join(dir, 'queue.json')
+    const old = JSON.stringify({ items: ['t1'], index: 0, from: '', pos: 0 })
+    writeFileSync(path, old)
+    // a folder where the copy would go
+    mkdirSync(`${path}.unknown`)
+    const file = new QueueFile(oldIds, path)
+    expect(file.get().track.items).toEqual(['files:t1'])
+    file.setPlace({ index: 0, pos: 5 })
     file.flushSync()
-    expect(JSON.parse(readFileSync(path, 'utf8')).kind).toBeUndefined()
+    expect(readFileSync(path, 'utf8')).toBe(old)
+  })
+
+  it('the same for old playlists', () => {
+    const path = join(dir, 'playlists.json')
+    const old = JSON.stringify({
+      version: 1,
+      playlists: [{ id: 'p', name: 'Mix', trackIds: ['t1'] }]
+    })
+    writeFileSync(path, old)
+    mkdirSync(`${path}.unknown`)
+    const file = new PlaylistFile(oldIds, path)
+    expect(file.get()[0].items).toEqual(['files:t1'])
+    file.setFromPage([])
+    file.flushSync()
+    expect(readFileSync(path, 'utf8')).toBe(old)
   })
 })

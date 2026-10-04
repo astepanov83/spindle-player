@@ -1,19 +1,12 @@
-import type {
-  LibraryApi,
-  PlaybackApi,
-  PlaylistsApi,
-  RadioApi,
-  SettingsApi,
-  WinApi
-} from '../shared/ipc'
+import type { PlaybackApi, PlaylistsApi, SettingsApi, WinApi } from '../shared/ipc'
+import type { PluginApis } from '../shared/plugins'
 
+// The core's APIs, and the plugins' from the plugin list.
 declare global {
-  interface Window {
+  interface Window extends PluginApis {
     win: WinApi
     settingsApi: SettingsApi
-    libraryApi: LibraryApi
     playlistsApi: PlaylistsApi
-    radioApi: RadioApi
     playbackApi: PlaybackApi
   }
 }

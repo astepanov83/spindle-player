@@ -2,32 +2,14 @@
 // Forward and another chip return to where the view was left (see scroll-places.ts).
 import { tick, untrack } from 'svelte'
 import { ScrollPlaces, type View } from './scroll-places'
-import { crumbs, shownFolder } from '../library/folders'
+import { pagePath } from '../plugins'
 import { library } from '../stores/library.svelte'
 
-// The open view under a section or chip, as a path for ScrollPlaces.
-export function libraryView(top: string): View {
-  const path = [top]
-  if (top === 'albums' && library.open) path.push(`album:${library.open}`)
-  if (top === 'playlists' && library.openPlaylist) path.push(`pl:${library.openPlaylist}`)
-  if (top === 'mfp' && library.episode) path.push(`episode:${library.episode}`)
-  if (top === 'folders') {
-    const tree = library.folders
-    const i = shownFolder(tree, library.folder)
-    if (i !== null) for (const j of crumbs(tree, i)) path.push(`folder:${tree.nodes[j].key}`)
-  }
-  if (top === 'artists') {
-    if (library.artist) path.push(`artist:${library.artist}`)
-    if (library.artistAlbum) path.push(`album:${library.artistAlbum}`)
-  }
-  // The search results (Albums) and the filtered grid (Artists) show over
-  // the open view, so they are a view below it (ticket 039). Other views
-  // filter in place and stay the same view.
-  if (library.query.trim() && (top === 'albums' || top === 'artists')) {
-    path.push('search')
-    if (top === 'albums' && library.searchAll) path.push(`all:${library.searchAll}`)
-  }
-  return { path, query: library.query.trim() }
+// The open view, as a path for ScrollPlaces: the tab, then where its page
+// is under it (the page's plugin says).
+export function libraryView(): View {
+  const tab = library.tab
+  return { path: [tab, ...pagePath(tab)], query: library.query.trim() }
 }
 
 // Where a view was left: its scrollTop, and the first grid row on screen
@@ -41,7 +23,8 @@ interface Place {
   song?: string
 }
 
-// Grid rows carry data-index inside a data-grid (AlbumGrid, ArtistGrid). A
+// Grid rows carry data-index inside a data-grid, "square" or "round"
+// (blocks/Tiles.svelte). A
 // view has one of each at most: the search results have both, so a row is
 // looked up in its own grid.
 const rows = (el: HTMLElement, grid?: string): NodeListOf<HTMLElement> =>

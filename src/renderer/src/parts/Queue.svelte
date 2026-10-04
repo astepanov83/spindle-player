@@ -3,18 +3,21 @@
   import GoLink from '../ui/GoLink.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Thumb from '../ui/Thumb.svelte'
-  import RecentSongs from './RecentSongs.svelte'
+  import LiveHistory from './LiveHistory.svelte'
   import { fmtLength, fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { roving } from '../ui/roving'
   import { dropIndex, dropSlot, rowShift } from '../ui/drag-rows'
   import { layout } from '../stores/layout.svelte'
   import { library } from '../stores/library.svelte'
-  import { playing } from '../stores/playing.svelte'
+  import { queues } from '../stores/queues.svelte'
   import { playlists } from '../stores/playlists.svelte'
   import { queue } from '../stores/queue.svelte'
-  import { radio } from '../stores/radio.svelte'
   import { openSongMenu } from '../library/song-menu'
+  import { linkTarget } from '../../../shared/saved-queue'
+  import type { ItemKey } from '../../../shared/plugins/items'
+  import type { ItemAnswer } from '../plugins/types'
+  import { canOpen, infoOf, itemInfo, openPage } from '../plugins'
 
   // header and close are set by the container, not by templates
   let { header = false, close = false }: { header?: boolean; close?: boolean } = $props()
@@ -31,7 +34,7 @@
   const currentKey = (): number => queue.starts
   $effect(() => {
     const key = currentKey()
-    // radio showed its songs here: back on the queue, show its current song again
+    // a live item showed its songs here: back on the queue, show its current song again
     if (!body) {
       seen = -1
       return
@@ -53,20 +56,36 @@
     seen = currentKey()
   }
 
-  const total = $derived(queue.items.reduce((s, id) => s + library.track(id).duration, 0))
+  // 50k songs: itemInfo is a lookup that makes no objects
+  const total = $derived(queue.items.reduce((s, key) => s + lengthOf(key), 0))
+
+  function lengthOf(key: ItemKey): number {
+    const s = itemInfo(key)
+    return s.state === 'ok' ? (s.info.length ?? 0) : 0
+  }
   const sum = $derived(
     `${queue.items.length.toLocaleString()} ${queue.items.length === 1 ? 'song' : 'songs'}` +
       ` · ${fmtLength(total)}`
   )
-  // "From" opens the album, artist, folder or playlist, while it is still there
+  // "From" opens a playlist, or the plugin's page (an album, artist, folder),
+  // while it is still there
   const openFrom = $derived.by(() => {
     const link = queue.link
-    if (!link || !library.canShow(link)) return undefined
-    if (link.kind === 'playlist' && !playlists.get(link.id)) return undefined
+    if (!link) return undefined
+    let show: () => void
+    if (link.plugin === 'core') {
+      const to = linkTarget(link)
+      if (to?.kind !== 'playlist' || !playlists.get(to.id)) return undefined
+      show = () => library.showPlaylist(to.id)
+    } else {
+      const to = { plugin: link.plugin, page: link.page }
+      if (!canOpen(to)) return undefined
+      show = () => openPage(to)
+    }
     return () => {
       // the drawer would cover the page opened
       layout.showQueue = false
-      library.showFrom(link)
+      show()
     }
   })
 
@@ -161,12 +180,34 @@
     drag = null
   }
 
-  // Radio: its recent songs in place of the queue, with a head even in a tab.
-  const onRadio = $derived(playing.kind === 'radio')
+  // A live item: its recent songs in place of the queue, with a head even in a tab.
+  const onLive = $derived(queues.active === 'live')
+  const liveHead = $derived(
+    `${infoOf(queues.live.current ?? undefined)?.title ?? ''} · recent songs`
+  )
 
   // in the markup this would lose its spaces next to a block
   const dot = ' · '
 </script>
+
+<!-- A song its plugin can't give now is greyed: off says so, loading says
+     nothing yet. -->
+{#snippet words(s: ItemAnswer, eq: boolean)}
+  {#if s.state === 'ok'}
+    <Thumb src={s.info.art?.cover} {eq} />
+    <span class="qt"
+      ><span class="nm" title={s.info.title}>{s.info.title}</span><span
+        class="ar"
+        title={s.info.subtitle}>{s.info.subtitle ?? ''}</span
+      ></span
+    >
+    <span class="d">{s.info.length === undefined ? '' : fmtTime(s.info.length)}</span>
+  {:else}
+    <Thumb src={undefined} />
+    <span class="qt"><span class="nm">{s.state === 'off' ? s.text : ''}</span></span>
+    <span class="d"></span>
+  {/if}
+{/snippet}
 
 <svelte:window
   {onpointermove}
@@ -177,13 +218,11 @@
 />
 
 <div class="qpart" class:dragging={!!drag}>
-  {#if header || onRadio}
+  {#if header || onLive}
     <div class="head">
       <div class="title">
-        {#if onRadio}
-          <b title="{radio.station?.name ?? 'Radio'} · recent songs"
-            >{radio.station?.name ?? 'Radio'} · recent songs</b
-          >
+        {#if onLive}
+          <b title={liveHead}>{liveHead}</b>
         {:else}
           <b>Queue</b>{#if queue.from}<small>From <GoLink go={openFrom}>{queue.from}</GoLink></small
             >{/if}
@@ -194,7 +233,7 @@
       {/if}
     </div>
   {/if}
-  {#if !onRadio && queue.items.length}
+  {#if !onLive && queue.items.length}
     <div class="sum" class:tab={!header}>
       <!-- the tab has no head, so "From" goes here there -->
       <span class="count"
@@ -208,8 +247,8 @@
       >
     </div>
   {/if}
-  {#if onRadio}
-    <RecentSongs />
+  {#if onLive}
+    <LiveHistory />
   {:else}
     <div class="body" bind:this={body}>
       {#if !queue.items.length}
@@ -229,13 +268,14 @@
         }}
       >
         {#each v.items as item (item.key)}
-          {@const id = queue.items[item.index]}
-          {@const t = library.track(id)}
+          {@const key = queue.items[item.index]}
+          {@const s = itemInfo(key)}
           {@const cur = item.index === queue.index}
           <button
             class="qrow row"
             class:cur-row={cur}
             class:past={item.index < queue.index}
+            class:dim={s.state !== 'ok'}
             class:lifted={drag?.from === item.index}
             data-row
             data-index={item.index}
@@ -244,30 +284,20 @@
             onclick={() => playRow(item.index)}
             onpointerdown={(e) => onrowdown(e, item.index)}
             onkeydown={(e) => onrowkey(e, item.index)}
-            oncontextmenu={(e) => openSongMenu(e, [id], { queueRow: item.index })}
+            oncontextmenu={(e) => openSongMenu(e, [key], { queueRow: item.index })}
           >
-            <Thumb src={library.art(t).cover} eq={cur && playing.songPlaying} />
-            <span class="qt"
-              ><span class="nm" title={t.title}>{t.title}</span><span class="ar" title={t.artist}
-                >{t.artist}</span
-              ></span
-            >
-            <span class="d">{fmtTime(t.duration)}</span>
+            {@render words(s, cur && queues.songPlaying)}
           </button>
         {/each}
         {#if drag}
-          {@const t = library.track(queue.items[drag.from])}
           <div
             class="qrow ghost"
             class:cur-row={drag.from === queue.index}
+            class:dim={itemInfo(queue.items[drag.from]).state !== 'ok'}
             aria-hidden="true"
             style:transform="translateY({drag.y - drag.grab}px)"
           >
-            <Thumb src={library.art(t).cover} />
-            <span class="qt"
-              ><span class="nm">{t.title}</span><span class="ar">{t.artist}</span></span
-            >
-            <span class="d">{fmtTime(t.duration)}</span>
+            {@render words(itemInfo(queue.items[drag.from]), false)}
           </div>
         {/if}
       </div>
@@ -413,6 +443,13 @@
   }
   .past {
     opacity: var(--past);
+  }
+  /* its plugin is off, or its data is not in yet */
+  .dim .nm {
+    color: var(--ink-3);
+  }
+  .dim :global(.mini) {
+    opacity: 0.5;
   }
   /* a played row with focus shows its mark at full strength */
   .past:hover {

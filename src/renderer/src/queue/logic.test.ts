@@ -12,13 +12,19 @@ import {
   jump,
   moveRow,
   onEnded,
+  passOver,
   prune,
   queueNotice,
   removeRow,
   type QueueState
 } from './logic'
+import { queueLink } from '../../../shared/saved-queue'
+import type { ItemKey } from '../../../shared/plugins/items'
 
-const q = (index: number, items = ['a/0', 'a/1', 'a/2']): QueueState => ({
+const q = (
+  index: number,
+  items: ItemKey[] = ['files:a/0', 'files:a/1', 'files:a/2']
+): QueueState => ({
   items,
   index,
   from: 'A'
@@ -44,7 +50,7 @@ describe('advance', () => {
   })
 
   it('shuffle with one song has nowhere to go', () => {
-    const s = q(0, ['a/0'])
+    const s = q(0, ['files:a/0'])
     expect(advance(s, { shuffle: true })).toBe(s)
   })
 })
@@ -70,15 +76,27 @@ describe('prune', () => {
   })
 
   it('keeps the current song current when others go', () => {
-    expect(prune(q(2), has(['a/0']))).toEqual({ items: ['a/1', 'a/2'], index: 1, from: 'A' })
+    expect(prune(q(2), has(['files:a/0']))).toEqual({
+      items: ['files:a/1', 'files:a/2'],
+      index: 1,
+      from: 'A'
+    })
   })
 
   it('moves to the next song left when the current one is gone', () => {
-    expect(prune(q(1), has(['a/1']))).toEqual({ items: ['a/0', 'a/2'], index: 1, from: 'A' })
+    expect(prune(q(1), has(['files:a/1']))).toEqual({
+      items: ['files:a/0', 'files:a/2'],
+      index: 1,
+      from: 'A'
+    })
   })
 
   it('moves to the last song when the current one and all after it are gone', () => {
-    expect(prune(q(1), has(['a/1', 'a/2']))).toEqual({ items: ['a/0'], index: 0, from: 'A' })
+    expect(prune(q(1), has(['files:a/1', 'files:a/2']))).toEqual({
+      items: ['files:a/0'],
+      index: 0,
+      from: 'A'
+    })
   })
 
   it('empties the queue when every song is gone', () => {
@@ -180,7 +198,7 @@ describe('follows', () => {
 const qn = (
   index: number,
   next: number,
-  items = ['a/0', 'a/1', 'a/2', 'a/3', 'a/4']
+  items: ItemKey[] = ['files:a/0', 'files:a/1', 'files:a/2', 'files:a/3', 'files:a/4']
 ): QueueState => ({
   items,
   index,
@@ -190,16 +208,28 @@ const qn = (
 
 describe('insertNext', () => {
   it('puts the songs right after the current one, the newest first', () => {
-    const s = insertNext(q(0), ['x', 'y'])
-    expect(s).toEqual({ items: ['a/0', 'x', 'y', 'a/1', 'a/2'], index: 0, from: 'A', next: 2 })
-    expect(insertNext(s, ['z']).items).toEqual(['a/0', 'z', 'x', 'y', 'a/1', 'a/2'])
-    expect(insertNext(s, ['z']).next).toBe(3)
+    const s = insertNext(q(0), ['files:x', 'files:y'])
+    expect(s).toEqual({
+      items: ['files:a/0', 'files:x', 'files:y', 'files:a/1', 'files:a/2'],
+      index: 0,
+      from: 'A',
+      next: 2
+    })
+    expect(insertNext(s, ['files:z']).items).toEqual([
+      'files:a/0',
+      'files:z',
+      'files:x',
+      'files:y',
+      'files:a/1',
+      'files:a/2'
+    ])
+    expect(insertNext(s, ['files:z']).next).toBe(3)
   })
 
   it('fills an empty queue, with the first song current', () => {
     const empty = { items: [], index: 0, from: '' }
-    expect(insertNext(empty, ['x', 'y'], 'Blue')).toEqual({
-      items: ['x', 'y'],
+    expect(insertNext(empty, ['files:x', 'files:y'], 'Blue')).toEqual({
+      items: ['files:x', 'files:y'],
       index: 0,
       from: 'Blue'
     })
@@ -207,9 +237,9 @@ describe('insertNext', () => {
 
   it('takes what "From" opens with the songs it names (ticket 040)', () => {
     const empty = { items: [], index: 0, from: '' }
-    const link = { kind: 'album' as const, id: 'blue' }
-    expect(insertNext(empty, ['x'], 'Blue', link).link).toEqual(link)
-    expect(insertNext({ ...q(0), link }, ['x'], 'Other', { kind: 'album', id: 'o' }).link).toBe(
+    const link = queueLink('album', 'blue')
+    expect(insertNext(empty, ['files:x'], 'Blue', link).link).toEqual(link)
+    expect(insertNext({ ...q(0), link }, ['files:x'], 'Other', queueLink('album', 'o')).link).toBe(
       link
     )
   })
@@ -222,26 +252,28 @@ describe('insertNext', () => {
 
 describe('append', () => {
   it('adds the songs at the end, keeping the place and the Play next songs', () => {
-    expect(append(qn(1, 1, ['a', 'b', 'c']), ['x'])).toEqual(qn(1, 1, ['a', 'b', 'c', 'x']))
+    expect(append(qn(1, 1, ['files:a', 'files:b', 'files:c']), ['files:x'])).toEqual(
+      qn(1, 1, ['files:a', 'files:b', 'files:c', 'files:x'])
+    )
   })
 
   it('fills an empty queue, with the first song current', () => {
-    expect(append({ items: [], index: 0, from: '' }, ['x'], 'Blue')).toEqual({
-      items: ['x'],
+    expect(append({ items: [], index: 0, from: '' }, ['files:x'], 'Blue')).toEqual({
+      items: ['files:x'],
       index: 0,
       from: 'Blue'
     })
   })
 
   it('keeps where the list came from when it had songs', () => {
-    expect(append(q(0), ['x'], 'Other').from).toBe('A')
-    expect(append(q(0), ['x'], 'Other', { kind: 'album', id: 'o' }).link).toBeUndefined()
+    expect(append(q(0), ['files:x'], 'Other').from).toBe('A')
+    expect(append(q(0), ['files:x'], 'Other', queueLink('album', 'o')).link).toBeUndefined()
   })
 
   it('takes what "From" opens when it fills an empty queue (ticket 040)', () => {
-    const link = { kind: 'playlist' as const, id: 'p1' }
-    expect(append({ items: [], index: 0, from: '' }, ['x'], 'Mix', link)).toEqual({
-      items: ['x'],
+    const link = queueLink('playlist', 'p1')
+    expect(append({ items: [], index: 0, from: '' }, ['files:x'], 'Mix', link)).toEqual({
+      items: ['files:x'],
       index: 0,
       from: 'Mix',
       link
@@ -251,25 +283,29 @@ describe('append', () => {
 
 describe('removeRow', () => {
   it('keeps the current song when a row before it goes', () => {
-    expect(removeRow(q(2), 0)).toEqual({ items: ['a/1', 'a/2'], index: 1, from: 'A' })
+    expect(removeRow(q(2), 0)).toEqual({ items: ['files:a/1', 'files:a/2'], index: 1, from: 'A' })
   })
 
   it('keeps the index when a row after it goes', () => {
-    expect(removeRow(q(0), 2)).toEqual({ items: ['a/0', 'a/1'], index: 0, from: 'A' })
+    expect(removeRow(q(0), 2)).toEqual({ items: ['files:a/0', 'files:a/1'], index: 0, from: 'A' })
   })
 
   it('makes the next song current when the current one goes', () => {
-    expect(removeRow(q(1), 1)).toEqual({ items: ['a/0', 'a/2'], index: 1, from: 'A' })
+    expect(removeRow(q(1), 1)).toEqual({ items: ['files:a/0', 'files:a/2'], index: 1, from: 'A' })
   })
 
   it('goes back one when the current song was the last', () => {
-    expect(removeRow(q(2), 2)).toEqual({ items: ['a/0', 'a/1'], index: 1, from: 'A' })
+    expect(removeRow(q(2), 2)).toEqual({ items: ['files:a/0', 'files:a/1'], index: 1, from: 'A' })
   })
 
   it('empties the queue with its last song', () => {
-    expect(removeRow(q(0, ['a/0']), 0)).toEqual({ items: [], index: 0, from: '' })
-    const link = { kind: 'album' as const, id: 'a' }
-    expect(removeRow({ ...q(0, ['a/0']), link }, 0)).toEqual({ items: [], index: 0, from: '' })
+    expect(removeRow(q(0, ['files:a/0']), 0)).toEqual({ items: [], index: 0, from: '' })
+    const link = queueLink('album', 'a')
+    expect(removeRow({ ...q(0, ['files:a/0']), link }, 0)).toEqual({
+      items: [],
+      index: 0,
+      from: ''
+    })
   })
 
   it('counts one Play next song less when one of them goes', () => {
@@ -289,17 +325,33 @@ describe('removeRow', () => {
 describe('moveRow', () => {
   it('keeps the current song current when a row moves past it', () => {
     // a/0 goes below the current a/1
-    expect(moveRow(q(1), 0, 2)).toEqual({ items: ['a/1', 'a/2', 'a/0'], index: 0, from: 'A' })
+    expect(moveRow(q(1), 0, 2)).toEqual({
+      items: ['files:a/1', 'files:a/2', 'files:a/0'],
+      index: 0,
+      from: 'A'
+    })
     // a/2 goes above the current a/1
-    expect(moveRow(q(1), 2, 0)).toEqual({ items: ['a/2', 'a/0', 'a/1'], index: 2, from: 'A' })
+    expect(moveRow(q(1), 2, 0)).toEqual({
+      items: ['files:a/2', 'files:a/0', 'files:a/1'],
+      index: 2,
+      from: 'A'
+    })
   })
 
   it('follows the current song when it moves', () => {
-    expect(moveRow(q(0), 0, 2)).toEqual({ items: ['a/1', 'a/2', 'a/0'], index: 2, from: 'A' })
+    expect(moveRow(q(0), 0, 2)).toEqual({
+      items: ['files:a/1', 'files:a/2', 'files:a/0'],
+      index: 2,
+      from: 'A'
+    })
   })
 
   it('leaves the index alone for moves on one side of it', () => {
-    expect(moveRow(q(0), 1, 2)).toEqual({ items: ['a/0', 'a/2', 'a/1'], index: 0, from: 'A' })
+    expect(moveRow(q(0), 1, 2)).toEqual({
+      items: ['files:a/0', 'files:a/2', 'files:a/1'],
+      index: 0,
+      from: 'A'
+    })
   })
 
   it('does nothing for the same place or rows out of range', () => {
@@ -310,11 +362,16 @@ describe('moveRow', () => {
   })
 
   it('a row moved to right after the current song plays next, with shuffle too', () => {
-    const s = moveRow(q(0, ['a/0', 'a/1', 'a/2', 'a/3']), 3, 1)
-    expect(s).toEqual({ items: ['a/0', 'a/3', 'a/1', 'a/2'], index: 0, from: 'A', next: 1 })
+    const s = moveRow(q(0, ['files:a/0', 'files:a/1', 'files:a/2', 'files:a/3']), 3, 1)
+    expect(s).toEqual({
+      items: ['files:a/0', 'files:a/3', 'files:a/1', 'files:a/2'],
+      index: 0,
+      from: 'A',
+      next: 1
+    })
     // from above the current song: it lands right after it as well
-    expect(moveRow(q(2, ['a/0', 'a/1', 'a/2', 'a/3']), 0, 2)).toEqual({
-      items: ['a/1', 'a/2', 'a/0', 'a/3'],
+    expect(moveRow(q(2, ['files:a/0', 'files:a/1', 'files:a/2', 'files:a/3']), 0, 2)).toEqual({
+      items: ['files:a/1', 'files:a/2', 'files:a/0', 'files:a/3'],
       index: 1,
       from: 'A',
       next: 1
@@ -330,13 +387,13 @@ describe('moveRow', () => {
 
 describe('clearQueue', () => {
   it('keeps only the current song', () => {
-    expect(clearQueue(qn(1, 1))).toEqual({ items: ['a/1'], index: 0, from: 'A' })
+    expect(clearQueue(qn(1, 1))).toEqual({ items: ['files:a/1'], index: 0, from: 'A' })
   })
 
   it('empties a queue that holds only the current song', () => {
-    expect(clearQueue(q(0, ['a/0']))).toEqual({ items: [], index: 0, from: '' })
-    const link = { kind: 'album' as const, id: 'a' }
-    expect(clearQueue({ ...q(0, ['a/0']), link })).toEqual({ items: [], index: 0, from: '' })
+    expect(clearQueue(q(0, ['files:a/0']))).toEqual({ items: [], index: 0, from: '' })
+    const link = queueLink('album', 'a')
+    expect(clearQueue({ ...q(0, ['files:a/0']), link })).toEqual({ items: [], index: 0, from: '' })
     expect(clearQueue({ ...qn(1, 1), link }).link).toBe(link)
   })
 })
@@ -373,15 +430,39 @@ describe('Play next songs with shuffle and repeat', () => {
   })
 
   it('a rescan keeps the ones left', () => {
-    expect(prune(qn(0, 2), (id) => id !== 'a/1')).toEqual(qn(0, 1, ['a/0', 'a/2', 'a/3', 'a/4']))
+    expect(prune(qn(0, 2), (id) => id !== 'files:a/1')).toEqual(
+      qn(0, 1, ['files:a/0', 'files:a/2', 'files:a/3', 'files:a/4'])
+    )
   })
 })
 
 describe('queueNotice', () => {
   it('names one song, counts more', () => {
-    expect(queueNotice('next', ['x'], 'Song')).toBe('Playing next: "Song"')
-    expect(queueNotice('next', ['x', 'y'], 'Song')).toBe('Playing next: 2 songs')
-    expect(queueNotice('add', ['x'], 'Song')).toBe('Added to the queue: "Song"')
-    expect(queueNotice('add', ['x', 'y', 'z'], 'Song')).toBe('Added 3 songs to the queue')
+    expect(queueNotice('next', ['files:x'], 'Song')).toBe('Playing next: "Song"')
+    expect(queueNotice('next', ['files:x', 'files:y'], 'Song')).toBe('Playing next: 2 songs')
+    expect(queueNotice('add', ['files:x'], 'Song')).toBe('Added to the queue: "Song"')
+    expect(queueNotice('add', ['files:x', 'files:y', 'files:z'], 'Song')).toBe(
+      'Added 3 songs to the queue'
+    )
+  })
+})
+
+describe('passOver (ticket 056)', () => {
+  const items: ItemKey[] = ['files:a', 'mfp:b', 'mfp:c', 'files:d']
+  const off = (k: ItemKey): boolean => k.startsWith('mfp:')
+  const next = (s: QueueState): QueueState => advance(s, { shuffle: false })
+
+  it('goes on to the next song that can play', () => {
+    expect(passOver(q(1, items), off, next).index).toBe(3)
+  })
+
+  it('leaves a song that can play where it is', () => {
+    const s = q(0, items)
+    expect(passOver(s, off, next)).toBe(s)
+  })
+
+  it('gives the same state when none after can play', () => {
+    const s = q(1, ['files:a', 'mfp:b', 'mfp:c'])
+    expect(passOver(s, off, next)).toBe(s)
   })
 })

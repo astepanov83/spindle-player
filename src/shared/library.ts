@@ -24,14 +24,9 @@ export interface Track {
   // (compilations, singles folders); else the album's is shown
   art?: Art
   // index in LibraryData.folders: the folder the file is in (a cue track's
-  // is the sheet's folder); -1 for an online track
+  // is the sheet's folder)
   folder: number
-  // where the track comes from; missing for files on disk (ticket 052)
-  online?: Online
 }
-
-// Music that is not in a music folder. Only its own tab and search show it.
-export type Online = 'mfp'
 
 // A folder on disk that holds songs, or a folder above one. A number per
 // song and one table of folders keep the JSON small (no path per song).
@@ -104,10 +99,6 @@ export interface Album extends Art {
   // 0 when unknown
   year: number
   trackIds: string[]
-  // set for an online album (see Track.online)
-  online?: Online
-  // an online album's page on its site
-  link?: string
 }
 
 // An artist photo found online (ticket 021).
@@ -119,7 +110,7 @@ export interface LibraryData {
   albums: Album[]
   tracks: Track[]
   folders: Folder[]
-  // artist key (see shared/artists.ts) -> photo; only artists with one
+  // artist key (see shared/plugins/files/artists.ts) -> photo; only artists with one
   artistPhotos?: Record<string, ArtistPhoto>
 }
 
@@ -141,17 +132,6 @@ export interface FetchStatus extends FetchCounts {
   phase?: 'covers' | 'photos'
   // artist photos (ticket 021); missing while Deezer is off
   artists?: FetchCounts
-}
-
-// Music For Programming (ticket 052), for the line in Settings.
-export interface MfpStatus {
-  episodes: number
-  // when the site was last read, ms; 0 for never
-  fetchedAt: number
-  // reading the site now
-  running: boolean
-  // why the last refresh failed; the episodes from before stay
-  error?: string
 }
 
 export interface ScanStatus {
@@ -178,6 +158,4 @@ export interface ScanStatus {
   settingsUnreadable?: boolean
   // the online cover lookup; missing while it is off
   fetch?: FetchStatus
-  // Music For Programming; missing while it is off
-  mfp?: MfpStatus
 }

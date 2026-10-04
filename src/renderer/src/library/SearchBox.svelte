@@ -2,7 +2,8 @@
   import Icon from '../ui/Icon.svelte'
   import { library } from '../stores/library.svelte'
 
-  let { placeholder }: { placeholder: string } = $props()
+  // onenter: Enter in the box (Radio searches at once)
+  let { placeholder, onenter }: { placeholder: string; onenter?: () => void } = $props()
 
   let input: HTMLInputElement | undefined = $state()
 
@@ -14,6 +15,7 @@
 
   // The first Escape clears the text, the next leaves the box.
   function onkeydown(e: KeyboardEvent & { currentTarget: HTMLInputElement }): void {
+    if (e.key === 'Enter' && !e.isComposing) return onenter?.()
     if (e.key !== 'Escape') return
     e.preventDefault()
     if (library.query) library.query = ''

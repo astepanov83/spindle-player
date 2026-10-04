@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addTracks,
+  addItems,
   cleanName,
   create,
   isKnownPlaylistsFile,
@@ -8,15 +8,16 @@ import {
   newName,
   parsePlaylists,
   remove,
-  removeTracks,
+  removeItems,
   rename,
   type Playlist
 } from './playlists'
+import type { ItemKey } from './plugins/items'
 
-const pl = (id: string, name: string, trackIds: string[] = []): Playlist => ({
+const pl = (id: string, name: string, items: ItemKey[] = []): Playlist => ({
   id,
   name,
-  trackIds
+  items
 })
 
 describe('parsePlaylists', () => {
@@ -27,22 +28,29 @@ describe('parsePlaylists', () => {
   })
 
   it('keeps a good file as it is', () => {
-    const good = [pl('a', 'Road', ['t1', 't2']), pl('b', 'Empty')]
-    expect(parsePlaylists({ version: 1, playlists: good })).toEqual(good)
+    const good = [pl('a', 'Road', ['files:t1', 'files:t2']), pl('b', 'Empty')]
+    expect(parsePlaylists({ version: 2, playlists: good })).toEqual(good)
   })
 
-  it('drops bad playlists and bad ids on their own', () => {
+  it('drops bad playlists, and bad and live items, on their own', () => {
     const raw = {
       playlists: [
-        { id: 'a', name: 'Ok', trackIds: ['t1', 7, '', 't2', 't1'] },
+        {
+          id: 'a',
+          name: 'Ok',
+          items: ['files:t1', 7, '', 't3', 'radio:x', 'files:t2', 'files:t1']
+        },
         { id: 'a', name: 'Same id' },
         { id: '', name: 'No id' },
         { id: 'c', name: 5 },
         'junk',
-        { id: 'd', name: '  ', trackIds: 'nope' }
+        { id: 'd', name: '  ', items: 'nope' }
       ]
     }
-    expect(parsePlaylists(raw)).toEqual([pl('a', 'Ok', ['t1', 't2']), pl('d', 'Playlist')])
+    expect(parsePlaylists(raw)).toEqual([
+      pl('a', 'Ok', ['files:t1', 'files:t2']),
+      pl('d', 'Playlist')
+    ])
   })
 })
 
@@ -102,12 +110,12 @@ describe('nameForSongs', () => {
 })
 
 describe('edits', () => {
-  const list = [pl('a', 'A', ['t1']), pl('b', 'B')]
+  const list = [pl('a', 'A', ['files:t1']), pl('b', 'B')]
 
   it('creates at the end without doubles', () => {
-    expect(create(list, 'c', ' C ', ['t1', 't1', 't2'])).toEqual([
+    expect(create(list, 'c', ' C ', ['files:t1', 'files:t1', 'files:t2'])).toEqual([
       ...list,
-      pl('c', 'C', ['t1', 't2'])
+      pl('c', 'C', ['files:t1', 'files:t2'])
     ])
   })
 
@@ -121,44 +129,44 @@ describe('edits', () => {
   })
 
   it('adds songs at the end, skipping ones already there', () => {
-    const r = addTracks(list, 'a', ['t2', 't1', 't3', 't2'])
+    const r = addItems(list, 'a', ['files:t2', 'files:t1', 'files:t3', 'files:t2'])
     expect(r.added).toBe(2)
-    expect(r.list[0].trackIds).toEqual(['t1', 't2', 't3'])
+    expect(r.list[0].items).toEqual(['files:t1', 'files:t2', 'files:t3'])
     expect(r.list[1]).toBe(list[1])
   })
 
   it('leaves the list as it is when nothing is new', () => {
-    const r = addTracks(list, 'a', ['t1'])
+    const r = addItems(list, 'a', ['files:t1'])
     expect(r).toEqual({ list, added: 0 })
     expect(r.list).toBe(list)
   })
 
   it('removes songs', () => {
-    expect(removeTracks([pl('a', 'A', ['t1', 't2', 't3'])], 'a', ['t2'])[0].trackIds).toEqual([
-      't1',
-      't3'
-    ])
+    expect(
+      removeItems([pl('a', 'A', ['files:t1', 'files:t2', 'files:t3'])], 'a', ['files:t2'])[0].items
+    ).toEqual(['files:t1', 'files:t3'])
   })
 })
 
 describe('isKnownPlaylistsFile', () => {
   it('knows a file the next save writes back the same', () => {
-    expect(isKnownPlaylistsFile({ version: 1, playlists: [] })).toBe(true)
-    expect(isKnownPlaylistsFile({ version: 1, playlists: [pl('a', 'Mix', ['t1', 't2'])] })).toBe(
-      true
-    )
+    expect(isKnownPlaylistsFile({ version: 2, playlists: [] })).toBe(true)
+    expect(
+      isKnownPlaylistsFile({ version: 2, playlists: [pl('a', 'Mix', ['files:t1', 'files:t2'])] })
+    ).toBe(true)
   })
 
   it('does not know another version, a wrong shape, or a file the save would cut', () => {
     for (const raw of [
-      { version: 2, playlists: [pl('a', 'Mix')] },
+      { version: 1, playlists: [{ id: 'a', name: 'Mix', trackIds: [] }] },
+      { version: 3, playlists: [pl('a', 'Mix')] },
       { playlists: [] },
-      { version: 1, playlists: {} },
+      { version: 2, playlists: {} },
       [],
       'x',
-      { version: 1, playlists: [pl('a', 'Mix'), { id: 'b' }] },
-      { version: 1, playlists: [pl('a', 'Mix', ['t1', 't1'])] },
-      { version: 1, playlists: [{ ...pl('a', 'Mix'), smart: true }] }
+      { version: 2, playlists: [pl('a', 'Mix'), { id: 'b' }] },
+      { version: 2, playlists: [pl('a', 'Mix', ['files:t1', 'files:t1'])] },
+      { version: 2, playlists: [{ ...pl('a', 'Mix'), smart: true }] }
     ])
       expect(isKnownPlaylistsFile(raw)).toBe(false)
   })

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { player } from '../stores/player.svelte'
-  import { playing } from '../stores/playing.svelte'
+  import { queues } from '../stores/queues.svelte'
   import { fmtTime } from '../format'
   import { sliderKey } from '../keys'
 
@@ -27,7 +27,7 @@
 
   function onpointerup(e: PointerEvent): void {
     if (drag === null) return
-    playing.seek(at(e))
+    queues.seek(at(e))
     drag = null
   }
 
@@ -37,7 +37,7 @@
     const to = sliderKey(e.key, player.pos, player.duration, 5, 30)
     if (to === null) return
     e.preventDefault()
-    playing.seek(to)
+    queues.seek(to)
   }
 </script>
 

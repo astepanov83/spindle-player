@@ -2,6 +2,10 @@
 import * as ops from '../../../shared/playlists'
 import type { Playlist } from '../../../shared/playlists'
 import { movePlaylists, type IdMoves } from '../../../shared/id-moves'
+import type { PluginId } from '../../../shared/plugins'
+import type { ItemKey } from '../../../shared/plugins/items'
+import { infoOf } from '../plugins'
+import type { ItemInfo } from '../plugins/types'
 import { library } from './library.svelte'
 import { notice } from './notice.svelte'
 
@@ -30,12 +34,16 @@ class PlaylistStore {
 
   // Makes a playlist and returns its id. One made from songs is named after
   // them (ops.nameForSongs); an empty one is "New playlist", typed over next.
-  create(trackIds: string[] = []): string {
+  // Songs come as item keys here and below.
+  create(keys: ItemKey[] = []): string {
     const id = crypto.randomUUID()
-    const known = trackIds.filter((t) => library.has(t)).map((t) => library.track(t))
+    const known = keys.flatMap((k) => {
+      const i = infoOf(k)
+      return i ? [nameParts(i)] : []
+    })
     const name = ops.newName(this.list, known.length ? ops.nameForSongs(known) : undefined)
-    this.#set(ops.create(this.list, id, name, trackIds))
-    if (trackIds.length) notice.show(`Added ${songs(trackIds.length)} to ${name}`)
+    this.#set(ops.create(this.list, id, name, keys))
+    if (keys.length) notice.show(`Added ${songs(keys.length)} to ${name}`)
     return id
   }
 
@@ -46,27 +54,35 @@ class PlaylistStore {
   remove(id: string): void {
     const p = this.get(id)
     this.#set(ops.remove(this.list, id))
+    // the views and their history leave it
     library.forgetPlaylist(id)
     if (p) notice.show(`Deleted ${p.name}`)
   }
 
-  add(id: string, trackIds: string[]): void {
+  add(id: string, keys: ItemKey[]): void {
     const p = this.get(id)
     if (!p) return
-    const r = ops.addTracks(this.list, id, trackIds)
+    const r = ops.addItems(this.list, id, keys)
     if (r.added) this.#set(r.list)
     notice.show(r.added ? `Added ${songs(r.added)} to ${p.name}` : `Already in ${p.name}`)
   }
 
   // Songs whose ids changed (see id-moves.ts); main renames its copy too.
-  moveIds(moves: IdMoves): void {
-    const list = movePlaylists(this.list, moves)
+  moveIds(plugin: PluginId, moves: IdMoves): void {
+    const list = movePlaylists(this.list, plugin, moves)
     if (list !== this.list) this.#set(list)
   }
 
-  removeTracks(id: string, trackIds: string[]): void {
-    this.#set(ops.removeTracks(this.list, id, trackIds))
+  removeItems(id: string, keys: ItemKey[]): void {
+    this.#set(ops.removeItems(this.list, id, keys))
   }
+}
+
+// A song's album (its group, told apart by the page it opens) and artist.
+function nameParts(i: ItemInfo): { albumId: string; album: string; artist: string } {
+  const to = i.groupTo
+  const album = i.group ?? ''
+  return { albumId: to ? `${to.plugin}:${to.page}` : album, album, artist: i.subtitle ?? '' }
 }
 
 function songs(n: number): string {

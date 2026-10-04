@@ -3,13 +3,13 @@
 <script lang="ts">
   import PlayingText from './PlayingText.svelte'
   import { layout } from '../stores/layout.svelte'
-  import { playing } from '../stores/playing.svelte'
+  import { queues } from '../stores/queues.svelte'
 </script>
 
-{#if layout.queueMode === 'tab' && layout.tabSel === 1 && playing.title}
+{#if layout.queueMode === 'tab' && layout.tabSel === 1 && queues.title}
   <div class="tabline">
-    <div class="song-title" title={playing.title}><PlayingText line="title" /></div>
-    <div class="song-sub" title={playing.sub}><PlayingText line="sub" /></div>
+    <div class="song-title" title={queues.title}><PlayingText line="title" /></div>
+    <div class="song-sub" title={queues.sub}><PlayingText line="sub" /></div>
   </div>
 {/if}
 

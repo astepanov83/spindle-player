@@ -1,6 +1,10 @@
 // Messages between main and the hidden window that resizes covers.
 import type { ThemePalettes } from './palette'
 
+// Pictures (station logos) under this many px on their shorter side show as a
+// tile on the stage.
+export const smallLogoSide = 64
+
 export const CoverChannel = {
   job: 'cover:job',
   done: 'cover:done'

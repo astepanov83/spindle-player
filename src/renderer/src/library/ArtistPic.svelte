@@ -4,8 +4,8 @@
 <script lang="ts">
   import Cover from '../ui/Cover.svelte'
   import { mosaicUrl } from '../../../shared/library'
-  import type { CoverArt } from './artists'
-  import { library } from '../stores/library.svelte'
+  import type { CoverArt } from '../plugins/types'
+  import { itemsVersion } from '../plugins'
   import { theme } from '../stores/theme.svelte'
 
   let { photo, covers }: { photo: string | undefined; covers: CoverArt[] } = $props()
@@ -17,12 +17,13 @@
   // Pictures that failed: a photo the cache lost shows the covers, a mosaic
   // that can't be made shows the 4 covers, not a broken image. Only until the
   // next library or patch: a scan can make its small file again at the same URL.
-  let failed = $state.raw({ urls: [] as string[], load: -1 })
+  let failed = $state.raw({ urls: [] as string[], load: '' })
+  const version = $derived(itemsVersion())
   const ok = (url: string | undefined): url is string =>
-    !!url && !(failed.load === library.revision && failed.urls.includes(url))
+    !!url && !(failed.load === version && failed.urls.includes(url))
   function fail(url: string): void {
-    const before = failed.load === library.revision ? failed.urls : []
-    failed = { urls: [...before, url], load: library.revision }
+    const before = failed.load === version ? failed.urls : []
+    failed = { urls: [...before, url], load: version }
   }
 
   const tone = (c: CoverArt): string => c.palette[theme.light ? 'light' : 'dark'][0]

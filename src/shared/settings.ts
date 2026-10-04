@@ -1,4 +1,5 @@
 import type { QueueMode, Template, TemplateId } from './layout'
+import { isPluginId, plugins, type PluginId } from './plugins'
 import { templateIds, templates } from './templates'
 
 export type VisualizerStyle = 'ring' | 'spectrum' | 'wave' | 'off'
@@ -19,8 +20,8 @@ export interface Settings {
   coverSources: Record<CoverSource, boolean>
   // what closing the window does; 'ask' until the user picks one
   closeAction: CloseAction
-  // Music For Programming in its own tab (ticket 052); off, the site is never asked
-  mfp: boolean
+  // which plugins are on; MFP off means the site is never asked
+  plugins: Record<PluginId, boolean>
 }
 
 export interface Size {
@@ -43,7 +44,7 @@ export interface StoredSettings extends Settings {
   // none until the window was first closed or moved; then it opens there again
   windowPlace: WindowPlace | null
   // music folders, absolute paths. Only main changes them: through the folder
-  // picker, or a folder dropped on the window (checked in main/library/dropped.ts).
+  // picker, or a folder dropped on the window (checked in main/plugins/files/dropped.ts).
   folders: string[]
 }
 
@@ -53,6 +54,10 @@ export const themeChoices: ThemeChoice[] = ['dark', 'light', 'system']
 export const coverSources: CoverSource[] = ['musicbrainz', 'deezer', 'itunes']
 export const closeActions: CloseAction[] = ['ask', 'minimize', 'quit']
 
+function pluginDefaults(): Record<PluginId, boolean> {
+  return Object.fromEntries(plugins.map((p) => [p.id, p.defaultOn])) as Record<PluginId, boolean>
+}
+
 export function defaultSettings(): Settings {
   return {
     template: 'studio',
@@ -60,10 +65,10 @@ export function defaultSettings(): Settings {
     visualizer: 'ring',
     theme: 'system',
     volume: 70,
-    fetchCovers: false,
+    fetchCovers: true,
     coverSources: { musicbrainz: true, deezer: true, itunes: true },
     closeAction: 'ask',
-    mfp: false
+    plugins: pluginDefaults()
   }
 }
 
@@ -124,6 +129,25 @@ function parseCoverSources(
   return out
 }
 
+// A plugin's old top-level switch (`oldSwitch` in the plugin list, as MFP's
+// `mfp`) is read only when `plugins` is missing.
+function parsePlugins(
+  v: unknown,
+  raw: Record<string, unknown>,
+  base: Record<PluginId, boolean>
+): Record<PluginId, boolean> {
+  const out = { ...base }
+  if (!isObject(v)) {
+    for (const p of plugins) {
+      const old = p.oldSwitch && raw[p.oldSwitch]
+      if (typeof old === 'boolean') out[p.id] = old
+    }
+    return out
+  }
+  for (const p of plugins) if (typeof v[p.id] === 'boolean') out[p.id] = v[p.id] as boolean
+  return out
+}
+
 // Absolute on Linux and macOS, or with a drive letter on Windows.
 function isAbsolutePath(p: string): boolean {
   return p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\')
@@ -174,14 +198,16 @@ export function parseStoredSettings(
     fetchCovers: typeof r.fetchCovers === 'boolean' ? r.fetchCovers : base.fetchCovers,
     coverSources: parseCoverSources(r.coverSources, base.coverSources),
     closeAction: oneOf(r.closeAction, closeActions, base.closeAction),
-    mfp: typeof r.mfp === 'boolean' ? r.mfp : base.mfp,
+    plugins: parsePlugins(r.plugins, r, base.plugins),
     windowSizes,
     windowPlace: r.windowPlace === undefined ? base.windowPlace : parseWindowPlace(r.windowPlace),
     folders: Array.isArray(r.folders) ? parseFolders(r.folders) : [...base.folders]
   }
 }
 
-const storedKeys = Object.keys(defaultStoredSettings())
+// The plugins' old switches: still read, and dropped by the next save
+const oldSwitches = plugins.flatMap((p) => p.oldSwitch ?? [])
+const storedKeys = [...Object.keys(defaultStoredSettings()), ...oldSwitches]
 
 // Every template named is one this version has, with a mode it offers. A
 // template left out is fine: the save only adds it.
@@ -234,7 +260,13 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('windowSizes') && !isKnownSizes(raw.windowSizes)) return false
   if (has('windowPlace') && raw.windowPlace !== null && !isKnownPlace(raw.windowPlace)) return false
   if (has('fetchCovers') && typeof raw.fetchCovers !== 'boolean') return false
-  if (has('mfp') && typeof raw.mfp !== 'boolean') return false
+  if (oldSwitches.some((k) => has(k) && typeof raw[k] !== 'boolean')) return false
+  if (
+    has('plugins') &&
+    (!isObject(raw.plugins) ||
+      Object.entries(raw.plugins).some(([k, v]) => !isPluginId(k) || typeof v !== 'boolean'))
+  )
+    return false
   if (has('closeAction') && !closeActions.includes(raw.closeAction as CloseAction)) return false
   if (
     has('coverSources') &&
@@ -262,6 +294,6 @@ export function pageSettings(s: StoredSettings): Settings {
     fetchCovers: s.fetchCovers,
     coverSources: { ...s.coverSources },
     closeAction: s.closeAction,
-    mfp: s.mfp
+    plugins: { ...s.plugins }
   }
 }

@@ -15,12 +15,12 @@ export interface PlaceOptions<T> {
   // row height in px
   rowSize: number
   key: (item: T) => string
-  // changes with every library the page gets
-  source: number
+  // changes with every library the page gets (or new data in a plugin)
+  source: number | string
 }
 
 export function keepPlace<T>(opts: () => PlaceOptions<T>): void {
-  let last: { items: T[]; source: number } | undefined
+  let last: { items: T[]; source: number | string } | undefined
   // the item held in place last time, and where the view was left; while it
   // stays there, the next change holds the same item
   let held: { key: string; scroll: number } | undefined

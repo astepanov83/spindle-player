@@ -9,144 +9,59 @@ import './assets/text.css'
 import './assets/controls.css'
 
 import App from './App.svelte'
-import { decodeLibrary, library } from './stores/library.svelte'
-import { LibraryFeed } from './stores/library-feed'
-import { layout } from './stores/layout.svelte'
-import { notice } from './stores/notice.svelte'
 import { playlists } from './stores/playlists.svelte'
-import { playing } from './stores/playing.svelte'
+import { queues } from './stores/queues.svelte'
 import { queue } from './stores/queue.svelte'
-import { radio } from './stores/radio.svelte'
 import { loadSettings } from './stores/settings.svelte'
-import { dropText, ScanWatch } from './library/scan-text'
+import { dropOn, startPlugins, takesDrops } from './plugins'
 import { orFallback } from './start'
-import { emptyQueue } from '../../shared/saved-queue'
+import { moveQueue, movePlaylists } from '../../shared/id-moves'
+import { emptyQueues } from '../../shared/saved-queue'
 import { defaultSettings } from '../../shared/settings'
-import type { ScanStatus } from '../../shared/library'
-import type { LibraryMessage } from '../../shared/library-patch'
-import {
-  mergeMoves,
-  moveQueue,
-  movePlaylists,
-  splitMoves,
-  type IdMoves
-} from '../../shared/id-moves'
 
 // A file dropped on the window would replace the app (main blocks that too),
-// so the page takes every drop itself. Only files from the system count:
-// the folders among them become music folders (main checks each path).
+// so the page takes every drop itself. Only files from the system count, and
+// only while a plugin that takes them is on.
 window.addEventListener('dragover', (e) => {
   e.preventDefault()
   if (e.dataTransfer)
-    e.dataTransfer.dropEffect = e.dataTransfer.types.includes('Files') ? 'copy' : 'none'
+    e.dataTransfer.dropEffect =
+      e.dataTransfer.types.includes('Files') && takesDrops() ? 'copy' : 'none'
 })
 window.addEventListener('drop', (e) => {
   e.preventDefault()
-  const files = [...(e.dataTransfer?.files ?? [])]
-  if (!files.length) return
-  void window.libraryApi.addDropped(files).then((r) => {
-    const text = dropText(r)
-    if (text) notice.show(text)
-  })
+  const dropped = [...(e.dataTransfer?.files ?? [])]
+  if (dropped.length) dropOn(dropped)
 })
 
-// Settings and the library first, so the first paint already shows the saved
-// template and the albums. The window stays hidden until then, so the wait doesn't show.
-// A failed ask shows the app with defaults. Settings and playlists that failed
-// to load are not saved this run, so the defaults can't replace the user's files.
-const [saved, lib, lists, lastQueue, stations] = await Promise.all([
+// Settings and the plugins' data first, so the first paint already shows the
+// saved template and the albums. The window stays hidden until then, so the
+// wait doesn't show. A failed ask shows the app with defaults. Settings and
+// playlists that failed to load are not saved this run, so the defaults can't
+// replace the user's files.
+const [saved, lists, lastQueue, started] = await Promise.all([
   orFallback(() => window.settingsApi.load(), defaultSettings(), 'the settings'),
-  orFallback<{ library?: Uint8Array; status: ScanStatus; moves?: IdMoves }>(
-    () => window.libraryApi.load(),
-    { status: library.status },
-    'the library'
-  ),
   orFallback(() => window.playlistsApi.load(), [], 'the playlists'),
-  orFallback(() => window.playbackApi.loadQueue(), emptyQueue(), 'the queue'),
-  orFallback(() => window.radioApi.stations(), [], 'the radio stations')
+  orFallback(() => window.playbackApi.loadQueue(), emptyQueues(), 'the queue'),
+  startPlugins()
 ])
 loadSettings(saved.value, saved.ok)
-library.status = lib.value.status
-library.loadFailed = !lib.ok
-if (lib.value.library) loadLibrary(lib.value.library)
 
-// Ids that changed come just before the library that has the new ones, and
-// are renamed as it loads, so the queue doesn't drop those songs. The maps of
-// this run so far come with the load (one sent at start can come before the
-// page listens); those may be for this library already.
-let moves: IdMoves | undefined = lib.value.moves
-window.libraryApi.onIdsMoved((m) => (moves = moves ? mergeMoves(moves, m) : m))
+// Ids a plugin moved are renamed before the playlists and the queue load, so
+// the queue doesn't drop those songs.
 let startLists = lists.value
 let startQueue = lastQueue.value
-if (moves) {
-  const { now, later } = splitMoves(moves, (id) => library.has(id))
-  startLists = movePlaylists(startLists, now)
-  startQueue = moveQueue(startQueue, now)
-  moves = Object.keys(later).length ? later : undefined
+for (const { plugin, moves } of started.load()) {
+  startLists = movePlaylists(startLists, plugin, moves)
+  startQueue = moveQueue(startQueue, plugin, moves)
 }
 playlists.load(startLists, lists.ok)
-radio.load(stations.value)
-// paused where it was; songs no longer in the library leave the queue.
-// Radio comes back with its station, paused.
-playing.restore(startQueue, stations.ok)
-
-// A library that can't be read leaves the one shown as it is.
-function loadLibrary(bytes: Uint8Array): boolean {
-  try {
-    const m = decodeLibrary(bytes)
-    if ('patch' in m) throw new Error('a patch, not a whole library')
-    library.load(m)
-  } catch (e) {
-    console.error('Could not read the library', e)
-    library.loadFailed = true
-    return false
-  }
-  library.loadFailed = false
-  return true
-}
-
-// Ids that changed are renamed as the library with the new ones loads.
-function applyLibrary(m: LibraryMessage): void {
-  if (moves) {
-    queue.moveIds(moves)
-    playlists.moveIds(moves)
-    moves = undefined
-  }
-  const gone = 'patch' in m ? library.patch(m) : (library.load(m), true)
-  library.loadFailed = false
-  if (gone) queue.prune()
-}
-
-// While a scan runs, main sends what changed (ticket 022).
-const feed = new LibraryFeed({
-  have: () => library.sent,
-  apply: applyLibrary,
-  fetch: async () => decodeLibrary(await window.libraryApi.get()),
-  fail: (e) => {
-    console.error('Could not get the library', e)
-    library.loadFailed = true
-  }
-})
-
-window.libraryApi.onChanged((bytes) => {
-  let m: LibraryMessage
-  try {
-    m = decodeLibrary(bytes)
-  } catch (e) {
-    console.error('Could not read the library', e)
-    library.loadFailed = true
-    return
-  }
-  feed.take(m)
-})
-// A failed scan or a folder not found shows only in the settings sheet, so
-// the main window says so too (ticket 045).
-const scanWatch = new ScanWatch(library.status)
-window.libraryApi.onStatus((s) => {
-  library.status = s
-  const text = scanWatch.next(s)
-  if (text && !layout.settingsOpen)
-    notice.show(text, { label: 'Open Settings', run: () => (layout.settingsOpen = true) })
+// paused where it was; songs their plugin says are gone leave the queue.
+// A live item (a station) comes back picked, paused.
+queues.restore(startQueue)
+started.listen((plugin, moves) => {
+  queue.moveIds(plugin, moves)
+  playlists.moveIds(plugin, moves)
 })
 
 const app = mount(App, {

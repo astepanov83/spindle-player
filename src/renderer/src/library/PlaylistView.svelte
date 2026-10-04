@@ -3,10 +3,13 @@
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
   import { openSongMenu } from './song-menu'
-  import { filterSongs, playlistRows, sortRows } from './views'
+  import { filterItems, playlistRows, sortItems } from './views'
+  import { infoOf, itemInfo } from '../plugins'
   import { library } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { queueLink } from '../../../shared/saved-queue'
+  import type { ItemKey } from '../../../shared/plugins/items'
 
   let {
     id,
@@ -16,16 +19,10 @@
 
   const p = $derived(playlists.get(id))
   const view = $derived(
-    p
-      ? playlistRows(
-          p.trackIds,
-          (t) => library.has(t),
-          (t) => library.track(t)
-        )
-      : { rows: [], missing: 0 }
+    p ? playlistRows(p.items, (k) => itemInfo(k).state === 'missing') : { rows: [], missing: 0 }
   )
   // the search box filters the rows; Play takes what is shown
-  const shown = $derived(filterSongs(view.rows, library.query))
+  const shown = $derived(filterItems(view.rows, library.query, infoOf))
   let confirmDelete = $state(false)
 
   // a different playlist starts without the delete question
@@ -35,12 +32,14 @@
   })
 
   // what the table shows, as sorted there
-  const playIds = (): string[] =>
-    sortRows(shown, library.playlistSort(id), (t) => library.order(t)).map((t) => t.id)
+  const playIds = (): ItemKey[] => sortItems(shown, library.playlistSort(id), infoOf)
 
+  // from the first song that can play: greyed ones are passed over
   function play(): void {
     if (!p) return
-    queue.playList(playIds(), 0, p.name, { kind: 'playlist', id })
+    const keys = playIds()
+    const first = keys.findIndex((k) => itemInfo(k).state === 'ok')
+    if (first >= 0) queue.playList(keys, first, p.name, queueLink('playlist', id))
   }
 
   // a step clears the text: it filtered this playlist's rows, and the list
@@ -82,7 +81,7 @@
     sort={library.playlistSort(id)}
     onsort={(k) => library.sortPlaylist(id, k)}
     playlistId={id}
-    link={{ kind: 'playlist', id }}
+    link={queueLink('playlist', id)}
   >
     {#snippet head()}
       <div class="head">
@@ -125,14 +124,14 @@
               openSongMenu(e, playIds(), {
                 onPlaylist: id,
                 from: p.name,
-                link: { kind: 'playlist', id }
+                link: queueLink('playlist', id)
               })}><Icon name="more" size={18} /></button
           >
         </div>
       </div>
     {/snippet}
   </SongTable>
-  {#if !p.trackIds.length}
+  {#if !p.items.length}
     <p class="hint">
       Empty for now. Right-click a song to add it, or use "Add to playlist" on an album page.
     </p>

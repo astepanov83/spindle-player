@@ -1,57 +1,81 @@
 import { describe, expect, it } from 'vitest'
-import { mergeMoves, moveIds, movePlaylists, moveQueue, splitMoves } from './id-moves'
-import { parsePlaylists, playlistsFile } from './playlists'
-import { parseSavedQueue } from './saved-queue'
+import { mergeMoves, moveKeys, movePlaylists, moveQueue, splitMoves } from './id-moves'
+import { parsePlaylists, playlistsFile, type Playlist } from './playlists'
+import type { ItemKey } from './plugins/items'
+import { emptyQueues, parseSavedQueues, type SavedQueues } from './saved-queue'
 
 const moves = { a: 'A', b: 'B' }
 
-describe('moveIds', () => {
-  it('renames moved ids in place and keeps the rest', () => {
-    expect(moveIds(['x', 'a', 'y', 'b'], moves)).toEqual(['x', 'A', 'y', 'B'])
+describe('moveKeys', () => {
+  it('renames moved files keys in place and keeps the rest', () => {
+    expect(moveKeys(['files:x', 'files:a', 'files:y', 'files:b'], 'files', moves)).toEqual([
+      'files:x',
+      'files:A',
+      'files:y',
+      'files:B'
+    ])
+  })
+
+  it("leaves other plugins' keys alone, also with the same id", () => {
+    const keys = ['mfp:a', 'radio:b'] as const
+    expect(moveKeys([...keys], 'files', moves)).toEqual(keys)
+    expect(moveKeys(['mfp:a', 'files:a'], 'files', moves)).toEqual(['mfp:a', 'files:A'])
+    // the plugin that sent them is the one whose keys move
+    expect(moveKeys(['mfp:a', 'files:a'], 'mfp', moves)).toEqual(['mfp:A', 'files:a'])
   })
 
   it('gives the same list when nothing moved', () => {
-    const ids = ['x', 'y']
-    expect(moveIds(ids, moves)).toBe(ids)
+    const keys: ItemKey[] = ['files:x', 'mfp:a']
+    expect(moveKeys(keys, 'files', moves)).toBe(keys)
   })
 
   it('ignores names an object has on its own prototype', () => {
-    expect(moveIds(['constructor', 'toString'], moves)).toEqual(['constructor', 'toString'])
+    const keys: ItemKey[] = ['files:constructor', 'files:toString']
+    expect(moveKeys(keys, 'files', moves)).toEqual(keys)
   })
 })
 
 describe('movePlaylists', () => {
   it('renames songs in each playlist, once each, and passes the file check', () => {
-    const list = [
-      { id: 'p1', name: 'One', trackIds: ['a', 'x'] },
-      { id: 'p2', name: 'Two', trackIds: ['y'] },
+    const list: Playlist[] = [
+      { id: 'p1', name: 'One', items: ['files:a', 'files:x', 'mfp:b'] },
+      { id: 'p2', name: 'Two', items: ['files:y', 'mfp:a'] },
       // both the old and the new id: the song stays once
-      { id: 'p3', name: 'Three', trackIds: ['A', 'a'] }
+      { id: 'p3', name: 'Three', items: ['files:A', 'files:a'] }
     ]
-    const out = movePlaylists(list, moves)
-    expect(out[0].trackIds).toEqual(['A', 'x'])
+    const out = movePlaylists(list, 'files', moves)
+    expect(out[0].items).toEqual(['files:A', 'files:x', 'mfp:b'])
     expect(out[1]).toBe(list[1])
-    expect(out[2].trackIds).toEqual(['A'])
+    expect(out[2].items).toEqual(['files:A'])
     expect(parsePlaylists(playlistsFile(out))).toEqual(out)
   })
 
   it('gives the same list when nothing moved', () => {
-    const list = [{ id: 'p', name: 'P', trackIds: ['x'] }]
-    expect(movePlaylists(list, moves)).toBe(list)
+    const list: Playlist[] = [{ id: 'p', name: 'P', items: ['files:x'] }]
+    expect(movePlaylists(list, 'files', moves)).toBe(list)
   })
 })
 
 describe('moveQueue', () => {
-  it('renames the queue and keeps its place', () => {
-    const q = { items: ['x', 'a', 'b'], index: 1, from: 'Album', pos: 12 }
-    const out = moveQueue(q, moves)
-    expect(out).toEqual({ items: ['x', 'A', 'B'], index: 1, from: 'Album', pos: 12 })
-    expect(parseSavedQueue(out)).toEqual(out)
+  const queues = (items: ItemKey[]): SavedQueues => ({
+    ...emptyQueues(),
+    track: { items, index: 1, from: 'Album', pos: 12 }
+  })
+
+  it('renames the track queue and keeps its place', () => {
+    const out = moveQueue(queues(['files:x', 'files:a', 'mfp:b']), 'files', moves)
+    expect(out.track).toEqual({
+      items: ['files:x', 'files:A', 'mfp:b'],
+      index: 1,
+      from: 'Album',
+      pos: 12
+    })
+    expect(parseSavedQueues(out)).toEqual(out)
   })
 
   it('gives the same queue when nothing moved', () => {
-    const q = { items: ['x'], index: 0, from: '', pos: 0 }
-    expect(moveQueue(q, moves)).toBe(q)
+    const q = queues(['files:x', 'mfp:a'])
+    expect(moveQueue(q, 'files', moves)).toBe(q)
   })
 })
 

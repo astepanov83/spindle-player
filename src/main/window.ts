@@ -9,7 +9,7 @@ import { WinChannel } from '../shared/ipc'
 import { windowBackground } from '../shared/theme'
 import type { SettingsStore } from './settings-store'
 import { closeStep } from './close-ask'
-import { RestartBudget } from './library/restart'
+import { RestartBudget } from './restart'
 import { blockNavigation, canOpenExternal } from './web-guard'
 import { AppliedSize, placeCentered, placeSaved, sizeFor } from './window-place'
 

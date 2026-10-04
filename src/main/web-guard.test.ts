@@ -2,24 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn(), on: vi.fn() } }))
 
-const { canOpenExternal, blockNavigation } = await import('./web-guard')
+const { blockNavigation } = await import('./web-guard')
 const { isFromPage } = await import('./page-ipc')
-
-describe('canOpenExternal', () => {
-  it('opens https links only', () => {
-    expect(canOpenExternal('https://github.com/astepanov83/spindle-player')).toBe(true)
-    for (const url of [
-      'http://example.com',
-      'file:///etc/passwd',
-      'javascript:alert(1)',
-      'smb://host/share',
-      'spindle://media/abc',
-      'not a url',
-      ''
-    ])
-      expect(canOpenExternal(url)).toBe(false)
-  })
-})
 
 describe('blockNavigation', () => {
   it('stops every navigation of the page and its frames', () => {

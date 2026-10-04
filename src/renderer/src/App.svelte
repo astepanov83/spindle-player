@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import { defaultPalettes } from '../../shared/palette'
   import TitleBar from './components/TitleBar.svelte'
   import Settings from './components/Settings.svelte'
@@ -27,8 +28,10 @@
     showSeekInMediaSession,
     showStateInMediaSession
   } from './stores/media-session'
+  import { itemsVersion, navTabs } from './plugins'
+  import { library } from './stores/library.svelte'
   import { player } from './stores/player.svelte'
-  import { playing } from './stores/playing.svelte'
+  import { queues } from './stores/queues.svelte'
   import { queue } from './stores/queue.svelte'
   import { settings, settingsState } from './stores/settings.svelte'
   import { theme } from './stores/theme.svelte'
@@ -36,7 +39,7 @@
   import { setLook } from './visualizer/loop'
 
   // each cover has a palette per theme; the light one has a darker accent
-  const palettes = $derived(playing.art?.palette ?? defaultPalettes)
+  const palettes = $derived(queues.art?.palette ?? defaultPalettes)
   const palette = $derived(palettes[theme.light ? 'light' : 'dark'])
 
   $effect(() => engine.setVolume(settings.volume))
@@ -50,12 +53,34 @@
     })
   )
 
+  // New data in a plugin, or one turned on or off: songs that are gone leave
+  // the queue, a song that waited for its plugin loads, a live item whose
+  // plugin went off gives the player back to the queue, and pages that are
+  // gone close. A $derived, so a read that changes without changing the
+  // version (the scan status, every 100 ms in a scan) doesn't run them.
+  const version = $derived(itemsVersion())
+  $effect(() => {
+    void version
+    untrack(() => {
+      queues.refresh()
+      library.pagesChanged()
+    })
+  })
+
+  // The library's tabs follow the plugins that are on: one turned off takes
+  // its tabs, pages and history steps with it. .pre, so the library is drawn
+  // with them from the start.
+  $effect.pre(() => {
+    const tabs = navTabs()
+    untrack(() => library.setTabs(tabs))
+  })
+
   // The library scan slows down while a song plays, so the audio gets the disk first.
   $effect(() => window.playbackApi.playing(player.playing))
 
   setupMediaSession()
-  $effect(() => showInMediaSession(playing.media, playing.art))
-  $effect(() => showSeekInMediaSession(playing.kind))
+  $effect(() => showInMediaSession(queues.media, queues.art))
+  $effect(() => showSeekInMediaSession(queues.active))
   $effect(() => showStateInMediaSession())
   $effect(() => showPositionInMediaSession(player.pos, player.duration))
 
@@ -79,13 +104,13 @@
   }
 
   function run(act: KeyAction): void {
-    if (act === 'toggle') playing.togglePlay()
+    if (act === 'toggle') queues.togglePlay()
     else if (act === 'seekBack' || act === 'seekForward')
-      playing.seek(seekStep(player.pos, player.duration, act === 'seekBack' ? -1 : 1))
+      queues.seek(seekStep(player.pos, player.duration, act === 'seekBack' ? -1 : 1))
     else if (act === 'volumeUp' || act === 'volumeDown')
       settings.volume = volumeStep(settings.volume, act === 'volumeDown' ? -1 : 1)
-    else if (act === 'previous') void playing.prev()
-    else if (act === 'next') void playing.next()
+    else if (act === 'previous') void queues.prev()
+    else if (act === 'next') void queues.next()
     else if (act === 'back') goBack()
     else if (act === 'forward') goForward()
     else if (act === 'search') focusSearch()
@@ -132,7 +157,7 @@
 <div
   class="app vz-{settings.visualizer}"
   class:playing={player.playing}
-  class:song-playing={playing.songPlaying}
+  class:song-playing={queues.songPlaying}
   style:--c1={palette[0]}
   style:--c2={palette[1]}
   style:--c3={palette[2]}

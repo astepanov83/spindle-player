@@ -1,6 +1,7 @@
 // Files the page edits: playlists and the saved queue. Main checks what the
 // page sends like a file read, keeps the latest, and writes it a bit later.
-import { join } from 'path'
+import { constants, copyFileSync } from 'fs'
+import { basename, dirname, join } from 'path'
 import { app } from 'electron'
 import {
   isKnownPlaylistsFile,
@@ -13,9 +14,18 @@ import {
   applyPlaying,
   isKnownQueueFile,
   parseSavedQueue,
-  type SavedQueue
+  parseSavedQueues,
+  type SavedQueues
 } from '../shared/saved-queue'
 import { moveQueue, movePlaylists, type IdMoves } from '../shared/id-moves'
+import type { PluginId } from '../shared/plugins'
+import {
+  convertPlaylists,
+  convertQueue,
+  isOldPlaylistsFile,
+  isOldQueueFile,
+  type OldIds
+} from './convert-files'
 import { JsonFileWriter, openJsonFile, removeStrayTmp } from './json-file'
 
 // Reads the file at start. A file that can't be read gets no writer, so it is
@@ -33,14 +43,51 @@ function open<T>(
   return { value: file.value, writer }
 }
 
+// An old file is converted once. openJsonFile kept it as "<name>.unknown",
+// but that copy is replaced the next time a file can't be read back, e.g.
+// after an older build ran (it starts empty on the new file and saves). So it
+// is also kept as "<name>.v1.json", made once and never written over. Without
+// that copy the file is not written this session.
+function keepOld<T>(
+  path: string,
+  writer: JsonFileWriter<T> | undefined
+): JsonFileWriter<T> | undefined {
+  console.warn(`Converting old ${basename(path)} to version 2`)
+  if (!writer) return undefined
+  const to = join(dirname(path), `${basename(path, '.json')}.v1.json`)
+  try {
+    copyFileSync(path, to, constants.COPYFILE_EXCL)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return writer
+    console.error(`Could not keep a copy of ${path}; not saving it this session`, error)
+    return undefined
+  }
+  return writer
+}
+
+// The converted file is on disk at once, so it is converted only once.
+function writeConverted<T>(writer: JsonFileWriter<T> | undefined, data: T): void {
+  if (!writer) return
+  writer.schedule(data)
+  writer.flushSync()
+}
+
 export class PlaylistFile {
   #data: Playlist[]
   #writer: JsonFileWriter<unknown> | undefined
 
-  constructor(readonly path = join(app.getPath('userData'), 'playlists.json')) {
+  // `oldIds`: which plugin an id of an old file belongs to, from the folder it is in
+  constructor(
+    oldIds: (dir: string) => OldIds,
+    readonly path = join(app.getPath('userData'), 'playlists.json')
+  ) {
     const f = open<unknown>(path, 'Playlists file', isKnownPlaylistsFile, 500)
-    this.#data = parsePlaylists(f.value)
     this.#writer = f.writer
+    if (isOldPlaylistsFile(f.value)) {
+      this.#writer = keepOld(path, f.writer)
+      this.#data = convertPlaylists(f.value, oldIds(dirname(path)))
+      writeConverted(this.#writer, playlistsFile(this.#data))
+    } else this.#data = parsePlaylists(f.value)
   }
 
   get(): Playlist[] {
@@ -58,8 +105,8 @@ export class PlaylistFile {
   // Songs whose ids changed (see id-moves.ts), checked like a file read and
   // written at once: the library process drops the map once it hears back.
   // False when the new ids are not on disk: no writer this session, or the write failed.
-  moveIds(moves: IdMoves): boolean {
-    const moved = movePlaylists(this.#data, moves)
+  moveIds(plugin: PluginId, moves: IdMoves): boolean {
+    const moved = movePlaylists(this.#data, plugin, moves)
     if (moved === this.#data) return true
     this.#data = parsePlaylists(playlistsFile(moved))
     if (!this.#writer) return false
@@ -73,28 +120,35 @@ export class PlaylistFile {
 }
 
 export class QueueFile {
-  #data: SavedQueue
-  #writer: JsonFileWriter<SavedQueue> | undefined
+  #data: SavedQueues
+  #writer: JsonFileWriter<SavedQueues> | undefined
 
-  constructor(readonly path = join(app.getPath('userData'), 'queue.json')) {
+  constructor(
+    oldIds: (dir: string) => OldIds,
+    readonly path = join(app.getPath('userData'), 'queue.json')
+  ) {
     // one line: a queue made from a big song table holds thousands of ids
-    const f = open<SavedQueue>(path, 'Queue file', isKnownQueueFile, 1000, 0)
-    this.#data = parseSavedQueue(f.value)
+    const f = open<SavedQueues>(path, 'Queue file', isKnownQueueFile, 1000, 0)
     this.#writer = f.writer
+    if (isOldQueueFile(f.value)) {
+      this.#writer = keepOld(path, f.writer)
+      this.#data = convertQueue(f.value, oldIds(dirname(path)))
+      writeConverted(this.#writer, this.#data)
+    } else this.#data = parseSavedQueues(f.value)
   }
 
-  get(): SavedQueue {
+  get(): SavedQueues {
     return this.#data
   }
 
-  // What plays comes on its own (setPlaying), so a new list keeps it.
+  // The page sends the track queue. What plays comes on its own (setPlaying),
+  // so a new list keeps it.
   setFromPage(raw: unknown): void {
-    const { kind, station } = this.#data
-    this.#data = applyPlaying(parseSavedQueue(raw), kind ? { kind, station } : { kind: 'queue' })
+    this.#data = { ...this.#data, track: parseSavedQueue(raw) }
     this.#writer?.schedule(this.#data)
   }
 
-  // Radio or the queue (ticket 027).
+  // The track queue or the live one (tickets 027, 057).
   setPlaying(raw: unknown): void {
     const next = applyPlaying(this.#data, raw)
     if (next === this.#data) return
@@ -103,10 +157,10 @@ export class QueueFile {
   }
 
   // False when the new ids are not on disk (see PlaylistFile.moveIds).
-  moveIds(moves: IdMoves): boolean {
-    const moved = moveQueue(this.#data, moves)
+  moveIds(plugin: PluginId, moves: IdMoves): boolean {
+    const moved = moveQueue(this.#data, plugin, moves)
     if (moved === this.#data) return true
-    this.#data = parseSavedQueue(moved)
+    this.#data = parseSavedQueues(moved)
     if (!this.#writer) return false
     this.#writer.schedule(this.#data)
     return this.#writer.flushSync()
@@ -114,9 +168,9 @@ export class QueueFile {
 
   // The current song and position come on their own and more often, without the whole list.
   setPlace(raw: unknown): void {
-    const next = applyPlace(this.#data, raw)
-    if (next === this.#data) return
-    this.#data = next
+    const track = applyPlace(this.#data.track, raw)
+    if (track === this.#data.track) return
+    this.#data = { ...this.#data, track }
     this.#writer?.schedule(this.#data)
   }
 

@@ -32,7 +32,7 @@
     <button class="row" onclick={() => open(p.id)}>
       <span class="ic"><Icon name="list" size={20} /></span>
       <span class="nm" title={p.name}>{p.name}</span>
-      <span class="n">{p.trackIds.length} {p.trackIds.length === 1 ? 'song' : 'songs'}</span>
+      <span class="n">{p.items.length} {p.items.length === 1 ? 'song' : 'songs'}</span>
     </button>
   {/each}
   {#if playlists.list.length && !shown.length}

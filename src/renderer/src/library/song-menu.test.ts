@@ -1,12 +1,13 @@
 // The song menu's entries, with the queue faked.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { queueLink } from '../../../shared/saved-queue'
 import type { Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 import type { MenuEntry, MenuItem } from '../stores/menu.svelte'
 
 const fake = vi.hoisted(() => ({
   calls: [] as string[],
-  items: ['a', 'b', 'c'],
+  items: ['files:a', 'files:b', 'files:c'],
   index: 1,
   hasLibrary: true
 }))
@@ -28,22 +29,26 @@ vi.mock('../stores/queue.svelte', () => ({
     get index() {
       return fake.index
     },
-    playNext: (ids: string[], from = '', link?: { kind: string; id: string }) =>
-      fake.calls.push(`next ${ids} ${from}` + (link ? ` ${link.kind}:${link.id}` : '')),
-    append: (ids: string[], from = '', link?: { kind: string; id: string }) =>
-      fake.calls.push(`add ${ids} ${from}` + (link ? ` ${link.kind}:${link.id}` : '')),
+    playNext: (ids: string[], from = '', link?: { plugin: string; page: string }) =>
+      fake.calls.push(`next ${ids} ${from}` + (link ? ` ${link.plugin}:${link.page}` : '')),
+    append: (ids: string[], from = '', link?: { plugin: string; page: string }) =>
+      fake.calls.push(`add ${ids} ${from}` + (link ? ` ${link.plugin}:${link.page}` : '')),
     remove: (i: number) => fake.calls.push(`remove ${i}`),
     playRowNext: (i: number) => fake.calls.push(`row next ${i}`)
   }
 }))
-const showFolder = vi.fn(async (parts: string[]) => parts.length > 0)
-vi.stubGlobal('window', { playlistsApi: { save: vi.fn() }, libraryApi: { showFolder } })
+// radio's page half hears main from the start
+vi.stubGlobal('window', {
+  playlistsApi: { save: vi.fn() },
+  radioApi: { onTitle: () => () => {}, onLogo: () => () => {}, onCover: () => () => {} }
+})
 
 const { playlistMenu, songMenu, sections } = await import('./song-menu')
 const { playlists } = await import('../stores/playlists.svelte')
 const { library } = await import('../stores/library.svelte')
+const { files } = await import('../plugins/files/store.svelte')
 const { layout } = await import('../stores/layout.svelte')
-const { notice } = await import('../stores/notice.svelte')
+const { settings } = await import('../stores/settings.svelte')
 
 const labels = (entries: MenuEntry[]): string[] =>
   entries.map((e) => (e === 'line' ? '---' : 'heading' in e ? `# ${e.heading}` : e.label))
@@ -54,15 +59,15 @@ const pick = (entries: MenuEntry[], label: string): void =>
 
 beforeEach(() => {
   fake.calls = []
-  fake.items = ['a', 'b', 'c']
+  fake.items = ['files:a', 'files:b', 'files:c']
   fake.index = 1
   fake.hasLibrary = true
-  playlists.load([{ id: 'p1', name: 'Mix', trackIds: [] }])
+  playlists.load([{ id: 'p1', name: 'Mix', items: [] }])
 })
 
 describe('songMenu', () => {
   it('starts with the queue, then the playlists', () => {
-    expect(labels(songMenu(['x']))).toEqual([
+    expect(labels(songMenu(['files:x']))).toEqual([
       'Play next',
       'Add to queue',
       '---',
@@ -73,21 +78,27 @@ describe('songMenu', () => {
   })
 
   it('hands the songs and their source to the queue', () => {
-    const m = songMenu(['x', 'y'], { from: 'Blue Hours' })
+    const m = songMenu(['files:x', 'files:y'], { from: 'Blue Hours' })
     pick(m, 'Play next')
     pick(m, 'Add to queue')
-    expect(fake.calls).toEqual(['next x,y Blue Hours', 'add x,y Blue Hours'])
+    expect(fake.calls).toEqual([
+      'next files:x,files:y Blue Hours',
+      'add files:x,files:y Blue Hours'
+    ])
   })
 
   it('names where the songs come from, so "From" can open it (ticket 040)', () => {
-    const m = songMenu(['x'], { from: 'Mix', link: { kind: 'playlist', id: 'p1' } })
+    const m = songMenu(['files:x'], { from: 'Mix', link: queueLink('playlist', 'p1') })
     pick(m, 'Play next')
     pick(m, 'Add to queue')
-    expect(fake.calls).toEqual(['next x Mix playlist:p1', 'add x Mix playlist:p1'])
+    expect(fake.calls).toEqual([
+      'next files:x Mix core:playlist/p1',
+      'add files:x Mix core:playlist/p1'
+    ])
   })
 
   it('a queue row can leave the queue or move up to play next', () => {
-    const m = songMenu(['c'], { queueRow: 2 })
+    const m = songMenu(['files:c'], { queueRow: 2 })
     expect(labels(m).slice(0, 3)).toEqual(['Remove from queue', 'Play next', '---'])
     pick(m, 'Remove from queue')
     pick(m, 'Play next')
@@ -95,15 +106,15 @@ describe('songMenu', () => {
   })
 
   it('the current song has no Play next', () => {
-    expect(labels(songMenu(['b'], { queueRow: 1 })).slice(0, 2)).toEqual([
+    expect(labels(songMenu(['files:b'], { queueRow: 1 })).slice(0, 2)).toEqual([
       'Remove from queue',
       '---'
     ])
   })
 
   it('does nothing to a queue row that moved away since the menu opened', () => {
-    const m = songMenu(['c'], { queueRow: 2 })
-    fake.items = ['c', 'a', 'b']
+    const m = songMenu(['files:c'], { queueRow: 2 })
+    fake.items = ['files:c', 'files:a', 'files:b']
     pick(m, 'Remove from queue')
     pick(m, 'Play next')
     expect(fake.calls).toEqual([])
@@ -111,14 +122,14 @@ describe('songMenu', () => {
 
   it('rows of a playlist can leave it, and it is not offered to add to', () => {
     playlists.load([
-      { id: 'p1', name: 'Mix', trackIds: ['x'] },
-      { id: 'p2', name: 'Other', trackIds: [] }
+      { id: 'p1', name: 'Mix', items: ['files:x'] },
+      { id: 'p2', name: 'Other', items: [] }
     ])
-    const m = labels(songMenu(['x'], { inPlaylist: 'p1' }))
+    const m = labels(songMenu(['files:x'], { inPlaylist: 'p1' }))
     expect(m).not.toContain('Mix')
     expect(m.at(-1)).toBe('Remove from this playlist')
     // the page's own menu: not offered, and nothing to remove
-    const page = labels(songMenu(['x'], { onPlaylist: 'p1' }))
+    const page = labels(songMenu(['files:x'], { onPlaylist: 'p1' }))
     expect(page).not.toContain('Mix')
     expect(page).not.toContain('Remove from this playlist')
   })
@@ -126,8 +137,8 @@ describe('songMenu', () => {
 
 describe('playlistMenu', () => {
   it('is only the playlist part, for the "Add to playlist" buttons', () => {
-    expect(labels(playlistMenu(['x']))).toEqual(['# Add to playlist', 'Mix', 'New playlist'])
-    expect(labels(playlistMenu(['x'], { onPlaylist: 'p1' }))).toEqual([
+    expect(labels(playlistMenu(['files:x']))).toEqual(['# Add to playlist', 'Mix', 'New playlist'])
+    expect(labels(playlistMenu(['files:x'], { onPlaylist: 'p1' }))).toEqual([
       '# Add to playlist',
       'New playlist'
     ])
@@ -167,13 +178,13 @@ describe('Go to (ticket 040)', () => {
       codec: '',
       folder: 0
     })
-    library.load({ albums: [album], tracks: [track('s1'), track('s2')], folders: [] })
-    library.go({ chip: 'radio' })
+    files.load({ albums: [album], tracks: [track('s1'), track('s2')], folders: [] })
+    library.go({ tab: 'radio' })
   }
 
   it('one song goes to its album and its artist, between the queue and the playlists', () => {
     song('Marina Vale')
-    const m = songMenu(['s2'])
+    const m = songMenu(['files:s2'])
     expect(labels(m)).toEqual([
       'Play next',
       'Add to queue',
@@ -186,16 +197,20 @@ describe('Go to (ticket 040)', () => {
       'New playlist'
     ])
     pick(m, 'Go to album')
-    expect([library.chip, library.open, library.landing]).toEqual(['albums', 'al', { song: 's2' }])
+    expect([library.tab, library.page('albums'), library.landing]).toEqual([
+      'albums',
+      'album/al',
+      { song: 's2' }
+    ])
     // the queue's drawer closes, so the page shows
     expect(layout.showQueue).toBe(false)
     pick(m, 'Go to artist')
-    expect([library.chip, library.artist]).toEqual(['artists', 'marinavale'])
+    expect([library.tab, library.page('artists')]).toEqual(['artists', 'artist/marinavale'])
   })
 
   it('a split artist gives one item per artist', () => {
     song('A, B', ['A', 'B'])
-    const m = songMenu(['s1'], { queueRow: 1 })
+    const m = songMenu(['files:s1'], { queueRow: 1 })
     expect(labels(m).slice(0, 6)).toEqual([
       'Remove from queue',
       '---',
@@ -205,57 +220,43 @@ describe('Go to (ticket 040)', () => {
       '---'
     ])
     pick(m, 'Go to B')
-    expect(library.artist).toBe('b')
+    expect(library.page('artists')).toBe('artist/b')
   })
 
-  it('an MFP song goes to its episode, and not to an artist (ticket 052)', () => {
-    const base = {
-      year: 0,
-      palette: defaultPalettes,
-      cover: '',
-      coverLarge: ''
-    }
-    const t = (id: string, albumId: string, online?: 'mfp'): Track => ({
-      id,
-      title: id,
-      duration: 1,
-      albumId,
-      artist: 'Marina Vale',
-      album: albumId,
-      no: 1,
-      disc: 1,
-      codec: '',
-      folder: online ? -1 : 0,
-      ...(online ? { online } : {})
+  it('an MFP song goes to its episode, and not to an artist (ticket 052)', async () => {
+    const { mfp } = await import('../plugins/mfp/store.svelte')
+    const songs = [{ id: 'm1', title: 'M', artist: 'Marina Vale', start: 0, length: 1 }]
+    mfp.load({
+      episodes: [
+        { id: 'ep', title: '01: Mixer', artist: 'Mixer', year: 0, link: '', length: 1, songs }
+      ]
     })
-    library.load({
-      albums: [
-        { ...base, id: 'al', title: 'Blue Hours', artist: 'Marina Vale', trackIds: ['s1'] },
-        { ...base, id: 'ep', title: '01: Mixer', artist: 'Mixer', trackIds: ['m1'], online: 'mfp' }
-      ],
-      tracks: [t('s1', 'al'), t('m1', 'ep', 'mfp')],
-      folders: []
-    })
-    const m = songMenu(['m1'])
+    settings.plugins.mfp = true
+    const m = songMenu(['mfp:m1'])
     expect(labels(m)).toContain('Go to album')
     expect(labels(m)).not.toContain('Go to artist')
+    expect(labels(m)).not.toContain('Show in file manager')
     pick(m, 'Go to album')
-    expect([library.chip, library.episode, library.landing]).toEqual(['mfp', 'ep', { song: 'm1' }])
+    expect([library.tab, library.page('mfp'), library.landing]).toEqual([
+      'mfp',
+      'episode/ep',
+      { song: 'm1' }
+    ])
   })
 
   it('is left out for several songs, and where there is no library (Focus)', () => {
     song('Marina Vale')
-    expect(labels(songMenu(['s1', 's2']))).not.toContain('Go to album')
+    expect(labels(songMenu(['files:s1', 'files:s2']))).not.toContain('Go to album')
     fake.hasLibrary = false
-    expect(labels(songMenu(['s1']))).not.toContain('Go to album')
+    expect(labels(songMenu(['files:s1']))).not.toContain('Go to album')
   })
 })
 
-describe('Show in file manager', () => {
-  const folder = ['/home/me/Music', 'Rock', 'A']
+describe("the songs' plugin's entries", () => {
+  const show = { label: 'Show in file manager', run: vi.fn() }
 
-  it('comes before the playlists when the songs have a folder', () => {
-    const entries = songMenu(['a', 'b'], { folder })
+  it('come after Go to and before the playlists', () => {
+    const entries = songMenu(['files:a', 'files:b'], { actions: [show] })
     expect(labels(entries).slice(0, 5)).toEqual([
       'Play next',
       'Add to queue',
@@ -264,17 +265,10 @@ describe('Show in file manager', () => {
       '---'
     ])
     pick(entries, 'Show in file manager')
-    expect(showFolder).toHaveBeenLastCalledWith(folder)
+    expect(show.run).toHaveBeenCalledOnce()
   })
 
-  it('is left out with no folder', () => {
-    expect(labels(songMenu(['a']))).not.toContain('Show in file manager')
-  })
-
-  it('says so when the folder could not be opened', async () => {
-    showFolder.mockResolvedValueOnce(false)
-    pick(songMenu(['a'], { folder }), 'Show in file manager')
-    await vi.waitFor(() => expect(notice.text).toBe("Couldn't open /home/me/Music/Rock/A"))
-    notice.hide()
+  it('are left out when the block gives none', () => {
+    expect(labels(songMenu(['files:a']))).not.toContain('Show in file manager')
   })
 })

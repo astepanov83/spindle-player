@@ -121,14 +121,14 @@ export function groupsLine(
             : sameDay(g.at, now + 24 * 3600_000)
               ? 'tomorrow'
               : `${new Date(g.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-      return { text: `Waiting for the limit, goes on ${when}` }
+      return { text: `Waiting for the limit. Will go on ${when}.` }
     }
     case 'stopped':
       return {
         text:
           g.error === 'network'
-            ? 'Could not reach the service. Tries again after the next scan.'
-            : 'The service gave no usable answer. Tries again after the next scan.',
+            ? 'Could not reach the service. Will try again after the next scan.'
+            : 'The service gave no usable answer. Will try again after the next scan.',
         error: true
       }
   }

@@ -4,7 +4,7 @@ import { createHash, randomBytes } from 'crypto'
 import type { Answer, JsonRequest } from '../../../../shared/ai'
 import type { SettingBlock } from '../../../../shared/setting-blocks'
 import type { ModelInfo, Provider, ProviderContext } from '../../types'
-import { api, NetworkError, send, site } from './api'
+import { api, askTimeoutMs, NetworkError, send, site } from './api'
 import { answerFor, appName, chatUrl, requestBody } from './ask'
 import { parseModels } from './models'
 
@@ -176,7 +176,8 @@ export class OpenRouterProvider implements Provider {
           },
           body: JSON.stringify(requestBody(model, req))
         },
-        ctl.signal
+        ctl.signal,
+        askTimeoutMs
       )
       const { answer, noEndpoints } = answerFor(
         model,
@@ -196,8 +197,9 @@ export class OpenRouterProvider implements Provider {
       // stop() aborted it, not the caller
       if (ctl.signal.aborted && !signal.aborted) return { ok: false, error: 'off' }
       signal.throwIfAborted()
+      // too slow is this model's fault, so the next one is tried
       if (error instanceof NetworkError)
-        return { ok: false, error: 'network', detail: error.message }
+        return { ok: false, error: error.timedOut ? 'failed' : 'network', detail: error.message }
       throw error
     } finally {
       this.#running.delete(ctl)

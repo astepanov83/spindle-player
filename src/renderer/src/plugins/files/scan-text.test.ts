@@ -319,23 +319,23 @@ describe('groupsLine', () => {
 
   it('says when it goes on after a limit', () => {
     expect(groupsLine({ state: 'limit', at }, now)?.text).toBe(
-      'Waiting for the limit, goes on at 10:42'
+      'Waiting for the limit. Will go on at 10:42.'
     )
     expect(groupsLine({ state: 'limit', at: at + 24 * 3600_000 }, now)?.text).toBe(
-      'Waiting for the limit, goes on tomorrow'
+      'Waiting for the limit. Will go on tomorrow.'
     )
     expect(groupsLine({ state: 'limit' }, now)?.text).toBe(
-      'Waiting for the limit, goes on after the next scan'
+      'Waiting for the limit. Will go on after the next scan.'
     )
   })
 
   it('says a run stopped, as an error', () => {
     expect(groupsLine({ state: 'stopped', error: 'network' })).toEqual({
-      text: 'Could not reach the service. Tries again after the next scan.',
+      text: 'Could not reach the service. Will try again after the next scan.',
       error: true
     })
     expect(groupsLine({ state: 'stopped', error: 'failed' })?.text).toBe(
-      'The service gave no usable answer. Tries again after the next scan.'
+      'The service gave no usable answer. Will try again after the next scan.'
     )
   })
 })

@@ -3,6 +3,8 @@ export const site = 'https://openrouter.ai'
 export const api = `${site}/api/v1`
 
 const timeoutMs = 60_000
+// free models are often queued, so an answer gets longer than a plain request
+export const askTimeoutMs = 120_000
 
 export interface Reply {
   status: number
@@ -11,7 +13,14 @@ export interface Reply {
 }
 
 // The fetch failed or ran out of time. The text never has a key in it.
-export class NetworkError extends Error {}
+export class NetworkError extends Error {
+  constructor(
+    message: string,
+    readonly timedOut = false
+  ) {
+    super(message)
+  }
+}
 
 // The caller's `signal` aborting rethrows its reason, so the caller can tell a
 // cancel from a network error.
@@ -37,7 +46,7 @@ export async function send(
   } catch (error) {
     signal.throwIfAborted()
     const why = timedOut ? `no answer in ${ms / 1000} s` : String((error as Error).message ?? error)
-    throw new NetworkError(why)
+    throw new NetworkError(why, timedOut)
   } finally {
     clearTimeout(timer)
     signal.removeEventListener('abort', onAbort)

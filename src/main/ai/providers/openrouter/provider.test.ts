@@ -472,7 +472,8 @@ describe('ask', () => {
     expect(await ask(t)).toMatchObject({ ok: false, error: 'network', detail: 'ECONNRESET' })
   })
 
-  it('maps a request with no answer in 60 s to network', async () => {
+  // a slow free model is that model's problem: the service tries the next one
+  it('maps a request with no answer in 120 s to failed', async () => {
     vi.useFakeTimers()
     try {
       const t = setup({ key: 'k' })
@@ -483,11 +484,16 @@ describe('ask', () => {
           })
       )
       const pending = ask(t)
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(119_000)
+      let settled = false
+      void pending.then(() => (settled = true))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1_000)
       expect(await pending).toMatchObject({
         ok: false,
-        error: 'network',
-        detail: 'no answer in 60 s'
+        error: 'failed',
+        detail: 'no answer in 120 s'
       })
     } finally {
       vi.useRealTimers()

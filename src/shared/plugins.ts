@@ -1,4 +1,6 @@
+import type { AiTaskInfo } from './ai'
 import type { FilesChannels, LibraryApi } from './plugins/files/ipc'
+import { artistGroupsTask } from './plugins/files/artists-file'
 import type { MfpApi, MfpChannels } from './plugins/mfp/ipc'
 import type { RadioApi, RadioChannels } from './plugins/radio/ipc'
 import { stationIdPattern } from './plugins/radio/ids'
@@ -24,6 +26,8 @@ export interface PluginInfo {
   liveIds?: RegExp
   // the settings field that turned it on before `plugins`, still read
   oldSwitch?: string
+  // features of it that ask a language model (spec "AI models")
+  aiTasks?: AiTaskInfo[]
 }
 
 // Also the order of the switches and tabs.
@@ -35,7 +39,16 @@ export const plugins: PluginInfo[] = [
     defaultOn: true,
     itemKind: 'track',
     offText: 'Music files are off',
-    linkKinds: ['album', 'artist', 'folder']
+    linkKinds: ['album', 'artist', 'folder'],
+    aiTasks: [
+      {
+        id: artistGroupsTask,
+        name: 'Fix artist names',
+        about:
+          'Joint credits are split into their artists, and spellings of one artist are shown as one.',
+        sends: 'Sends artist names and up to two album titles each to the service.'
+      }
+    ]
   },
   {
     id: 'radio',

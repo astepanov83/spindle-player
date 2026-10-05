@@ -39,7 +39,8 @@ export class FilesPlugin implements MainPlugin {
       ctx.covers.get().cache,
       this.o.keptByOthers,
       ctx.userData,
-      this.#on
+      this.#on,
+      ctx.ai
     )
     this.#library = library
     ctx.covers.provide({
@@ -59,6 +60,7 @@ export class FilesPlugin implements MainPlugin {
     page.on(LibraryChannel.removeFolder, (_, path) => library.removeFolder(path))
     page.on(LibraryChannel.rescan, () => library.scan(true))
     page.on(LibraryChannel.setArtists, (_, changes) => library.setArtists(changes))
+    page.on(LibraryChannel.aiRecheck, () => library.aiRecheck())
     page.handle(LibraryChannel.showFolder, (_, parts) =>
       this.#on ? showFolder(parts, settings.get().folders) : false
     )

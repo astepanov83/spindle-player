@@ -1,6 +1,6 @@
 // Builds the albums and tracks the page shows from the index.
 import { basename } from 'path'
-import { creditOf, type ArtistOverrides } from '../../../shared/plugins/files/artist-overrides'
+import { creditOf, type Shown } from '../../../shared/plugins/files/artists-file'
 import { artistKey, listArtists, namesOf } from '../../../shared/plugins/files/artists'
 import {
   coverUrls,
@@ -152,7 +152,8 @@ function withoutTracks(al: Album & { tracks: Track[] }): Album {
 // A few of the artist's titles to check a found artist by: two of their
 // albums, then their songs on other albums, then their own songs. Deezer
 // lacks some albums in some countries but has a song of them elsewhere.
-function checksOf(albums: Album[], also: Track[], songs: Track[]): ArtistCheck[] {
+// The artist groups task sends the first two (ticket 068).
+export function checksOf(albums: Album[], also: Track[], songs: Track[]): ArtistCheck[] {
   const out: ArtistCheck[] = []
   const seen = new Set<string>()
   const add = (kind: ArtistCheck['kind'], title: string): void => {
@@ -197,16 +198,16 @@ function artistsOf(
 }
 
 // `roots` are the music folders, for the Folders view. `photos` are the
-// artist photos found online, by artist key. `overrides` change the artist
-// names shown (ticket 024); albums are still grouped and looked up online
-// by the tags.
+// artist photos found online, by artist key. `names` changes the artist
+// names shown (artists.json, see resolve); albums are still grouped and
+// looked up online by the tags.
 export function buildLibrary(
   ix: LibraryIndex,
   hasCover: (hash: string) => boolean,
   fetched: Fetched = new Map(),
   roots: string[] = [],
   photos: Fetched = new Map(),
-  overrides: ArtistOverrides = new Map()
+  names: Map<string, Shown> = new Map()
 ): BuiltLibrary {
   const groups = new Map<string, Group>()
   const paths = new Map<string, string>()
@@ -268,7 +269,7 @@ export function buildLibrary(
         title: e.title ?? fromName,
         duration: e.duration,
         albumId: id,
-        ...creditOf(e.artist ?? e.albumArtist ?? fallbackArtist, overrides),
+        ...creditOf(e.artist ?? e.albumArtist ?? fallbackArtist, names),
         album: title,
         no,
         disc,
@@ -284,7 +285,7 @@ export function buildLibrary(
     albums.push({
       id,
       title,
-      ...creditOf(artist, overrides),
+      ...creditOf(artist, names),
       year: yearOf(entries),
       palette: paletteOf(ix, cover, id),
       ...(cover ? coverUrls(cover) : { cover: '', coverLarge: '' }),

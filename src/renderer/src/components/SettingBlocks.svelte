@@ -4,10 +4,15 @@
   import type { PluginId } from '../../../shared/plugins'
   import { pathEnds } from '../ui/path-ends'
   import { actOnSetting } from '../plugins'
-  import type { SettingBlock } from '../plugins/types'
+  import { ai, actOnAi } from '../ai.svelte'
+  import { aiBlocks, aiTarget } from '../ai-blocks'
+  import type { SettingBlock } from '../../../shared/setting-blocks'
+  import { optionText, shownText, textToSend, type Draft } from './setting-input'
   import Icon from '../ui/Icon.svelte'
   import Spinner from '../ui/Spinner.svelte'
 
+  // ties each label to its box, with more than one of these on the page
+  const uid = $props.id()
   let { plugin, blocks }: { plugin: PluginId; blocks: SettingBlock[] } = $props()
 
   type Button = Extract<SettingBlock, { kind: 'button' }>
@@ -22,7 +27,9 @@
   // reader hears the first line that comes.
   const parts = $derived.by(() => {
     const out: Part[] = []
-    for (const b of blocks) {
+    // an `ai` block becomes its switch and setup, drawn like any other blocks
+    const flat = blocks.flatMap((b) => (b.kind === 'ai' ? aiBlocks(b.task, ai.state) : [b]))
+    for (const b of flat) {
       const last = out[out.length - 1]
       if (b.kind === 'button')
         if (last?.kind === 'buttons') last.buttons.push(b)
@@ -45,8 +52,33 @@
   // The row that is asked to confirm its removal, one at a time.
   let asking: string | null = $state(null)
 
+  // the AI blocks' ids say so; they go to the AI service, not to the plugin
   const act = (id: string, actionId: string, value?: string): void =>
-    actOnSetting(plugin, id, actionId, value)
+    aiTarget(id) ? actOnAi(id, actionId, value) : actOnSetting(plugin, id, actionId, value)
+
+  // What is typed in a text box and not sent yet, by block id, and what was
+  // sent last (so Enter and then blur send once). Secrets are kept apart: the
+  // page drops one as soon as it is sent. `changing`: the secret boxes that
+  // are open again after "Change".
+  let drafts: Record<string, Draft> = $state({})
+  let sent: Record<string, Draft> = {}
+  let secrets: Record<string, string> = $state({})
+  let changing: Record<string, boolean> = $state({})
+
+  function send(id: string, value: string): void {
+    const text = textToSend(drafts[id], value, sent[id])
+    if (text === undefined) return
+    sent[id] = { text, base: value }
+    act(id, 'set', text)
+  }
+
+  function sendSecret(id: string): void {
+    const text = secrets[id]
+    if (!text) return
+    delete secrets[id]
+    changing[id] = false
+    act(id, 'set', text)
+  }
 
   function remove(list: string, row: string): void {
     asking = null
@@ -60,7 +92,7 @@
   {:else if b.kind === 'statuses'}
     <div class="lines" aria-live="polite">
       {#each b.lines as line, j (j)}
-        <p class="hint status">
+        <p class="hint status" class:error={line.error}>
           {#if line.busy}<Spinner />{/if}
           <span>{line.text}</span>
         </p>
@@ -114,15 +146,76 @@
         >
       {/each}
     </div>
-  {:else}
-    <label class="check">
-      <input
-        type="checkbox"
-        checked={b.on}
-        onchange={(e) => act(b.id, 'set', String(e.currentTarget.checked))}
-      />
-      {b.label}
-    </label>
+  {:else if b.kind === 'text'}
+    {@const box = `${uid}-${b.id}`}
+    <div class="field">
+      {#if b.secret && b.saved && !changing[b.id]}
+        <span class="label">{b.label}</span>
+        <div class="saved">
+          <span class="state">Saved</span>
+          <button class="sm pill ghost" disabled={b.disabled} onclick={() => act(b.id, 'remove')}
+            >Remove</button
+          >
+          <button
+            class="sm pill ghost"
+            disabled={b.disabled}
+            onclick={() => (changing[b.id] = true)}>Change</button
+          >
+        </div>
+      {:else}
+        <label class="label" for={box}>{b.label}</label>
+        <input
+          id={box}
+          class="box"
+          type={b.secret ? 'password' : 'text'}
+          autocomplete="off"
+          spellcheck="false"
+          placeholder={b.placeholder}
+          disabled={b.disabled}
+          value={b.secret ? (secrets[b.id] ?? '') : shownText(drafts[b.id], b.value ?? '')}
+          oninput={(e) => {
+            const text = e.currentTarget.value
+            if (b.secret) secrets[b.id] = text
+            else drafts[b.id] = { text, base: b.value ?? '' }
+          }}
+          onkeydown={(e) => {
+            if (e.key !== 'Enter') return
+            if (b.secret) sendSecret(b.id)
+            else send(b.id, b.value ?? '')
+          }}
+          onblur={() => (b.secret ? sendSecret(b.id) : send(b.id, b.value ?? ''))}
+        />
+      {/if}
+    </div>
+  {:else if b.kind === 'choice'}
+    {@const box = `${uid}-${b.id}`}
+    <div class="field">
+      <label class="label" for={box}>{b.label}</label>
+      <select
+        id={box}
+        class="box"
+        disabled={b.disabled}
+        value={b.value}
+        onchange={(e) => act(b.id, 'set', e.currentTarget.value)}
+      >
+        {#each b.options as o (o.id)}
+          <option value={o.id} selected={o.id === b.value}>{optionText(o)}</option>
+        {/each}
+      </select>
+    </div>
+  {:else if b.kind === 'switch'}
+    <div class="field">
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={b.on}
+          aria-describedby={b.about ? `${uid}-${b.id}-about` : undefined}
+          onchange={(e) => act(b.id, 'set', String(e.currentTarget.checked))}
+        />
+        {b.label}
+      </label>
+      {#if b.about}<p class="hint" id="{uid}-{b.id}-about">{b.about}</p>{/if}
+    </div>
   {/if}
 {/each}
 
@@ -227,6 +320,48 @@
   .btn:disabled {
     color: var(--ink-3);
     cursor: default;
+  }
+  .status.error {
+    color: var(--warn);
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .label {
+    font-size: var(--text-s);
+    color: var(--ink-2);
+  }
+  .box {
+    height: 34px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--field);
+    color: var(--ink);
+    font: var(--text-s) var(--ui);
+  }
+  select.box {
+    cursor: pointer;
+  }
+  .box:disabled {
+    color: var(--ink-3);
+    cursor: default;
+  }
+  .box::placeholder {
+    color: var(--ink-3);
+  }
+  .saved {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    min-height: 34px;
+  }
+  .state {
+    flex: 1;
+    font-size: var(--text-s);
+    color: var(--ink);
   }
   .check {
     display: flex;

@@ -7,10 +7,11 @@ export interface Track {
   // seconds
   duration: number
   albumId: string
-  // the tag, or what an artist override made of it (see ArtistCredit)
+  // the tag, or what artists.json made of it (see ArtistCredit)
   artist: string
   artists?: string[]
   artistTag?: string
+  grouped?: true
   album: string
   // track number, 1-based; 0 when unknown
   no: number
@@ -37,14 +38,17 @@ export interface Folder {
   parent: number
 }
 
-// An artist credit after the overrides (ticket 024). `artist` is what is
-// shown: the tag, a new name, or the names of a split joined by ", ".
+// An artist credit after artists.json (ticket 069): your renames and splits,
+// and the AI's groups while that task is on. `artist` is what is shown: the
+// tag, a new name, or the names of a split joined by ", ".
 export interface ArtistCredit {
   artist: string
-  // the names, only when an override split the tag into several
+  // the names, only when a split made the tag several artists
   artists?: string[]
-  // the tag as written, only when an override changed it
+  // the tag as written, only when a link changed it
   artistTag?: string
+  // set when the AI's links changed the tag (ticket 068), none of yours
+  grouped?: true
 }
 
 // A cover and the colors picked from it. An Album is one too.
@@ -96,6 +100,7 @@ export interface Album extends Art {
   artist: string
   artists?: string[]
   artistTag?: string
+  grouped?: true
   // 0 when unknown
   year: number
   trackIds: string[]
@@ -134,6 +139,18 @@ export interface FetchStatus extends FetchCounts {
   artists?: FetchCounts
 }
 
+// The artist groups task (ticket 068), as the library process last ran it.
+export type GroupsStatus =
+  // step: splitting joint credits, then matching spellings (ticket 070);
+  // checked: names asked about so far in this step, of total
+  | { state: 'running'; step: 'split' | 'join'; checked: number; total: number }
+  // grouped: tags given a new AI link this run, splits too; at: when it ended (ms since 1970)
+  | { state: 'done'; grouped: number; at: number }
+  // a rate or daily limit; at: when it goes on, when known
+  | { state: 'limit'; at?: number }
+  // stopped this run; the next finished scan tries again
+  | { state: 'stopped'; error: 'network' | 'failed' }
+
 export interface ScanStatus {
   folders: string[]
   phase: ScanPhase
@@ -158,4 +175,6 @@ export interface ScanStatus {
   settingsUnreadable?: boolean
   // the online cover lookup; missing while it is off
   fetch?: FetchStatus
+  // missing while the task is off and before it first runs
+  groups?: GroupsStatus
 }

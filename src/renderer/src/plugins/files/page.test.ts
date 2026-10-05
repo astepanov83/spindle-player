@@ -4,6 +4,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Album, LibraryData, Track } from '../../../../shared/library'
 import { defaultPalettes } from '../../../../shared/palette'
+import {
+  applyChanges,
+  creditOf,
+  resolve,
+  type ArtistsFile
+} from '../../../../shared/plugins/files/artists-file'
 import type { Block, HeadBlock, PageRow, RowsBlock, SongsBlock, TilesBlock } from '../types'
 
 const api = {
@@ -306,5 +312,53 @@ describe('pages', () => {
     expect(files.folderSort).toEqual({ k: 'd', dir: 1 })
     page.filesAct('artist/junopark', 'sort', 'al')
     expect(files.artistSort).toEqual({ k: 'al', dir: 1 })
+  })
+})
+
+describe('a grouped tag (ticket 068)', () => {
+  // "Marina Vail" is grouped with "Marina Vale" by the artist groups task
+  beforeEach(() => {
+    const d = lib()
+    const grouped = { artist: 'Marina Vale', artistTag: 'Marina Vail', grouped: true as const }
+    d.albums.push(album('c', ['c1'], grouped))
+    d.tracks.push(track('c1', 'c', grouped))
+    files.load(d)
+  })
+
+  it('is marked "(grouped)" under the name, with Use tag', () => {
+    const [h] = page.filesPage('artists', 'artist/marinavale', '')
+    expect(head(h).note).toEqual({
+      text: 'From tags:',
+      items: [
+        { text: 'Marina Vale' },
+        {
+          text: 'Marina Vail (grouped)',
+          action: { id: 'use-tag', label: 'Use tag', value: 'marinavail' }
+        }
+      ]
+    })
+  })
+
+  it("Use tag saves the tag's own name, so the group can't take it again", () => {
+    page.filesAct('artist/marinavale', 'use-tag', 'marinavail')
+    const sent = api.setArtists.mock.calls[0][0] as Record<string, null>
+    expect(sent).toEqual({ marinavail: null })
+    // the library built from artists.json with that change, the AI on
+    const f: ArtistsFile = {
+      artists: [{ name: 'Marina Vale', nameBy: 'ai', tags: [{ tag: 'Marina Vail', by: 'ai' }] }]
+    }
+    applyChanges(f, sent, (k) => (k === 'marinavail' ? 'Marina Vail' : undefined))
+    const d = lib()
+    const credit = creditOf('Marina Vail', resolve(f, true))
+    d.albums.push(album('c', ['c1'], credit))
+    d.tracks.push(track('c1', 'c', credit))
+    files.load(d)
+    // its own artist, from the tag as it is: no "From tags" line to undo it
+    const [h] = page.filesPage('artists', 'artist/marinavail', '')
+    expect(head(h).title).toBe('Marina Vail')
+    expect(head(h).note).toBeUndefined()
+    expect(files.getArtist('marinavale')?.tags).toEqual([
+      { key: 'marinavale', name: 'Marina Vale' }
+    ])
   })
 })

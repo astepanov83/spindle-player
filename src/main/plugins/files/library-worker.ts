@@ -4,18 +4,39 @@
 // never blocks it. Its own process means its own libuv pool: slow NAS reads here
 // can't hold up main's audio requests and saves.
 import { hash, randomBytes } from 'crypto'
+import { existsSync, renameSync } from 'fs'
 import { readdir, readFile, rm, stat } from 'fs/promises'
 import { basename, dirname, join } from 'path'
+import type { ArtistChanges } from '../../../shared/plugins/files/artist-edit'
 import {
+  addAsked,
+  aiKeys,
   applyChanges,
-  dropUnused,
-  knownOverrides,
-  parseOverrides,
-  serializeOverrides,
-  tagKeys,
-  type ArtistChanges,
-  type ArtistOverrides
-} from '../../../shared/plugins/files/artist-overrides'
+  artistGroupsTask,
+  cacheKeys,
+  convertOld,
+  knownArtists,
+  knownCache,
+  noArtists,
+  noCache,
+  parseArtists,
+  parseCache,
+  parseOldGroups,
+  parseOldOverrides,
+  prune,
+  pruneCache,
+  resolve,
+  serializeArtists,
+  artistsText,
+  serializeCache,
+  tagSpellings,
+  usedKeys,
+  yourKeys,
+  type ArtistAiCache,
+  type ArtistsData,
+  type ArtistsFile,
+  type Spelling
+} from '../../../shared/plugins/files/artists-file'
 import type { ScanStatus } from '../../../shared/library'
 import type { CoverSource } from '../../../shared/settings'
 import { JsonFileWriter, openJsonFile, readJsonFile } from '../../json-file'
@@ -45,6 +66,9 @@ import { ScanChain, Stopped } from './scan-chain'
 import { confirmMoves } from './moves'
 import { mergeMoves, type IdMoves } from '../../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
+import { AiOverMessages } from './ai-messages'
+import { promptNumber, taskNames } from './group-artists'
+import { fullCheckDue, groupArtists, limitWaitMs, startFullCheck } from './group-artists-job'
 import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from '../../covers/cover-names'
 import { CoverFetcher } from './cover-fetch'
@@ -88,8 +112,8 @@ const statPace = new Pacer(16, 2, false, undefined, undefined, turns)
 const readPace = new Pacer(4, 1, true, undefined, undefined, turns)
 
 // Music files is on. Off: no scan, no album or artist lookup, and the index,
-// fetched-covers.json and artist-overrides.json are not written. The radio's
-// song cover lookups go on (see 'set-on').
+// fetched-covers.json, artists.json and artist-ai-cache.json are not
+// written. The radio's song cover lookups go on (see 'set-on').
 let on = true
 
 let playing = false
@@ -300,38 +324,260 @@ async function startFetcher(s: WorkerStart): Promise<void> {
   setFetch(opt.on, opt.sources)
 }
 
-// --- artist names changed by hand (ticket 024) ---
+// --- who is who: artists.json (ticket 069) ---
 
-let overrides: ArtistOverrides = new Map()
+let artists: ArtistsFile = noArtists()
 // none when the file could not be read: it may still be fine, so it is never replaced
-let overridesWriter: JsonFileWriter<unknown> | undefined
+let artistsWriter: JsonFileWriter<ArtistsData> | undefined
+// the tags already sent to the model (artist-ai-cache.json)
+let aiCache: ArtistAiCache = noCache(promptNumber)
+let cacheWriter: JsonFileWriter<unknown> | undefined
+// AiClient.on and AiClient.enabled of the files plugin's tasks, from main (see 'ai-on')
+let aiOn: Record<string, boolean> = {}
+let aiEnabled: Record<string, boolean> = {}
+// each tag key's spelling in the library, from the last build
+let spellings = new Map<string, string>()
+const spelling: Spelling = (k) => spellings.get(k)
 
 // A broken file or one of an unknown version is copied aside before it is
-// written again (see openJsonFile): these took the user's time to make.
-function loadOverrides(s: WorkerStart): void {
-  const f = openJsonFile(s.overridesPath, 'Artist overrides', knownOverrides)
-  overrides = parseOverrides(f.value)
+// written again (see openJsonFile): these took the user's time to make. True
+// when artists.json was there, and whether none of it could be used.
+function loadArtists(s: WorkerStart): { had: boolean; unusable: boolean } {
+  const had = existsSync(s.artistsPath)
+  const f = openJsonFile(s.artistsPath, 'Artists', knownArtists)
+  artists = parseArtists(f.value)
   if (f.canWrite)
-    overridesWriter = new JsonFileWriter<unknown>(s.overridesPath, 1000, (e) =>
-      log(`Could not save ${s.overridesPath}: ${e}`)
+    artistsWriter = new JsonFileWriter<ArtistsData>(
+      s.artistsPath,
+      1000,
+      (e) => log(`Could not save ${s.artistsPath}: ${e}`),
+      artistsText
     )
+  const c = openJsonFile(s.aiCachePath, 'Artist AI cache', knownCache)
+  aiCache = parseCache(c.value, promptNumber)
+  if (c.canWrite)
+    cacheWriter = new JsonFileWriter<unknown>(s.aiCachePath, 1000, (e) =>
+      log(`Could not save ${s.aiCachePath}: ${e}`)
+    )
+  return { had, unusable: had && !knownArtists(f.value) }
 }
 
-const saveOverrides = (): void => {
-  if (on) overridesWriter?.schedule(serializeOverrides(overrides))
+const saveArtists = (): void => {
+  if (on) artistsWriter?.schedule(serializeArtists(artists))
 }
 
-function setOverrides(c: ArtistChanges): void {
-  if (!on || !applyChanges(overrides, c)) return
-  saveOverrides()
+const saveCache = (): void => {
+  if (on) cacheWriter?.schedule(serializeCache(aiCache))
+}
+
+function setArtists(c: ArtistChanges): void {
+  if (!on || !applyChanges(artists, c, spelling)) return
+  saveArtists()
   dirty = true
   publisher.now()
+}
+
+// The old files still to move: write: artists.json came from them, so it is
+// written first. Nothing is written while off, so the move waits for on.
+let oldFiles: { write: boolean } | undefined
+// The index was empty at start, so the move waits for the first finished scan.
+let convertLater = false
+
+// artist-overrides.json (024) and artist-groups.json (068) become
+// artists.json once, at start, after the index is read: tag keys get their
+// spelling from the library. With artists.json there already, they are only
+// moved aside. With no files in the index there are no spellings yet, so the
+// move waits for the first scan that ended (see convertLater). True when
+// artists.json came from them.
+function convertOldFiles(
+  s: WorkerStart,
+  had: boolean,
+  unusable: boolean,
+  scanned: boolean
+): boolean {
+  const o = readJsonFile(s.oldOverridesPath)
+  const g = readJsonFile(s.oldGroupsPath)
+  if (o.kind === 'missing' && g.kind === 'missing') return false
+  // it may still be fine: tried again next start
+  if (o.kind === 'unreadable' || g.kind === 'unreadable') {
+    log(
+      `Old artist files can't be read; not moving them: ${s.oldOverridesPath}, ${s.oldGroupsPath}`
+    )
+    return false
+  }
+  if (!had && !scanned && ix.files.size === 0) {
+    convertLater = true
+    return false
+  }
+  oldFiles = { write: !had }
+  if (had) {
+    if (unusable) log(`${s.artistsPath} can't be used, so the old names stay in the .v1.json files`)
+    moveOldFiles(s)
+    return false
+  }
+  for (const [r, path] of [
+    [o, s.oldOverridesPath],
+    [g, s.oldGroupsPath]
+  ] as const)
+    if (r.kind === 'broken') log(`Old artist file is broken, nothing was taken from it: ${path}`)
+  const old = convertOld(
+    parseOldOverrides(o.kind === 'ok' ? o.value : undefined),
+    parseOldGroups(g.kind === 'ok' ? g.value : undefined),
+    spelling
+  )
+  artists = old.artists
+  addAsked(aiCache.joined, old.cache.joined)
+  log(`Artists: moved the old artist files to ${s.artistsPath}`)
+  moveOldFiles(s)
+  return true
+}
+
+// Renames the old files to *.v1.json, never over one that is there. The new
+// files are on disk first, so a crash in between moves nothing twice.
+function moveOldFiles(s: WorkerStart): void {
+  if (!oldFiles || !on) return
+  const { write } = oldFiles
+  oldFiles = undefined
+  if (write) {
+    // the cache first: if artists.json is written, its asked keys are there too
+    cacheWriter?.schedule(serializeCache(aiCache))
+    cacheWriter?.flushSync()
+    artistsWriter?.schedule(serializeArtists(artists))
+    const ok = artistsWriter?.flushSync() ?? false
+    // the old files stay, so the next start makes artists.json again
+    if (!ok) return
+  }
+  for (const path of [s.oldOverridesPath, s.oldGroupsPath]) {
+    const to = path.replace(/\.json$/, '.v1.json')
+    if (!existsSync(path)) continue
+    if (existsSync(to)) {
+      log(`Not moving ${path}: ${to} is there already`)
+      continue
+    }
+    try {
+      renameSync(path, to)
+    } catch (e) {
+      log(`Could not move ${path}: ${e}`)
+    }
+  }
+}
+
+// --- artist spellings grouped by a model (ticket 068) ---
+
+// The task's AiClient: messages to main, which has the key.
+const ai = new AiOverMessages((m) => post(m))
+// the job running, and the wait for a limit to end
+let groupsJob: AbortController | undefined
+let groupsRetry: ReturnType<typeof setTimeout> | undefined
+
+function setAiOn(tasks: Record<string, boolean>, enabled: Record<string, boolean>): void {
+  const wasOn = !!aiOn[artistGroupsTask]
+  const wasShown = !!aiEnabled[artistGroupsTask]
+  aiOn = tasks
+  aiEnabled = enabled
+  ai.setOn(tasks, enabled)
+  const nowOn = !!aiOn[artistGroupsTask]
+  if (wasOn !== nowOn) {
+    if (nowOn) startGroupsJob()
+    else {
+      stopGroupsJob()
+      setStatus({ groups: undefined })
+    }
+  }
+  if (wasShown === !!aiEnabled[artistGroupsTask] || !aiKeys(artists).size) return
+  dirty = true
+  publisher.now()
+}
+
+// The button: a run going stops, then every name is checked again. While a
+// scan runs the job waits; the saved cache makes the scan's end go on with it.
+function recheckNames(): void {
+  if (!on || !aiOn[artistGroupsTask]) return
+  stopGroupsJob()
+  startFullCheck(artists, aiCache)
+  saveCache()
+  log('Artist groups: checking all names again, asked on the page')
+  startGroupsJob()
+}
+
+function stopGroupsJob(): void {
+  // its progress would stay up; the next run shows its own
+  if (groupsJob && status.groups?.state === 'running') setStatus({ groups: undefined })
+  groupsJob?.abort()
+  groupsJob = undefined
+  clearTimeout(groupsRetry)
+  groupsRetry = undefined
+}
+
+// After a scan that ran to the end, when the task turns on, and when a limit
+// ends. One job at a time; it goes on from the keys already asked. Never while
+// a scan or its prune runs: the library is half built, and the scan's end
+// starts it.
+function startGroupsJob(): void {
+  if (!on || closing || groupsJob || chain.busy || !aiOn[artistGroupsTask]) return
+  clearTimeout(groupsRetry)
+  groupsRetry = undefined
+  // the names come from the library as it is now
+  if (dirty) publisher.now()
+  const stop = new AbortController()
+  groupsJob = stop
+  // a cache from another prompt number loads empty: every name is asked again
+  if (fullCheckDue(artists, aiCache)) {
+    startFullCheck(artists, aiCache)
+    saveCache()
+    log('Artist groups: checking all names again')
+  }
+  groupArtists(
+    {
+      ai,
+      names: taskNames(built.data.albums, built.data.tracks, yourKeys(artists)),
+      artists,
+      cache: aiCache,
+      spelling,
+      saved: () => {
+        saveArtists()
+        saveCache()
+        // setAiOn shows nothing new when there were no groups, so it is done here
+        dirty = true
+        publisher.now()
+      },
+      status: (groups) => setStatus({ groups }),
+      log,
+      now: () => Date.now()
+    },
+    stop.signal
+  )
+    .then(
+      (end) => {
+        if (end.end !== 'limit' || end.retryAt === undefined || stop.signal.aborted) return
+        groupsRetry = setTimeout(startGroupsJob, limitWaitMs(end.retryAt, Date.now()))
+      },
+      (e) => {
+        // a stop throws the abort error; what was saved stays
+        if (!stop.signal.aborted) log(`Artist groups failed: ${e}`)
+      }
+    )
+    .finally(() => {
+      if (groupsJob === stop) groupsJob = undefined
+    })
 }
 
 // Groups albums, for the page and the lookups.
 function build(): void {
   dirty = false
-  built = buildLibrary(ix, (h) => cached.has(h), fetched, status.folders, photos, overrides)
+  built = buildLibrary(
+    ix,
+    (h) => cached.has(h),
+    fetched,
+    status.folders,
+    photos,
+    // While the task is switched off the AI's links are kept but not shown.
+    // A provider that is not ready (a key that lasts until quit, a refused
+    // key) does not hide them: only the job waits for it.
+    resolve(artists, !!aiEnabled[artistGroupsTask])
+  )
+  const track = new Map(built.data.tracks.map((t) => [t.id, t]))
+  spellings = tagSpellings(built.data.albums, (id) => track.get(id))
   let failed = 0
   for (const e of ix.files.values()) if (e.error) failed++
   setStatus({ tracks: built.data.tracks.length, albums: built.data.albums.length, failed })
@@ -658,12 +904,15 @@ function setOn(next: boolean): void {
   if (!next) {
     chain.stop()
     fetcher?.hold()
+    stopGroupsJob()
     saveIndex()
     writer?.flushSync()
     fetchedWriter?.flushSync()
-    overridesWriter?.flushSync()
+    artistsWriter?.flushSync()
+    cacheWriter?.flushSync()
   }
   on = next
+  if (on) moveOldFiles(start)
   if (on && fetchedChangedOff) {
     fetchedChangedOff = false
     saveFetched()
@@ -712,13 +961,14 @@ function movedIds(ids: IdMoves, files: number): void {
 }
 
 // Walks, stats and reads the music folders (see scan-files.ts). New and
-// changed songs reach the page as they are read (publish.ts).
+// changed songs reach the page as they are read (publish.ts). True when it
+// ran to the end; a stopped scan throws.
 async function scan(
   folders: string[],
   retryFailed: boolean,
   gen: number,
   id: number
-): Promise<void> {
+): Promise<boolean> {
   const t0 = performance.now()
   scanStart = t0
   firstSent = undefined
@@ -803,10 +1053,16 @@ async function scan(
   // results of albums and artists that are gone; a failed scan may have missed some
   if (!failed) {
     const albums = dropGone(fetched, new Set(built.data.albums.map((a) => a.id)))
-    const artists = dropGone(photos, new Set(built.artists.map((a) => a.id)))
-    if (albums || artists) saveFetched()
-    const used = tagKeys([...built.data.albums, ...built.data.tracks])
-    if (dropUnused(overrides, used)) saveOverrides()
+    const gonePhotos = dropGone(photos, new Set(built.artists.map((a) => a.id)))
+    if (albums || gonePhotos) saveFetched()
+    const credits = [...built.data.albums, ...built.data.tracks]
+    const used = usedKeys(credits)
+    if (prune(artists, used)) saveArtists()
+    if (pruneCache(aiCache, cacheKeys(artists, used))) saveCache()
+    if (convertLater) {
+      convertLater = false
+      if (convertOldFiles(start, false, false, true)) publisher.now()
+    }
   }
   setStatus({ phase: 'idle', done: 0, total: 0, read: undefined, scanFailed: failed })
   post({ type: 'scanned', id })
@@ -820,6 +1076,21 @@ async function scan(
       firstSent
     )
   )
+  return !failed
+}
+
+// The artist groups job runs once a scan that ran to the end and its prune
+// are done. A newer scan asked for meanwhile keeps the chain busy, so its own
+// end starts the job.
+function scanThenGroups(folders: string[], retryFailed: boolean, id: number): void {
+  let ended = false
+  void chain
+    .request(async (gen) => {
+      ended = await scan(folders, retryFailed, gen, id)
+    })
+    .then(() => {
+      if (ended) startGroupsJob()
+    })
 }
 
 // --- lookups for the protocol ---
@@ -854,6 +1125,9 @@ port.on('message', (e: Electron.MessageEvent) => {
       keptCovers = m.start.keepCovers
       keptEdits++
       on = m.start.on
+      aiOn = m.start.aiOn
+      aiEnabled = m.start.aiEnabled
+      ai.setOn(aiOn, aiEnabled)
       started(m.start)
       pruneWhileOff()
       break
@@ -865,12 +1139,14 @@ port.on('message', (e: Electron.MessageEvent) => {
     case 'scan':
       // main asks for none while off
       if (!on) break
+      // it goes on after this scan, from the keys already asked
+      stopGroupsJob()
       // a manual Rescan looks up every miss again
       if (m.retryFailed) {
         const albums = dropNotFound(fetched)
         if (dropNotFound(photos) || albums) saveFetched()
       }
-      void chain.request((gen) => scan(m.folders, m.retryFailed, gen, m.id))
+      scanThenGroups(m.folders, m.retryFailed, m.id)
       break
     case 'fetch-covers':
       setFetch(m.on, m.sources)
@@ -887,8 +1163,17 @@ port.on('message', (e: Electron.MessageEvent) => {
     case 'set-on':
       setOn(m.on)
       break
-    case 'artist-overrides':
-      void ready.then(() => setOverrides(m.changes))
+    case 'set-artists':
+      void ready.then(() => setArtists(m.changes))
+      break
+    case 'ai-recheck':
+      void ready.then(recheckNames)
+      break
+    case 'ai-on':
+      void ready.then(() => setAiOn(m.tasks, m.enabled))
+      break
+    case 'ai-reply':
+      ai.reply(m)
       break
     case 'resume':
       // a new window: go on unless a scan runs (it releases when done) or none
@@ -950,7 +1235,9 @@ port.on('message', (e: Electron.MessageEvent) => {
       fetcher?.hold()
       stopSongLookups()
       fetchedWriter?.flushSync()
-      overridesWriter?.flushSync()
+      artistsWriter?.flushSync()
+      cacheWriter?.flushSync()
+      stopGroupsJob()
       closing = true
       clearTimeout(offPrune)
       chain.close()
@@ -981,7 +1268,7 @@ port.on('message', (e: Electron.MessageEvent) => {
 // covers and may be at it now (a restart), so only old ones go there.
 async function removeStrayTemp(): Promise<void> {
   const dir = dirname(start.indexPath)
-  const names = [basename(start.indexPath), basename(start.overridesPath)]
+  const names = [start.indexPath, start.artistsPath, start.aiCachePath].map((p) => basename(p))
   try {
     for (const n of await readdir(dir))
       if (names.some((f) => n.startsWith(f + '.')) && n.endsWith('.tmp'))
@@ -1001,7 +1288,7 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   status = { ...status, folders: s.folders }
   await removeStrayTemp()
   await loadCached()
-  loadOverrides(s)
+  const { had: hadArtists, unusable } = loadArtists(s)
   await startFetcher(s)
   const r = readJsonFile(start.indexPath)
   // the index is only a cache of the music files, so it is made again either way
@@ -1014,6 +1301,8 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   // a quit or crash came before main saved them: send them again
   if (Object.keys(ix.pendingMoves).length) post({ type: 'ids-moved', moves: ix.pendingMoves })
   build()
+  // the first build gives the tags' spellings
+  if (convertOldFiles(s, hadArtists, unusable, false)) build()
 })
 
 // Scans and prunes, one after the other; see scan-chain.ts.

@@ -37,6 +37,17 @@ export interface WindowPlace {
   maximized: boolean
 }
 
+// The AI service's choices (spec "AI models"). Main's own: the page gets
+// AiState instead. Keys are never here, they are in main/ai/secrets.ts.
+export interface AiSettings {
+  // the chosen provider's id
+  provider: string
+  // task id -> on; a task left out is off
+  tasks: Record<string, boolean>
+  // each provider's plain settings, e.g. { model: 'auto' }
+  providers: Record<string, Record<string, string>>
+}
+
 // What the settings file holds. Window sizes are main's business, so the page never sees them.
 export interface StoredSettings extends Settings {
   // the last size the user chose per template; missing means the template's own size
@@ -46,6 +57,7 @@ export interface StoredSettings extends Settings {
   // music folders, absolute paths. Only main changes them: through the folder
   // picker, or a folder dropped on the window (checked in main/plugins/files/dropped.ts).
   folders: string[]
+  ai: AiSettings
 }
 
 export const visualizerStyles: VisualizerStyle[] = ['ring', 'spectrum', 'wave', 'off']
@@ -165,8 +177,55 @@ export function parseFolders(v: unknown): string[] {
   return out
 }
 
+export function defaultAiSettings(): AiSettings {
+  return { provider: 'openrouter', tasks: {}, providers: {} }
+}
+
+// Each field on its own, and each entry of tasks and providers on its own.
+function parseAi(v: unknown, base: AiSettings): AiSettings {
+  if (!isObject(v)) return structuredClone(base)
+  const provider = typeof v.provider === 'string' && v.provider ? v.provider : base.provider
+  const tasks: Record<string, boolean> = {}
+  if (isObject(v.tasks)) {
+    for (const [k, on] of Object.entries(v.tasks)) if (typeof on === 'boolean') tasks[k] = on
+  } else Object.assign(tasks, base.tasks)
+  const providers: Record<string, Record<string, string>> = {}
+  if (isObject(v.providers)) {
+    for (const [id, values] of Object.entries(v.providers)) {
+      if (!isObject(values)) continue
+      providers[id] = {}
+      for (const [k, x] of Object.entries(values)) if (typeof x === 'string') providers[id][k] = x
+    }
+  } else Object.assign(providers, structuredClone(base.providers))
+  return { provider, tasks, providers }
+}
+
+function isKnownAi(v: unknown): boolean {
+  if (!isObject(v)) return false
+  if (Object.keys(v).some((k) => !['provider', 'tasks', 'providers'].includes(k))) return false
+  if (v.provider !== undefined && (typeof v.provider !== 'string' || !v.provider)) return false
+  if (
+    v.tasks !== undefined &&
+    (!isObject(v.tasks) || Object.values(v.tasks).some((on) => typeof on !== 'boolean'))
+  )
+    return false
+  if (v.providers === undefined) return true
+  return (
+    isObject(v.providers) &&
+    Object.values(v.providers).every(
+      (values) => isObject(values) && Object.values(values).every((x) => typeof x === 'string')
+    )
+  )
+}
+
 export function defaultStoredSettings(): StoredSettings {
-  return { ...defaultSettings(), windowSizes: {}, windowPlace: null, folders: [] }
+  return {
+    ...defaultSettings(),
+    windowSizes: {},
+    windowPlace: null,
+    folders: [],
+    ai: defaultAiSettings()
+  }
 }
 
 // The file may be old, hand-edited or half written, and a message from the page
@@ -201,7 +260,8 @@ export function parseStoredSettings(
     plugins: parsePlugins(r.plugins, r, base.plugins),
     windowSizes,
     windowPlace: r.windowPlace === undefined ? base.windowPlace : parseWindowPlace(r.windowPlace),
-    folders: Array.isArray(r.folders) ? parseFolders(r.folders) : [...base.folders]
+    folders: Array.isArray(r.folders) ? parseFolders(r.folders) : [...base.folders],
+    ai: parseAi(r.ai, base.ai)
   }
 }
 
@@ -276,6 +336,7 @@ export function isKnownSettingsFile(raw: unknown): boolean {
       ))
   )
     return false
+  if (has('ai') && !isKnownAi(raw.ai)) return false
   if (has('folders')) {
     if (!Array.isArray(raw.folders)) return false
     if (parseFolders(raw.folders).length !== new Set(raw.folders).size) return false

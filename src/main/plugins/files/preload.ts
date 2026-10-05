@@ -35,6 +35,7 @@ export function filesPreload(): LibraryApi {
     removeFolder: (path) => send(LibraryChannel.removeFolder, path),
     rescan: () => send(LibraryChannel.rescan),
     setArtists: (changes) => send(LibraryChannel.setArtists, changes),
+    aiRecheck: () => send(LibraryChannel.aiRecheck),
     showFolder: (parts) => invoke(LibraryChannel.showFolder, parts),
     onChanged: onLibraryChanged,
     onStatus: onScanStatus,

@@ -7,12 +7,15 @@ import { app, dialog, utilityProcess, type BrowserWindow } from 'electron'
 import { LibraryChannel, type DropResult } from '../../../shared/plugins/files/ipc'
 import type { IdMoves } from '../../../shared/id-moves'
 import type { ScanStatus } from '../../../shared/library'
-import { parseChanges } from '../../../shared/plugins/files/artist-overrides'
+import { parseChanges } from '../../../shared/plugins/files/artist-edit'
+import { artistGroupsTask } from '../../../shared/plugins/files/artists-file'
+import type { AiClient } from '../../../shared/ai'
 import type { CoverSource } from '../../../shared/settings'
 import { ffmpegTool } from '../../ffmpeg-path'
 import type { SettingsStore } from '../../settings-store'
 import type { CoverCache } from '../../covers/cover-cache'
 import { addDropped } from './dropped'
+import { AiRequests } from './ai-messages'
 import { LibraryClient } from './library-client'
 import { LibraryProcess } from './library-process'
 import { RestartBudget } from '../../restart'
@@ -41,6 +44,12 @@ export class LibraryService {
   // names, no audio and no covers made from the music files. The library is
   // still read and given to the page, and the radio's song lookup goes on.
   #on: boolean
+  // AiClient.on and AiClient.enabled of this plugin's tasks, as last sent to
+  // the library process
+  #aiOn: Record<string, boolean>
+  #aiEnabled: Record<string, boolean>
+  // the library process's AiClient calls, made here where the key is
+  #aiRequests: AiRequests
 
   constructor(
     readonly store: SettingsStore,
@@ -54,9 +63,17 @@ export class LibraryService {
     // covers other plugins keep that the index does not know (station logos), for the prune
     readonly keepCovers: () => string[] = () => [],
     readonly dir = app.getPath('userData'),
-    on = true
+    on = true,
+    // the AI service, for the library process's tasks (ticket 068)
+    readonly ai?: AiClient
   ) {
     this.#on = on
+    this.#aiOn = this.#tasksOn()
+    this.#aiEnabled = this.#tasksEnabled()
+    // the library process only gets messages, so it is told when on() or
+    // enabled() changes
+    ai?.changed(() => this.#aiChanged())
+    this.#aiRequests = new AiRequests(ai, [artistGroupsTask], (m) => this.#post(m))
     if (!this.ffmpeg || !this.ffprobe)
       console.error(
         'ffmpeg or ffprobe not found (npm run fetch-ffmpeg); APE, WMA and the like will not play'
@@ -87,7 +104,12 @@ export class LibraryService {
         // live: with settings.json unreadable, the page's choice still counts this run
         fetch: { on: this.store.live().fetchCovers, sources: this.store.live().coverSources },
         fetchedPath: join(this.dir, 'fetched-covers.json'),
-        overridesPath: join(this.dir, 'artist-overrides.json'),
+        artistsPath: join(this.dir, 'artists.json'),
+        aiCachePath: join(this.dir, 'artist-ai-cache.json'),
+        oldOverridesPath: join(this.dir, 'artist-overrides.json'),
+        oldGroupsPath: join(this.dir, 'artist-groups.json'),
+        aiOn: this.#aiOn,
+        aiEnabled: this.#aiEnabled,
         userAgent: this.userAgent,
         keepCovers: this.keepCovers(),
         on: this.#on
@@ -96,7 +118,10 @@ export class LibraryService {
       new RestartBudget(3, 60000),
       {
         message: (m) => this.#onMessage(m),
-        exit: (code, after) => this.#client.onExit(code, after),
+        exit: (code, after) => {
+          this.#aiRequests.stopAll()
+          this.#client.onExit(code, after)
+        },
         // a new process starts at full speed; tell it if a song is playing
         started: () => {
           if (this.#playing) this.#sendPlaying()
@@ -108,13 +133,32 @@ export class LibraryService {
     this.#proc.start()
   }
 
+  #tasksOn(): Record<string, boolean> {
+    return { [artistGroupsTask]: this.ai?.on(artistGroupsTask) ?? false }
+  }
+
+  #tasksEnabled(): Record<string, boolean> {
+    return { [artistGroupsTask]: this.ai?.enabled(artistGroupsTask) ?? false }
+  }
+
+  #aiChanged(): void {
+    const on = this.#tasksOn()
+    const enabled = this.#tasksEnabled()
+    const same = (a: Record<string, boolean>, b: Record<string, boolean>): boolean =>
+      Object.entries(a).every(([t, v]) => b[t] === v)
+    if (same(on, this.#aiOn) && same(enabled, this.#aiEnabled)) return
+    this.#aiOn = on
+    this.#aiEnabled = enabled
+    this.#post({ type: 'ai-on', tasks: on, enabled })
+  }
+
   #post(m: WorkerIn): boolean {
     // the client is made first, so the process may not exist yet
     return this.#proc?.post(m) ?? false
   }
 
   #onMessage(m: WorkerOut): void {
-    if (this.#client.onMessage(m)) return
+    if (this.#client.onMessage(m) || this.#aiRequests.onMessage(m)) return
     switch (m.type) {
       case 'library':
         // JSON bytes the page parses; main never reads them
@@ -253,7 +297,12 @@ export class LibraryService {
   // The page renamed or split artists; checked here, since the page can't be trusted.
   setArtists(changes: unknown): void {
     const c = this.#on && parseChanges(changes)
-    if (c) this.#post({ type: 'artist-overrides', changes: c })
+    if (c) this.#post({ type: 'set-artists', changes: c })
+  }
+
+  // The page asked for a full check of the artist names; main has no state for it.
+  aiRecheck(): void {
+    if (this.#on) this.#post({ type: 'ai-recheck' })
   }
 
   // Only files in the index are served, by id; never a path from the page.

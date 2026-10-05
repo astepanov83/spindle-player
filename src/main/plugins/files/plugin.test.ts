@@ -5,9 +5,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { LibraryChannel } from '../../../shared/plugins/files/ipc'
 import type { CoverHelper, PluginContext } from '../types'
 import type { WorkerIn, WorkerOut } from './types'
+import type { AiClient } from '../../../shared/ai'
 
 // the library processes made, with what main sent each
-const children: { sent: WorkerIn[] }[] = []
+const children: { sent: WorkerIn[]; emit(m: WorkerOut): void }[] = []
 
 // A process that answers every ask at once: a library with nothing in it, no song cover.
 function answer(m: WorkerIn): WorkerOut | undefined {
@@ -26,7 +27,7 @@ vi.mock('electron', () => ({
     fork: () => {
       const listeners = new Map<string, (m: unknown) => void>()
       const sent: WorkerIn[] = []
-      children.push({ sent })
+      children.push({ sent, emit: (m) => listeners.get('message')?.(m) })
       return {
         postMessage: (m: WorkerIn) => {
           sent.push(m)
@@ -47,7 +48,39 @@ const { FilesPlugin } = await import('./plugin')
 
 type Handler = (...args: unknown[]) => unknown
 
-function setup(on: boolean): {
+// A fake AI service: the tasks on (ready), those switched on but not ready,
+// and a way to say on() or enabled() changed.
+function fakeAi(): {
+  client: AiClient
+  tasks: Set<string>
+  notReady: Set<string>
+  change(): void
+  asked: { task: string; avoid?: string[] }[]
+} {
+  const asked: { task: string; avoid?: string[] }[] = []
+  const tasks = new Set<string>()
+  const notReady = new Set<string>()
+  const listeners = new Set<() => void>()
+  const client: AiClient = {
+    on: (task) => tasks.has(task),
+    enabled: (task) => tasks.has(task) || notReady.has(task),
+    changed: (cb) => {
+      listeners.add(cb)
+      return () => listeners.delete(cb)
+    },
+    maxInput: async () => undefined,
+    ask: async (task, _req, _signal, avoid) => {
+      asked.push({ task, avoid })
+      return { ok: true, json: { matches: [] }, model: 'm' }
+    }
+  }
+  return { client, tasks, notReady, change: () => listeners.forEach((f) => f()), asked }
+}
+
+function setup(
+  on: boolean,
+  ai = fakeAi()
+): {
   plugin: InstanceType<typeof FilesPlugin>
   call(channel: string, ...args: unknown[]): Promise<unknown>
   media(id: string): Promise<Response>
@@ -88,7 +121,8 @@ function setup(on: boolean): {
     covers: {
       get: () => ({ cache: { dir: '/nowhere/covers' } }),
       provide: (h: CoverHelper) => (helper = h)
-    }
+    },
+    ai: ai.client
   } as unknown as PluginContext
   const plugin = new FilesPlugin({ keptByOthers: () => [] })
   plugin.start(ctx)
@@ -135,10 +169,12 @@ describe('FilesPlugin', () => {
     })
     await s.call(LibraryChannel.removeFolder, '/music')
     await s.call(LibraryChannel.setArtists, { x: ['Y'] })
+    await s.call(LibraryChannel.aiRecheck)
     expect(await s.call(LibraryChannel.showFolder, ['/music'])).toBe(false)
     expect(s.folders).toEqual([])
     expect(s.sent()).not.toContain('scan')
-    expect(s.sent()).not.toContain('artist-overrides')
+    expect(s.sent()).not.toContain('set-artists')
+    expect(s.sent()).not.toContain('ai-recheck')
     expect(s.sent()).toContain('get-library')
   })
 
@@ -178,5 +214,48 @@ describe('FilesPlugin', () => {
     expect(s.sent()).not.toContain('scan')
     await loadPage(s)
     expect(s.sent()).toContain('scan')
+  })
+
+  it('tells the process whether the artist groups task is on and enabled, at start and when it changes', () => {
+    const ai = fakeAi()
+    ai.tasks.add('artist-groups')
+    setup(true, ai)
+    expect(children[0].sent[0]).toMatchObject({
+      type: 'start',
+      start: { aiOn: { 'artist-groups': true }, aiEnabled: { 'artist-groups': true } }
+    })
+    // a change that leaves the task as it was sends nothing
+    ai.change()
+    expect(children[0].sent.filter((m) => m.type === 'ai-on')).toEqual([])
+    // the provider is no longer ready (a refused key): still enabled
+    ai.tasks.delete('artist-groups')
+    ai.notReady.add('artist-groups')
+    ai.change()
+    expect(children[0].sent.at(-1)).toEqual({
+      type: 'ai-on',
+      tasks: { 'artist-groups': false },
+      enabled: { 'artist-groups': true }
+    })
+    // switched off
+    ai.notReady.delete('artist-groups')
+    ai.change()
+    expect(children[0].sent.at(-1)).toEqual({
+      type: 'ai-on',
+      tasks: { 'artist-groups': false },
+      enabled: { 'artist-groups': false }
+    })
+  })
+  it("makes the library process's AI requests with its AiClient and answers them", async () => {
+    const ai = fakeAi()
+    setup(true, ai)
+    const req = { system: 's', user: 'u', schema: {}, maxOutput: 1 }
+    children[0].emit({ type: 'ai-ask', id: 4, task: 'artist-groups', req, avoid: ['x'] })
+    children[0].emit({ type: 'ai-ask', id: 5, task: 'other', req })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(ai.asked).toEqual([{ task: 'artist-groups', avoid: ['x'] }])
+    expect(children[0].sent.filter((m) => m.type === 'ai-reply')).toEqual([
+      { type: 'ai-reply', id: 5, answer: { ok: false, error: 'off' } },
+      { type: 'ai-reply', id: 4, answer: { ok: true, json: { matches: [] }, model: 'm' } }
+    ])
   })
 })

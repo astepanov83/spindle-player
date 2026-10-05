@@ -1,15 +1,17 @@
 // Who is an artist in the Artists view (ticket 021), from tags the scan
-// already reads, after the artist overrides (ticket 024). The page lists them
-// and the library process looks up their photos with the same list, so both
-// use the same keys.
+// already reads, after the names in artists.json (ticket 069). The page
+// lists them and the library process looks up their photos with the same
+// list, so both use the same keys.
 import type { Album, ArtistCredit, Track } from '../../library'
 
-// A tag an artist comes from, spelled as it was first seen. names: what an
-// override made of it; none when the tag is used as it is.
+// A tag an artist comes from, spelled as it was first seen. names: what a
+// link in artists.json made of it; none when the tag is used as it is.
 export interface ArtistTag {
   key: string
   name: string
   names?: string[]
+  // the AI's links made the names (ticket 068), none of yours
+  grouped?: true
 }
 
 export interface Artist {
@@ -64,13 +66,12 @@ export function listArtists(albums: Album[], track: (id: string) => Track): Arti
     e.names.set(name, (e.names.get(name) ?? 0) + 1)
     const tag = tagOf(c)
     const tagKey = keyOf(tag)
-    if (!e.tags.has(tagKey))
-      e.tags.set(
-        tagKey,
-        c.artistTag === undefined
-          ? { key: tagKey, name: tag }
-          : { key: tagKey, name: tag, names: namesOf(c) }
-      )
+    if (!e.tags.has(tagKey)) {
+      const t: ArtistTag = { key: tagKey, name: tag }
+      if (c.artistTag !== undefined) t.names = namesOf(c)
+      if (c.grouped) t.grouped = true
+      e.tags.set(tagKey, t)
+    }
     return e.a
   }
   for (const al of albums) {

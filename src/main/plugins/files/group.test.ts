@@ -6,6 +6,7 @@ import type { FileEntry, LibraryIndex } from './types'
 import { cleanArtist } from '../../covers/clean-names'
 import { searchKey } from './cover-match'
 import { artistKey } from '../../../shared/plugins/files/artists'
+import { convertOld, resolve } from '../../../shared/plugins/files/artists-file'
 import type { Fetched } from './fetched-store'
 import type { LibraryData } from '../../../shared/library'
 import {
@@ -29,12 +30,19 @@ function build(
   has: (hash: string) => boolean = () => true,
   fetched?: Fetched,
   photos?: Fetched,
-  overrides?: Record<string, string[]>
+  overrides?: Record<string, string[]>,
+  groups?: Record<string, string>
 ): ReturnType<typeof buildLibrary> {
   const ix = emptyIndex()
   for (const f of files) ix.files.set(f.path, f)
   setup?.(ix)
-  return buildLibrary(ix, has, fetched, [], photos, new Map(Object.entries(overrides ?? {})))
+  // artists.json as the old files would make it: overrides as your links,
+  // groups as the AI's, with the AI on
+  const tags = files.flatMap((f) => [f.artist, f.albumArtist]).filter((t) => t !== undefined)
+  const spelling = (key: string): string | undefined => tags.find((t) => artistKey(t) === key)
+  const old = { groups: new Map(Object.entries(groups ?? {})), asked: new Set<string>() }
+  const f = convertOld(new Map(Object.entries(overrides ?? {})), old, spelling).artists
+  return buildLibrary(ix, has, fetched, [], photos, resolve(f, true))
 }
 
 describe('buildLibrary', () => {
@@ -403,7 +411,7 @@ describe('artist photos (ticket 021)', () => {
   })
 })
 
-describe('artist overrides (ticket 024)', () => {
+describe('artist names you changed (tickets 024, 069)', () => {
   const files = [
     entry('/m/s/1.mp3', { album: 'Split', albumArtist: 'sadness, stellafera', artist: 'Sadness' }),
     entry('/m/s/2.mp3', {
@@ -455,6 +463,62 @@ describe('artist overrides (ticket 024)', () => {
       { kind: 'album', title: 'Split' },
       { kind: 'song', title: '2' }
     ])
+  })
+})
+
+describe('artist spellings the AI grouped (tickets 068, 069)', () => {
+  const files = [
+    entry('/m/a/1.mp3', { album: 'Debut', artist: 'Bjork' }),
+    entry('/m/b/1.mp3', { album: 'Homogenic', artist: 'Björk' }),
+    entry('/m/c/1.mp3', { album: 'Blood', artist: 'Kino', title: 'Blood' }),
+    entry('/m/d/1.mp3', { album: 'Gruppa krovi', artist: 'Кино' })
+  ]
+  const g = { bjork: 'Björk', björk: 'Björk', kino: 'Кино', кино: 'Кино' }
+  const albumOf = (d: LibraryData, title: string): LibraryData['albums'][number] =>
+    d.albums.find((a) => a.title === title)!
+
+  it('shows the group name on albums and songs, with the tag kept beside it', () => {
+    const { data } = build(files, undefined, () => true, undefined, undefined, undefined, g)
+    expect(albumOf(data, 'Debut')).toMatchObject({
+      artist: 'Björk',
+      artistTag: 'Bjork',
+      grouped: true
+    })
+    expect(data.tracks.find((t) => t.title === 'Blood')).toMatchObject({
+      artist: 'Кино',
+      artistTag: 'Kino',
+      grouped: true
+    })
+    // spelled as the group name: as it is
+    expect(albumOf(data, 'Homogenic')).not.toHaveProperty('artistTag')
+  })
+
+  it("lets your link win over the AI's", () => {
+    const o = { kino: ['KINO'] }
+    const { data } = build(files, undefined, () => true, undefined, undefined, o, g)
+    expect(albumOf(data, 'Blood')).toMatchObject({ artist: 'KINO', artistTag: 'Kino' })
+    expect(albumOf(data, 'Blood')).not.toHaveProperty('grouped')
+  })
+
+  it('shows a tag you kept as its own name (Use tag) as the plain tag', () => {
+    const o = { kino: ['Kino'] }
+    const { data } = build(files, undefined, () => true, undefined, undefined, o, g)
+    const blood = albumOf(data, 'Blood')
+    expect(blood.artist).toBe('Kino')
+    expect(blood).not.toHaveProperty('artistTag')
+    expect(blood).not.toHaveProperty('grouped')
+  })
+
+  it('keeps album ids, since albums are still grouped by the tags', () => {
+    const ids = (d: LibraryData): string[] => d.albums.map((a) => a.id).sort()
+    const grouped = build(files, undefined, () => true, undefined, undefined, undefined, g)
+    expect(ids(grouped.data)).toEqual(ids(build(files).data))
+  })
+
+  it('looks artist photos up by the group name, album covers by the tags', () => {
+    const { queries, artists } = build(files, undefined, () => false, undefined, undefined, {}, g)
+    expect(artists.map((a) => a.name)).toEqual(['Björk', 'Кино'])
+    expect(queries.map((q) => q.artist).sort()).toEqual(['Bjork', 'Björk', 'Kino', 'Кино'])
   })
 })
 

@@ -11,7 +11,7 @@ export function filterArtists(artists: Artist[], q: string): Artist[] {
 }
 
 // The artists of a song or album as links (ticket 040): one per name of a
-// split credit (an artist override), since each has its own page. key is
+// split credit (one you made), since each has its own page. key is
 // null for a name with no page.
 export function artistLinks(
   c: ArtistCredit,

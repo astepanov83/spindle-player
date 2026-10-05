@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { creditOf, type ArtistOverrides } from './artist-overrides'
+import { convertOld, creditOf, resolve } from './artists-file'
 import { artistKey, listArtists } from './artists'
 import type { Album, Track } from '../../library'
 import { defaultPalettes } from '../../palette'
@@ -105,15 +105,18 @@ describe('listArtists', () => {
   })
 })
 
-describe('listArtists with overrides (ticket 024)', () => {
-  // the album and its songs as the library process sends them
-  function credited(o: Record<string, string[]>, al: Album): Album {
-    const m: ArtistOverrides = new Map(Object.entries(o))
+describe('listArtists with names from artists.json (tickets 024, 069)', () => {
+  // the album and its songs as the library process sends them: o as your
+  // renames and splits, g as the AI's groups
+  function credited(o: Record<string, string[]>, al: Album, g: Record<string, string> = {}): Album {
+    const old = { groups: new Map(Object.entries(g)), asked: new Set<string>() }
+    const f = convertOld(new Map(Object.entries(o)), old, () => undefined).artists
+    const shown = resolve(f, true)
     for (const id of al.trackIds) {
       const t = tracks.get(id)!
-      tracks.set(id, { ...t, ...creditOf(t.artist, m) })
+      tracks.set(id, { ...t, ...creditOf(t.artist, shown) })
     }
-    return { ...al, ...creditOf(al.artist, m) }
+    return { ...al, ...creditOf(al.artist, shown) }
   }
   const split = { 'sadness,stellafera': ['Sadness', 'Stellafera'] }
 
@@ -150,6 +153,15 @@ describe('listArtists with overrides (ticket 024)', () => {
     expect(sadness.tags).toEqual([
       { key: 'sadness', name: 'Sadness' },
       { key: 'sadness,stellafera', name: 'sadness, stellafera', names: ['Sadness', 'Stellafera'] }
+    ])
+  })
+
+  it('marks a tag an AI link (ticket 068) changed', () => {
+    const [bjork] = list(credited({}, album('a', 'Bjork'), { bjork: 'Björk' }), album('b', 'Björk'))
+    expect(bjork).toMatchObject({ name: 'Björk', albums: ['a', 'b'] })
+    expect(bjork.tags).toEqual([
+      { key: 'björk', name: 'Björk' },
+      { key: 'bjork', name: 'Bjork', names: ['Björk'], grouped: true }
     ])
   })
 })

@@ -1,3 +1,4 @@
+import type { AiState } from './ai'
 import type { PluginChannels } from './plugins'
 import type { Playlist } from './playlists'
 import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
@@ -83,6 +84,29 @@ export interface PlaybackApi {
   log(text: string): void
 }
 
+export const AiChannel = {
+  load: 'ai:load',
+  // main to page: the whole AiState, at every change
+  state: 'ai:state',
+  act: 'ai:act',
+  setTask: 'ai:set-task',
+  setProvider: 'ai:set-provider'
+} as const
+
+// What the preload exposes to the page as `window.aiApi`. Main checks every
+// value the page sends. No key ever comes back: a secret box's value goes
+// to main with `act` and is not in AiState.
+export interface AiApi {
+  // the state now; a pushed one may come first, and is newer
+  load(): Promise<AiState>
+  // Returns a function that stops listening.
+  onState(listener: (state: AiState) => void): () => void
+  // a block of the chosen provider was used (SettingBlock acts)
+  act(provider: string, id: string, actionId: string, value?: string): void
+  setTask(task: string, on: boolean): void
+  setProvider(id: string): void
+}
+
 // Which API method each page-to-main channel of the core carries. The
 // preload's calls and main's handlers are both typed from this and the
 // plugins' own (PluginChannels), so a change on one side and not the other is
@@ -104,6 +128,10 @@ export interface CoreChannels {
   [PlaybackChannel.savePlaying]: PlaybackApi['savePlaying']
   [PlaybackChannel.playing]: PlaybackApi['playing']
   [PlaybackChannel.log]: PlaybackApi['log']
+  [AiChannel.load]: AiApi['load']
+  [AiChannel.act]: AiApi['act']
+  [AiChannel.setTask]: AiApi['setTask']
+  [AiChannel.setProvider]: AiApi['setProvider']
 }
 
 export type PageChannels = CoreChannels & PluginChannels

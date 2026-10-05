@@ -652,17 +652,33 @@ describe('the artist groups job', () => {
       ])
     })
 
-    it('leaves a tag linked by you in the check: the split answer did not link it', async () => {
+    // The tag is asked about although you linked it (you linked it while
+    // the run went on), so the save runs and is skipped.
+    it('leaves a tag linked by you in the check when the split save skips it', async () => {
       const g = oldSplit()
-      g.artists.artists.push({ name: 'A, B', nameBy: 'you', tags: [{ tag: 'A, B', by: 'you' }] })
-      const names = plain(['A, B'])
-      names[0].manual = true
+      g.artists.artists.push({ name: 'Mine', nameBy: 'you', tags: [{ tag: 'A, B', by: 'you' }] })
       const { ai } = fakeAi(both([]), { split: bothSplit([[1, ['A', 'B']]]) })
-      const j = job(ai, [...names, ...plain(['A, B']).map((t) => ({ ...t, n: 2 }))], g)
+      const j = job(ai, plain(['A, B']), g)
       await j.done
       // your link stays, the old AI links go
       expect(j.artists.artists).toEqual([
-        { name: 'A, B', nameBy: 'you', tags: [{ tag: 'A, B', by: 'you' }] }
+        { name: 'Mine', nameBy: 'you', tags: [{ tag: 'A, B', by: 'you' }] }
+      ])
+    })
+
+    it('leaves a tag linked by you in the check when the group save skips it', async () => {
+      const g = fresh()
+      g.artists.artists.push(
+        { name: 'Björk', nameBy: 'ai', tags: [{ tag: 'Bjork', by: 'ai' }] },
+        { name: 'Mine', nameBy: 'you', tags: [{ tag: 'Bjork', by: 'you' }] }
+      )
+      startFullCheck(g.artists, g.cache)
+      const { ai } = fakeAi(both([[1, 2]]))
+      const j = job(ai, plain(['Bjork', 'Björk']), g)
+      await j.done
+      expect(j.artists.artists).toEqual([
+        { name: 'Björk', nameBy: 'ai', tags: [{ tag: 'Björk', by: 'ai' }] },
+        { name: 'Mine', nameBy: 'you', tags: [{ tag: 'Bjork', by: 'you' }] }
       ])
     })
   })

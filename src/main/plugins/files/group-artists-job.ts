@@ -13,6 +13,7 @@ import {
   aiSplits,
   artistGroupsTask,
   dropStale,
+  yourKeys,
   type ArtistAiCache,
   type ArtistsFile,
   type Spelling
@@ -147,13 +148,15 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
   // tag keys whose AI links changed this run
   const grouped = new Set<string>()
   // An answer about these keys: a key the save gave an AI link (or kept
-  // one) is confirmed for a full check. One with a link by you is not.
+  // one) is confirmed for a full check. A key with a link by you is skipped
+  // by the save, so the AI links it still has are old: not confirmed.
   const save = (keys: string[], change: () => void): void => {
     const before = aiLinks(artists)
     change()
     const after = aiLinks(artists)
     for (const [k, v] of after) if (before.get(k) !== v) grouped.add(k)
-    for (const k of keys) if (after.has(k)) cache.checking.delete(k)
+    const yours = yourKeys(artists)
+    for (const k of keys) if (after.has(k) && !yours.has(k)) cache.checking.delete(k)
   }
 
   // Step 1: which artists each tag names. All chunks before step 2, so

@@ -4,8 +4,9 @@ import { aiBlocks, aiTarget } from './ai-blocks'
 
 const info = {
   id: 'groups',
-  name: 'Group artist spellings',
-  about: 'Artists spelled differently in tags are shown as one.',
+  name: 'Fix artist names',
+  about:
+    'Joint credits are split into their artists, and spellings of one artist are shown as one.',
   sends: 'Sends artist names to the service.'
 }
 

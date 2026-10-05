@@ -43,8 +43,9 @@ export const plugins: PluginInfo[] = [
     aiTasks: [
       {
         id: artistGroupsTask,
-        name: 'Group artist spellings',
-        about: 'Artists spelled differently in tags are shown as one.',
+        name: 'Fix artist names',
+        about:
+          'Joint credits are split into their artists, and spellings of one artist are shown as one.',
         sends: 'Sends artist names and up to two album titles each to the service.'
       }
     ]

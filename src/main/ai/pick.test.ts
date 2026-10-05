@@ -20,15 +20,18 @@ const ids = (models: ModelInfo[]): string[] => models.map((m) => m.id)
 
 describe('pickModels', () => {
   it('keeps models where the request and the answer fit', () => {
-    const models = [
-      model('small', 'schema', 1000),
-      model('short-answers', 'schema', 10000, 500),
-      model('big', 'schema', 10000)
-    ]
-    // 3000 in + 1000 out: too much for small, too long an answer for short-answers
+    const models = [model('small', 'schema', 1000), model('big', 'schema', 10000)]
+    // 3000 in + 1000 out: too much for small
     expect(ids(pickModels(models, 3000, 1000))).toEqual(['big'])
     expect(ids(pickModels(models, 9000, 1000))).toEqual(['big'])
     expect(ids(pickModels(models, 9001, 1000))).toEqual([])
+  })
+
+  it("caps the answer by the model's own limit, so a lower one does not drop it", () => {
+    const models = [model('short-answers', 'schema', 10000, 500), model('big', 'schema', 10000)]
+    // 32000 out is more than either gives: each is asked for its own limit
+    expect(ids(pickModels(models, 9500, 32000))).toEqual(['short-answers'])
+    expect(ids(pickModels(models, 8000, 32000))).toEqual(['short-answers', 'big'])
   })
 
   it('puts schema models before prompt ones, each in the given order', () => {
@@ -55,8 +58,11 @@ describe('size', () => {
   it('gives the biggest request a model takes with that answer', () => {
     const models = [model('a', 'schema', 8000, 1000), model('b', 'prompt', 20000, 500)]
     expect(biggestInput(models, 500)).toBe(19500)
-    expect(biggestInput(models, 1000)).toBe(7000)
-    expect(biggestInput(models, 2000)).toBeUndefined()
+    // b gives 500 out at most, so it still takes 19500 in
+    expect(biggestInput(models, 1000)).toBe(19500)
+    expect(biggestInput(models, 32000)).toBe(19500)
+    expect(biggestInput([model('a', 'schema', 8000, 1000)], 32000)).toBe(7000)
+    expect(biggestInput([], 500)).toBeUndefined()
   })
 })
 

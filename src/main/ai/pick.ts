@@ -15,8 +15,12 @@ export function requestSize(req: JsonRequest): number {
   return tokens(req.system) + tokens(req.user)
 }
 
+// The answer is capped by the model's own limit (as the provider sends it),
+// so a model with a lower one still takes the request.
+const outOf = (m: ModelInfo, maxOutput: number): number => Math.min(maxOutput, m.maxOutput)
+
 function fits(m: ModelInfo, size: number, maxOutput: number): boolean {
-  return maxOutput <= m.maxOutput && size + maxOutput <= m.context
+  return size + outOf(m, maxOutput) <= m.context
 }
 
 // The models that take the request and are not in `avoid`, those that hold
@@ -33,7 +37,7 @@ export function pickModels(
 
 // The biggest request (tokens in) any model takes with this much out.
 export function biggestInput(models: ModelInfo[], maxOutput: number): number | undefined {
-  const sizes = models.filter((m) => maxOutput <= m.maxOutput).map((m) => m.context - maxOutput)
+  const sizes = models.map((m) => m.context - outOf(m, maxOutput)).filter((n) => n > 0)
   return sizes.length ? Math.max(...sizes) : undefined
 }
 

@@ -1,31 +1,42 @@
-// One run of the artist groups task (ticket 068): asks the model about the
-// names not asked yet, 200 at a time, and saves the groups after each chunk,
-// so a stop or a limit loses nothing. It talks only to AiClient: in the
-// library process that is messages to main, which has the key.
-import type { AiClient, Answer, AnswerError, JsonRequest } from '../../../shared/ai'
+// One run of the artist groups task (tickets 068, 070), in two steps over
+// the names not asked yet, 200 at a time: first which artists a tag names
+// (split), then which names are one artist (join). It saves after each
+// chunk, so a stop or a limit loses nothing. It talks only to AiClient: in
+// the library process that is messages to main, which has the key.
+import type { AiClient, Answer, AnswerError, JsonRequest, JsonSchema } from '../../../shared/ai'
 import type { GroupsStatus } from '../../../shared/library'
 import {
   addAiGroup,
+  addAiSplit,
   addAsked,
   aiKeys,
+  aiSplits,
   artistGroupsTask,
+  dropStale,
   type ArtistAiCache,
   type ArtistsFile,
   type Spelling
 } from '../../../shared/plugins/files/artists-file'
+import { artistKey } from '../../../shared/plugins/files/artists'
 import {
   agreed,
+  agreedSplits,
   chunksOf,
+  joinNames,
+  joinSchema,
+  joinSystem,
   maxOutput,
   pairsOf,
-  schema,
   shownName,
   splitList,
-  system,
+  splitSchema,
+  splitsOf,
+  splitSystem,
   tokensOf,
   UnionFind,
   userText,
   type Pair,
+  type Split,
   type TaskName
 } from './group-artists'
 
@@ -44,6 +55,10 @@ export interface JobDeps {
   cache: ArtistAiCache
   // a tag key's spelling in the library, for the links
   spelling: Spelling
+  // During a full check (startFullCheck): tag keys whose AI links no answer
+  // gave again yet. Changed in place. When the run is done, the rest lose
+  // their AI links; a run that stops early removes nothing.
+  stale?: Set<string>
   // a chunk was done: save the file and show the groups
   saved(): void
   // undefined: no line to show (the task is off, or the provider asks for a login)
@@ -63,10 +78,39 @@ const minWaitMs = 30_000
 export const limitWaitMs = (retryAt: number, now: number): number =>
   Math.min(maxWaitMs, Math.max(minWaitMs, retryAt - now))
 
+// A full check asks every name again: both sets of the cache are emptied,
+// and the tags with an AI link now are stale until an answer gives them one
+// again. Pass the keys as JobDeps.stale until a run ends as done.
+export function startFullCheck(artists: ArtistsFile, cache: ArtistAiCache): Set<string> {
+  cache.split.clear()
+  cache.joined.clear()
+  return aiKeys(artists)
+}
+
+// AI links with nothing asked under this prompt number: the cache was made
+// with another one (it then loads empty), or a full check stopped before its
+// first chunk. Either way every name is asked again.
+export const fullCheckDue = (artists: ArtistsFile, cache: ArtistAiCache): boolean =>
+  !cache.split.size && !cache.joined.size && aiKeys(artists).size > 0
+
 // An abort rejects ask and maxInput, so it ends the run by throwing; what was
-// saved stays and the next run goes on from `asked`.
+// saved stays and the next run goes on from the keys asked.
 export async function groupArtists(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
-  const end = await run(d, signal)
+  let end = await run(d, signal)
+  if (end.end === 'done' && d.stale) {
+    const stale = [...d.stale]
+    d.stale.clear()
+    if (dropStale(d.artists, stale)) {
+      d.log(`Artist groups: removed the AI links no answer gave again (${stale.length} tags)`)
+      d.saved()
+      // a tag no longer split was not asked in the join step: its parts were
+      const again = await run({ ...d, stale: undefined }, signal)
+      end =
+        again.end === 'done'
+          ? { end: 'done', grouped: end.grouped + again.grouped, asked: true }
+          : again
+    }
+  }
   if (end.end === 'done') {
     if (end.asked) d.status({ state: 'done', grouped: end.grouped, at: d.now() })
   } else if (end.end === 'limit') d.status({ state: 'limit', at: end.retryAt })
@@ -78,11 +122,24 @@ export async function groupArtists(d: JobDeps, signal: AbortSignal): Promise<Job
   return end
 }
 
+// What one step sends and keeps.
+interface Step<T> {
+  system: string
+  schema: JsonSchema
+  // what two answers agree on, for one chunk and one part of the LIST
+  agree(first: Answered, second: Answered, chunk: TaskName[], part: TaskName[]): T
+}
+
+type Answered = Extract<Answer, { ok: true }>
+
 async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
   const { ai, names, artists, cache } = d
   if (!ai.on(task)) return { end: 'off' }
-  const chunks = chunksOf(names, cache.joined)
-  if (!chunks.length) return { end: 'done', grouped: 0, asked: false }
+  // names you gave are not tags: there is nothing to split
+  const tags = names.filter((t) => !t.manual)
+  const splitChunks = chunksOf(tags, cache.split)
+  if (!splitChunks.length && !chunksOf(joinNames(names, aiSplits(artists)), cache.joined).length)
+    return { end: 'done', grouped: 0, asked: false }
   let max: number | undefined
   try {
     max = await ai.maxInput(task, maxOutput, signal)
@@ -94,87 +151,190 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
   }
   // still on: the provider had no model list to give
   if (max === undefined) return { end: ai.on(task) ? 'network' : 'off' }
-  // the LIST is split when a request with it whole would not fit
-  let parts = 1
-  const fits = (p: number): boolean =>
-    splitList(names, p).every(
-      (part) => tokensOf(system) + tokensOf(userText(part, chunks[0])) <= max
-    )
-  while (parts < names.length && !fits(parts)) parts *= 2
 
-  const byN = new Map(names.map((t) => [t.n, t]))
-  const uf = new UnionFind()
-  let grouped = 0
-  for (const chunk of chunks) {
+  // tag keys whose AI links changed this run
+  const grouped = new Set<string>()
+  const save = (change: () => void): void => {
+    const before = aiLinks(artists)
+    change()
+    for (const [k, v] of aiLinks(artists)) if (before.get(k) !== v) grouped.add(k)
+  }
+
+  // Step 1: which artists each tag names. All chunks before step 2, so
+  // step 2 sees every split.
+  const nameOf = new Map(names.map((t) => [t.key, t.name]))
+  const split: Step<Map<number, Split>> = {
+    system: splitSystem,
+    schema: splitSchema,
+    agree: (a, b, chunk) => {
+      const splits = (x: Answered): Map<number, Split> => {
+        const r = splitsOf(x.json, chunk)
+        for (const why of r.dropped) d.log(`Artist groups: dropped a split from ${x.model}: ${why}`)
+        return r.splits
+      }
+      return agreedSplits(splits(a), splits(b))
+    }
+  }
+  const splitParts = {
+    n: splitChunks.length ? partsFor(splitSystem, names, splitChunks[0], max) : 1
+  }
+  for (const chunk of splitChunks) {
     d.status({
       state: 'running',
-      checked: names.filter((t) => cache.joined.has(t.key)).length,
-      total: names.length
+      step: 'split',
+      checked: tags.filter((t) => cache.split.has(t.key)).length,
+      total: tags.length
     })
-    let pairs: Map<Pair, string> | undefined
-    for (;;) {
-      const r = await askChunk(ai, names, chunk, parts, signal)
-      if (r !== 'too-big') {
-        if ('end' in r) return r
-        pairs = r
-        break
+    const r = await askAll(ai, split, names, chunk, splitParts, signal)
+    if (!Array.isArray(r)) return r
+    const byN = new Map(chunk.map((t) => [t.n, t]))
+    for (const [n, s] of mergeSplits(r)) {
+      const t = byN.get(n)!
+      d.log(`Artist groups: ${t.name} = ${s.parts.join(' + ')}` + (s.why ? ` (${s.why})` : ''))
+      d.stale?.delete(t.key)
+      save(() => addAiSplit(artists, t.key, s.parts, d.spelling, (k) => nameOf.get(k)))
+    }
+    addAsked(
+      cache.split,
+      chunk.map((t) => t.key)
+    )
+    d.saved()
+  }
+
+  // Step 2: which names are one artist, with split tags as their parts.
+  const list = joinNames(names, aiSplits(artists))
+  const joinChunks = chunksOf(list, cache.joined)
+  const join: Step<Map<Pair, string>> = {
+    system: joinSystem,
+    schema: joinSchema,
+    agree: (a, b, chunk, part) => {
+      const checkIds = new Set(chunk.map((t) => t.n))
+      const listIds = new Set(part.map((t) => t.n))
+      return agreed(pairsOf(a.json, checkIds, listIds), pairsOf(b.json, checkIds, listIds))
+    }
+  }
+  const joinParts = { n: joinChunks.length ? partsFor(joinSystem, list, joinChunks[0], max) : 1 }
+  const byN = new Map(list.map((t) => [t.n, t]))
+  const uf = new UnionFind()
+  for (const chunk of joinChunks) {
+    d.status({
+      state: 'running',
+      step: 'join',
+      checked: list.filter((t) => cache.joined.has(t.key)).length,
+      total: list.length
+    })
+    const r = await askAll(ai, join, list, chunk, joinParts, signal)
+    if (!Array.isArray(r)) return r
+    for (const pairs of r)
+      for (const [p, why] of pairs) {
+        uf.addPair(p)
+        const [a, b] = p.split('-').map((n) => byN.get(Number(n))!.name)
+        d.log(`Artist groups: ${a} = ${b}` + (why ? ` (${why})` : ''))
       }
-      // no part smaller than one name
-      if (parts >= names.length) return { end: 'failed' }
-      parts *= 2
-    }
-    for (const [p, why] of pairs) {
-      uf.addPair(p)
-      const [a, b] = p.split('-').map((n) => byN.get(Number(n))!.name)
-      d.log(`Artist groups: ${a} = ${b}` + (why ? ` (${why})` : ''))
-    }
-    const before = aiKeys(artists)
     for (const g of uf.groups()) {
       const members = g.map((n) => byN.get(n)!)
-      addAiGroup(
-        artists,
-        members.map((m) => m.key),
-        shownName(members),
-        d.spelling
+      for (const m of members) d.stale?.delete(m.key)
+      save(() =>
+        addAiGroup(
+          artists,
+          members.map((m) => m.key),
+          shownName(members),
+          d.spelling
+        )
       )
     }
-    for (const k of aiKeys(artists)) if (!before.has(k)) grouped++
     addAsked(
       cache.joined,
       chunk.map((t) => t.key)
     )
     d.saved()
   }
-  return { end: 'done', grouped, asked: true }
+  return { end: 'done', grouped: grouped.size, asked: true }
 }
 
-// One chunk against every part of the LIST, each asked twice: only pairs two
-// models both gave are kept. With only one model to use (a fixed choice, or
-// one that fits) it is asked twice instead, and the two answers must agree.
-// A second answer that fails keeps nothing of the chunk, so it is asked
-// again later.
-async function askChunk(
+// How many parts the LIST is cut into so a request with it fits.
+function partsFor(system: string, list: TaskName[], chunk: TaskName[], max: number): number {
+  const fits = (p: number): boolean =>
+    splitList(list, p).every((part) => tokensOf(system) + tokensOf(userText(part, chunk)) <= max)
+  let parts = 1
+  while (parts < list.length && !fits(parts)) parts *= 2
+  return parts
+}
+
+// A tag kept in one part of the LIST and split another way in a later one
+// is dropped: the answers disagree.
+function mergeSplits(perPart: Map<number, Split>[]): Map<number, Split> {
+  const out = new Map<number, Split>()
+  const off = new Set<number>()
+  for (const splits of perPart)
+    for (const [n, s] of splits) {
+      const had = out.get(n)
+      if (had && had.keys.join('\n') !== s.keys.join('\n')) off.add(n)
+      else out.set(n, s)
+    }
+  for (const n of off) out.delete(n)
+  return out
+}
+
+// tag key -> the artists its AI links go to, to see which tags a save changed
+function aiLinks(f: ArtistsFile): Map<string, string> {
+  const out = new Map<string, string[]>()
+  for (const a of f.artists)
+    for (const l of a.tags) {
+      if (l.by !== 'ai') continue
+      const k = artistKey(l.tag)
+      const v = out.get(k)
+      if (v) v.push(a.name)
+      else out.set(k, [a.name])
+    }
+  return new Map([...out].map(([k, v]) => [k, v.sort().join('\n')]))
+}
+
+// One chunk against every part of the LIST (more parts while it is too big).
+// One result per part.
+async function askAll<T>(
   ai: AiClient,
-  names: TaskName[],
+  step: Step<T>,
+  list: TaskName[],
+  chunk: TaskName[],
+  parts: { n: number },
+  signal: AbortSignal
+): Promise<T[] | JobEnd> {
+  for (;;) {
+    const r = await askChunk(ai, step, list, chunk, parts.n, signal)
+    if (r !== 'too-big') return r
+    // no part smaller than one name
+    if (parts.n >= list.length) return { end: 'failed' }
+    parts.n *= 2
+  }
+}
+
+// Each part asked twice: only what two models both gave is kept. With only
+// one model to use (a fixed choice, or one that fits) it is asked twice
+// instead, and the two answers must agree. A second answer that fails keeps
+// nothing of the chunk, so it is asked again later.
+async function askChunk<T>(
+  ai: AiClient,
+  step: Step<T>,
+  list: TaskName[],
   chunk: TaskName[],
   parts: number,
   signal: AbortSignal
-): Promise<Map<Pair, string> | 'too-big' | JobEnd> {
-  const checkIds = new Set(chunk.map((t) => t.n))
-  const out = new Map<Pair, string>()
-  for (const part of splitList(names, parts)) {
-    const req: JsonRequest = { system, user: userText(part, chunk), schema, maxOutput }
+): Promise<T[] | 'too-big' | JobEnd> {
+  const out: T[] = []
+  for (const part of splitList(list, parts)) {
+    const req: JsonRequest = {
+      system: step.system,
+      user: userText(part, chunk),
+      schema: step.schema,
+      maxOutput
+    }
     const first = await ai.ask(task, req, signal)
     if (!first.ok) return stopFor(first)
     let second = await ai.ask(task, req, signal, [first.model])
     if (!second.ok && second.avoided) second = await ai.ask(task, req, signal)
     if (!second.ok) return stopFor(second)
-    const listIds = new Set(part.map((t) => t.n))
-    const both = agreed(
-      pairsOf(first.json, checkIds, listIds),
-      pairsOf(second.json, checkIds, listIds)
-    )
-    for (const [p, why] of both) out.set(p, why)
+    out.push(step.agree(first, second, chunk, part))
   }
   return out
 }

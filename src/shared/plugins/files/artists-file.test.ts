@@ -4,6 +4,7 @@ import {
   addAiSplit,
   addAsked,
   aiKeys,
+  aiSplits,
   applyChanges,
   artistsText,
   convertOld,
@@ -562,6 +563,18 @@ describe('addAiGroup and a split', () => {
     expect(f.artists.find((a) => a.name === 'Sadness')?.tags).toEqual([
       { tag: 'Sadness, Forgotten', by: 'ai' }
     ])
+  })
+})
+
+describe('aiSplits', () => {
+  it('gives the tags with AI links in two or more artists, and those artists in file order', () => {
+    const f = file(
+      artist('Sadness', 'you', ['Sadness, Forgotten', 'ai'], ['Sadness', 'you']),
+      artist('Björk', 'ai', ['Bjork', 'ai']),
+      artist('Forgotten', 'ai', ['Sadness, Forgotten', 'ai'], ['A, B', 'you']),
+      artist('B', 'ai', ['A, B', 'you'])
+    )
+    expect(aiSplits(f)).toEqual(new Map([['sadness,forgotten', ['Sadness', 'Forgotten']]]))
   })
 })
 

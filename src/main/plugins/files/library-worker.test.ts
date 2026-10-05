@@ -293,7 +293,7 @@ describe('the library process', () => {
         version: 1,
         artists: [artist('Nobody', 'ai', ['Unknown artist', 'ai'], ['Gone', 'ai'])]
       }
-      const asked = { version: 1, prompt: 1, split: [], joined: ['unknownartist', 'gone'] }
+      const asked = { version: 1, prompt: 2, split: [], joined: ['unknownartist', 'gone'] }
 
       it('drops links and asked keys of tags that are gone after a scan that ran to the end', async () => {
         write(artistsPath(), two)
@@ -308,7 +308,7 @@ describe('the library process', () => {
         })
         expect(read(cachePath())).toEqual({
           version: 1,
-          prompt: 1,
+          prompt: 2,
           split: [],
           joined: ['unknownartist']
         })
@@ -330,12 +330,12 @@ describe('the library process', () => {
       it('keeps the names you gave in the cache, so they are not asked again', async () => {
         index(['kino'], true)
         write(artistsPath(), { version: 1, artists: [artist('Кино', 'you', ['kino', 'you'])] })
-        write(cachePath(), { version: 1, prompt: 1, split: [], joined: ['кино', 'gone'] })
+        write(cachePath(), { version: 1, prompt: 2, split: [], joined: ['кино', 'gone'] })
         start(true)
         scan(1)
         await until(() => scanned(1))
         send({ type: 'flush' })
-        expect(read(cachePath())).toEqual({ version: 1, prompt: 1, split: [], joined: ['кино'] })
+        expect(read(cachePath())).toEqual({ version: 1, prompt: 2, split: [], joined: ['кино'] })
       })
     })
 
@@ -414,16 +414,19 @@ describe('the library process', () => {
         model,
         json: { matches: [{ check: 1, same: 2, why: 'accent' }] }
       })
-      // Answers the run's maxInput and its two asks, n the asks before it.
+      // no tag split
+      const noSplit = (model: string): unknown => ({ ok: true, model, json: { tags: [] } })
+      // Answers the run's maxInput and its four asks (split twice, then join
+      // twice), n the asks before it.
       async function answerRun(n = 0): Promise<void> {
         const runs = calls('ai-max-input').length
         send({ type: 'ai-reply', id: (await call('ai-max-input', runs || 1)).id, max: 100_000 })
-        const first = await call('ai-ask', n + 1)
-        expect(first).toMatchObject({ task: 'artist-groups' })
-        send({ type: 'ai-reply', id: first.id, answer: answer('m1') as never })
-        const second = await call('ai-ask', n + 2)
-        expect(second).toMatchObject({ avoid: ['m1'] })
-        send({ type: 'ai-reply', id: second.id, answer: answer('m2') as never })
+        const answers = [noSplit('m1'), noSplit('m2'), answer('m1'), answer('m2')]
+        for (const [i, a] of answers.entries()) {
+          const ask = await call('ai-ask', n + i + 1)
+          expect(ask).toMatchObject({ task: 'artist-groups', ...(i % 2 ? { avoid: ['m1'] } : {}) })
+          send({ type: 'ai-reply', id: ask.id, answer: a as never })
+        }
         await until(() =>
           heard.some((m) => m.type === 'status' && m.status.groups?.state === 'done')
         )
@@ -446,10 +449,31 @@ describe('the library process', () => {
         })
         expect(read(cachePath())).toEqual({
           version: 1,
-          prompt: 1,
-          split: [],
+          prompt: 2,
+          split: ['bjork', 'björk'],
           joined: ['bjork', 'björk']
         })
+      })
+
+      it('checks all names again when the cache is from another prompt number', async () => {
+        index(['Bjork', 'Björk', 'Björk'])
+        write(artistsPath(), { version: 1, artists: [artist('Björk', 'ai', ['Bjork', 'ai'])] })
+        write(cachePath(), { version: 1, prompt: 1, split: [], joined: ['bjork', 'björk'] })
+        start(true)
+        await ready()
+        aiOn({ 'artist-groups': true })
+        send({ type: 'ai-reply', id: (await call('ai-max-input', 1)).id, max: 100_000 })
+        const none = { ok: true, model: 'm', json: { tags: [], matches: [] } }
+        for (let i = 1; i <= 4; i++)
+          send({ type: 'ai-reply', id: (await call('ai-ask', i)).id, answer: none as never })
+        await until(() =>
+          heard.some((m) => m.type === 'status' && m.status.groups?.state === 'done')
+        )
+        send({ type: 'flush' })
+        // asked again, and no answer gave the old link again
+        expect(read(artistsPath())).toEqual({ version: 1, artists: [] })
+        expect(read(cachePath())).toMatchObject({ prompt: 2, joined: ['bjork', 'björk'] })
+        expect(await artistOf('Bjork')).toBe('Bjork')
       })
 
       it('turned on during a scan, runs once after the scan ends', async () => {
@@ -466,7 +490,7 @@ describe('the library process', () => {
         expect(at('scanned')).toBeLessThan(at('ai-max-input'))
         await settle(50)
         expect(calls('ai-max-input')).toHaveLength(1)
-        expect(calls('ai-ask')).toHaveLength(2)
+        expect(calls('ai-ask')).toHaveLength(4)
         send({ type: 'flush' })
         expect(read(artistsPath())).toMatchObject({
           artists: [artist('Björk', 'ai', ['Bjork', 'ai'], ['Björk', 'ai'])]
@@ -601,7 +625,7 @@ describe('the library process', () => {
         expect(read(artistsPath())).toEqual(converted)
         expect(read(cachePath())).toEqual({
           version: 1,
-          prompt: 1,
+          prompt: 2,
           split: [],
           joined: ['bjork', 'björk', 'magogaio/sadness']
         })

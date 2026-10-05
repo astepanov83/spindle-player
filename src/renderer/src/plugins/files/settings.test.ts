@@ -19,7 +19,10 @@ const state = (on: boolean): AiState => ({
 
 describe('filesSettings and the artist groups task', () => {
   it('puts the ai block after the music folder blocks, and its line after it while on', () => {
-    files.status = { ...files.status, groups: { state: 'running', checked: 600, total: 3000 } }
+    files.status = {
+      ...files.status,
+      groups: { state: 'running', step: 'join', checked: 600, total: 3000 }
+    }
     ai.state = state(true)
     const blocks = filesSettings()
     const at = blocks.findIndex((b) => b.kind === 'ai')

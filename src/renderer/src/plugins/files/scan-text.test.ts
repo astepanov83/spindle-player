@@ -306,7 +306,7 @@ describe('groupsLine', () => {
   })
 
   it('says how far a run got, with a spinner', () => {
-    expect(groupsLine({ state: 'running', checked: 600, total: 3000 })).toEqual({
+    expect(groupsLine({ state: 'running', step: 'join', checked: 600, total: 3000 })).toEqual({
       text: 'Checked 600 of 3,000 names',
       busy: true
     })

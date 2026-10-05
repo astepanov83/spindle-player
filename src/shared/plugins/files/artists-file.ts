@@ -330,14 +330,20 @@ export function applyChanges(f: ArtistsFile, c: ArtistChanges, spelling: Spellin
   return snapshot(f) !== before
 }
 
-// The keys of tags the AI split: AI links in two or more artists.
-function splitKeys(f: ArtistsFile): Set<string> {
-  const count = new Map<string, number>()
+// The tags the AI split (AI links in two or more artists): tag key -> the
+// names of those artists, in file order. The join step asks about the parts.
+export function aiSplits(f: ArtistsFile): Map<string, string[]> {
+  const names = new Map<string, string[]>()
   for (const a of f.artists)
-    for (const k of new Set(a.tags.filter((l) => l.by === 'ai').map(keyOf)))
-      count.set(k, (count.get(k) ?? 0) + 1)
-  return new Set([...count].filter(([, n]) => n > 1).map(([k]) => k))
+    for (const k of new Set(a.tags.filter((l) => l.by === 'ai').map(keyOf))) {
+      const n = names.get(k)
+      if (n) n.push(a.name)
+      else names.set(k, [a.name])
+    }
+  return new Map([...names].filter(([, n]) => n.length > 1))
 }
+
+const splitKeys = (f: ArtistsFile): Set<string> => new Set(aiSplits(f).keys())
 
 // Links a tag by "ai" to one artist per part, replacing the tag's old AI
 // links. A part joins the artist that has its name key (yours keeps its

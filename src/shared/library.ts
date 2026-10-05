@@ -141,9 +141,10 @@ export interface FetchStatus extends FetchCounts {
 
 // The artist groups task (ticket 068), as the library process last ran it.
 export type GroupsStatus =
-  // checked: names asked about so far, of total
-  | { state: 'running'; checked: number; total: number }
-  // grouped: names put in a group this run; at: when it ended (ms since 1970)
+  // step: splitting joint credits, then matching spellings (ticket 070);
+  // checked: names asked about so far in this step, of total
+  | { state: 'running'; step: 'split' | 'join'; checked: number; total: number }
+  // grouped: tags given a new AI link this run, splits too; at: when it ended (ms since 1970)
   | { state: 'done'; grouped: number; at: number }
   // a rate or daily limit; at: when it goes on, when known
   | { state: 'limit'; at?: number }

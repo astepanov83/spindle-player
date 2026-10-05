@@ -1,11 +1,13 @@
-// The artist groups task's request and answer (ticket 068): which names go to
-// the model, the text it gets, and what of its answer is kept. Plain functions,
+// The artist groups task's requests and answers (tickets 068, 070): which
+// names go to the model, the text it gets for each step (split, then join),
+// and what of its answers is kept. Plain functions,
 // so they are tested without a model; the job that asks is group-artists-job.ts.
 import type { Album, ArtistCredit, Track } from '../../../shared/library'
 import type { JsonSchema } from '../../../shared/ai'
 import { artistKey, namesOf, tagOf } from '../../../shared/plugins/files/artists'
 import { lookUpArtist } from './artist-photo'
 import { checksOf } from './group'
+import { maxNameLength, maxNames } from '../../../shared/plugins/files/artist-edit'
 
 // One name the task knows: a tag with no link by you, or a name you gave a
 // tag (so a tag can join it).
@@ -29,29 +31,44 @@ export interface TaskName {
 export const chunkSize = 200
 
 // Raise it whenever a prompt changes: the cache then asks every name again.
-export const promptNumber = 1
+export const promptNumber = 2
 
-export const system = `You get artist names from one person's music library. The tags were typed by
-different people, so one artist can appear under several spellings.
+// Both prompts are short on purpose and name no artist, not even as an
+// example (ticket 070): paid models need no hints, and a name in the prompt
+// leaks into answers.
+export const splitSystem = `You get artist tags from one person's music library. For each line under
+CHECK, list the real artists the tag names, each written as in the tag.
+Leave out lines that already name exactly one artist and nothing else.
+If you are not sure, leave the line out. Answer only with JSON.`
 
-For each line under CHECK, find a different line in LIST that is the same artist,
-if any. Never answer a line with its own number. Leave out lines with no match.
+export const joinSystem = `You get artist names from one person's music library. For each line under
+CHECK, find a different line in LIST that is the same artist, if any.
+Never answer a line with its own number. Leave out lines with no match.
+If you are not sure, leave the line out. Answer only with JSON.`
 
-Same artist:
-- spelling, accents or punctuation: Bjork / Björk, Guns N Roses / Guns N' Roses
-- with or without "The": Beatles / The Beatles
-- the same name in another alphabet: Kino / Кино
-- a short and a full name: ELO / Electric Light Orchestra
+// { "tags": [ { "check": 57, "artists": ["A", "B"], "why": "..." } ] }
+export const splitSchema: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['tags'],
+  properties: {
+    tags: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['check', 'artists', 'why'],
+        properties: {
+          check: { type: 'integer' },
+          artists: { type: 'array', items: { type: 'string' } },
+          why: { type: 'string' }
+        }
+      }
+    }
+  }
+}
 
-Not the same artist:
-- a joint credit and one of its members: Sadness / Sadness, Stellafera;
-  Drake / Drake feat. Rihanna
-- different artists with similar names: Bush / Kate Bush
-- anything you are not sure about. A missed match is fine, a wrong one is not.
-
-Use the album titles to tell artists apart. Answer only with JSON.`
-
-export const schema: JsonSchema = {
+export const joinSchema: JsonSchema = {
   type: 'object',
   additionalProperties: false,
   required: ['matches'],
@@ -72,7 +89,8 @@ export const schema: JsonSchema = {
   }
 }
 
-export const maxOutput = 8000
+// Reasoning models used up 8000 on thinking and gave an empty answer.
+export const maxOutput = 32000
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
@@ -149,9 +167,32 @@ export function taskNames(
       .map((c) => c.title)
     out.push({ n: 0, key, name, titles, count: best.n, seen: best.seen, manual: e.manual })
   }
-  out.sort((x, y) => collator.compare(x.name, y.name) || (x.key < y.key ? -1 : 1))
-  out.forEach((t, i) => (t.n = i + 1))
-  return out
+  return numbered(out)
+}
+
+// Sorted by name and numbered from 1, in place.
+function numbered(list: TaskName[]): TaskName[] {
+  list.sort((x, y) => collator.compare(x.name, y.name) || (x.key < y.key ? -1 : 1))
+  list.forEach((t, i) => (t.n = i + 1))
+  return list
+}
+
+// The names step 2 (join) asks about: a tag the AI split leaves, and its
+// parts come in with its titles, so a part can join another spelling. A
+// part with the key of a name already there is that name. splits: tag key
+// -> the names of the artists it is split into (aiSplits). Numbered anew.
+export function joinNames(names: TaskName[], splits: Map<string, string[]>): TaskName[] {
+  const split = (t: TaskName): boolean => !t.manual && splits.has(t.key)
+  const out = names.filter((t) => !split(t)).map((t) => ({ ...t }))
+  const keys = new Set(out.map((t) => t.key))
+  for (const t of names.filter(split))
+    for (const part of splits.get(t.key)!) {
+      const key = artistKey(part)
+      if (!key || keys.has(key) || !lookUpArtist(part)) continue
+      keys.add(key)
+      out.push({ ...t, key, name: part, manual: false })
+    }
+  return numbered(out)
 }
 
 // The names not asked about yet, 200 at a time.
@@ -216,6 +257,78 @@ export function pairsOf(
     out.set(c < s ? `${c}-${s}` : `${s}-${c}`, typeof why === 'string' ? why : '')
   }
   return out
+}
+
+// One tag the model split: the parts as written in the tag, and their keys
+// sorted, so two answers can be compared in any order.
+export interface Split {
+  parts: string[]
+  keys: string[]
+  why: string
+}
+
+// The split answer comes parsed but unchecked. An item is dropped, not the
+// whole answer, when it is not the right shape, is not about a CHECK line,
+// or its parts are not names found in the tag (a made-up name, or one taken
+// from an album title). dropped: one line per item, so mistakes show in the log.
+export function splitsOf(
+  json: unknown,
+  chunk: TaskName[]
+): { splits: Map<number, Split>; dropped: string[] } {
+  const splits = new Map<number, Split>()
+  const dropped: string[] = []
+  if (!isObject(json) || !Array.isArray(json.tags)) return { splits, dropped }
+  const byN = new Map(chunk.map((t) => [t.n, t]))
+  for (const item of json.tags) {
+    if (!isObject(item)) {
+      dropped.push('an item that is not an object')
+      continue
+    }
+    const { check, artists, why } = item
+    const t = Number.isInteger(check) ? byN.get(check as number) : undefined
+    if (!t) {
+      dropped.push(`line ${JSON.stringify(check)}: not a CHECK line`)
+      continue
+    }
+    const problem = splitProblem(t, artists, splits.has(t.n))
+    if (typeof problem === 'string') {
+      dropped.push(`${t.name}: ${problem}`)
+      continue
+    }
+    splits.set(t.n, { ...problem, why: typeof why === 'string' ? why : '' })
+  }
+  return { splits, dropped }
+}
+
+// Why a split can't be used, or its parts and keys.
+function splitProblem(t: TaskName, artists: unknown, seen: boolean): string | Omit<Split, 'why'> {
+  if (seen) return 'answered twice'
+  if (!Array.isArray(artists) || !artists.every((a) => typeof a === 'string'))
+    return 'artists is not a list of names'
+  const parts = (artists as string[]).map((a) => a.trim())
+  if (!parts.length) return 'no parts'
+  if (parts.length > maxNames) return `more than ${maxNames} parts`
+  const tag = oneLine(t.name).toLowerCase()
+  const keys = new Set<string>()
+  for (const p of parts) {
+    const key = artistKey(p)
+    if (!key) return 'an empty part'
+    if (p.length > maxNameLength) return 'a part is too long'
+    if (!tag.includes(p.toLowerCase())) return `"${p}" is not in the tag`
+    if (keys.has(key)) return `"${p}" twice`
+    keys.add(key)
+  }
+  if (parts.length === 1 && keys.has(t.key)) return 'one part, the tag itself'
+  return { parts, keys: [...keys].sort() }
+}
+
+// The same artists in two answers, in any order.
+export const sameParts = (a: Split, b: Split): boolean =>
+  a.keys.length === b.keys.length && a.keys.every((k, i) => k === b.keys[i])
+
+// Splits both answers gave with the same parts, as the first one wrote them.
+export function agreedSplits(a: Map<number, Split>, b: Map<number, Split>): Map<number, Split> {
+  return new Map([...a].filter(([n, s]) => b.has(n) && sameParts(s, b.get(n)!)))
 }
 
 // Pairs both answers gave, with the first one's reason.

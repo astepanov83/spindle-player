@@ -6,11 +6,16 @@ import { artistKey } from '../../../shared/plugins/files/artists'
 import { convertOld, resolve, yourKeys } from '../../../shared/plugins/files/artists-file'
 import {
   agreed,
+  agreedSplits,
   chunksOf,
+  joinNames,
+  joinSystem,
   pairsOf,
+  sameParts,
   shownName,
   splitList,
-  system,
+  splitsOf,
+  splitSystem,
   taskNames,
   UnionFind,
   userText,
@@ -56,9 +61,65 @@ describe('the request', () => {
   // every CHECK name is in LIST too, so a model left alone pairs each name
   // with itself (seen on the user's library); the code drops those pairs
   it('tells the model to pick a different line and leave out names with no match', () => {
-    expect(system).toContain('find a different line in LIST')
-    expect(system).toContain('Never answer a line with its own number.')
-    expect(system).toContain('Leave out lines with no match.')
+    expect(joinSystem).toContain('find a different line in LIST')
+    expect(joinSystem).toContain('Never answer a line with its own number.')
+    expect(joinSystem).toContain('Leave out lines with no match.')
+  })
+
+  it('asks the split as the ticket words it, written as in the tag', () => {
+    expect(splitSystem).toContain('list the real artists the tag names, each written as in the tag')
+    expect(splitSystem).toContain('Leave out lines that already name exactly one artist')
+  })
+
+  // ticket 070: the prompt never names an artist, not even as an example
+  it('names no artist in either prompt', () => {
+    const cases = [
+      'Sadness',
+      'Forgotten',
+      'Soulless',
+      'In Autumnus',
+      'Grief & Bliss',
+      'Grief',
+      'Bliss',
+      'A Perfect Day',
+      'City Of Dawn',
+      'An Open Letter',
+      'Jared Turner',
+      'John Pasden',
+      'kenopsia',
+      'Moonspell',
+      'Orquestra Sinfonietta De Lisboa',
+      'Charles Dickens',
+      'Xingxing Liu',
+      'Jules Verne',
+      'Falaise',
+      'Crescent Days',
+      'Shishuang Chen',
+      'Centerpointe',
+      'Centrepointe',
+      'Centerpointe Research Institute',
+      'Mortiis',
+      "Last Man's Breath",
+      'The Evocation of Her Tears',
+      'Bill Harris',
+      'Morbid God',
+      'Magogaio',
+      'Stellafera',
+      // the old prompt's examples
+      'Bjork',
+      'Björk',
+      'Beatles',
+      'Guns N',
+      'Kino',
+      'Кино',
+      'Electric Light Orchestra',
+      'ELO',
+      'Drake',
+      'Rihanna',
+      'Bush'
+    ]
+    for (const prompt of [splitSystem, joinSystem])
+      for (const name of cases) expect(prompt.toLowerCase()).not.toContain(name.toLowerCase())
   })
 
   it('numbers the names in name order, the same whatever order the files come in', () => {
@@ -235,5 +296,147 @@ describe('groups', () => {
         { ...b, manual: true }
       ])
     ).toBe('The Beatles')
+  })
+})
+
+describe('the split answer', () => {
+  const tags = plain(['Sadness, Forgotten', 'Grief & Bliss', 'Magogaio', 'A/B/C'])
+  const t = (check: unknown, artists: unknown, why: unknown = 'joint'): unknown => ({
+    check,
+    artists,
+    why
+  })
+  const kept = (json: unknown): Record<number, string[]> =>
+    Object.fromEntries([...splitsOf(json, tags).splits].map(([n, s]) => [n, s.parts]))
+
+  it('keeps the parts as written, trimmed, with their keys sorted and the reason', () => {
+    const { splits, dropped } = splitsOf({ tags: [t(1, [' Sadness', 'Forgotten '])] }, tags)
+    expect(splits.get(1)).toEqual({
+      parts: ['Sadness', 'Forgotten'],
+      keys: ['forgotten', 'sadness'],
+      why: 'joint'
+    })
+    expect(dropped).toEqual([])
+  })
+
+  it('keeps one part: the tag with extra words around one name', () => {
+    expect(kept({ tags: [t(4, ['B'])] })).toEqual({ 4: ['B'] })
+  })
+
+  it('drops each bad item with a reason, and keeps the rest', () => {
+    const long = 'x'.repeat(201)
+    const twentyOne = Array.from({ length: 21 }, () => 'A')
+    const json = {
+      tags: [
+        null,
+        t(9, ['A']),
+        t('1', ['Sadness']),
+        t(2, 'Grief'),
+        t(2, ['Grief', 7]),
+        t(2, []),
+        t(2, ['Grief', ' ']),
+        t(2, ['Grief', long]),
+        // a name from an album title, not the tag
+        t(3, ['Magogaio', 'Sadness']),
+        t(2, ['Grief', 'grief']),
+        t(3, ['magogaio']),
+        t(4, twentyOne),
+        t(1, ['Sadness', 'Forgotten'], 7),
+        t(1, ['Sadness'])
+      ]
+    }
+    const { splits, dropped } = splitsOf(json, tags)
+    expect([...splits]).toEqual([
+      [1, { parts: ['Sadness', 'Forgotten'], keys: ['forgotten', 'sadness'], why: '' }]
+    ])
+    expect(dropped).toEqual([
+      'an item that is not an object',
+      'line 9: not a CHECK line',
+      'line "1": not a CHECK line',
+      'Grief & Bliss: artists is not a list of names',
+      'Grief & Bliss: artists is not a list of names',
+      'Grief & Bliss: no parts',
+      'Grief & Bliss: an empty part',
+      'Grief & Bliss: a part is too long',
+      'Magogaio: "Sadness" is not in the tag',
+      'Grief & Bliss: "grief" twice',
+      'Magogaio: one part, the tag itself',
+      'A/B/C: more than 20 parts',
+      'Sadness, Forgotten: answered twice'
+    ])
+  })
+
+  it('finds a part in the tag with case ignored', () => {
+    expect(kept({ tags: [t(1, ['SADNESS', 'forgotten'])] })).toEqual({
+      1: ['SADNESS', 'forgotten']
+    })
+  })
+
+  it('takes nothing from a broken answer', () => {
+    for (const json of [undefined, null, 'text', [], { tags: 'x' }, { matches: [] }])
+      expect(splitsOf(json, tags).splits.size).toBe(0)
+  })
+
+  describe('two answers', () => {
+    const of = (items: unknown[]): ReturnType<typeof splitsOf>['splits'] =>
+      splitsOf({ tags: items }, tags).splits
+
+    it('keep a split with the same parts in another order, as the first wrote it', () => {
+      const a = of([t(1, ['Sadness', 'Forgotten'], 'a')])
+      const b = of([t(1, ['forgotten', 'SADNESS'], 'b')])
+      expect(sameParts(a.get(1)!, b.get(1)!)).toBe(true)
+      expect(agreedSplits(a, b)).toEqual(a)
+    })
+
+    it('drop a split with other parts, or one part missing, or one answer without it', () => {
+      const a = of([t(4, ['A', 'B', 'C']), t(1, ['Sadness', 'Forgotten'])])
+      const b = of([t(4, ['A', 'B'])])
+      expect(sameParts(a.get(4)!, b.get(4)!)).toBe(false)
+      expect(agreedSplits(a, b).size).toBe(0)
+      const c = of([t(4, ['C', 'A', 'B']), t(1, ['Sadness', 'Forgot'])])
+      expect([...agreedSplits(a, c).keys()]).toEqual([4])
+    })
+  })
+})
+
+describe('the join names', () => {
+  it('takes a split tag out and brings its parts in with its titles, numbered anew', () => {
+    const list = plain(['Zed', 'Sadness, Forgotten', 'Abba'])
+    const out = joinNames(list, new Map([['sadness, forgotten', ['Sadness', 'Forgotten']]]))
+    expect(out.map((t) => [t.n, t.name, t.key, t.titles, t.manual])).toEqual([
+      [1, 'Abba', 'abba', ['Abba album', 'Abba single'], false],
+      [
+        2,
+        'Forgotten',
+        'forgotten',
+        ['Sadness, Forgotten album', 'Sadness, Forgotten single'],
+        false
+      ],
+      [3, 'Sadness', 'sadness', ['Sadness, Forgotten album', 'Sadness, Forgotten single'], false],
+      [4, 'Zed', 'zed', ['Zed album', 'Zed single'], false]
+    ])
+    // the step 1 numbers stay as they were
+    expect(list.map((t) => t.n)).toEqual([1, 2, 3])
+  })
+
+  it('makes a part with the key of a name already there that name', () => {
+    const list = plain(['sadness', 'Sadness, Forgotten', 'Forgotten, Sadness'])
+    const out = joinNames(
+      list,
+      new Map([
+        ['sadness, forgotten', ['Sadness', 'Forgotten']],
+        ['forgotten, sadness', ['Sadness', 'Forgotten']]
+      ])
+    )
+    expect(out.map((t) => [t.name, t.titles[0]])).toEqual([
+      ['Forgotten', 'Sadness, Forgotten album'],
+      ['sadness', 'sadness album']
+    ])
+  })
+
+  it('keeps a name you gave whose key is in the splits: only tags are split', () => {
+    const [you] = plain(['Kino'])
+    const out = joinNames([{ ...you, manual: true }], new Map([['kino', ['A', 'B']]]))
+    expect(out.map((t) => t.name)).toEqual(['Kino'])
   })
 })

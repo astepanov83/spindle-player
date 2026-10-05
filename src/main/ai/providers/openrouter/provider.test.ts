@@ -79,6 +79,10 @@ function setup(opts: { key?: string; model?: string } = {}) {
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}): Response =>
   new Response(JSON.stringify(body), { status, headers })
 
+const credits = (total: number, used: number): unknown => ({
+  data: { total_credits: total, total_usage: used }
+})
+
 const answerBody = (content: string): unknown => ({ choices: [{ message: { content } }] })
 
 const model = (over: Partial<ModelInfo> = {}): ModelInfo => ({
@@ -270,15 +274,47 @@ describe('models', () => {
     return t.provider.models(noSignal)
   }
 
-  it('keeps only :free models, largest context first', async () => {
+  it('keeps :free models and the two paid ones, largest free context first', async () => {
     const t = setup({ key: 'k' })
-    const all = await list(t)
+    t.replies.push(() => json(models))
+    t.replies.push(() => json(credits(10, 0.09)))
+    const all = await t.provider.models(noSignal)
     expect(t.calls[0].url).toBe('https://openrouter.ai/api/v1/models')
-    expect(all.every((m) => m.id.endsWith(':free'))).toBe(true)
-    expect(all).toHaveLength(7)
-    const sizes = all.map((m) => m.context)
+    expect(all.map((m) => m.id).slice(0, 2)).toEqual([
+      'google/gemini-3.8-flash',
+      'anthropic/claude-sonnet-5.5'
+    ])
+    const free = all.slice(2)
+    expect(free.every((m) => m.id.endsWith(':free'))).toBe(true)
+    expect(free).toHaveLength(7)
+    const sizes = free.map((m) => m.context)
     expect(sizes).toEqual([...sizes].sort((a, b) => b - a))
-    expect(all[0].id).toBe('thinkingmachines/inkling-small:free')
+    expect(free[0].id).toBe('thinkingmachines/inkling-small:free')
+  })
+
+  it('reads the credit with the list and gives the paid models only with credit', async () => {
+    const t = setup({ key: 'k' })
+    t.replies.push(() => json(models))
+    t.replies.push(() => json(credits(10, 0.09)))
+    expect(await t.provider.models(noSignal)).toHaveLength(9)
+    expect(t.calls[1].url).toBe('https://openrouter.ai/api/v1/credits')
+    expect((t.calls[1].init.headers as Record<string, string>).Authorization).toBe('Bearer k')
+
+    for (const reply of [() => json(credits(5, 5)), () => json({}, 500)]) {
+      const t2 = setup({ key: 'k' })
+      t2.replies.push(() => json(models))
+      t2.replies.push(reply)
+      const all = await t2.provider.models(noSignal)
+      expect(all).toHaveLength(7)
+      expect(all.every((m) => m.id.endsWith(':free'))).toBe(true)
+    }
+    // a failing fetch is no credit, too
+    const t3 = setup({ key: 'k' })
+    t3.replies.push(() => json(models))
+    t3.replies.push(() => {
+      throw new Error('down')
+    })
+    expect(await t3.provider.models(noSignal)).toHaveLength(7)
   })
 
   it('says schema when response_format or structured_outputs is supported', async () => {
@@ -322,6 +358,7 @@ describe('models', () => {
   it('goes back to the best free model when the fixed one is gone', async () => {
     const t = setup({ model: 'gone/model:free' })
     const all = await list(t)
+    // no key, so no credit
     expect(all).toHaveLength(7)
   })
 
@@ -332,8 +369,13 @@ describe('models', () => {
       t.provider.blocks().find((b) => b.kind === 'choice')
     expect(choice()).toMatchObject({ value: 'qwen/qwen3.8-27b:free' })
     const options = (choice() as { options: { id: string }[] }).options
-    expect(options[0]).toEqual({ id: 'auto', label: 'Best free model' })
-    expect(options).toHaveLength(8)
+    expect(options[0]).toEqual({ id: 'auto', label: 'Best model' })
+    // the paid ones are listed, marked
+    expect(options).toHaveLength(10)
+    expect(options.slice(1, 3)).toMatchObject([
+      { id: 'google/gemini-3.8-flash', label: 'Google: Gemini 3.8 Flash (paid)' },
+      { id: 'anthropic/claude-sonnet-5.5', label: 'Anthropic: Claude Sonnet 5.5 (paid)' }
+    ])
     await t.provider.act('model', 'set', 'auto')
     expect(t.settings.get('model')).toBe('auto')
     expect(choice()).toMatchObject({ value: 'auto' })
@@ -349,11 +391,12 @@ describe('models', () => {
     expect(blocks.some((b) => b.kind === 'status' && b.error)).toBe(true)
     expect(
       (blocks.find((b) => b.kind === 'choice') as { options: unknown[] }).options
-    ).toHaveLength(8)
+    ).toHaveLength(10)
   })
 })
 
 describe('ask', () => {
+  const paid = (): ModelInfo => model({ id: 'google/gemini-3.8-flash' })
   const ask = (t: Setup, m = model(), signal = noSignal): Promise<Answer> =>
     t.provider.ask(m, req, signal)
 
@@ -504,7 +547,7 @@ describe('ask', () => {
           })
       )
       const pending = ask(t)
-      await vi.advanceTimersByTimeAsync(119_000)
+      await vi.advanceTimersByTimeAsync(299_000)
       let settled = false
       void pending.then(() => (settled = true))
       await vi.advanceTimersByTimeAsync(0)
@@ -513,11 +556,27 @@ describe('ask', () => {
       expect(await pending).toMatchObject({
         ok: false,
         error: 'failed',
-        detail: 'no answer in 120 s'
+        detail: 'no answer in 300 s'
       })
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // a paid model that ran out of credit: next model, and the credit is read again
+  it('maps a 402 to failed and reads the credit again', async () => {
+    const t = setup({ key: 'k' })
+    t.replies.push(() => json(models))
+    t.replies.push(() => json(credits(10, 0.09)))
+    await t.provider.models(noSignal)
+    t.replies.push(() => json({ error: { code: 402, message: 'Insufficient credits' } }, 402))
+    t.replies.push(() => json(credits(2, 2)))
+    const n = t.calls.length
+    expect(await ask(t, paid())).toMatchObject({ ok: false, error: 'failed' })
+    expect(t.calls[n].url).toBe('https://openrouter.ai/api/v1/chat/completions')
+    expect(t.calls[n + 1].url).toBe('https://openrouter.ai/api/v1/credits')
+    const ids = (await t.provider.models(noSignal)).map((m) => m.id)
+    expect(ids.some((id) => !id.endsWith(':free'))).toBe(false)
   })
 
   it('rethrows the abort of the caller', async () => {
@@ -557,6 +616,15 @@ describe('ask', () => {
     t.advance(1000)
     await ask(t)
     expect(t.sleeps).toEqual([3500, 2500])
+  })
+
+  it('does not slow paid models', async () => {
+    const t = setup({ key: 'k' })
+    for (let i = 0; i < 3; i++) t.replies.push(() => json(answerBody('{}')))
+    await ask(t, paid())
+    await ask(t, paid())
+    await ask(t, paid())
+    expect(t.sleeps).toEqual([])
   })
 
   it('does not wait when enough time has passed', async () => {

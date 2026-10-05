@@ -3,8 +3,8 @@ export const site = 'https://openrouter.ai'
 export const api = `${site}/api/v1`
 
 const timeoutMs = 60_000
-// free models are often queued, so an answer gets longer than a plain request
-export const askTimeoutMs = 120_000
+// free reasoning models are slow: one took 114 s for 82 names
+export const askTimeoutMs = 300_000
 
 export interface Reply {
   status: number

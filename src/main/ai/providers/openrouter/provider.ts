@@ -1,4 +1,4 @@
-// OpenRouter's free models, with a one-click login (ticket 067). Everything
+// OpenRouter's free models and two paid ones, with a one-click login (ticket 067). Everything
 // about OpenRouter is in this folder.
 import { createHash, randomBytes } from 'crypto'
 import type { Answer, JsonRequest } from '../../../../shared/ai'
@@ -6,7 +6,7 @@ import type { SettingBlock } from '../../../../shared/setting-blocks'
 import type { ModelInfo, Provider, ProviderContext } from '../../types'
 import { api, askTimeoutMs, NetworkError, send, site } from './api'
 import { answerFor, appName, chatUrl, requestBody } from './ask'
-import { parseModels } from './models'
+import { isFree, parseModels } from './models'
 
 const hour = 60 * 60 * 1000
 // free models allow 20 requests a minute
@@ -47,8 +47,9 @@ interface Login {
 export class OpenRouterProvider implements Provider {
   readonly info = {
     id: 'openrouter',
-    name: 'OpenRouter (free models)',
-    about: 'Free models on openrouter.ai. Log in with one click, no card needed.'
+    name: 'OpenRouter',
+    about:
+      'Free models on openrouter.ai, and two paid models while your account has credit, a few cents per run. Log in with one click, no card needed.'
   }
   #ctx: ProviderContext | undefined
   #running = new Set<AbortController>()
@@ -63,6 +64,8 @@ export class OpenRouterProvider implements Provider {
   #list: ModelInfo[] = []
   #listAt = 0
   #listError: string | undefined
+  // the account has credit, so the paid models are tried first
+  #credit = false
   // asks in a row that said "no endpoints". The service tries 3 models at most
   // per request, so the whole list is never seen.
   #noEndpoints = 0
@@ -113,10 +116,10 @@ export class OpenRouterProvider implements Provider {
       label: 'Model',
       value: fixed && this.#list.some((m) => m.id === fixed) ? fixed : auto,
       options: [
-        { id: auto, label: 'Best free model' },
+        { id: auto, label: 'Best model' },
         ...this.#list.map((m) => ({
           id: m.id,
-          label: m.name,
+          label: isFree(m.id) ? m.name : `${m.name} (paid)`,
           note: `${Math.round(m.context / 1000)}k context`
         }))
       ]
@@ -150,7 +153,8 @@ export class OpenRouterProvider implements Provider {
     const fixed = this.#ctx?.settings.get('model')
     // a fixed choice that is gone from the list is "Best free model" again
     const one = fixed && fixed !== auto ? list.find((m) => m.id === fixed) : undefined
-    return one ? [one] : list
+    // paid models wait for credit; a fixed one is asked anyway
+    return one ? [one] : list.filter((m) => this.#credit || isFree(m.id))
   }
 
   async ask(model: ModelInfo, req: JsonRequest, signal: AbortSignal): Promise<Answer> {
@@ -159,10 +163,13 @@ export class OpenRouterProvider implements Provider {
     if (!ctx || !key) return { ok: false, error: 'auth', detail: 'not connected' }
     const ctl = this.#link(signal)
     try {
-      // take the next free place now, so asks at the same time queue up
-      const wait = Math.max(0, this.#nextAt - this.clock.now())
-      this.#nextAt = this.clock.now() + wait + spacingMs
-      if (wait) await this.clock.sleep(wait, ctl.signal)
+      // take the next free place now, so asks at the same time queue up.
+      // Only free models have the limit.
+      if (isFree(model.id)) {
+        const wait = Math.max(0, this.#nextAt - this.clock.now())
+        this.#nextAt = this.clock.now() + wait + spacingMs
+        if (wait) await this.clock.sleep(wait, ctl.signal)
+      }
       const res = await send(
         ctx.fetch,
         chatUrl,
@@ -192,6 +199,8 @@ export class OpenRouterProvider implements Provider {
         }
       )
       this.#trackPrivacy(ctx, answer, noEndpoints)
+      // the credit may have run out: the next ask must not start with a paid model
+      if (res.status === 402) await this.#readCredit(ctl.signal)
       return answer
     } catch (error) {
       // stop() aborted it, not the caller
@@ -251,6 +260,7 @@ export class OpenRouterProvider implements Provider {
       this.#list = list
       this.#listAt = this.clock.now()
       this.#listError = undefined
+      await this.#readCredit(signal)
       ctx?.changed()
       return list
     } catch (error) {
@@ -259,6 +269,30 @@ export class OpenRouterProvider implements Provider {
       ctx?.changed()
       throw error
     }
+  }
+
+  // No credit, or a failed read, means free models only.
+  async #readCredit(signal: AbortSignal): Promise<void> {
+    const ctx = this.#ctx
+    const key = ctx?.secrets.get('key')
+    if (!ctx || !key) return
+    let credit = false
+    try {
+      const res = await send(
+        ctx.fetch,
+        `${api}/credits`,
+        { headers: { Authorization: `Bearer ${key}` } },
+        signal
+      )
+      if (res.status === 200) {
+        const data = (JSON.parse(res.text) as { data?: Record<string, unknown> }).data
+        const { total_credits: total, total_usage: used } = data ?? {}
+        credit = typeof total === 'number' && typeof used === 'number' && total - used > 0
+      }
+    } catch {
+      signal.throwIfAborted()
+    }
+    this.#credit = credit
   }
 
   // for the model choice's list, right after start or login

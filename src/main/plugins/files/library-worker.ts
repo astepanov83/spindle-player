@@ -13,6 +13,7 @@ import {
   aiKeys,
   applyChanges,
   artistGroupsTask,
+  cacheKeys,
   convertOld,
   knownArtists,
   knownCache,
@@ -1057,7 +1058,7 @@ async function scan(
     const credits = [...built.data.albums, ...built.data.tracks]
     const used = usedKeys(credits)
     if (prune(artists, used)) saveArtists()
-    if (pruneCache(aiCache, used)) saveCache()
+    if (pruneCache(aiCache, cacheKeys(artists, used))) saveCache()
     if (convertLater) {
       convertLater = false
       if (convertOldFiles(start, false, false, true)) publisher.now()

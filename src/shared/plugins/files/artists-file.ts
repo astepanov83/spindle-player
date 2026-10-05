@@ -356,6 +356,15 @@ export function aiSplits(f: ArtistsFile): Map<string, string[]> {
 
 const splitKeys = (f: ArtistsFile): Set<string> => new Set(aiSplits(f).keys())
 
+// The keys the cache may keep: usedKeys, and the parts of the AI's splits.
+// Step 2 asks about a part with no tag of its own too, so dropping it would
+// have it asked (and paid for) again after every scan.
+export function cacheKeys(f: ArtistsFile, used: Set<string>): Set<string> {
+  const out = new Set(used)
+  for (const names of aiSplits(f).values()) for (const n of names) out.add(artistKey(n))
+  return out
+}
+
 // Links a tag by "ai" to one artist per part, replacing the tag's old AI
 // links. A part joins the artist that has its name key (yours keeps its
 // name); else a new artist, named with the library's most common spelling of

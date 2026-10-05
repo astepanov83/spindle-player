@@ -6,6 +6,7 @@ import {
   aiKeys,
   aiSplits,
   applyChanges,
+  cacheKeys,
   artistsText,
   convertOld,
   creditOf,
@@ -589,6 +590,19 @@ describe('aiSplits', () => {
       artist('B', 'ai', ['A, B', 'you'])
     )
     expect(aiSplits(f)).toEqual(new Map([['sadness,forgotten', ['Sadness', 'Forgotten']]]))
+  })
+})
+
+describe('cacheKeys', () => {
+  it("adds the keys of the AI's split parts, not of its other artists", () => {
+    const f = file(
+      artist('Sadness', 'ai', ['Sadness, Forgotten', 'ai']),
+      artist('Forgotten', 'ai', ['Sadness, Forgotten', 'ai']),
+      artist('Björk', 'ai', ['Bjork', 'ai'])
+    )
+    expect(cacheKeys(f, new Set(['sadness,forgotten', 'bjork']))).toEqual(
+      new Set(['sadness,forgotten', 'bjork', 'sadness', 'forgotten'])
+    )
   })
 })
 

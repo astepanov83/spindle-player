@@ -594,6 +594,42 @@ describe('the library process', () => {
         aiOn({})
       })
 
+      it('a split part with no tag of its own stays asked after a scan and a restart', async () => {
+        index(['Sadness, Forgotten', 'Sadness'], true)
+        start(true)
+        await ready()
+        aiOn({ 'artist-groups': true })
+        send({ type: 'ai-reply', id: (await call('ai-max-input', 1)).id, max: 100_000 })
+        // "Sadness" is 1, "Sadness, Forgotten" is 2
+        const split = (model: string): unknown => ({
+          ok: true,
+          model,
+          json: { tags: [{ check: 2, artists: ['Sadness', 'Forgotten'], why: 'two' }] }
+        })
+        const none = (model: string): unknown => ({ ok: true, model, json: { matches: [] } })
+        const answers = [split('m1'), split('m2'), none('m1'), none('m2')]
+        for (const [i, a] of answers.entries())
+          send({ type: 'ai-reply', id: (await call('ai-ask', i + 1)).id, answer: a as never })
+        await until(() =>
+          heard.some((m) => m.type === 'status' && m.status.groups?.state === 'done')
+        )
+
+        // the scan's end prunes the cache, then starts a run that has nothing to ask
+        scan(1)
+        await until(() => scanned(1))
+        await settle(50)
+        expect(calls('ai-max-input')).toHaveLength(1)
+        send({ type: 'flush' })
+        expect(read(cachePath())).toMatchObject({ joined: ['forgotten', 'sadness'] })
+
+        await boot()
+        start(true, [], { 'artist-groups': true })
+        await ready()
+        await settle(50)
+        expect(calls('ai-max-input')).toHaveLength(0)
+        expect(calls('ai-ask')).toHaveLength(0)
+      })
+
       it('end to end: Edit artist, an AI group, AI off, Use tag, and a restart keeps it all', async () => {
         index(['kino', 'Sadness, Stellafera', 'Bjork', 'Björk', 'Björk'])
         // shown but no job yet

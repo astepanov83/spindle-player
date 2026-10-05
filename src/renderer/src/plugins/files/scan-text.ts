@@ -109,7 +109,10 @@ export function groupsLine(
   if (!g) return undefined
   switch (g.state) {
     case 'running':
-      return { text: `Checked ${n(g.checked)} of ${n(g.total)} names`, busy: true }
+      return {
+        text: `${g.step === 'split' ? 'Splitting credits' : 'Matching spellings'}: ${n(g.checked)} of ${n(g.total)}`,
+        busy: true
+      }
     case 'done':
       return { text: `Grouped ${plural(g.grouped, 'artist', 'artists')}, ${clock(g.at)}` }
     case 'limit': {

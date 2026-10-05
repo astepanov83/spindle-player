@@ -167,6 +167,8 @@ export type WorkerIn =
   | { type: 'resume' }
   // the page renamed or split artists, or used a tag again (tickets 024, 069)
   | { type: 'set-artists'; changes: ArtistChanges }
+  // the page asked the artist groups task to check all names again (ticket 070)
+  | { type: 'ai-recheck' }
   // the covers main uses changed (station logos); the prune keeps them
   | { type: 'keep-covers'; hashes: string[] }
   // the cover of a song playing on the radio (ticket 032), looked up only

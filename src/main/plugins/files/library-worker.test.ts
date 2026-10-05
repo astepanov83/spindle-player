@@ -485,6 +485,23 @@ describe('the library process', () => {
         expect(await artistOf('Bjork')).toBe('Bjork')
       })
 
+      it('asks every name again when the page sends ai-recheck, only while the task is on', async () => {
+        index(['Bjork', 'Björk', 'Björk'])
+        start(true)
+        await ready()
+        send({ type: 'ai-recheck' })
+        await settle(50)
+        expect(calls('ai-max-input')).toHaveLength(0)
+        aiOn({ 'artist-groups': true })
+        await answerRun()
+        send({ type: 'ai-recheck' })
+        // a second run: its own max-input and four asks, though the names were asked
+        send({ type: 'ai-reply', id: (await call('ai-max-input', 2)).id, max: 100_000 })
+        expect(calls('ai-ask')).toHaveLength(4)
+        const ask = await call('ai-ask', 5)
+        expect(ask).toMatchObject({ task: 'artist-groups' })
+      })
+
       it('goes on with a full check the cache file says is under way', async () => {
         index(['Bjork', 'Björk', 'Björk'])
         write(artistsPath(), { version: 1, artists: [artist('Björk', 'ai', ['Bjork', 'ai'])] })

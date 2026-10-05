@@ -488,6 +488,17 @@ function setAiOn(tasks: Record<string, boolean>, enabled: Record<string, boolean
   publisher.now()
 }
 
+// The button: a run going stops, then every name is checked again. While a
+// scan runs the job waits; the saved cache makes the scan's end go on with it.
+function recheckNames(): void {
+  if (!on || !aiOn[artistGroupsTask]) return
+  stopGroupsJob()
+  startFullCheck(artists, aiCache)
+  saveCache()
+  log('Artist groups: checking all names again, asked on the page')
+  startGroupsJob()
+}
+
 function stopGroupsJob(): void {
   // its progress would stay up; the next run shows its own
   if (groupsJob && status.groups?.state === 'running') setStatus({ groups: undefined })
@@ -1153,6 +1164,9 @@ port.on('message', (e: Electron.MessageEvent) => {
       break
     case 'set-artists':
       void ready.then(() => setArtists(m.changes))
+      break
+    case 'ai-recheck':
+      void ready.then(recheckNames)
       break
     case 'ai-on':
       void ready.then(() => setAiOn(m.tasks, m.enabled))

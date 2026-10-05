@@ -46,14 +46,25 @@ export function filesSettings(): SettingBlock[] {
 
 // The task's own line follows its switch and setup, only while it is on.
 function groupsBlocks(): SettingBlock[] {
-  const line = ai.state?.tasks[artistGroupsTask]?.on ? groupsLine(files.status.groups) : undefined
-  return line ? [{ kind: 'status', ...line }] : []
+  if (!ai.state?.tasks[artistGroupsTask]?.on) return []
+  const g = files.status.groups
+  const line = groupsLine(g)
+  return [
+    ...(line ? [{ kind: 'status', ...line } as SettingBlock] : []),
+    {
+      kind: 'button',
+      id: 'ai-recheck',
+      label: 'Check all names again',
+      disabled: g?.state === 'running'
+    }
+  ]
 }
 
 export function filesActSetting(id: string, actionId: string, value?: string): void {
   if (id === 'folders' && actionId === 'remove' && value) window.libraryApi.removeFolder(value)
   else if (id === 'add' && actionId === 'press') window.libraryApi.addFolder()
   else if (id === 'rescan' && actionId === 'press') window.libraryApi.rescan()
+  else if (id === 'ai-recheck' && actionId === 'press') window.libraryApi.aiRecheck()
 }
 
 // A scan, next to the chips. With no songs yet the empty page shows it instead.

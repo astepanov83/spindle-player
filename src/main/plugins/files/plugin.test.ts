@@ -169,10 +169,12 @@ describe('FilesPlugin', () => {
     })
     await s.call(LibraryChannel.removeFolder, '/music')
     await s.call(LibraryChannel.setArtists, { x: ['Y'] })
+    await s.call(LibraryChannel.aiRecheck)
     expect(await s.call(LibraryChannel.showFolder, ['/music'])).toBe(false)
     expect(s.folders).toEqual([])
     expect(s.sent()).not.toContain('scan')
     expect(s.sent()).not.toContain('set-artists')
+    expect(s.sent()).not.toContain('ai-recheck')
     expect(s.sent()).toContain('get-library')
   })
 

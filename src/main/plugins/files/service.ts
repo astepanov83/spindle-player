@@ -300,6 +300,11 @@ export class LibraryService {
     if (c) this.#post({ type: 'set-artists', changes: c })
   }
 
+  // The page asked for a full check of the artist names; main has no state for it.
+  aiRecheck(): void {
+    if (this.#on) this.#post({ type: 'ai-recheck' })
+  }
+
   // Only files in the index are served, by id; never a path from the page.
   async mediaInfo(id: string): Promise<MediaInfo | undefined> {
     if (!this.#on) return undefined

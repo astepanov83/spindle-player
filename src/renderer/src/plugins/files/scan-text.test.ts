@@ -305,9 +305,13 @@ describe('groupsLine', () => {
     expect(groupsLine(undefined)).toBeUndefined()
   })
 
-  it('says how far a run got, with a spinner', () => {
-    expect(groupsLine({ state: 'running', step: 'join', checked: 600, total: 3000 })).toEqual({
-      text: 'Checked 600 of 3,000 names',
+  it('says how far a run got and in which step, with a spinner', () => {
+    expect(groupsLine({ state: 'running', step: 'split', checked: 600, total: 3000 })).toEqual({
+      text: 'Splitting credits: 600 of 3,000',
+      busy: true
+    })
+    expect(groupsLine({ state: 'running', step: 'join', checked: 40, total: 80 })).toEqual({
+      text: 'Matching spellings: 40 of 80',
       busy: true
     })
   })

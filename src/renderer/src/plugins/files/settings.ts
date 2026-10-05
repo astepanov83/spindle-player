@@ -44,20 +44,22 @@ export function filesSettings(): SettingBlock[] {
   ]
 }
 
-// The task's own line follows its switch and setup, only while it is on.
+// The task's own line and button follow its switch, only while it is switched on.
 function groupsBlocks(): SettingBlock[] {
-  if (!ai.state?.tasks[artistGroupsTask]?.on) return []
+  const task = ai.state?.tasks[artistGroupsTask]
+  if (!task?.on) return []
   const g = files.status.groups
   const line = groupsLine(g)
-  return [
-    ...(line ? [{ kind: 'status', ...line } as SettingBlock] : []),
-    {
-      kind: 'button',
-      id: 'ai-recheck',
-      label: 'Check all names again',
-      disabled: g?.state === 'running'
-    }
-  ]
+  const out: SettingBlock[] = []
+  if (line) out.push({ kind: 'status', ...line })
+  // asking needs the provider ready, not only the switch
+  out.push({
+    kind: 'button',
+    id: 'ai-recheck',
+    label: 'Check all names again',
+    disabled: !task.ready || g?.state === 'running'
+  })
+  return out
 }
 
 export function filesActSetting(id: string, actionId: string, value?: string): void {

@@ -1,23 +1,25 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { filesActSetting, filesSettings } from './settings'
 import { files } from './store.svelte'
 import { ai } from '../../ai.svelte'
 import type { AiState } from '../../../../shared/ai'
 
-const state = (on: boolean): AiState => ({
+const state = (on: boolean, ready = on): AiState => ({
   providers: [],
   provider: 'p',
   tasks: {
     'artist-groups': {
       info: { id: 'artist-groups', name: 'Group', about: '', sends: '' },
       on,
-      ready: on
+      ready
     }
   },
   blocks: []
 })
 
 describe('filesSettings and the artist groups task', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
   it('puts the ai block after the music folder blocks, and its line after it while on', () => {
     files.status = {
       ...files.status,
@@ -42,7 +44,6 @@ describe('filesSettings and the artist groups task', () => {
     vi.stubGlobal('window', { libraryApi: { aiRecheck } })
     filesActSetting('ai-recheck', 'press')
     expect(aiRecheck).toHaveBeenCalledOnce()
-    vi.unstubAllGlobals()
   })
 
   it('shows no line while the task is off', () => {
@@ -50,9 +51,17 @@ describe('filesSettings and the artist groups task', () => {
     expect(filesSettings().at(-1)).toEqual({ kind: 'ai', task: 'artist-groups' })
   })
 
-  it('shows no button while the task is only switched on, not ready', () => {
-    const s = state(true)
-    ai.state = { ...s, tasks: { 'artist-groups': { ...s.tasks['artist-groups'], on: false } } }
+  it('keeps the line and shows the button disabled while switched on but not ready', () => {
+    files.status = { ...files.status, groups: { state: 'done', grouped: 1, at: 0 } }
+    ai.state = state(true, false)
+    const blocks = filesSettings()
+    expect(blocks.at(-2)).toMatchObject({ kind: 'status' })
+    expect(blocks.at(-1)).toMatchObject({ id: 'ai-recheck', disabled: true })
+  })
+
+  it('shows neither the line nor the button while switched off', () => {
+    files.status = { ...files.status, groups: { state: 'done', grouped: 1, at: 0 } }
+    ai.state = state(false)
     expect(filesSettings().some((b) => b.kind === 'button' && b.id === 'ai-recheck')).toBe(false)
   })
 })

@@ -468,7 +468,8 @@ describe('addAiSplit', () => {
 
   it('links a tag to one artist per part, named by the library or the model', () => {
     const f = noArtists()
-    expect(addAiSplit(f, 'sadness,forgotten', ['sadness', 'Forgotten'], tags, nameOf)).toBe(true)
+    // the library spells forgotten one way, the model another
+    expect(addAiSplit(f, 'sadness,forgotten', ['sadness', 'FORGOTTEN'], tags, nameOf)).toBe(true)
     expect(f).toEqual(
       file(
         artist('sadness', 'ai', ['Sadness, Forgotten', 'ai']),
@@ -476,7 +477,7 @@ describe('addAiSplit', () => {
       )
     )
     expect(shown(f)['sadness,forgotten']).toEqual({ names: ['sadness', 'Forgotten'], byAi: true })
-    expect(addAiSplit(f, 'sadness,forgotten', ['sadness', 'Forgotten'], tags, nameOf)).toBe(false)
+    expect(addAiSplit(f, 'sadness,forgotten', ['sadness', 'FORGOTTEN'], tags, nameOf)).toBe(false)
   })
 
   it('joins an artist that has the name key and keeps a name by you', () => {
@@ -509,6 +510,9 @@ describe('addAiSplit', () => {
     const f = file(artist('B', 'ai', ['x', 'ai']), artist('A', 'ai', ['y', 'ai']))
     addAiSplit(f, 'a,b', ['A', 'B'], spell('A,B'), () => undefined)
     expect(shown(f)['a,b']).toEqual({ names: ['B', 'A'], byAi: true })
+    const g = file(artist('B', 'ai', ['x', 'ai']), artist('A', 'ai', ['y', 'ai']))
+    addAiSplit(g, 'a,b', ['B', 'A'], spell('A,B'), () => undefined)
+    expect(shown(g)['a,b']).toEqual(shown(f)['a,b'])
   })
 
   it('skips a tag with a link by you', () => {
@@ -543,17 +547,21 @@ describe('addAiGroup and a split', () => {
 
   it('keeps a split when a group merges an artist that holds it', () => {
     const f = file(
+      artist('Sadness Band', 'ai', ['Sadness Band', 'ai']),
       artist('Sadness', 'ai', ['Sadness, Forgotten', 'ai'], ['Sadnes', 'ai']),
-      artist('Forgotten', 'ai', ['Sadness, Forgotten', 'ai']),
-      artist('Sadness Band', 'ai', ['Sadness Band', 'ai'])
+      artist('Forgotten', 'ai', ['Sadness, Forgotten', 'ai'])
     )
     const tags = spell('Sadness, Forgotten', 'Sadnes', 'Sadness Band')
-    addAiGroup(f, ['sadnes', 'sadnessband'], 'Sadness Band', tags)
+    // Sadness Band is the target, so Sadness is the one merged into it
+    addAiGroup(f, ['sadnessband', 'sadnes'], 'Sadness Band', tags)
     expect(shown(f)['sadness,forgotten']).toEqual({
       names: ['Sadness', 'Forgotten'],
       byAi: true
     })
-    expect(shown(f)['sadnessband']).toEqual({ names: ['Sadness'], byAi: true })
+    expect(shown(f)['sadnes']).toEqual({ names: ['Sadness Band'], byAi: true })
+    expect(f.artists.find((a) => a.name === 'Sadness')?.tags).toEqual([
+      { tag: 'Sadness, Forgotten', by: 'ai' }
+    ])
   })
 })
 

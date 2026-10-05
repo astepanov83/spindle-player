@@ -293,7 +293,7 @@ describe('the library process', () => {
         version: 1,
         artists: [artist('Nobody', 'ai', ['Unknown artist', 'ai'], ['Gone', 'ai'])]
       }
-      const asked = { version: 1, asked: ['unknownartist', 'gone'] }
+      const asked = { version: 1, prompt: 1, split: [], joined: ['unknownartist', 'gone'] }
 
       it('drops links and asked keys of tags that are gone after a scan that ran to the end', async () => {
         write(artistsPath(), two)
@@ -306,7 +306,12 @@ describe('the library process', () => {
           version: 1,
           artists: [artist('Nobody', 'ai', ['Unknown artist', 'ai'])]
         })
-        expect(read(cachePath())).toEqual({ version: 1, asked: ['unknownartist'] })
+        expect(read(cachePath())).toEqual({
+          version: 1,
+          prompt: 1,
+          split: [],
+          joined: ['unknownartist']
+        })
       })
 
       it('keeps them after a scan that was cut short', async () => {
@@ -325,12 +330,12 @@ describe('the library process', () => {
       it('keeps the names you gave in the cache, so they are not asked again', async () => {
         index(['kino'], true)
         write(artistsPath(), { version: 1, artists: [artist('Кино', 'you', ['kino', 'you'])] })
-        write(cachePath(), { version: 1, asked: ['кино', 'gone'] })
+        write(cachePath(), { version: 1, prompt: 1, split: [], joined: ['кино', 'gone'] })
         start(true)
         scan(1)
         await until(() => scanned(1))
         send({ type: 'flush' })
-        expect(read(cachePath())).toEqual({ version: 1, asked: ['кино'] })
+        expect(read(cachePath())).toEqual({ version: 1, prompt: 1, split: [], joined: ['кино'] })
       })
     })
 
@@ -439,7 +444,12 @@ describe('the library process', () => {
           version: 1,
           artists: [artist('Björk', 'ai', ['Bjork', 'ai'], ['Björk', 'ai'])]
         })
-        expect(read(cachePath())).toEqual({ version: 1, asked: ['bjork', 'björk'] })
+        expect(read(cachePath())).toEqual({
+          version: 1,
+          prompt: 1,
+          split: [],
+          joined: ['bjork', 'björk']
+        })
       })
 
       it('turned on during a scan, runs once after the scan ends', async () => {
@@ -591,7 +601,9 @@ describe('the library process', () => {
         expect(read(artistsPath())).toEqual(converted)
         expect(read(cachePath())).toEqual({
           version: 1,
-          asked: ['bjork', 'björk', 'magogaio/sadness']
+          prompt: 1,
+          split: [],
+          joined: ['bjork', 'björk', 'magogaio/sadness']
         })
         expect(existsSync(oldOverrides())).toBe(false)
         expect(existsSync(oldGroups())).toBe(false)

@@ -38,8 +38,12 @@ export interface Shown {
 }
 
 export interface ArtistAiCache {
-  // tag keys already sent to the model, so a stopped job goes on from there
-  asked: Set<string>
+  // the prompt number the keys were asked with; another number means ask again
+  prompt: number
+  // tag keys already sent to the model for the split step and for the join
+  // step, so a stopped job goes on from there
+  split: Set<string>
+  joined: Set<string>
 }
 
 // The tag as written for a key, or undefined when no album or song has it.
@@ -62,14 +66,21 @@ function cleanName(name: unknown): string | undefined {
 const keyOf = (l: ArtistLink): string => artistKey(l.tag)
 
 export const noArtists = (): ArtistsFile => ({ artists: [] })
-export const noCache = (): ArtistAiCache => ({ asked: new Set() })
+// A file with no prompt number is from the first prompt.
+export const noCache = (prompt = 1): ArtistAiCache => ({
+  prompt,
+  split: new Set(),
+  joined: new Set()
+})
 
 // A file this build can read.
 export const knownArtists = (raw: unknown): boolean =>
   isObject(raw) && raw.version === version && Array.isArray(raw.artists)
 
 export const knownCache = (raw: unknown): boolean =>
-  isObject(raw) && raw.version === version && Array.isArray(raw.asked)
+  isObject(raw) &&
+  raw.version === version &&
+  (Array.isArray(raw.joined) || Array.isArray(raw.split) || Array.isArray(raw.asked))
 
 // Adds a link, one per tag key: a second one by you makes it yours.
 function addLink(a: ArtistEntry, tag: string, by: By): void {
@@ -154,16 +165,23 @@ export function artistsText(data: ArtistsData): string {
   return `${open}\n${data.artists.map(entry).join(',\n')}\n] }\n`
 }
 
-export function parseCache(raw: unknown): ArtistAiCache {
-  const out = noCache()
+// A cache made with another prompt number loads empty: every name is asked
+// again. An old file's `asked` is what `joined` is now.
+export function parseCache(raw: unknown, prompt: number): ArtistAiCache {
+  const out = noCache(prompt)
   if (!knownCache(raw)) return out
-  for (const k of (raw as { asked: unknown[] }).asked)
-    if (typeof k === 'string' && isKey(k)) out.asked.add(k)
+  const r = raw as Record<string, unknown>
+  if ((typeof r.prompt === 'number' ? r.prompt : 1) !== prompt) return out
+  const keys = (v: unknown, into: Set<string>): void => {
+    if (Array.isArray(v)) for (const k of v) if (typeof k === 'string' && isKey(k)) into.add(k)
+  }
+  keys(r.split, out.split)
+  keys(r.joined ?? r.asked, out.joined)
   return out
 }
 
 export function serializeCache(c: ArtistAiCache): unknown {
-  return { version, asked: [...c.asked] }
+  return { version, prompt: c.prompt, split: [...c.split], joined: [...c.joined] }
 }
 
 // tag key -> what it shows; a tag not in the map shows as written. Yours
@@ -312,6 +330,57 @@ export function applyChanges(f: ArtistsFile, c: ArtistChanges, spelling: Spellin
   return snapshot(f) !== before
 }
 
+// The keys of tags the AI split: AI links in two or more artists.
+function splitKeys(f: ArtistsFile): Set<string> {
+  const count = new Map<string, number>()
+  for (const a of f.artists)
+    for (const k of new Set(a.tags.filter((l) => l.by === 'ai').map(keyOf)))
+      count.set(k, (count.get(k) ?? 0) + 1)
+  return new Set([...count].filter(([, n]) => n > 1).map(([k]) => k))
+}
+
+// Links a tag by "ai" to one artist per part, replacing the tag's old AI
+// links. A part joins the artist that has its name key (yours keeps its
+// name); else a new artist, named with the library's most common spelling of
+// the key, or as the model wrote it. Skipped when the tag has a link by you.
+// An artist the old links left empty is reused before it is dropped, so
+// saving the same split twice changes nothing. True when something changed.
+export function addAiSplit(
+  f: ArtistsFile,
+  key: string,
+  parts: string[],
+  spelling: Spelling,
+  nameOf: (key: string) => string | undefined
+): boolean {
+  if (!isKey(key) || hasYours(f, key)) return false
+  const named = new Map<string, string>()
+  for (const p of parts) {
+    const n = cleanName(p)
+    if (n && !named.has(artistKey(n))) named.set(artistKey(n), n)
+  }
+  if (!named.size || named.size > maxNames) return false
+  const before = snapshot(f)
+  const tag = spelling(key) ?? key
+  unlink(f, key, true)
+  for (const [k, written] of named) {
+    let a = byName(f, k)
+    if (!a) f.artists.push((a = { name: nameOf(k) ?? written, nameBy: 'ai', tags: [] }))
+    addLink(a, tag, 'ai')
+  }
+  dropEmpty(f)
+  return snapshot(f) !== before
+}
+
+// Removes the AI links of these tags, then artists with no links left. For
+// the end of a full check, on the tags no new answer confirmed. Links by you
+// stay. True when something changed.
+export function dropStale(f: ArtistsFile, keys: Iterable<string>): boolean {
+  const before = snapshot(f)
+  for (const k of keys) unlink(f, k, true)
+  dropEmpty(f)
+  return snapshot(f) !== before
+}
+
 // Saves a group the AI found: keys of names that are one artist, and the
 // name for a new artist. Tags with a link by you are skipped. The rest are
 // linked to an artist the group already touches (yours first, and your name
@@ -324,7 +393,9 @@ export function addAiGroup(
   spelling: Spelling
 ): boolean {
   const clean = cleanName(name)
-  const own = [...new Set(keys.filter(isKey))]
+  // a tag the AI split is not taken apart: its parts are what get grouped
+  const split = splitKeys(f)
+  const own = [...new Set(keys.filter((k) => isKey(k) && !split.has(k)))]
   if (!clean || !own.length) return false
   const before = snapshot(f)
   const yours = new Set(own.filter((k) => hasYours(f, k)))
@@ -343,8 +414,9 @@ export function addAiGroup(
   for (const a of list) {
     if (a === target || a.nameBy === 'you') continue
     for (const l of a.tags)
-      if (l.by === 'ai' && !hasYours(f, keyOf(l))) addLink(target, l.tag, 'ai')
-    a.tags = a.tags.filter((l) => l.by === 'you')
+      if (l.by === 'ai' && !split.has(keyOf(l)) && !hasYours(f, keyOf(l)))
+        addLink(target, l.tag, 'ai')
+    a.tags = a.tags.filter((l) => l.by === 'you' || split.has(keyOf(l)))
   }
   for (const k of own) {
     if (yours.has(k)) continue
@@ -369,18 +441,19 @@ export function prune(f: ArtistsFile, used: Set<string>): boolean {
   return snapshot(f) !== before
 }
 
-// Marks keys as sent to the model. True when something changed.
-export function addAsked(c: ArtistAiCache, keys: Iterable<string>): boolean {
-  const before = c.asked.size
-  for (const k of keys) if (isKey(k)) c.asked.add(k)
-  return c.asked.size !== before
+// Marks keys as sent to the model (c.split or c.joined). True when
+// something changed.
+export function addAsked(c: Set<string>, keys: Iterable<string>): boolean {
+  const before = c.size
+  for (const k of keys) if (isKey(k)) c.add(k)
+  return c.size !== before
 }
 
-// As prune, for the cache.
+// As prune, for both sets of the cache.
 export function pruneCache(c: ArtistAiCache, used: Set<string>): boolean {
-  const before = c.asked.size
-  for (const k of c.asked) if (!used.has(k)) c.asked.delete(k)
-  return c.asked.size !== before
+  const before = c.split.size + c.joined.size
+  for (const set of [c.split, c.joined]) for (const k of set) if (!used.has(k)) set.delete(k)
+  return c.split.size + c.joined.size !== before
 }
 
 // --- the old files, read once to move them (see convertOld) ---
@@ -448,6 +521,6 @@ export function convertOld(
   }
   dropEmpty(f)
   const cache = noCache()
-  addAsked(cache, groups.asked)
+  addAsked(cache.joined, groups.asked)
   return { artists: f, cache }
 }

@@ -28,6 +28,9 @@ export interface TaskName {
 // About quality, not size: small models get careless with thousands of names at once.
 export const chunkSize = 200
 
+// Raise it whenever a prompt changes: the cache then asks every name again.
+export const promptNumber = 1
+
 export const system = `You get artist names from one person's music library. The tags were typed by
 different people, so one artist can appear under several spellings.
 

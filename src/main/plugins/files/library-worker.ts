@@ -66,7 +66,7 @@ import { confirmMoves } from './moves'
 import { mergeMoves, type IdMoves } from '../../../shared/id-moves'
 import { pictureWithHash } from './cover-source'
 import { AiOverMessages } from './ai-messages'
-import { taskNames } from './group-artists'
+import { promptNumber, taskNames } from './group-artists'
 import { groupArtists, limitWaitMs } from './group-artists-job'
 import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from '../../covers/cover-names'
@@ -329,7 +329,7 @@ let artists: ArtistsFile = noArtists()
 // none when the file could not be read: it may still be fine, so it is never replaced
 let artistsWriter: JsonFileWriter<ArtistsData> | undefined
 // the tags already sent to the model (artist-ai-cache.json)
-let aiCache: ArtistAiCache = noCache()
+let aiCache: ArtistAiCache = noCache(promptNumber)
 let cacheWriter: JsonFileWriter<unknown> | undefined
 // AiClient.on and AiClient.enabled of the files plugin's tasks, from main (see 'ai-on')
 let aiOn: Record<string, boolean> = {}
@@ -353,7 +353,7 @@ function loadArtists(s: WorkerStart): { had: boolean; unusable: boolean } {
       artistsText
     )
   const c = openJsonFile(s.aiCachePath, 'Artist AI cache', knownCache)
-  aiCache = parseCache(c.value)
+  aiCache = parseCache(c.value, promptNumber)
   if (c.canWrite)
     cacheWriter = new JsonFileWriter<unknown>(s.aiCachePath, 1000, (e) =>
       log(`Could not save ${s.aiCachePath}: ${e}`)
@@ -425,7 +425,7 @@ function convertOldFiles(
     spelling
   )
   artists = old.artists
-  addAsked(aiCache, old.cache.asked)
+  addAsked(aiCache.joined, old.cache.joined)
   log(`Artists: moved the old artist files to ${s.artistsPath}`)
   moveOldFiles(s)
   return true

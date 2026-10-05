@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   addAiGroup,
+  addAiSplit,
   addAsked,
   aiKeys,
   applyChanges,
   artistsText,
   convertOld,
   creditOf,
+  dropStale,
   knownArtists,
   knownCache,
   noArtists,
@@ -418,24 +420,160 @@ describe('prune', () => {
 
 describe('the cache', () => {
   it('reads back what it wrote, keys only', () => {
-    const c = parseCache({ version: 1, asked: ['bjork', 'Not A Key', 7, 'kino'] })
-    expect(c).toEqual({ asked: new Set(['bjork', 'kino']) })
-    expect(parseCache(JSON.parse(JSON.stringify(serializeCache(c))))).toEqual(c)
+    const c = parseCache(
+      { version: 1, prompt: 2, split: ['bjork', 'Bad Key'], joined: ['kino', 7] },
+      2
+    )
+    expect(c).toEqual({ prompt: 2, split: new Set(['bjork']), joined: new Set(['kino']) })
+    expect(parseCache(JSON.parse(JSON.stringify(serializeCache(c))), 2)).toEqual(c)
+  })
+
+  it('reads an old file: asked is joined, no prompt means 1', () => {
+    const old = { version: 1, asked: ['bjork', 'Not A Key', 7, 'kino'] }
+    expect(knownCache(old)).toBe(true)
+    expect(parseCache(old, 1)).toEqual({
+      prompt: 1,
+      split: new Set(),
+      joined: new Set(['bjork', 'kino'])
+    })
+  })
+
+  it('loads empty for another prompt number', () => {
+    const raw = { version: 1, prompt: 1, split: ['a'], joined: ['b'] }
+    expect(parseCache(raw, 2)).toEqual(noCache(2))
+    expect(parseCache({ version: 1, asked: ['a'] }, 2)).toEqual(noCache(2))
   })
 
   it('is empty for another version or no file', () => {
     expect(knownCache({ version: 2, asked: [] })).toBe(false)
-    expect(parseCache({ version: 2, asked: ['a'] })).toEqual(noCache())
-    expect(parseCache(undefined)).toEqual(noCache())
+    expect(parseCache({ version: 2, joined: ['a'] }, 1)).toEqual(noCache())
+    expect(parseCache(undefined, 1)).toEqual(noCache())
   })
 
-  it('adds asked keys and drops ones gone', () => {
+  it('adds asked keys and drops ones gone from both sets', () => {
     const c = noCache()
-    expect(addAsked(c, ['bjork', 'kino', 'Bad Key'])).toBe(true)
-    expect(addAsked(c, ['bjork'])).toBe(false)
+    expect(addAsked(c.joined, ['bjork', 'kino', 'Bad Key'])).toBe(true)
+    expect(addAsked(c.joined, ['bjork'])).toBe(false)
+    addAsked(c.split, ['bjork', 'kino'])
     expect(pruneCache(c, new Set(['kino']))).toBe(true)
-    expect(c.asked).toEqual(new Set(['kino']))
+    expect(c.joined).toEqual(new Set(['kino']))
+    expect(c.split).toEqual(new Set(['kino']))
     expect(pruneCache(c, new Set(['kino']))).toBe(false)
+  })
+})
+
+describe('addAiSplit', () => {
+  const tags = spell('Sadness, Forgotten', 'Sadness', 'Forgotten')
+  const nameOf = (k: string): string | undefined => ({ forgotten: 'Forgotten' })[k]
+
+  it('links a tag to one artist per part, named by the library or the model', () => {
+    const f = noArtists()
+    expect(addAiSplit(f, 'sadness,forgotten', ['sadness', 'Forgotten'], tags, nameOf)).toBe(true)
+    expect(f).toEqual(
+      file(
+        artist('sadness', 'ai', ['Sadness, Forgotten', 'ai']),
+        artist('Forgotten', 'ai', ['Sadness, Forgotten', 'ai'])
+      )
+    )
+    expect(shown(f)['sadness,forgotten']).toEqual({ names: ['sadness', 'Forgotten'], byAi: true })
+    expect(addAiSplit(f, 'sadness,forgotten', ['sadness', 'Forgotten'], tags, nameOf)).toBe(false)
+  })
+
+  it('joins an artist that has the name key and keeps a name by you', () => {
+    const f = file(artist('SADNESS', 'you', ['sadness', 'you']))
+    addAiSplit(f, 'sadness,forgotten', ['Sadness', 'Forgotten'], tags, nameOf)
+    expect(f).toEqual(
+      file(
+        artist('SADNESS', 'you', ['sadness', 'you'], ['Sadness, Forgotten', 'ai']),
+        artist('Forgotten', 'ai', ['Sadness, Forgotten', 'ai'])
+      )
+    )
+  })
+
+  it('replaces the old AI links of the tag, and drops artists left empty', () => {
+    const f = file(
+      artist('Sadness Forgotten', 'ai', ['Sadness, Forgotten', 'ai']),
+      artist('Kino', 'ai', ['Sadness, Forgotten', 'ai'], ['kino', 'ai'])
+    )
+    addAiSplit(f, 'sadness,forgotten', ['Sadness', 'Forgotten'], tags, nameOf)
+    expect(f).toEqual(
+      file(
+        artist('Kino', 'ai', ['kino', 'ai']),
+        artist('Sadness', 'ai', ['Sadness, Forgotten', 'ai']),
+        artist('Forgotten', 'ai', ['Sadness, Forgotten', 'ai'])
+      )
+    )
+  })
+
+  it('shows the same in the file order for both orders of a credit', () => {
+    const f = file(artist('B', 'ai', ['x', 'ai']), artist('A', 'ai', ['y', 'ai']))
+    addAiSplit(f, 'a,b', ['A', 'B'], spell('A,B'), () => undefined)
+    expect(shown(f)['a,b']).toEqual({ names: ['B', 'A'], byAi: true })
+  })
+
+  it('skips a tag with a link by you', () => {
+    const f = file(artist('Mine', 'you', ['Sadness, Forgotten', 'you']))
+    const before = JSON.stringify(f)
+    expect(addAiSplit(f, 'sadness,forgotten', ['Sadness', 'Forgotten'], tags, nameOf)).toBe(false)
+    expect(JSON.stringify(f)).toBe(before)
+  })
+
+  it('ignores bad keys and empty parts', () => {
+    const f = noArtists()
+    expect(addAiSplit(f, 'Bad Key', ['a'], tags, nameOf)).toBe(false)
+    expect(addAiSplit(f, 'a', ['', '  '], tags, nameOf)).toBe(false)
+    expect(f).toEqual(noArtists())
+  })
+})
+
+describe('addAiGroup and a split', () => {
+  it('never takes a tag with 2 or more AI links apart', () => {
+    const f = file(
+      artist('Sadness', 'ai', ['Sadness, Forgotten', 'ai'], ['Sadnes', 'ai']),
+      artist('Forgotten', 'ai', ['Sadness, Forgotten', 'ai'])
+    )
+    const tags = spell('Sadness, Forgotten', 'Sadnes', 'Sadness')
+    addAiGroup(f, ['sadness,forgotten', 'sadness'], 'Sadness', tags)
+    addAiGroup(f, ['sadness,forgotten', 'forgotten'], 'Forgotten', tags)
+    expect(shown(f)['sadness,forgotten']).toEqual({
+      names: ['Sadness', 'Forgotten'],
+      byAi: true
+    })
+  })
+
+  it('keeps a split when a group merges an artist that holds it', () => {
+    const f = file(
+      artist('Sadness', 'ai', ['Sadness, Forgotten', 'ai'], ['Sadnes', 'ai']),
+      artist('Forgotten', 'ai', ['Sadness, Forgotten', 'ai']),
+      artist('Sadness Band', 'ai', ['Sadness Band', 'ai'])
+    )
+    const tags = spell('Sadness, Forgotten', 'Sadnes', 'Sadness Band')
+    addAiGroup(f, ['sadnes', 'sadnessband'], 'Sadness Band', tags)
+    expect(shown(f)['sadness,forgotten']).toEqual({
+      names: ['Sadness', 'Forgotten'],
+      byAi: true
+    })
+    expect(shown(f)['sadnessband']).toEqual({ names: ['Sadness'], byAi: true })
+  })
+})
+
+describe('dropStale', () => {
+  it('removes AI links of the keys and empty artists, never links by you', () => {
+    const f = file(
+      artist('Björk', 'you', ['Bjork', 'ai'], ['bjork (live)', 'you']),
+      artist('Kino', 'ai', ['kino', 'ai']),
+      artist('Sadness', 'ai', ['Sadness, Forgotten', 'ai'], ['mine', 'you']),
+      artist('Forgotten', 'ai', ['Sadness, Forgotten', 'ai'], ['Keep', 'ai'])
+    )
+    expect(dropStale(f, ['bjork', 'kino', 'sadness,forgotten', 'mine'])).toBe(true)
+    expect(f).toEqual(
+      file(
+        artist('Björk', 'you', ['bjork (live)', 'you']),
+        artist('Sadness', 'ai', ['mine', 'you']),
+        artist('Forgotten', 'ai', ['Keep', 'ai'])
+      )
+    )
+    expect(dropStale(f, ['kino'])).toBe(false)
   })
 })
 
@@ -488,7 +626,11 @@ describe('convertOld', () => {
         artist('Guns N’ Roses', 'ai', ['gunsnroses', 'ai'])
       ]
     })
-    expect(cache).toEqual({ asked: new Set(['bjork', 'björk', 'magogaio/sadness']) })
+    expect(cache).toEqual({
+      prompt: 1,
+      split: new Set(),
+      joined: new Set(['bjork', 'björk', 'magogaio/sadness'])
+    })
     const s = shown(artists)
     expect(s['sadness,alongmemories']).toEqual({ names: ['Sadness'], byAi: false })
     expect(s['magogaio/sadness']).toEqual({ names: ['Magogaio', 'Sadness'], byAi: false })

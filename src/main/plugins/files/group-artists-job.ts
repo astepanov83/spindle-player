@@ -81,7 +81,7 @@ export async function groupArtists(d: JobDeps, signal: AbortSignal): Promise<Job
 async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
   const { ai, names, artists, cache } = d
   if (!ai.on(task)) return { end: 'off' }
-  const chunks = chunksOf(names, cache.asked)
+  const chunks = chunksOf(names, cache.joined)
   if (!chunks.length) return { end: 'done', grouped: 0, asked: false }
   let max: number | undefined
   try {
@@ -108,7 +108,7 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
   for (const chunk of chunks) {
     d.status({
       state: 'running',
-      checked: names.filter((t) => cache.asked.has(t.key)).length,
+      checked: names.filter((t) => cache.joined.has(t.key)).length,
       total: names.length
     })
     let pairs: Map<Pair, string> | undefined
@@ -140,7 +140,7 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
     }
     for (const k of aiKeys(artists)) if (!before.has(k)) grouped++
     addAsked(
-      cache,
+      cache.joined,
       chunk.map((t) => t.key)
     )
     d.saved()

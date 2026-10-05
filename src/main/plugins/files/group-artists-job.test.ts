@@ -94,7 +94,7 @@ function job(
       cache,
       // the tags in the library: names you gave are not tags
       spelling: (k) => names.find((t) => t.key === k && !t.manual)?.name,
-      saved: () => saves.push({ asked: cache.asked.size, groups: groups() }),
+      saved: () => saves.push({ asked: cache.joined.size, groups: groups() }),
       status: (s) => statuses.push(s),
       log: () => {},
       now: () => 1000
@@ -124,7 +124,7 @@ describe('the artist groups job', () => {
     const { ai, calls } = fakeAi(both([]))
     const names = plain(['A', 'B'])
     const g = fresh()
-    g.cache.asked = new Set(['a', 'b'])
+    g.cache.joined = new Set(['a', 'b'])
     const j = job(ai, names, g)
     expect(await j.done).toEqual({ end: 'done', grouped: 0, asked: false })
     expect(calls).toEqual([])
@@ -167,7 +167,7 @@ describe('the artist groups job', () => {
       const j = job(ai, plain(['Bjork', 'Björk']))
       expect(await j.done).toEqual({ end: 'failed' })
       expect(Object.keys(j.groups()).length).toBe(0)
-      expect(j.cache.asked.size).toBe(0)
+      expect(j.cache.joined.size).toBe(0)
       expect(j.statuses.at(-1)).toEqual({ state: 'stopped', error: 'failed' })
     })
     describe('one model to use (a fixed choice, or only one fits)', () => {
@@ -206,7 +206,7 @@ describe('the artist groups job', () => {
         const j = job(ai, plain(['Bjork', 'Björk', 'Bjorky']))
         expect(await j.done).toEqual({ end: 'done', grouped: 0, asked: true })
         expect(Object.keys(j.groups()).length).toBe(0)
-        expect(j.cache.asked.size).toBe(3)
+        expect(j.cache.joined.size).toBe(3)
       })
 
       it('stops when the answer again fails', async () => {
@@ -215,7 +215,7 @@ describe('the artist groups job', () => {
         )
         const j = job(ai, plain(['Bjork', 'Björk']))
         expect(await j.done).toEqual({ end: 'failed' })
-        expect(j.cache.asked.size).toBe(0)
+        expect(j.cache.joined.size).toBe(0)
       })
     })
   })
@@ -241,7 +241,7 @@ describe('the artist groups job', () => {
         nameBy: 'ai',
         tags: [{ tag: 'Bjork', by: 'ai' }]
       })
-      g.cache.asked.add('bjork')
+      g.cache.joined.add('bjork')
       const { ai } = fakeAi(both([[2, 1]]))
       const j = job(ai, plain(['Bjork', 'Björk', 'BJÖRK'], [1, 9, 1]), g)
       await j.done
@@ -298,7 +298,7 @@ describe('the artist groups job', () => {
       })
       const j = job(ai, plain(many(450)), fresh(), stop.signal)
       await expect(j.done).rejects.toThrow()
-      expect(j.cache.asked.size).toBe(200)
+      expect(j.cache.joined.size).toBe(200)
       expect(Object.keys(j.groups()).length).toBe(2)
       expect(j.saves).toHaveLength(1)
     })
@@ -328,7 +328,7 @@ describe('the artist groups job', () => {
       const { ai } = fakeAi(() => ({ ok: false, error: 'off' }))
       const j = job(ai, plain(['A', 'B']))
       expect(await j.done).toEqual({ end: 'off' })
-      expect(j.cache.asked.size).toBe(0)
+      expect(j.cache.joined.size).toBe(0)
     })
 
     it('limit: stops and says when it goes on', async () => {
@@ -337,7 +337,7 @@ describe('the artist groups job', () => {
       )
       const j = job(ai, plain(many(250)))
       expect(await j.done).toEqual({ end: 'limit', retryAt: 5000 })
-      expect(j.cache.asked.size).toBe(200)
+      expect(j.cache.joined.size).toBe(200)
       expect(j.statuses.at(-1)).toEqual({ state: 'limit', at: 5000 })
     })
 
@@ -382,7 +382,7 @@ describe('the artist groups job', () => {
         const j = job(ai, plain(['A', 'B']))
         expect(await j.done).toEqual({ end: error })
         expect(j.statuses.at(-1)).toEqual({ state: 'stopped', error })
-        expect(j.cache.asked.size).toBe(0)
+        expect(j.cache.joined.size).toBe(0)
       }
     })
 

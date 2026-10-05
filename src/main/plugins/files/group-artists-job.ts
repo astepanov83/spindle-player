@@ -50,15 +50,14 @@ export interface JobDeps {
   ai: AiClient
   // every name the task knows, numbered (taskNames)
   names: TaskName[]
-  // artists.json and the keys asked; changed in place
+  // artists.json and the keys asked; changed in place. cache.checking: a
+  // full check under way (startFullCheck). A key leaves it when an answer
+  // gives it an AI link again; when the run is done the rest lose their AI
+  // links. A run that stops early removes nothing.
   artists: ArtistsFile
   cache: ArtistAiCache
   // a tag key's spelling in the library, for the links
   spelling: Spelling
-  // During a full check (startFullCheck): tag keys whose AI links no answer
-  // gave again yet. Changed in place. When the run is done, the rest lose
-  // their AI links; a run that stops early removes nothing.
-  stale?: Set<string>
   // a chunk was done: save the file and show the groups
   saved(): void
   // undefined: no line to show (the task is off, or the provider asks for a login)
@@ -78,38 +77,31 @@ const minWaitMs = 30_000
 export const limitWaitMs = (retryAt: number, now: number): number =>
   Math.min(maxWaitMs, Math.max(minWaitMs, retryAt - now))
 
-// A full check asks every name again: both sets of the cache are emptied,
-// and the tags with an AI link now are stale until an answer gives them one
-// again. Pass the keys as JobDeps.stale until a run ends as done.
-export function startFullCheck(artists: ArtistsFile, cache: ArtistAiCache): Set<string> {
+// A full check asks every name again: the asked keys are emptied, and the
+// tags with an AI link now go in cache.checking until an answer gives them
+// one again. Save the cache after it.
+export function startFullCheck(artists: ArtistsFile, cache: ArtistAiCache): void {
   cache.split.clear()
   cache.joined.clear()
-  return aiKeys(artists)
+  cache.checking = aiKeys(artists)
 }
 
-// AI links with nothing asked under this prompt number: the cache was made
-// with another one (it then loads empty), or a full check stopped before its
-// first chunk. Either way every name is asked again.
+// AI links with nothing asked under this prompt number and no full check
+// under way: the cache was made with another one, so it loaded empty.
 export const fullCheckDue = (artists: ArtistsFile, cache: ArtistAiCache): boolean =>
-  !cache.split.size && !cache.joined.size && aiKeys(artists).size > 0
+  !cache.split.size && !cache.joined.size && !cache.checking.size && aiKeys(artists).size > 0
 
 // An abort rejects ask and maxInput, so it ends the run by throwing; what was
 // saved stays and the next run goes on from the keys asked.
 export async function groupArtists(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
-  let end = await run(d, signal)
-  if (end.end === 'done' && d.stale) {
-    const stale = [...d.stale]
-    d.stale.clear()
-    if (dropStale(d.artists, stale)) {
-      d.log(`Artist groups: removed the AI links no answer gave again (${stale.length} tags)`)
-      d.saved()
-      // a tag no longer split was not asked in the join step: its parts were
-      const again = await run({ ...d, stale: undefined }, signal)
-      end =
-        again.end === 'done'
-          ? { end: 'done', grouped: end.grouped + again.grouped, asked: true }
-          : again
-    }
+  const end = await run(d, signal)
+  const { checking } = d.cache
+  if (end.end === 'done' && checking.size) {
+    const n = checking.size
+    if (dropStale(d.artists, checking))
+      d.log(`Artist groups: removed the AI links no answer gave again (${n} tags)`)
+    checking.clear()
+    d.saved()
   }
   if (end.end === 'done') {
     if (end.asked) d.status({ state: 'done', grouped: end.grouped, at: d.now() })
@@ -138,7 +130,7 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
   // names you gave are not tags: there is nothing to split
   const tags = names.filter((t) => !t.manual)
   const splitChunks = chunksOf(tags, cache.split)
-  if (!splitChunks.length && !chunksOf(joinNames(names, aiSplits(artists)), cache.joined).length)
+  if (!splitChunks.length && !chunksOf(joinNames(names, splitsNow(d)), cache.joined).length)
     return { end: 'done', grouped: 0, asked: false }
   let max: number | undefined
   try {
@@ -154,10 +146,14 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
 
   // tag keys whose AI links changed this run
   const grouped = new Set<string>()
-  const save = (change: () => void): void => {
+  // An answer about these keys: a key the save gave an AI link (or kept
+  // one) is confirmed for a full check. One with a link by you is not.
+  const save = (keys: string[], change: () => void): void => {
     const before = aiLinks(artists)
     change()
-    for (const [k, v] of aiLinks(artists)) if (before.get(k) !== v) grouped.add(k)
+    const after = aiLinks(artists)
+    for (const [k, v] of after) if (before.get(k) !== v) grouped.add(k)
+    for (const k of keys) if (after.has(k)) cache.checking.delete(k)
   }
 
   // Step 1: which artists each tag names. All chunks before step 2, so
@@ -191,8 +187,7 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
     for (const [n, s] of mergeSplits(r)) {
       const t = byN.get(n)!
       d.log(`Artist groups: ${t.name} = ${s.parts.join(' + ')}` + (s.why ? ` (${s.why})` : ''))
-      d.stale?.delete(t.key)
-      save(() => addAiSplit(artists, t.key, s.parts, d.spelling, (k) => nameOf.get(k)))
+      save([t.key], () => addAiSplit(artists, t.key, s.parts, d.spelling, (k) => nameOf.get(k)))
     }
     addAsked(
       cache.split,
@@ -202,7 +197,7 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
   }
 
   // Step 2: which names are one artist, with split tags as their parts.
-  const list = joinNames(names, aiSplits(artists))
+  const list = joinNames(names, splitsNow(d))
   const joinChunks = chunksOf(list, cache.joined)
   const join: Step<Map<Pair, string>> = {
     system: joinSystem,
@@ -233,15 +228,17 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
       }
     for (const g of uf.groups()) {
       const members = g.map((n) => byN.get(n)!)
-      for (const m of members) d.stale?.delete(m.key)
-      save(() =>
-        addAiGroup(
+      const keys = members.map((m) => m.key)
+      save(keys, () => {
+        // an old split no answer gave again is asked as itself, and the
+        // group replaces it (addAiGroup leaves splits alone)
+        const old = aiSplits(artists)
+        dropStale(
           artists,
-          members.map((m) => m.key),
-          shownName(members),
-          d.spelling
+          keys.filter((k) => cache.checking.has(k) && old.has(k))
         )
-      )
+        addAiGroup(artists, keys, shownName(members), d.spelling)
+      })
     }
     addAsked(
       cache.joined,
@@ -250,6 +247,15 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
     d.saved()
   }
   return { end: 'done', grouped: grouped.size, asked: true }
+}
+
+// The AI's splits step 2 asks about as parts. During a full check, a split
+// no answer gave again yet is left out: the tag is asked as itself, so no
+// join is built on a split that may go.
+function splitsNow(d: JobDeps): Map<string, string[]> {
+  const out = aiSplits(d.artists)
+  for (const k of d.cache.checking) out.delete(k)
+  return out
 }
 
 // How many parts the LIST is cut into so a request with it fits.

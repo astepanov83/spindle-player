@@ -5,7 +5,9 @@ import type { GroupsStatus } from '../../../shared/library'
 import {
   noArtists,
   noCache,
+  parseCache,
   resolve,
+  serializeCache,
   type ArtistAiCache,
   type ArtistsFile
 } from '../../../shared/plugins/files/artists-file'
@@ -105,8 +107,7 @@ function job(
   ai: AiClient,
   names: TaskName[],
   files: Files = fresh(),
-  signal = new AbortController().signal,
-  stale?: Set<string>
+  signal = new AbortController().signal
 ): {
   done: Promise<JobEnd>
   // tag key -> the name it shows, AI on
@@ -134,8 +135,7 @@ function job(
       saved: () => saves.push({ asked: cache.joined.size, groups: groups() }),
       status: (s) => statuses.push(s),
       log: (t) => logs.push(t),
-      now: () => 1000,
-      ...(stale ? { stale } : {})
+      now: () => 1000
     },
     signal
   )
@@ -531,76 +531,139 @@ describe('the artist groups job', () => {
       n[2].manual = true
       return n
     }
-
-    it('empties both sets and notes the tags with an AI link', () => {
-      const g = files()
-      expect(startFullCheck(g.artists, g.cache)).toEqual(new Set(['bjork']))
-      expect(g.cache.split.size + g.cache.joined.size).toBe(0)
-    })
-
-    it('is due when there are AI links and nothing was asked', () => {
-      const g = files()
-      expect(fullCheckDue(g.artists, g.cache)).toBe(false)
-      g.cache = noCache(2)
-      expect(fullCheckDue(g.artists, g.cache)).toBe(true)
-      expect(fullCheckDue(noArtists(), g.cache)).toBe(false)
-    })
-
-    it('removes the AI links no answer gave again when the run is done, never yours', async () => {
-      const g = files()
-      const stale = startFullCheck(g.artists, g.cache)
-      const { ai, calls } = fakeAi(both([]))
-      const j = job(ai, names(), g, undefined, stale)
-      expect(await j.done).toEqual({ end: 'done', grouped: 0, asked: true })
-      expect(calls.length).toBe(2)
-      expect(j.artists.artists).toEqual([
-        { name: 'Кино', nameBy: 'you', tags: [{ tag: 'Kino', by: 'you' }] }
-      ])
-      expect(stale.size).toBe(0)
-    })
-
-    it('keeps a link an answer gave again', async () => {
-      const g = files()
-      const stale = startFullCheck(g.artists, g.cache)
-      const { ai } = fakeAi(both([[1, 2]]))
-      const j = job(ai, names(), g, undefined, stale)
-      expect(await j.done).toEqual({ end: 'done', grouped: 1, asked: true })
-      expect(j.groups()).toEqual({ bjork: 'Björk', björk: 'Björk', kino: 'Кино' })
-    })
-
-    it('removes nothing when the run stops early, and the next run goes on', async () => {
-      const g = files()
-      const stale = startFullCheck(g.artists, g.cache)
-      const first = fakeAi(() => ({ ok: false, error: 'limit', retryAt: 5000 }))
-      const j = job(first.ai, names(), g, undefined, stale)
-      expect(await j.done).toEqual({ end: 'limit', retryAt: 5000 })
-      expect(j.groups()).toMatchObject({ bjork: 'Björk' })
-      expect(stale).toEqual(new Set(['bjork']))
-      const next = fakeAi(both([]))
-      await job(next.ai, names(), g, undefined, stale).done
-      expect(next.splits).toEqual([])
-      expect(g.artists.artists).toHaveLength(1)
-    })
-
-    it('asks the join step about a tag whose old split no answer gave again', async () => {
+    // an old split by the AI: "A, B" as A and B
+    const oldSplit = (): Files => {
       const g = fresh()
       g.artists.artists.push(
         { name: 'A', nameBy: 'ai', tags: [{ tag: 'A, B', by: 'ai' }] },
         { name: 'B', nameBy: 'ai', tags: [{ tag: 'A, B', by: 'ai' }] }
       )
-      const stale = startFullCheck(g.artists, g.cache)
+      startFullCheck(g.artists, g.cache)
+      return g
+    }
+    // Pairs two names by how they are written, when both are in the request.
+    const pairNames =
+      (x: string, y: string) =>
+      (c: Call): Answer => {
+        const n = new Map(
+          c.req.user
+            .split('\nCHECK')[0]
+            .split('\n')
+            .slice(1)
+            .map((l) => [l.split(' | ')[0].replace(/^\d+ /, ''), Number(l.split(' ')[0])])
+        )
+        const pair: [number, number][] = n.has(x) && n.has(y) ? [[n.get(x)!, n.get(y)!]] : []
+        return ok(pair, c.avoid ? 'm2' : 'm1')
+      }
+
+    it('empties the asked keys and notes the tags with an AI link', () => {
+      const g = files()
+      startFullCheck(g.artists, g.cache)
+      expect(g.cache.checking).toEqual(new Set(['bjork']))
+      expect(g.cache.split.size + g.cache.joined.size).toBe(0)
+    })
+
+    it('is due when there are AI links, nothing was asked and no check is under way', () => {
+      const g = files()
+      expect(fullCheckDue(g.artists, g.cache)).toBe(false)
+      g.cache = noCache(2)
+      expect(fullCheckDue(g.artists, g.cache)).toBe(true)
+      expect(fullCheckDue(noArtists(), g.cache)).toBe(false)
+      startFullCheck(g.artists, g.cache)
+      expect(fullCheckDue(g.artists, g.cache)).toBe(false)
+    })
+
+    it('removes the AI links no answer gave again when the run is done, never yours', async () => {
+      const g = files()
+      startFullCheck(g.artists, g.cache)
       const { ai, calls } = fakeAi(both([]))
-      const j = job(ai, plain(['A, B', 'AB']), g, undefined, stale)
-      expect(await j.done).toMatchObject({ end: 'done' })
-      expect(j.artists.artists).toEqual([])
-      // first with the parts, then with the tag back
-      expect(calls.map((c) => c.req.user.split('CHECK\n')[1])).toEqual([
-        '1 A | A, B album\n2 AB | AB album\n3 B | A, B album',
-        '1 A | A, B album\n2 AB | AB album\n3 B | A, B album',
-        '1 A, B | A, B album',
-        '1 A, B | A, B album'
+      const j = job(ai, names(), g)
+      expect(await j.done).toEqual({ end: 'done', grouped: 0, asked: true })
+      expect(calls.length).toBe(2)
+      expect(j.artists.artists).toEqual([
+        { name: 'Кино', nameBy: 'you', tags: [{ tag: 'Kino', by: 'you' }] }
       ])
-      expect(j.cache.joined.has('a,b')).toBe(true)
+      expect(j.cache.checking.size).toBe(0)
+      // saved after the links went
+      expect(j.saves.at(-1)!.groups).toEqual({ kino: 'Кино' })
+    })
+
+    it('keeps a link an answer gave again', async () => {
+      const g = files()
+      startFullCheck(g.artists, g.cache)
+      const { ai } = fakeAi(both([[1, 2]]))
+      const j = job(ai, names(), g)
+      expect(await j.done).toEqual({ end: 'done', grouped: 1, asked: true })
+      expect(j.groups()).toEqual({ bjork: 'Björk', björk: 'Björk', kino: 'Кино' })
+    })
+
+    it('removes nothing when the run stops early, and goes on after a restart', async () => {
+      const g = files()
+      startFullCheck(g.artists, g.cache)
+      const first = fakeAi(() => ({ ok: false, error: 'limit', retryAt: 5000 }))
+      const j = job(first.ai, names(), g)
+      expect(await j.done).toEqual({ end: 'limit', retryAt: 5000 })
+      expect(j.groups()).toMatchObject({ bjork: 'Björk' })
+      // the cache file as a restart reads it
+      const cache = parseCache(JSON.parse(JSON.stringify(serializeCache(g.cache))), g.cache.prompt)
+      expect(cache.checking).toEqual(new Set(['bjork']))
+      const next = fakeAi(both([]))
+      await job(next.ai, names(), { artists: g.artists, cache }).done
+      expect(next.splits).toEqual([])
+      expect(g.artists.artists).toHaveLength(1)
+      expect(cache.checking.size).toBe(0)
+    })
+
+    it('keeps an old split an answer gave again', async () => {
+      const { ai, calls } = fakeAi(both([]), { split: bothSplit([[1, ['A', 'B']]]) })
+      const j = job(ai, plain(['A, B']), oldSplit())
+      await j.done
+      expect(j.groups()).toEqual({ 'a,b': 'A, B' })
+      expect(j.artists.artists).toHaveLength(2)
+      // its parts were asked in the join step
+      expect(calls[0].req.user.split('CHECK\n')[1]).toBe('1 A | A, B album\n2 B | A, B album')
+    })
+
+    it('asks about an old split no answer gave again as the tag itself, so no join is built on it', async () => {
+      const { ai, calls } = fakeAi(pairNames('B', 'Bee'))
+      const j = job(ai, plain(['A, B', 'Bee']), oldSplit())
+      expect(await j.done).toMatchObject({ end: 'done' })
+      expect(calls.map((c) => c.req.user.split('CHECK\n')[1])).toEqual([
+        '1 A, B | A, B album\n2 Bee | Bee album',
+        '1 A, B | A, B album\n2 Bee | Bee album'
+      ])
+      // no artist B holding "Bee", nothing left of the split
+      expect(j.artists.artists).toEqual([])
+    })
+
+    it('lets a join replace an old split no answer gave again', async () => {
+      const { ai } = fakeAi(pairNames('A, B', 'A-B'))
+      const j = job(ai, plain(['A, B', 'A-B']), oldSplit())
+      expect(await j.done).toEqual({ end: 'done', grouped: 2, asked: true })
+      expect(j.artists.artists).toEqual([
+        {
+          name: 'A, B',
+          nameBy: 'ai',
+          tags: [
+            { tag: 'A-B', by: 'ai' },
+            { tag: 'A, B', by: 'ai' }
+          ]
+        }
+      ])
+    })
+
+    it('leaves a tag linked by you in the check: the split answer did not link it', async () => {
+      const g = oldSplit()
+      g.artists.artists.push({ name: 'A, B', nameBy: 'you', tags: [{ tag: 'A, B', by: 'you' }] })
+      const names = plain(['A, B'])
+      names[0].manual = true
+      const { ai } = fakeAi(both([]), { split: bothSplit([[1, ['A', 'B']]]) })
+      const j = job(ai, [...names, ...plain(['A, B']).map((t) => ({ ...t, n: 2 }))], g)
+      await j.done
+      // your link stays, the old AI links go
+      expect(j.artists.artists).toEqual([
+        { name: 'A, B', nameBy: 'you', tags: [{ tag: 'A, B', by: 'you' }] }
+      ])
     })
   })
 

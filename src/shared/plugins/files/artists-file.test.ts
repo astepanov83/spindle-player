@@ -422,10 +422,21 @@ describe('prune', () => {
 describe('the cache', () => {
   it('reads back what it wrote, keys only', () => {
     const c = parseCache(
-      { version: 1, prompt: 2, split: ['bjork', 'Bad Key'], joined: ['kino', 7] },
+      {
+        version: 1,
+        prompt: 2,
+        split: ['bjork', 'Bad Key'],
+        joined: ['kino', 7],
+        checking: ['ddt', 'Bad Key']
+      },
       2
     )
-    expect(c).toEqual({ prompt: 2, split: new Set(['bjork']), joined: new Set(['kino']) })
+    expect(c).toEqual({
+      prompt: 2,
+      split: new Set(['bjork']),
+      joined: new Set(['kino']),
+      checking: new Set(['ddt'])
+    })
     expect(parseCache(JSON.parse(JSON.stringify(serializeCache(c))), 2)).toEqual(c)
   })
 
@@ -435,12 +446,13 @@ describe('the cache', () => {
     expect(parseCache(old, 1)).toEqual({
       prompt: 1,
       split: new Set(),
-      joined: new Set(['bjork', 'kino'])
+      joined: new Set(['bjork', 'kino']),
+      checking: new Set()
     })
   })
 
   it('loads empty for another prompt number', () => {
-    const raw = { version: 1, prompt: 1, split: ['a'], joined: ['b'] }
+    const raw = { version: 1, prompt: 1, split: ['a'], joined: ['b'], checking: ['c'] }
     expect(parseCache(raw, 2)).toEqual(noCache(2))
     expect(parseCache({ version: 1, asked: ['a'] }, 2)).toEqual(noCache(2))
   })
@@ -451,14 +463,16 @@ describe('the cache', () => {
     expect(parseCache(undefined, 1)).toEqual(noCache())
   })
 
-  it('adds asked keys and drops ones gone from both sets', () => {
+  it('adds asked keys and drops ones gone from every set', () => {
     const c = noCache()
     expect(addAsked(c.joined, ['bjork', 'kino', 'Bad Key'])).toBe(true)
     expect(addAsked(c.joined, ['bjork'])).toBe(false)
     addAsked(c.split, ['bjork', 'kino'])
+    addAsked(c.checking, ['bjork', 'kino'])
     expect(pruneCache(c, new Set(['kino']))).toBe(true)
     expect(c.joined).toEqual(new Set(['kino']))
     expect(c.split).toEqual(new Set(['kino']))
+    expect(c.checking).toEqual(new Set(['kino']))
     expect(pruneCache(c, new Set(['kino']))).toBe(false)
   })
 })
@@ -650,7 +664,8 @@ describe('convertOld', () => {
     expect(cache).toEqual({
       prompt: 1,
       split: new Set(),
-      joined: new Set(['bjork', 'björk', 'magogaio/sadness'])
+      joined: new Set(['bjork', 'björk', 'magogaio/sadness']),
+      checking: new Set()
     })
     const s = shown(artists)
     expect(s['sadness,alongmemories']).toEqual({ names: ['Sadness'], byAi: false })

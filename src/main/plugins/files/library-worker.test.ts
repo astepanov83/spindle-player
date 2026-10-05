@@ -15,6 +15,7 @@ import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyIndex, serializeIndex } from './merge'
 import { readerVersion, type WorkerIn, type WorkerOut, type WorkerStart } from './types'
+import { joinSystem } from './group-artists'
 
 let dir: string
 let music: string
@@ -310,7 +311,8 @@ describe('the library process', () => {
           version: 1,
           prompt: 2,
           split: [],
-          joined: ['unknownartist']
+          joined: ['unknownartist'],
+          checking: []
         })
       })
 
@@ -335,7 +337,13 @@ describe('the library process', () => {
         scan(1)
         await until(() => scanned(1))
         send({ type: 'flush' })
-        expect(read(cachePath())).toEqual({ version: 1, prompt: 2, split: [], joined: ['кино'] })
+        expect(read(cachePath())).toEqual({
+          version: 1,
+          prompt: 2,
+          split: [],
+          joined: ['кино'],
+          checking: []
+        })
       })
     })
 
@@ -451,7 +459,8 @@ describe('the library process', () => {
           version: 1,
           prompt: 2,
           split: ['bjork', 'björk'],
-          joined: ['bjork', 'björk']
+          joined: ['bjork', 'björk'],
+          checking: []
         })
       })
 
@@ -474,6 +483,42 @@ describe('the library process', () => {
         expect(read(artistsPath())).toEqual({ version: 1, artists: [] })
         expect(read(cachePath())).toMatchObject({ prompt: 2, joined: ['bjork', 'björk'] })
         expect(await artistOf('Bjork')).toBe('Bjork')
+      })
+
+      it('goes on with a full check the cache file says is under way', async () => {
+        index(['Bjork', 'Björk', 'Björk'])
+        write(artistsPath(), { version: 1, artists: [artist('Björk', 'ai', ['Bjork', 'ai'])] })
+        // stopped in the join step, before a restart
+        write(cachePath(), {
+          version: 1,
+          prompt: 2,
+          split: ['bjork', 'björk'],
+          joined: [],
+          checking: ['bjork']
+        })
+        start(true)
+        await ready()
+        aiOn({ 'artist-groups': true })
+        send({ type: 'ai-reply', id: (await call('ai-max-input', 1)).id, max: 100_000 })
+        const none = { ok: true, model: 'm', json: { matches: [] } }
+        for (let i = 1; i <= 2; i++) {
+          const ask = await call('ai-ask', i)
+          expect(ask).toMatchObject({ req: { system: joinSystem } })
+          send({ type: 'ai-reply', id: ask.id, answer: none as never })
+        }
+        await until(() =>
+          heard.some((m) => m.type === 'status' && m.status.groups?.state === 'done')
+        )
+        send({ type: 'flush' })
+        expect(calls('ai-ask')).toHaveLength(2)
+        expect(read(artistsPath())).toEqual({ version: 1, artists: [] })
+        expect(read(cachePath())).toEqual({
+          version: 1,
+          prompt: 2,
+          split: ['bjork', 'björk'],
+          joined: ['bjork', 'björk'],
+          checking: []
+        })
       })
 
       it('turned on during a scan, runs once after the scan ends', async () => {
@@ -627,7 +672,8 @@ describe('the library process', () => {
           version: 1,
           prompt: 2,
           split: [],
-          joined: ['bjork', 'björk', 'magogaio/sadness']
+          joined: ['bjork', 'björk', 'magogaio/sadness'],
+          checking: []
         })
         expect(existsSync(oldOverrides())).toBe(false)
         expect(existsSync(oldGroups())).toBe(false)

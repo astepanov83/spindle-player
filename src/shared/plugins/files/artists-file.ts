@@ -44,6 +44,9 @@ export interface ArtistAiCache {
   // step, so a stopped job goes on from there
   split: Set<string>
   joined: Set<string>
+  // A full check under way: tag keys whose AI links no answer gave again
+  // yet. Saved, so a restart goes on with it. Empty: no full check.
+  checking: Set<string>
 }
 
 // The tag as written for a key, or undefined when no album or song has it.
@@ -70,7 +73,8 @@ export const noArtists = (): ArtistsFile => ({ artists: [] })
 export const noCache = (prompt = 1): ArtistAiCache => ({
   prompt,
   split: new Set(),
-  joined: new Set()
+  joined: new Set(),
+  checking: new Set()
 })
 
 // A file this build can read.
@@ -177,11 +181,18 @@ export function parseCache(raw: unknown, prompt: number): ArtistAiCache {
   }
   keys(r.split, out.split)
   keys(r.joined ?? r.asked, out.joined)
+  keys(r.checking, out.checking)
   return out
 }
 
 export function serializeCache(c: ArtistAiCache): unknown {
-  return { version, prompt: c.prompt, split: [...c.split], joined: [...c.joined] }
+  return {
+    version,
+    prompt: c.prompt,
+    split: [...c.split],
+    joined: [...c.joined],
+    checking: [...c.checking]
+  }
 }
 
 // tag key -> what it shows; a tag not in the map shows as written. Yours
@@ -455,11 +466,13 @@ export function addAsked(c: Set<string>, keys: Iterable<string>): boolean {
   return c.size !== before
 }
 
-// As prune, for both sets of the cache.
+// As prune, for every set of the cache.
 export function pruneCache(c: ArtistAiCache, used: Set<string>): boolean {
-  const before = c.split.size + c.joined.size
-  for (const set of [c.split, c.joined]) for (const k of set) if (!used.has(k)) set.delete(k)
-  return c.split.size + c.joined.size !== before
+  const sets = [c.split, c.joined, c.checking]
+  const size = (): number => sets.reduce((n, s) => n + s.size, 0)
+  const before = size()
+  for (const set of sets) for (const k of set) if (!used.has(k)) set.delete(k)
+  return size() !== before
 }
 
 // --- the old files, read once to move them (see convertOld) ---

@@ -468,9 +468,6 @@ const ai = new AiOverMessages((m) => post(m))
 // the job running, and the wait for a limit to end
 let groupsJob: AbortController | undefined
 let groupsRetry: ReturnType<typeof setTimeout> | undefined
-// a full check under way: the tags whose AI links no answer gave again yet.
-// Kept in memory only, so after a restart the links it had not reached stay.
-let groupsStale: Set<string> | undefined
 
 function setAiOn(tasks: Record<string, boolean>, enabled: Record<string, boolean>): void {
   const wasOn = !!aiOn[artistGroupsTask]
@@ -513,11 +510,11 @@ function startGroupsJob(): void {
   const stop = new AbortController()
   groupsJob = stop
   // a cache from another prompt number loads empty: every name is asked again
-  if (!groupsStale && fullCheckDue(artists, aiCache)) {
-    groupsStale = startFullCheck(artists, aiCache)
+  if (fullCheckDue(artists, aiCache)) {
+    startFullCheck(artists, aiCache)
+    saveCache()
     log('Artist groups: checking all names again')
   }
-  const stale = groupsStale
   groupArtists(
     {
       ai,
@@ -525,7 +522,6 @@ function startGroupsJob(): void {
       artists,
       cache: aiCache,
       spelling,
-      ...(stale ? { stale } : {}),
       saved: () => {
         saveArtists()
         saveCache()
@@ -541,7 +537,6 @@ function startGroupsJob(): void {
   )
     .then(
       (end) => {
-        if (end.end === 'done' && groupsStale === stale) groupsStale = undefined
         if (end.end !== 'limit' || end.retryAt === undefined || stop.signal.aborted) return
         groupsRetry = setTimeout(startGroupsJob, limitWaitMs(end.retryAt, Date.now()))
       },

@@ -1,7 +1,7 @@
 // The core of AI models (spec "AI models", "AiService"): the list of
 // providers, the chosen one, the task switches, model choice and fallback,
 // and the Settings state for the page. It names no provider and no task.
-import type { AiClient, AiState, AiTaskInfo, Answer, JsonRequest } from '../../shared/ai'
+import type { AiClient, AiState, AiTaskInfo, Answer, JsonRequest, Usage } from '../../shared/ai'
 import type { SettingBlock } from '../../shared/setting-blocks'
 import type { AiSettings } from '../../shared/settings'
 import { askInTurn, biggestInput, pickModels, requestSize } from './pick'
@@ -32,6 +32,13 @@ export interface AiEnv {
   openExternal(url: string): void
   callbackServer(): Promise<CallbackServer>
   log(text: string): void
+}
+
+// The tokens and cost the service gave for an ask, for its log line.
+function usageText(u: Usage | undefined): string {
+  if (!u) return ''
+  const cost = u.cost === undefined ? '' : `, $${u.cost.toFixed(4)}`
+  return `, used ${u.tokensIn} tokens in and ${u.tokensOut} out${cost}`
 }
 
 const unsafeKeys: SettingBlock = {
@@ -120,12 +127,16 @@ export function createAiService(env: AiEnv): AiService {
       // a provider should answer, not throw; next model
       answer = { ok: false, error: 'failed', detail: String(error) }
     }
+    // paid for even when the answer is dropped below
+    const usage = answer.usage
     // stop() aborted it, or the task was turned off: not a failure to go on
     // from. Not ready() here: a refused key must still read 'auth'.
     if (!taskOn(task) || chosen() !== p) answer = { ok: false, error: 'off' }
     const result = answer.ok ? 'ok' : answer.error
     // never the prompt, the reply or a key
-    env.log(`AI ${task}: ${m.id}, ${size} tokens in, ${Date.now() - t0} ms: ${result}`)
+    env.log(
+      `AI ${task}: ${m.id}, ${size} tokens in, ${Date.now() - t0} ms: ${result}${usageText(usage)}`
+    )
     return answer
   }
 

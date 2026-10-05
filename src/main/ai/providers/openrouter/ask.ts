@@ -1,5 +1,5 @@
 // One chat request to OpenRouter, and its errors as AnswerError.
-import type { Answer, JsonRequest } from '../../../../shared/ai'
+import type { Answer, JsonRequest, Usage } from '../../../../shared/ai'
 import type { ModelInfo } from '../../types'
 import { api } from './api'
 
@@ -52,9 +52,12 @@ export interface Result {
   answer: Answer
   // the user's privacy settings rule out every provider of this model
   noEndpoints?: boolean
+  // 402: the account is out of credit, in the status or the body
+  noCredit?: boolean
 }
 
 interface ErrorBody {
+  usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; cost?: unknown }
   error?: {
     code?: unknown
     message?: unknown
@@ -82,6 +85,20 @@ const parse = (text: string): unknown => {
   }
 }
 
+const count = (v: unknown): number | undefined =>
+  typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined
+
+// What the ask used, from the body's usage: a reply that is not JSON is paid
+// for too.
+function usageOf(body: ErrorBody | undefined): Usage | undefined {
+  const u = body?.usage
+  const tokensIn = count(u?.prompt_tokens)
+  const tokensOut = count(u?.completion_tokens)
+  if (tokensIn === undefined || tokensOut === undefined) return undefined
+  const cost = count(u?.cost)
+  return { tokensIn, tokensOut, ...(cost !== undefined && { cost }) }
+}
+
 // Strips a ```json fence: some models add one even when asked for bare JSON.
 function reply(text: string): unknown {
   const fenced = /^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/i.exec(text)
@@ -101,8 +118,9 @@ export function answerFor(
   // OpenRouter sometimes puts the error in a 200 reply
   const code = typeof body?.error?.code === 'number' ? body.error.code : status
   const message = typeof body?.error?.message === 'string' ? body.error.message : ''
+  const usage = usageOf(body)
   const fail = (a: Omit<Extract<Answer, { ok: false }>, 'ok'>, noEndpoints?: boolean): Result => ({
-    answer: { ok: false, ...a },
+    answer: { ok: false, ...a, ...(usage && { usage }) },
     noEndpoints
   })
 
@@ -125,11 +143,14 @@ export function answerFor(
   if (code !== 200 || body?.error) {
     const noEndpoints = code === 404 || /no endpoints/i.test(message)
     const detail = `HTTP ${code}${message ? `: ${message}` : ''}`.slice(0, 300)
-    return fail({ error: 'failed', detail }, noEndpoints)
+    return {
+      ...fail({ error: 'failed', detail }, noEndpoints),
+      noCredit: code === 402 || undefined
+    }
   }
   const choices = body?.choices as { message?: { content?: unknown } }[] | undefined
   const content = choices?.[0]?.message?.content
   const json = typeof content === 'string' ? reply(content) : undefined
   if (json === undefined) return fail({ error: 'failed', detail: 'the reply is not JSON' })
-  return { answer: { ok: true, json, model: model.id } }
+  return { answer: { ok: true, json, model: model.id, ...(usage && { usage }) } }
 }

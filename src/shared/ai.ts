@@ -38,9 +38,24 @@ export interface JsonRequest {
 // `avoided` comes with 'failed' when every model that fits was in `avoid`
 // (a fixed model choice, or only one model takes the request): nothing was
 // sent, and asking again without `avoid` may still answer.
+// `usage` is what the ask used, when the service says, for the log.
 export type Answer =
-  | { ok: true; json: unknown; model: string }
-  | { ok: false; error: AnswerError; retryAt?: number; detail?: string; avoided?: true }
+  | { ok: true; json: unknown; model: string; usage?: Usage }
+  | {
+      ok: false
+      error: AnswerError
+      retryAt?: number
+      detail?: string
+      avoided?: true
+      usage?: Usage
+    }
+
+// Tokens in and out of one ask, and its cost in US dollars when known.
+export interface Usage {
+  tokensIn: number
+  tokensOut: number
+  cost?: number
+}
 
 // What a task can act on, the same for every provider.
 export type AnswerError =

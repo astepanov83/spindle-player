@@ -266,6 +266,44 @@ describe('login', () => {
       .join('|')
     expect(text).toContain('openrouter.ai, Settings, Keys')
   })
+
+  // a new account must not get the paid models on the old account's credit
+  const paidNow = async (t: Setup): Promise<boolean> =>
+    (await t.provider.models(noSignal)).some((m) => !m.id.endsWith(':free'))
+  const withCredit = async (): Promise<Setup> => {
+    const t = setup({ key: 'k' })
+    t.replies.push(() => json(models))
+    t.replies.push(() => json(credits(10, 0.09)))
+    expect(await paidNow(t)).toBe(true)
+    return t
+  }
+
+  it('reads the credit again after Disconnect and a new key', async () => {
+    const t = await withCredit()
+    await t.provider.act('disconnect', 'press')
+    t.secrets.set('key', 'k2')
+    t.replies.push(() => json(models))
+    t.replies.push(() => json(credits(0, 0)))
+    expect(await paidNow(t)).toBe(false)
+    expect(t.calls.at(-1)!.url).toBe('https://openrouter.ai/api/v1/credits')
+  })
+
+  it('reads the credit again after a login', async () => {
+    const t = await withCredit()
+    const cb = fakeServer()
+    t.ctx.callbackServer = async () => cb.server
+    t.replies.push(() => json({ key: 'sk-other' }))
+    t.replies.push(() => json(models))
+    t.replies.push(() => json(credits(0, 0)))
+    const done = t.provider.act('connect', 'press')
+    await tick()
+    cb.answer(new URLSearchParams({ code: 'the-code' }))
+    await done
+    await tick()
+    expect(await paidNow(t)).toBe(false)
+    const auth = (t.calls.at(-1)!.init.headers as Record<string, string>).Authorization
+    expect(auth).toBe('Bearer sk-other')
+  })
 })
 
 describe('models', () => {
@@ -355,7 +393,7 @@ describe('models', () => {
     expect(all.map((m) => m.id)).toEqual(['qwen/qwen3.8-27b:free'])
   })
 
-  it('goes back to the best free model when the fixed one is gone', async () => {
+  it('goes back to the best model when the fixed one is gone', async () => {
     const t = setup({ model: 'gone/model:free' })
     const all = await list(t)
     // no key, so no credit
@@ -577,6 +615,38 @@ describe('ask', () => {
     expect(t.calls[n + 1].url).toBe('https://openrouter.ai/api/v1/credits')
     const ids = (await t.provider.models(noSignal)).map((m) => m.id)
     expect(ids.some((id) => !id.endsWith(':free'))).toBe(false)
+  })
+
+  it('reads the credit again on a 402 inside a 200 reply', async () => {
+    const t = setup({ key: 'k' })
+    t.replies.push(() => json(models))
+    t.replies.push(() => json(credits(10, 0.09)))
+    await t.provider.models(noSignal)
+    t.replies.push(() => json({ error: { code: 402, message: 'Insufficient credits' } }))
+    t.replies.push(() => json(credits(2, 2)))
+    const n = t.calls.length
+    expect(await ask(t, paid())).toMatchObject({ ok: false, error: 'failed' })
+    expect(t.calls[n + 1].url).toBe('https://openrouter.ai/api/v1/credits')
+    const ids = (await t.provider.models(noSignal)).map((m) => m.id)
+    expect(ids.some((id) => !id.endsWith(':free'))).toBe(false)
+  })
+
+  it('gives the tokens and cost OpenRouter says the ask used', async () => {
+    const t = setup({ key: 'k' })
+    const usage = { prompt_tokens: 1200, completion_tokens: 80, cost: 0.0021 }
+    t.replies.push(() => json({ ...(answerBody('{"a":1}') as object), usage }))
+    t.replies.push(() => json({ ...(answerBody('not json') as object), usage }))
+    t.replies.push(() => json({ ...(answerBody('{}') as object), usage: { prompt_tokens: 5 } }))
+    const used = { tokensIn: 1200, tokensOut: 80, cost: 0.0021 }
+    expect(await ask(t, paid())).toEqual({
+      ok: true,
+      json: { a: 1 },
+      model: 'google/gemini-3.8-flash',
+      usage: used
+    })
+    // a reply that is not JSON is paid for too
+    expect(await ask(t, paid())).toMatchObject({ ok: false, error: 'failed', usage: used })
+    expect(await ask(t, paid())).not.toHaveProperty('usage')
   })
 
   it('rethrows the abort of the caller', async () => {

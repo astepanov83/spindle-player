@@ -49,7 +49,7 @@ export class OpenRouterProvider implements Provider {
     id: 'openrouter',
     name: 'OpenRouter',
     about:
-      'Free models on openrouter.ai, and two paid models while your account has credit, a few cents per run. Log in with one click, no card needed.'
+      'Uses free models, and two paid models while your OpenRouter account has credit: about 1 cent per 100 artist names on the first check, then almost nothing. Log in with one click, no card needed.'
   }
   #ctx: ProviderContext | undefined
   #running = new Set<AbortController>()
@@ -136,11 +136,11 @@ export class OpenRouterProvider implements Provider {
       this.#cancelLogin()
     } else if (id === 'disconnect' && actionId === 'press') {
       ctx.secrets.remove('key')
+      this.#forgetAccount()
       this.#note = {
         text: 'Disconnected. The key stays in your OpenRouter account: delete it at openrouter.ai, Settings, Keys.',
         error: false
       }
-      this.#noEndpoints = 0
       ctx.changed()
     } else if (id === 'model' && actionId === 'set' && value !== undefined) {
       ctx.settings.set('model', value)
@@ -151,7 +151,7 @@ export class OpenRouterProvider implements Provider {
   async models(signal: AbortSignal): Promise<ModelInfo[]> {
     const list = await this.#load(signal)
     const fixed = this.#ctx?.settings.get('model')
-    // a fixed choice that is gone from the list is "Best free model" again
+    // a fixed choice that is gone from the list is "Best model" again
     const one = fixed && fixed !== auto ? list.find((m) => m.id === fixed) : undefined
     // paid models wait for credit; a fixed one is asked anyway
     return one ? [one] : list.filter((m) => this.#credit || isFree(m.id))
@@ -186,7 +186,7 @@ export class OpenRouterProvider implements Provider {
         ctl.signal,
         askTimeoutMs
       )
-      const { answer, noEndpoints } = answerFor(
+      const { answer, noEndpoints, noCredit } = answerFor(
         model,
         res.status,
         res.headers,
@@ -200,7 +200,7 @@ export class OpenRouterProvider implements Provider {
       )
       this.#trackPrivacy(ctx, answer, noEndpoints)
       // the credit may have run out: the next ask must not start with a paid model
-      if (res.status === 402) await this.#readCredit(ctl.signal)
+      if (noCredit) await this.#readCredit(ctl.signal)
       return answer
     } catch (error) {
       // stop() aborted it, not the caller
@@ -239,6 +239,14 @@ export class OpenRouterProvider implements Provider {
     return ctl
   }
 
+  // Another account may come next: its credit and privacy settings are its
+  // own, so the list (read with the credit) is loaded again.
+  #forgetAccount(): void {
+    this.#credit = false
+    this.#listAt = -Infinity
+    this.#noEndpoints = 0
+  }
+
   #privacyBlocked(): boolean {
     return this.#noEndpoints >= 3
   }
@@ -256,7 +264,7 @@ export class OpenRouterProvider implements Provider {
       const res = await send(ctx!.fetch, `${api}/models`, {}, signal)
       if (res.status !== 200) throw new Error(`HTTP ${res.status}`)
       const list = parseModels(JSON.parse(res.text))
-      if (!list.length) throw new Error('no free models in the list')
+      if (!list.length) throw new Error('no usable models in the list')
       this.#list = list
       this.#listAt = this.clock.now()
       this.#listError = undefined
@@ -349,7 +357,7 @@ export class OpenRouterProvider implements Provider {
         if (typeof key !== 'string' || !key)
           throw new Error(`OpenRouter gave no key (HTTP ${res.status})`)
         ctx.secrets.set('key', key)
-        this.#noEndpoints = 0
+        this.#forgetAccount()
         void this.#refresh()
       } finally {
         cb.close()

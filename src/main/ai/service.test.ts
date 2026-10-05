@@ -158,6 +158,28 @@ describe('AiService with the fake provider', () => {
     ])
   })
 
+  it('logs the tokens and cost the provider gives, on an answer and on a failure', async () => {
+    const p = plainProvider('paid')
+    const m: ModelInfo = { id: 'p/m', name: 'M', context: 10000, maxOutput: 1000, json: 'schema' }
+    p.models = async () => [m, { ...m, id: 'p/n' }]
+    const answers: Answer[] = [
+      { ok: false, error: 'failed', usage: { tokensIn: 900, tokensOut: 40 } },
+      { ok: true, json: {}, model: 'p/n', usage: { tokensIn: 1200, tokensOut: 80, cost: 0.00213 } }
+    ]
+    p.ask = async () => answers.shift()!
+    const { ai, lines, signal } = setup({
+      providers: [p],
+      saved: { tasks: { [task.id]: true } }
+    })
+    await ai.client.ask(task.id, req, signal)
+    expect(lines).toEqual([
+      expect.stringMatching(/: p\/m, 6 tokens in, \d+ ms: failed, used 900 tokens in and 40 out$/),
+      expect.stringMatching(
+        /: p\/n, 6 tokens in, \d+ ms: ok, used 1200 tokens in and 80 out, \$0\.0021$/
+      )
+    ])
+  })
+
   it('gives the state of each task and the provider list', async () => {
     const { ai } = setup()
     expect(ai.state()).toEqual({

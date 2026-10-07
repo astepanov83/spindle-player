@@ -16,7 +16,9 @@ export function filesTabs(): Tab[] {
       label: 'Albums',
       icon: 'disc',
       search: 'Search your library',
-      searchShort: 'Search library'
+      searchShort: 'Search library',
+      // its results page finds songs, albums and artists
+      searchWide: true
     },
     { id: 'artists', label: 'Artists', icon: 'person', search: 'Search artists' },
     {

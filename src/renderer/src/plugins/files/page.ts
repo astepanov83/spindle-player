@@ -61,7 +61,7 @@ const libraryTarget = 'library'
 
 export function filesPage(tab: string, page: string, query: string): Block[] {
   if (!files.albums.length) return [noLibrary(false)]
-  if (tab === 'songs') return [songsTable(query)]
+  if (tab === 'songs') return songsPage(query)
   if (tab === 'albums') return albumsPage(page, query)
   if (tab === 'artists') return artistsPage(page, query)
   if (tab === 'folders') return foldersPage(page, query)
@@ -108,11 +108,13 @@ export function noLibrary(noPlaylists: boolean): EmptyBlock {
   return empty('No songs found', `Spindle found no songs it can play in ${where}.`)
 }
 
+// the core adds a button for each other tab that searches wider (ticket 077)
 const noMatches = (text: string): EmptyBlock => ({
   kind: 'empty',
   id: libraryTarget,
   title: 'No matches',
-  text
+  text,
+  nothingFound: true
 })
 
 const listHead = (title: string, count: string): HeadBlock => ({
@@ -126,17 +128,21 @@ const listHead = (title: string, count: string): HeadBlock => ({
 
 // Classic's Songs: every song, in the library's sort. The sort is read when
 // drawn, so a sort click doesn't build the 50k list again.
-function songsTable(query: string): Block {
-  return {
+function songsPage(query: string): Block[] {
+  const items = songRows(files.albums, (id) => files.track(id), query).map(trackKey)
+  const table: Block = {
     kind: 'songs',
     id: songsTarget,
-    items: songRows(files.albums, (id) => files.track(id), query).map(trackKey),
+    items,
     from: 'Songs',
     meta: 'Library',
     get sort() {
       return library.sort
     }
   }
+  return items.length || !query.trim()
+    ? [table]
+    : [table, noMatches('No song has that in its title, artist or album.')]
 }
 
 function albumsPage(page: string, query: string): Block[] {

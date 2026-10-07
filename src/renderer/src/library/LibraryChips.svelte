@@ -72,7 +72,7 @@
       {/key}
     {:else if shown?.plugin === 'core'}
       {#if library.openPlaylist}
-        <PlaylistView id={library.openPlaylist} {scrollEl} back />
+        <PlaylistView id={library.openPlaylist} {scrollEl} nav="chips" back />
       {:else}
         <PlaylistList />
       {/if}

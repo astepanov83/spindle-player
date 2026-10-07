@@ -94,7 +94,7 @@
     {:else if none}
       <div class="fill"><Nothing block={none.block} plugin={none.plugin} /></div>
     {:else if playlist}
-      <PlaylistView id={playlist.id} {scrollEl} />
+      <PlaylistView id={playlist.id} {scrollEl} nav="sidebar" />
     {:else if shown && shown.plugin !== 'core'}
       {#key shown.id}
         <BlockPage {blocks} tab={shown.id} plugin={shown.plugin} {scrollEl} nav="sidebar" />

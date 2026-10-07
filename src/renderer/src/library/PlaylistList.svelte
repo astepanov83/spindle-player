@@ -1,14 +1,18 @@
 <!-- Studio's Playlists chip: the playlists, and a button to make one. -->
 <script lang="ts">
   import Empty from './Empty.svelte'
+  import SearchButtons from '../blocks/SearchButtons.svelte'
+  import { widerTabs } from '../plugins'
   import ViewHead from './ViewHead.svelte'
   import { fmtCount } from '../format'
   import Icon from '../ui/Icon.svelte'
   import { filterPlaylists } from './views'
-  import { library } from '../stores/library.svelte'
+  import { library, playlistsTab } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
 
   const shown = $derived(filterPlaylists(playlists.list, library.query))
+  // the other tabs to search, while there is text (ticket 077); Studio only
+  const wider = $derived(widerTabs(playlistsTab, 'chips'))
 
   // a playlist opens with no search (a step clears it): the text was for playlist names
   function create(): void {
@@ -36,13 +40,22 @@
     </button>
   {/each}
   {#if playlists.list.length && !shown.length}
-    <Empty title="No matches" text="No playlist has that in its name." />
+    {#if wider.length}
+      <Empty title="No matches" text="No playlist has that in its name."
+        ><SearchButtons tabs={wider} /></Empty
+      >
+    {:else}
+      <Empty title="No matches" text="No playlist has that in its name." />
+    {/if}
   {:else if !playlists.list.length}
     <p class="hint">
       No playlists yet. Make one here, or right-click a song and pick "New playlist".
     </p>
   {/if}
 </div>
+{#if wider.length && (shown.length || !playlists.list.length)}<div class="wider">
+    <SearchButtons tabs={wider} />
+  </div>{/if}
 
 <style>
   .pls {
@@ -80,6 +93,12 @@
     color: var(--ink-3);
     font-size: var(--text-s);
     font-variant-numeric: tabular-nums;
+  }
+  .wider {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 22px;
   }
   .hint {
     color: var(--ink-3);

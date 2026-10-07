@@ -357,6 +357,13 @@ class LibraryStore {
     this.go({ searchAll: group }, true)
   }
 
+  // The search text, sent to another tab that searches wider ('Search
+  // stations for "har"', ticket 077): a step that keeps the text, so Back
+  // shows the search it came from.
+  searchIn(tab: string): void {
+    this.go({ tab, searchAll: null }, true)
+  }
+
   // Studio's playlist page; null is the list
   openPlaylistPage(id: string | null): void {
     this.openPage(playlistsTab, id ? playlistPage(id) : '')

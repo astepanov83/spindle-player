@@ -261,6 +261,8 @@ describe('pages', () => {
     const found = page.filesPage('artists', 'artist/marinavale', 'jun')
     expect(head(found[0]).count).toBe('1 artist')
     expect(kinds(page.filesPage('artists', '', 'nobody'))).toEqual(['head', 'empty', 'tiles'])
+    // so the core offers the wider searches in it (ticket 077)
+    expect(page.filesPage('artists', '', 'nobody')[1]).toMatchObject({ nothingFound: true })
   })
 
   it('an artist: head with a round picture, their albums opening under them', () => {
@@ -338,6 +340,17 @@ describe('pages', () => {
       'empty',
       'rows'
     ])
+    expect(page.filesPage('folders', `folder/${rock}`, 'zzz')[2]).toMatchObject({
+      nothingFound: true
+    })
+  })
+
+  it("Classic's Songs: a search that finds nothing says so (ticket 077)", () => {
+    const blocks = page.filesPage('songs', '', 'zzz')
+    expect(kinds(blocks)).toEqual(['songs', 'empty'])
+    expect(songs(blocks[0]).items).toEqual([])
+    expect(blocks[1]).toMatchObject({ title: 'No matches', nothingFound: true })
+    expect(kinds(page.filesPage('songs', '', 'juno'))).toEqual(['songs'])
   })
 
   it("Classic's Songs: every song in the library's sort, sorted through act", () => {

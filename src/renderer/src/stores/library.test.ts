@@ -557,6 +557,37 @@ describe('search text (ticket 039)', () => {
   })
 })
 
+describe('searching another tab (ticket 077)', () => {
+  it('keeps the text and the page the tab was left on, as a step', () => {
+    filesPages.openAlbum('a')
+    library.pickTab('artists')
+    library.query = 'har'
+    library.searchIn('albums')
+    expect([library.tab, library.query, filesPages.shownAlbum()]).toEqual(['albums', 'har', 'a'])
+    library.back()
+    expect([library.tab, library.query]).toEqual(['artists', 'har'])
+    library.forward()
+    expect([library.tab, library.query]).toEqual(['albums', 'har'])
+  })
+
+  it('leaves "Show all" behind', () => {
+    library.query = 'har'
+    library.showAll('files:songs')
+    library.searchIn('radio')
+    expect([library.tab, library.query, library.searchAll]).toEqual(['radio', 'har', null])
+  })
+
+  it('sends the text to Radio Browser at once', async () => {
+    const search = vi.fn(async () => ({ ok: true as const, stations: [] }))
+    vi.stubGlobal('window', { ...window, radioApi: { ...window.radioApi, search } })
+    library.pickTab('artists')
+    library.query = 'har'
+    p.searchWider('radio')
+    expect(library.tab).toBe('radio')
+    expect(search).toHaveBeenCalledWith('har')
+  })
+})
+
 describe('links from what plays (ticket 040)', () => {
   const album = (id: string, item?: string): void =>
     p.openPage({ plugin: 'files', page: `album/${id}`, ...(item ? { item } : {}) })

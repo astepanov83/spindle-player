@@ -23,7 +23,13 @@ interface BuiltBase {
 
 export type BuiltNode = BuiltBase &
   (
-    | { kind: 'box'; dir: 'row' | 'col'; look: Look | null; children: BuiltNode[] }
+    | {
+        kind: 'box'
+        dir: 'row' | 'col'
+        look: Look | null
+        contentWidth: string | null
+        children: BuiltNode[]
+      }
     | { kind: 'part'; part: BuiltPart }
     | { kind: 'tabs'; labels: [string, string]; panes: [BuiltNode, BuiltNode] }
   )
@@ -59,6 +65,7 @@ export function buildLayout(template: Template, queueMode: QueueMode): BuiltLayo
         kind: 'box',
         dir: 'row' in n ? 'row' : 'col',
         look: n.look ?? null,
+        contentWidth: n.contentWidth ?? null,
         children: kids.map(build).filter((c): c is BuiltNode => c !== null),
         flex: null,
         drawer: false

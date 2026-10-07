@@ -51,6 +51,9 @@
   }
   .meta {
     flex: none;
+    width: 100%;
+    max-width: var(--content-max, none);
+    margin-inline: auto;
   }
   .song-title {
     font-size: var(--title-m);

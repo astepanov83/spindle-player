@@ -17,10 +17,17 @@ interface NodeBase {
   drawerHost?: boolean
 }
 
+interface BoxOpts {
+  look?: Look
+  // the parts inside keep their words and controls this wide at most, centered
+  // (a wide Focus); the stage and backgrounds still fill the box
+  contentWidth?: string
+}
+
 export type TemplateNode = NodeBase &
   (
-    | { row: TemplateNode[]; look?: Look }
-    | { col: TemplateNode[]; look?: Look }
+    | ({ row: TemplateNode[] } & BoxOpts)
+    | ({ col: TemplateNode[] } & BoxOpts)
     | PartNode
     // Tabs [label, "Queue"] when the queue setting is Tab, otherwise just `with`
     | { queue: { with: TemplateNode; label: string } }

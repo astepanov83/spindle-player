@@ -103,6 +103,15 @@ describe('Focus', () => {
     expect(host.kind === 'part' && host.part.part).toBe('nowplaying')
     expect(host.flex).toBe('1 1 0')
   })
+
+  it('keeps its words and controls 560px wide at most; the other templates have no such width', () => {
+    const b = buildLayout(t, 'tab')
+    expect(b.root.kind === 'box' && b.root.contentWidth).toBe('560px')
+    for (const other of [templates.studio, templates.classic]) {
+      const boxes = find(buildLayout(other, 'drawer').root, (n) => n.kind === 'box')
+      expect(boxes.every((n) => n.kind === 'box' && n.contentWidth === null)).toBe(true)
+    }
+  })
 })
 
 describe('every template and queue option', () => {

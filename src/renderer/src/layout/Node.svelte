@@ -35,6 +35,7 @@
     class:look-ambient={node.look === 'ambient'}
     class:dhost={node.drawer}
     style:flex={node.flex}
+    style:--content-max={node.contentWidth}
   >
     {#if node.look === 'ambient'}
       <div class="amb-bg" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -219,7 +220,8 @@
   .tabstrip {
     display: flex;
     gap: 3px;
-    margin: 14px 20px 4px;
+    /* 20px from the edges, or --content-max wide in the middle */
+    margin: 14px max(20px, (100% - var(--content-max, 100%)) / 2) 4px;
     background: var(--well);
     border-radius: 10px;
     padding: 3px;

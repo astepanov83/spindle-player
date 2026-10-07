@@ -14,6 +14,8 @@ export const focus: Template = {
       },
       { part: 'controls', opts: { style: 'stack' } }
     ],
-    look: 'ambient'
+    look: 'ambient',
+    // on a wide window the tabs, words and controls stay this wide, in the middle
+    contentWidth: '560px'
   }
 }

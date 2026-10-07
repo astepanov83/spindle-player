@@ -316,7 +316,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 10px 6px 20px;
+    padding: 14px max(10px, (100% - var(--content-max, 100%)) / 2 - 10px) 6px
+      max(20px, (100% - var(--content-max, 100%)) / 2);
     flex: none;
   }
   .title {
@@ -336,7 +337,8 @@
   .body {
     flex: 1;
     overflow: auto;
-    padding: 4px 8px 12px;
+    /* rows line up with --content-max (a wide Focus); the 12px is their own padding */
+    padding: 4px max(8px, (100% - var(--content-max, 100%)) / 2 - 12px) 12px;
     min-height: 0;
     position: relative;
   }
@@ -391,7 +393,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 0 16px 4px 20px;
+    padding: 0 max(16px, (100% - var(--content-max, 100%)) / 2) 4px
+      max(20px, (100% - var(--content-max, 100%)) / 2);
     font-size: var(--text-xs);
     color: var(--ink-3);
     flex: none;

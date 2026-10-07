@@ -1,5 +1,7 @@
 // What each key does, as plain functions; App.svelte runs the result.
 // The full list is in docs/design.md (Keyboard).
+import type { TemplateId } from '../../shared/layout'
+
 type Target = Pick<HTMLElement, 'tagName' | 'isContentEditable'> & { type?: string }
 type Key = Pick<KeyboardEvent, 'code' | 'ctrlKey' | 'altKey' | 'metaKey' | 'repeat'>
 type FullKey = Key & Pick<KeyboardEvent, 'key' | 'shiftKey'>
@@ -51,6 +53,8 @@ export type KeyAction =
   | 'escape'
   | 'visualizer'
   | 'queue'
+  // switch to that layout
+  | TemplateId
 
 export interface KeyPlace {
   // focus is in a text field
@@ -145,10 +149,24 @@ export const shortcuts: Shortcut[] = [
   {
     does: 'Queue: switch to its tab, or open or close the drawer',
     chords: [{ action: 'queue', key: 'q' }]
+  },
+  {
+    does: 'Layout: Studio, Classic or Focus',
+    chords: [
+      { action: 'studio', key: 'Digit1', code: true, ctrl: true, inText: true },
+      { action: 'classic', key: 'Digit2', code: true, ctrl: true, inText: true },
+      { action: 'focus', key: 'Digit3', code: true, ctrl: true, inText: true }
+    ]
   }
 ]
 
 const chords = shortcuts.flatMap((s) => s.chords)
+
+// The chord that switches to a layout, for its button's tooltip.
+export function layoutChord(id: TemplateId): string {
+  const c = chords.find((c) => c.action === id)
+  return c ? chordText(c) : ''
+}
 
 const matches = (e: FullKey, c: Chord): boolean =>
   (c.code ? e.code === c.key : e.key === c.key) &&
@@ -186,26 +204,29 @@ const keyNames: Record<string, string> = {
 
 // How a chord is written in the list: "Ctrl+←", "Ctrl+F", "V".
 export function chordText(c: Pick<Chord, 'key' | 'ctrl' | 'alt'>): string {
-  const name = keyNames[c.key] ?? (/^Key[A-Z]$/.test(c.key) ? c.key.slice(3) : c.key)
+  const name = keyNames[c.key] ?? c.key.replace(/^(Key(?=[A-Z]$)|Digit(?=\d$))/, '')
   const key = name.length === 1 ? name.toUpperCase() : name
   return `${c.ctrl ? 'Ctrl+' : ''}${c.alt ? 'Alt+' : ''}${key}`
 }
 
 // The keys of a line, one entry per way to press it: ["Ctrl+F", "/"],
-// ["← / →"]. A pair that steps both ways shares an entry.
+// ["← / →"]. Chords next to each other that do different things with the
+// same Ctrl and Alt share an entry ("Ctrl+1 / Ctrl+2 / Ctrl+3").
 export function shortcutKeys(s: Pick<Shortcut, 'chords'>): string[] {
   const out: string[] = []
   const cs = s.chords
-  for (let i = 0; i < cs.length; i++) {
-    const c = cs[i]
-    const next = cs[i + 1]
-    if (next && next.ctrl === c.ctrl && next.alt === c.alt && next.action !== c.action) {
-      out.push(`${chordText(c)} / ${chordText(next)}`)
-      i++
-    } else out.push(chordText(c))
+  let i = 0
+  while (i < cs.length) {
+    const run = [cs[i++]]
+    const joins = (c: Chord): boolean =>
+      sameMods(c, run[0]) && run.every((r) => r.action !== c.action)
+    while (i < cs.length && joins(cs[i])) run.push(cs[i++])
+    out.push(run.map(chordText).join(' / '))
   }
   return out
 }
+
+const sameMods = (a: Chord, b: Chord): boolean => !!a.ctrl === !!b.ctrl && !!a.alt === !!b.alt
 
 // Escape closes one thing at a time, the one on top first.
 export function escapeTarget(open: {

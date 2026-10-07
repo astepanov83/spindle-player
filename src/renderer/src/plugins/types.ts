@@ -112,6 +112,9 @@ export interface HeadBlock {
   count?: string
   // a list's line under its title: "Reading musicforprogramming.net…"
   hint?: string
+  // A list's sort, a menu next to its count: act(id, 'sort', the option's id).
+  // `label` heads the menu and names the button: "Sort albums".
+  sort?: { label: string; options: { id: string; label: string }[]; picked: string }
   // A line under the title that points at the search box: the core ends it
   // with where the box is ("above", "on the left"). In place of `hint`.
   searchHint?: string
@@ -194,6 +197,8 @@ export interface SongsBlock {
   count?: boolean
   // the Artist column; off where every song has the page's artist
   artist?: boolean
+  // the sortable table's Plays and Last played columns (ticket 085)
+  plays?: boolean
   // a column head was clicked: act(id, 'sort', its key). May be a getter, so
   // a sort click only sorts and doesn't build the page's list again.
   sort?: Sort | null

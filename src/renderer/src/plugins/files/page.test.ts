@@ -146,6 +146,31 @@ describe('pages', () => {
     expect(tile.link).toEqual({ plugin: 'files', page: 'album/a' })
   })
 
+  it('Albums: a sort on the head, kept in settings, and the plays sorts follow new plays (085)', async () => {
+    const { settings } = await import('../../stores/settings.svelte')
+    const { plays } = await import('../../stores/plays.svelte')
+    const blocks = page.filesPage('albums', '', '')
+    expect(head(blocks[0]).sort).toMatchObject({ label: 'Sort albums', picked: 'artist' })
+    expect(head(blocks[0]).sort?.options).toHaveLength(6)
+    page.filesAct(head(blocks[0]).id, 'sort', 'played')
+    expect(settings.viewSorts).toEqual({ albums: 'played' })
+    // nothing played yet: library order
+    const ids = (): string[] =>
+      tiles(page.filesPage('albums', '', '')[1]).items.map((al) => (al as Album).id)
+    expect(ids()).toEqual(['a', 'b'])
+    plays.load({ 'files:b1': { n: 1, last: 5 } })
+    expect(ids()).toEqual(['b', 'a'])
+    plays.load({ 'files:b1': { n: 1, last: 5 }, 'files:a2': { n: 1, last: 9 } })
+    expect(ids()).toEqual(['a', 'b'])
+    // a sort this version doesn't know is Artist
+    page.filesAct('albums', 'sort', 'colour')
+    expect(settings.viewSorts).toEqual({ albums: 'artist' })
+  })
+
+  it('Classic Songs: the table has Plays and Last played (085)', () => {
+    expect(songs(page.filesPage('songs', '', '')[0]).plays).toBe(true)
+  })
+
   it('Albums with search text: the search results, over the open album', () => {
     expect(page.filesPage('albums', 'album/a', 'juno')).toEqual([
       { kind: 'results', empty: 'No song, album or artist has that in its name.' }

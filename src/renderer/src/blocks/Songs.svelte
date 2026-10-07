@@ -59,6 +59,7 @@
     link={b.link}
     count={b.count ?? true}
     {artist}
+    plays={b.plays ?? false}
     head={b.meta === undefined ? label : undefined}
   />
 {:else}

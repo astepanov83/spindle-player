@@ -34,6 +34,7 @@ describe('parseStoredSettings', () => {
       coverSources: { musicbrainz: false, deezer: true, itunes: true },
       closeAction: 'minimize',
       plugins: { files: true, radio: false, mfp: true },
+      viewSorts: { albums: 'added' },
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowMaximized: { studio: true, focus: false },
       windowPlace: { x: -1200, y: 40 },
@@ -131,6 +132,7 @@ describe('parseStoredSettings with a base', () => {
     coverSources: { musicbrainz: true, deezer: false, itunes: true },
     closeAction: 'quit',
     plugins: { files: true, radio: true, mfp: false },
+    viewSorts: { albums: 'added' },
     windowSizes: { focus: { width: 500, height: 700 } },
     windowMaximized: { focus: true },
     windowPlace: { x: 40, y: 60 },
@@ -183,6 +185,26 @@ describe('isKnownSettingsFile', () => {
       { volume: 40.5 }
     ])
       expect(isKnownSettingsFile(raw)).toBe(false)
+  })
+
+  it('checks each view sort', () => {
+    expect(isKnownSettingsFile({ viewSorts: { albums: 'played', 'my-view': 'most-played' } })).toBe(
+      true
+    )
+    for (const viewSorts of [
+      [],
+      'added',
+      { albums: 7 },
+      { Albums: 'added' },
+      { a: 'x'.repeat(41) }
+    ])
+      expect(isKnownSettingsFile({ viewSorts })).toBe(false)
+  })
+
+  it('drops a bad view sort and keeps the rest', () => {
+    const s = parseStoredSettings({ viewSorts: { albums: 'added', x: 7, 'Bad Key': 'year' } })
+    expect(s.viewSorts).toEqual({ albums: 'added' })
+    expect(parseStoredSettings({ viewSorts: 'x' }).viewSorts).toEqual({})
   })
 
   it('checks the modes inside queue', () => {

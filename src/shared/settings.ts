@@ -22,6 +22,9 @@ export interface Settings {
   closeAction: CloseAction
   // which plugins are on; MFP off means the site is never asked
   plugins: Record<PluginId, boolean>
+  // a list view's sort, by view: { albums: 'added' } (ticket 085). The view's
+  // plugin knows the values; a view left out is in its own order.
+  viewSorts: Record<string, string>
 }
 
 export interface Size {
@@ -81,7 +84,8 @@ export function defaultSettings(): Settings {
     fetchCovers: true,
     coverSources: { musicbrainz: true, deezer: true, itunes: true },
     closeAction: 'ask',
-    plugins: pluginDefaults()
+    plugins: pluginDefaults(),
+    viewSorts: {}
   }
 }
 
@@ -179,6 +183,16 @@ function parsePlugins(
     return out
   }
   for (const p of plugins) if (typeof v[p.id] === 'boolean') out[p.id] = v[p.id] as boolean
+  return out
+}
+
+// A view id or a sort: a short word, so a bad file can't hold much here.
+const isSortWord = (v: unknown): v is string => typeof v === 'string' && /^[a-z-]{1,40}$/.test(v)
+
+function parseViewSorts(v: unknown, base: Record<string, string>): Record<string, string> {
+  if (!isObject(v)) return { ...base }
+  const out: Record<string, string> = {}
+  for (const [k, x] of Object.entries(v)) if (isSortWord(k) && isSortWord(x)) out[k] = x
   return out
 }
 
@@ -282,6 +296,7 @@ export function parseStoredSettings(
     coverSources: parseCoverSources(r.coverSources, base.coverSources),
     closeAction: oneOf(r.closeAction, closeActions, base.closeAction),
     plugins: parsePlugins(r.plugins, r, base.plugins),
+    viewSorts: parseViewSorts(r.viewSorts, base.viewSorts),
     windowSizes,
     windowMaximized:
       r.windowMaximized === undefined
@@ -378,6 +393,12 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   )
     return false
   if (has('ai') && !isKnownAi(raw.ai)) return false
+  if (
+    has('viewSorts') &&
+    (!isObject(raw.viewSorts) ||
+      Object.entries(raw.viewSorts).some(([k, v]) => !isSortWord(k) || !isSortWord(v)))
+  )
+    return false
   if (has('folders')) {
     if (!Array.isArray(raw.folders)) return false
     if (parseFolders(raw.folders).length !== new Set(raw.folders).size) return false
@@ -396,6 +417,7 @@ export function pageSettings(s: StoredSettings): Settings {
     fetchCovers: s.fetchCovers,
     coverSources: { ...s.coverSources },
     closeAction: s.closeAction,
-    plugins: { ...s.plugins }
+    plugins: { ...s.plugins },
+    viewSorts: { ...s.viewSorts }
   }
 }

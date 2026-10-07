@@ -154,7 +154,14 @@
 {/snippet}
 
 {#if b.look === 'list'}
-  <ViewHead title={b.title} meta={b.meta} count={b.count ?? ''} {hint} />
+  <ViewHead
+    title={b.title}
+    meta={b.meta}
+    count={b.count ?? ''}
+    {hint}
+    sort={b.sort}
+    onsort={(id) => act('sort', id)}
+  />
 {:else if b.look === 'album'}
   {@render back()}
   <div class="albhead">

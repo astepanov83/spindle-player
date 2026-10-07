@@ -361,6 +361,39 @@ describe('songs as items (ticket 056)', () => {
     expect(sortItems(keys, null, info)).toBe(keys)
   })
 
+  it('sort by plays and last played, most and latest first (085)', () => {
+    const plays: Record<string, { n: number; last: number }> = {
+      'files:1': { n: 2, last: 900 },
+      'files:3': { n: 7, last: 100 }
+    }
+    const played = (k: ItemKey): { n: number; last: number } | undefined => plays[k]
+    const p = nextSort({ k: 't', dir: 1 }, 'p')
+    expect(p).toEqual({ k: 'p', dir: -1 })
+    expect(sortItems(keys, p, info, played)).toEqual(['files:3', 'files:1', 'mfp:off', 'mfp:2'])
+    expect(sortItems(keys, nextSort(p, 'lp'), info, played)).toEqual([
+      'files:1',
+      'files:3',
+      'mfp:off',
+      'mfp:2'
+    ])
+    // a second click: the fewest first
+    expect(nextSort(p, 'p')).toEqual({ k: 'p', dir: 1 })
+  })
+
+  it('asks for plays only for a sort by them', () => {
+    const played = vi.fn(() => undefined)
+    sortItems(keys, { k: 't', dir: 1 }, info, played)
+    expect(played).not.toHaveBeenCalled()
+  })
+
+  it('goes most, fewest, then back to playlist order on a plays column', () => {
+    const a = nextPlaylistSort(null, 'p')
+    expect(a).toEqual({ k: 'p', dir: -1 })
+    const b = nextPlaylistSort(a, 'p')
+    expect(b).toEqual({ k: 'p', dir: 1 })
+    expect(nextPlaylistSort(b, 'p')).toBeNull()
+  })
+
   it('filter by title, artist or album, without accents; greyed ones never match', () => {
     expect(filterItems(keys, 'bjork', info)).toEqual(['files:3'])
     expect(filterItems(keys, 'episode', info)).toEqual(['mfp:2'])

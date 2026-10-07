@@ -1,11 +1,13 @@
 // The Radio tab as blocks (tickets 062, 082): My stations and a search
-// answer, and a row's star, menu and drag reaching the plugin.
+// answer, tags and popular stations before a search, and a row's star, menu
+// and drag reaching the plugin.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultPalettes } from '../../../../shared/palette'
 import type { Station } from '../../../../shared/plugins/radio/stations'
-import type { Block, EmptyBlock, HeadBlock, ItemRow, RowsBlock } from '../types'
+import type { Block, ChipsBlock, EmptyBlock, HeadBlock, ItemRow, RowsBlock } from '../types'
 
-vi.stubGlobal('window', { radioApi: { search: vi.fn(() => new Promise(() => {})) } })
+const never = (): Promise<never> => new Promise(() => {})
+vi.stubGlobal('window', { radioApi: { search: vi.fn(never), popular: vi.fn(never) } })
 
 // the real store starts the audio engine; the page only reads its list
 const radio = vi.hoisted(() => ({
@@ -26,6 +28,7 @@ vi.mock('./store.svelte', () => ({ radio, radioPage: { plugin: 'radio', page: ''
 
 const { radioBlocks } = await import('./page')
 const { radioSearch } = await import('./search.svelte')
+const { radioPopular } = await import('./popular.svelte')
 const { radioHalf } = await import('./index')
 
 const hash = 'a'.repeat(40)
@@ -57,13 +60,15 @@ beforeEach(() => {
   radio.station = undefined
   radioSearch.status = 'idle'
   radioSearch.results = []
+  radioPopular.status = 'done'
+  radioPopular.stations = []
   vi.clearAllMocks()
 })
 
 describe('My stations', () => {
   it('a list head that points at the search box, then the stations as rows', () => {
     const b = radioBlocks('')
-    expect(kinds(b)).toEqual(['head', 'text', 'rows'])
+    expect(kinds(b)).toEqual(['head', 'text', 'rows', 'chips'])
     expect(b[0] as HeadBlock).toEqual({
       kind: 'head',
       look: 'list',
@@ -210,6 +215,13 @@ describe('a row’s star and menu', () => {
     ])
   })
 
+  it('star saves a popular station', () => {
+    const p = st('rb-p')
+    radioPopular.stations = [p]
+    radioHalf.act!('rb-p', 'star')
+    expect(radio.save).toHaveBeenCalledWith(p)
+  })
+
   it('does nothing for a station it does not know', () => {
     radioHalf.act!('zz', 'star')
     radioHalf.act!('zz', 'remove')
@@ -227,7 +239,78 @@ describe('a row’s star and menu', () => {
   })
 })
 
+describe('before a search (082)', () => {
+  const chips = (b: Block[]): ChipsBlock | undefined =>
+    b.find((x): x is ChipsBlock => x.kind === 'chips')
+
+  it('offers the tags of My stations, the most shared first', () => {
+    expect(chips(radioBlocks(''))).toEqual({
+      kind: 'chips',
+      label: 'Search a tag',
+      words: ['jazz', 'swing', 'drone']
+    })
+  })
+
+  it('shows the popular stations not in My stations, up to 20, with logos through main', () => {
+    radioPopular.stations = [
+      radio.stations[1],
+      st('rb-1', { logoUrl: 'https://x/logo.png' }),
+      ...Array.from({ length: 30 }, (_, i) => st(`rb-n${i}`))
+    ]
+    const b = radioBlocks('')
+    expect(kinds(b)).toEqual(['head', 'text', 'rows', 'chips', 'text', 'rows'])
+    expect(b[4]).toEqual({ kind: 'text', text: 'Popular stations' })
+    const found = rows(b[5])
+    expect(found).toHaveLength(20)
+    expect(found[0]).toMatchObject({
+      play: 'radio:rb-1',
+      art: 'spindle://radio-logo/rb-1',
+      star: { on: false, label: 'Add to My stations' }
+    })
+    expect('reorder' in b[5]).toBe(false)
+  })
+
+  it('says it loads, or one quiet line when Radio Browser can’t be reached', () => {
+    radioPopular.status = 'loading'
+    expect(text(radioBlocks('').at(-1)!)).toBe('Loading…')
+    radioPopular.status = 'unreachable'
+    const b = radioBlocks('')
+    expect(b.at(-2)).toEqual({ kind: 'text', text: 'Popular stations' })
+    expect(text(b.at(-1)!)).toBe("Radio Browser can't be reached.")
+  })
+
+  it('shows no popular heading when all of them are in My stations', () => {
+    radioPopular.stations = [radio.stations[0]]
+    expect(kinds(radioBlocks(''))).toEqual(['head', 'text', 'rows', 'chips'])
+  })
+
+  it('a new user gets the popular stations’ tags', () => {
+    radio.stations = []
+    radioPopular.stations = [st('rb-1', { tags: ['pop', 'news'] }), st('rb-2', { tags: ['news'] })]
+    expect(chips(radioBlocks(''))?.words).toEqual(['news', 'pop'])
+  })
+
+  it('shows neither while searching', () => {
+    radioPopular.stations = [st('rb-1')]
+    radioSearch.status = 'searching'
+    const b = radioBlocks('jazz')
+    expect(chips(b)).toBeUndefined()
+    expect(b.some((x) => x.kind === 'text' && x.text === 'Popular stations')).toBe(false)
+  })
+
+  it('a popular station is an item while it shows, so it can be played', () => {
+    radioPopular.stations = [st('rb-p')]
+    expect(radioHalf.info('rb-p')).toMatchObject({ state: 'ok', info: { title: 'Station rb-p' } })
+  })
+})
+
 describe('the search box', () => {
+  it('asks for the popular stations when the tab opens', () => {
+    const want = vi.spyOn(radioPopular, 'want')
+    radioHalf.typed!('radio', '', false)
+    expect(want).toHaveBeenCalled()
+  })
+
   it('asks Radio Browser after typing stops, or at once on Enter', () => {
     const want = vi.spyOn(radioSearch, 'want')
     const now = vi.spyOn(radioSearch, 'now')

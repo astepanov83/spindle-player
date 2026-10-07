@@ -5,6 +5,7 @@ import {
   searchRows,
   stationLine,
   stationMatches,
+  stationTags,
   cantPlayFormat,
   firstStream,
   historyEntries,
@@ -275,5 +276,40 @@ describe('searchRows', () => {
     const st = (id: string): Station => ({ id, name: id, tags: [], streams: [] })
     const rows = searchRows([st('rb-1'), st('rb-2'), st('rb-3')], [st('metal-only'), st('rb-2')])
     expect(rows.map((s) => s.id)).toEqual(['rb-1', 'rb-3'])
+  })
+})
+
+describe('stationTags (082)', () => {
+  const st = (id: string, tags: string[]): Station => ({ id, name: id, tags, streams: [] })
+
+  it('lists the tags of My stations, the most shared first, a tie in list order', () => {
+    const mine = [st('a', ['Metal', 'rock']), st('b', ['ambient', 'metal']), st('c', ['rock'])]
+    expect(stationTags(mine, [])).toEqual(['metal', 'rock', 'ambient'])
+  })
+
+  it('takes each station’s first tag before any second one, so one station does not fill the row', () => {
+    const mine = [
+      st('a', ['1930', '1940', '1950', '1960']),
+      st('b', ['metal']),
+      st('c', ['jazz', 'swing'])
+    ]
+    expect(stationTags(mine, [], 5)).toEqual(['1930', 'metal', 'jazz', '1940', 'swing'])
+  })
+
+  it('counts a tag a station lists twice once, and drops one letter and long tags', () => {
+    const mine = [st('a', ['jazz', ' Jazz ', 'x', 'a'.repeat(31)]), st('b', ['soul', 'blues'])]
+    expect(stationTags(mine, [])).toEqual(['jazz', 'soul', 'blues'])
+  })
+
+  it('keeps the first few', () => {
+    const mine = [st('a', ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9'])]
+    expect(stationTags(mine, [])).toHaveLength(8)
+    expect(stationTags(mine, [], 2)).toEqual(['t1', 't2'])
+  })
+
+  it('takes the popular stations’ tags only when My stations have none', () => {
+    const popular = [st('p', ['news', 'talk']), st('q', ['talk'])]
+    expect(stationTags([st('a', [])], popular)).toEqual(['talk', 'news'])
+    expect(stationTags([st('a', ['metal'])], popular)).toEqual(['metal'])
   })
 })

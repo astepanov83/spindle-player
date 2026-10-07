@@ -6,6 +6,7 @@ import {
   groupStations,
   mergeResults,
   nameKey,
+  popularPath,
   stationName,
   RadioBrowser,
   resolveMirrors,
@@ -19,6 +20,8 @@ const read = (name: string): RbRecord[] =>
   JSON.parse(readFileSync(join(__dirname, 'fixtures', name), 'utf8'))
 const byName = read('rb-drone-name.json')
 const byTag = read('rb-drone-tag.json')
+// the 100 best voted records (October 2026), trimmed the same way
+const top = read('rb-top-votes.json')
 
 const record = (over: Partial<RbRecord>): RbRecord => ({
   stationuuid: 'aaaaaaaa-0000-0000-0000-000000000001',
@@ -346,6 +349,65 @@ describe('RadioBrowser.search', () => {
     const { rb, f } = browser({})
     expect(await rb.search('  ')).toEqual({ ok: true, stations: [] })
     expect(f.calls).toEqual([])
+  })
+})
+
+describe('RadioBrowser.popular (082)', () => {
+  const topUrl = (host: string): string => `https://${host}${popularPath()}`
+
+  it('asks for the best voted working stations', () => {
+    expect(popularPath()).toBe(
+      '/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=100'
+    )
+  })
+
+  it('groups the records into stations, best voted first, at most 40', async () => {
+    const { rb, f } = browser({ [topUrl('a.example')]: { body: top } })
+    const r = await rb.popular()
+    if (!r.ok) throw new Error('not ok')
+    expect(r.stations).toHaveLength(40)
+    expect(r.stations[0].name).toBe('MANGORADIO')
+    // France Info's 128 and 192 kbps records are one station
+    const info = r.stations.filter((s) => s.name === 'France Info')
+    expect(info).toHaveLength(1)
+    expect(info[0].streams.map((s) => s.bitrate)).toEqual([128, 192])
+    expect(f.calls.map((c) => c.agent)).toEqual(['Spindle/1.0'])
+  })
+
+  it('asks once a run', async () => {
+    const { rb, f } = browser({ [topUrl('a.example')]: { body: top } })
+    const [one, two] = await Promise.all([rb.popular(), rb.popular()])
+    expect(await rb.popular()).toBe(one)
+    expect(two).toBe(one)
+    expect(f.calls).toHaveLength(1)
+  })
+
+  it('says it cannot reach Radio Browser, and asks again next time', async () => {
+    const replies: Record<string, Reply> = {}
+    const { rb } = browser(replies)
+    expect(await rb.popular()).toEqual({ ok: false })
+    replies[topUrl('a.example')] = { body: top }
+    const r = await rb.popular()
+    expect(r.ok && r.stations.length).toBe(40)
+  })
+
+  it('takes an answer that is not a list as no stations', async () => {
+    const { rb } = browser({ [topUrl('a.example')]: { body: { error: 'x' } } })
+    expect(await rb.popular()).toEqual({ ok: true, stations: [] })
+  })
+
+  it('counts a click for a popular station played, as for one from search', async () => {
+    const { rb, f } = browser({
+      [topUrl('a.example')]: { body: top },
+      'https://a.example/json/url/962cc6df-0601-11e8-ae97-52543be04c81': { body: {} }
+    })
+    const r = await rb.popular()
+    const wave = r.ok ? r.stations.find((s) => s.name === 'Dance Wave!') : undefined
+    rb.played(wave!.id)
+    await rb.opened(wave!.id, wave!.streams[0].url)
+    expect(f.calls.at(-1)?.url).toBe(
+      'https://a.example/json/url/962cc6df-0601-11e8-ae97-52543be04c81'
+    )
   })
 })
 

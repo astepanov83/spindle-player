@@ -23,6 +23,7 @@ export function radioPreload(): RadioApi {
     lastAnswer: (id) => invoke(RadioChannel.lastAnswer, id),
     stop: () => send(RadioChannel.stop),
     search: (q) => invoke(RadioChannel.search, q),
+    popular: () => invoke(RadioChannel.popular),
     onTitle: (listener) => {
       const handler = (_: Electron.IpcRendererEvent, title: RadioTitle): void => listener(title)
       ipcRenderer.on(RadioChannel.title, handler)

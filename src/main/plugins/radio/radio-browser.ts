@@ -37,6 +37,21 @@ export function searchPath(field: 'name' | 'tag', q: string): string {
   return `/json/stations/search?${p}`
 }
 
+// The best voted working stations of all, for the Radio tab before a search.
+// The records are one per stream, so a hundred make far fewer stations.
+export function popularPath(): string {
+  const p = new URLSearchParams({
+    hidebroken: 'true',
+    order: 'votes',
+    reverse: 'true',
+    limit: '100'
+  })
+  return `/json/stations/search?${p}`
+}
+
+// Popular stations kept: the page shows 20 not in My stations
+const popularCount = 40
+
 // The player needs a plain stream that answered on the last check. HLS is not
 // played (as in webmusicmo). No minimum bitrate: search shows what there is.
 export function usableRecords(json: unknown): RbRecord[] {
@@ -218,6 +233,8 @@ export class RadioBrowser {
   #pending = new Set<string>()
   // records counted this run
   #clicked = new Set<string>()
+  // the popular stations, asked once a run; a failed ask is not kept
+  #popular: Promise<RadioSearch> | undefined
 
   constructor(readonly d: RadioBrowserDeps) {}
 
@@ -231,10 +248,33 @@ export class RadioBrowser {
       this.#get(searchPath('tag', query)).catch(() => undefined)
     ])
     if (byName === undefined && byTag === undefined) return { ok: false }
-    const records = mergeResults(usableRecords(byName), usableRecords(byTag))
+    return {
+      ok: true,
+      stations: this.#stations(mergeResults(usableRecords(byName), usableRecords(byTag)))
+    }
+  }
+
+  // The best voted stations, grouped as search groups them, best first.
+  // Asked once a run: votes change slowly, and the tab asks on each open.
+  popular(): Promise<RadioSearch> {
+    const job = (this.#popular ??= this.#get(popularPath()).then(
+      (json): RadioSearch => ({
+        ok: true,
+        stations: this.#stations(usableRecords(json)).slice(0, popularCount)
+      }),
+      (): RadioSearch => ({ ok: false })
+    ))
+    void job.then((r) => {
+      if (!r.ok && this.#popular === job) this.#popular = undefined
+    })
+    return job
+  }
+
+  // Records as stations, their addresses kept to count clicks.
+  #stations(records: RbRecord[]): Station[] {
     if (this.#uuidOf.size > maxKnown) this.#uuidOf.clear()
     for (const r of records) this.#uuidOf.set(r.url_resolved, r.stationuuid)
-    return { ok: true, stations: groupStations(records, this.d.known) }
+    return groupStations(records, this.d.known)
   }
 
   // radio:play for a station: its click is counted when a stream opens.

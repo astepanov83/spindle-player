@@ -264,6 +264,13 @@ export class RadioPlugin implements MainPlugin {
       if (n === this.#searches) resultLogos.searched(found.stations)
       return played.searched(found.stations) ? { ...found, saved: stations.list() } : found
     })
+    page.handle(RadioChannel.popular, async () => {
+      if (!this.#on) return { ok: false }
+      const found = await radioBrowser.popular()
+      if (!found.ok || !this.#on) return { ok: false }
+      resultLogos.popular(found.stations)
+      return played.searched(found.stations) ? { ...found, saved: stations.list() } : found
+    })
     // always allowed: it only ends a connection
     page.on(RadioChannel.stop, () => this.#stop())
     page.handle(RadioChannel.lastAnswer, (_, id) =>

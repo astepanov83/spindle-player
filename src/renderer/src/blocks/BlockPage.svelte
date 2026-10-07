@@ -6,6 +6,7 @@
   import { typedIn } from '../plugins'
   import type { Block, NavKind } from '../plugins/types'
   import { library } from '../stores/library.svelte'
+  import Chips from './Chips.svelte'
   import Head from './Head.svelte'
   import Nothing from './Nothing.svelte'
   import Results from './Results.svelte'
@@ -87,6 +88,8 @@
       <h3 class="part section-label" class:over-rows={overRows(i)} class:top={underHead(i)}>
         {b.text}
       </h3>
+    {:else if b.kind === 'chips'}
+      <Chips block={b} {tab} {plugin} />
     {:else}
       <Results block={b} {scrollEl} />
     {/if}

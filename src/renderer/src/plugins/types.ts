@@ -54,6 +54,7 @@ export type Block =
   | TreeBlock
   | EmptyBlock
   | TextBlock
+  | ChipsBlock
   | ResultsBlock
 
 // A piece of a line: plain text, or a name that opens its page.
@@ -297,6 +298,15 @@ export interface EmptyBlock {
 export interface TextBlock {
   kind: 'text'
   text: string
+}
+
+// Words to search for, as a row of chips after a label: a click puts the
+// word in the search box and searches at once (Radio's tags, ticket 082).
+export interface ChipsBlock {
+  kind: 'chips'
+  // before the chips: "Search a tag"
+  label: string
+  words: string[]
 }
 
 // What a search found in one plugin: songs, or tiles (albums, artists). The

@@ -348,6 +348,39 @@ describe('a file Chromium can’t read', () => {
     expect(got).toEqual(['error 4 gone'])
   })
 
+  // a file that failed while paused, as a restored queue on a drive not mounted
+  async function failPaused(): Promise<void> {
+    headStatus = 404
+    e.load('spindle://media/nas', 21)
+    el.error = { code: 4, message: '' }
+    el.fire('error')
+    el.error = { code: 4, message: '' }
+    el.fire('error')
+    await vi.runAllTimersAsync()
+    got.length = 0
+  }
+
+  it('failed while paused: Play loads it again, and it plays where it was if the file is back', async () => {
+    await failPaused()
+    e.play()
+    expect(el.loads.at(-1)).toBe('spindle://media/nas')
+    expect(el.paused).toBe(false)
+    el.meta(100)
+    expect(el.currentTime).toBe(21)
+    expect(got.filter((g) => g.startsWith('error'))).toEqual([])
+  })
+
+  it('failed while paused: Play loads it again, and it fails now if the file is still gone', async () => {
+    await failPaused()
+    e.play()
+    el.error = { code: 4, message: '' }
+    el.fire('error')
+    el.error = { code: 4, message: '' }
+    el.fire('error')
+    await vi.runAllTimersAsync()
+    expect(got).toEqual(['error 4 gone'])
+  })
+
   it('drops the error of a song that is no longer loaded', async () => {
     e.load('spindle://media/x', 0)
     el.error = { code: 4, message: '' }

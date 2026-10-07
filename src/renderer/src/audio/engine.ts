@@ -602,6 +602,14 @@ export class AudioEngine {
   play(): void {
     if (!this.loaded) return
     this.#wantPlay = true
+    // It failed while paused (a drive not mounted): its error event came and
+    // went, so play() alone would do nothing. Load it again: it plays if the
+    // file is back, or fails now, while playing, and is passed over.
+    const d = this.#deck
+    if (d.el.error && !d.live) {
+      d.load(d.url, d.el.currentTime || d.startAt, false, d.level)
+      return this.#playElement()
+    }
     // like an ended file, a part played to its end starts again
     const end = this.#part.end
     if (end !== undefined && this.el.currentTime >= end - endSlack) this.seek(0)

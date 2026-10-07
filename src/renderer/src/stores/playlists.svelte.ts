@@ -1,18 +1,22 @@
 // The user's playlists. Every change goes to main, which checks and saves the list.
 import * as ops from '../../../shared/playlists'
 import type { Playlist } from '../../../shared/playlists'
-import { movePlaylists, type IdMoves } from '../../../shared/id-moves'
+import { moveKeys, movePlaylists, type IdMoves } from '../../../shared/id-moves'
 import type { PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
 import { infoOf } from '../plugins'
 import type { ItemInfo } from '../plugins/types'
 import { library } from './library.svelte'
-import { notice } from './notice.svelte'
+import { removedNotice } from '../queue/logic'
+import { notice, type NoticeAction } from './notice.svelte'
 
 class PlaylistStore {
   list: Playlist[] = $state.raw([])
   // the playlist whose name is being edited; set right after "New playlist"
   editing: string | null = $state(null)
+
+  // the last "Remove from this playlist", while its notice offers Undo
+  #undo: { id: string; removed: ops.Removed[]; action: NoticeAction } | undefined
 
   // false when main could not give the playlists: an edit then must not
   // replace the user's file with this run's list
@@ -71,10 +75,40 @@ class PlaylistStore {
   moveIds(plugin: PluginId, moves: IdMoves): void {
     const list = movePlaylists(this.list, plugin, moves)
     if (list !== this.list) this.#set(list)
+    // an Undo on offer puts back the same songs, by their new ids
+    const u = this.#undo
+    if (u) {
+      const keys = moveKeys(
+        u.removed.map((r) => r.key),
+        plugin,
+        moves
+      )
+      u.removed = u.removed.map((r, i) => ({ ...r, key: keys[i] }))
+    }
   }
 
+  // "Remove from this playlist" and Delete on its row. Its notice offers
+  // Undo, which puts the songs back at their places.
   removeItems(id: string, keys: ItemKey[]): void {
+    const p = this.get(id)
+    const removed = ops.removedAt(this.list, id, keys)
+    if (!p || !removed.length) return
     this.#set(ops.removeItems(this.list, id, keys))
+    const action: NoticeAction = { label: 'Undo', run: () => this.#undoRemove() }
+    this.#undo = { id, removed, action }
+    const text =
+      removed.length === 1
+        ? removedNotice(infoOf(removed[0].key)?.title ?? '', p.name)
+        : `Removed ${songs(removed.length)} from ${p.name}`
+    notice.show(text, action)
+  }
+
+  #undoRemove(): void {
+    const u = this.#undo
+    this.#undo = undefined
+    if (!u) return
+    const list = ops.putBack(this.list, u.id, u.removed)
+    if (list !== this.list) this.#set(list)
   }
 }
 

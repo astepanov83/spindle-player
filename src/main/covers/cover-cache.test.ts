@@ -224,8 +224,8 @@ describe('CoverCache', () => {
       const covers = new CoverCache(dir, 'preload.js')
       writeFileSync(join(dir, `${hash}.jpg`), new Uint8Array([7, 7]))
       const p = covers.logoPalette(hash)
-      await tick()
-      await tick()
+      // the file is read for real, which can take more than a tick under load
+      await vi.waitFor(() => expect(fake.windows[0]?.sent).toHaveLength(1))
       const job = fake.windows[0].sent[0] as unknown as CoverJob
       expect([job.side, job.palette, [...job.data]]).toEqual([undefined, true, [7, 7]])
       fake.onDone!({ sender: fake.windows[0].webContents }, { id: job.id, palette })

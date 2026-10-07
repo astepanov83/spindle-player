@@ -11,6 +11,8 @@ import { listStep } from '../keys'
 
 export interface RovingOptions {
   count?: number
+  // the lowest row number shown: the queue folds its played songs away
+  first?: number
   scrollTo?: (index: number) => void
   rows?: unknown
 }
@@ -24,6 +26,18 @@ export function tabStop(
 ): number | undefined {
   for (const i of [active, current, shown]) if (i !== null && drawn.includes(i)) return i
   return drawn[0]
+}
+
+// Where a key moves the focus from row `i` when rows `first`..`count - 1` are shown.
+export function rowStep(
+  key: string,
+  i: number,
+  first: number,
+  count: number,
+  page: number
+): number | null {
+  const to = listStep(key, i - first, count - first, page)
+  return to === null ? null : to + first
 }
 
 // The drawn row closest to `i`, for the focus when a scroll takes its row away.
@@ -113,11 +127,12 @@ export function roving(
     const row = rowOf(e.target, all)
     if (!row) return
     const count = opts.count ?? all.length
+    const first = Math.min(opts.first ?? 0, count)
     const page = Math.max(
       1,
       Math.floor((scrollBox(node)?.clientHeight ?? 400) / row.offsetHeight) - 1
     )
-    const to = listStep(e.key, indexOf(row, all), count, page)
+    const to = rowStep(e.key, indexOf(row, all), first, count, page)
     if (to === null) return
     e.preventDefault()
     void focusRow(to)
@@ -160,6 +175,7 @@ export function roving(
       }
       opts = o
       if (active !== null && o.count !== undefined && active >= o.count) active = null
+      if (active !== null && active < (o.first ?? 0)) active = null
       mark()
     },
     destroy() {

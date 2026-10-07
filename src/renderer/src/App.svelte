@@ -8,6 +8,7 @@
   import Node from './layout/Node.svelte'
   import Menu from './ui/Menu.svelte'
   import Notice from './ui/Notice.svelte'
+  import DragGhost from './ui/DragGhost.svelte'
   import { engine } from './audio/engine'
   import { heard } from './audio/volume'
   import { escapeTarget, isTyping, keyAction, seekStep, usesArrows, type KeyAction } from './keys'
@@ -199,6 +200,7 @@
   <Notice />
   <Menu />
   <CloseAsk />
+  <DragGhost />
 </div>
 
 <style>

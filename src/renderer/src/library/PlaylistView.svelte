@@ -41,6 +41,12 @@
 
   const link = $derived(queueLink('playlist', id))
 
+  // Rows move (drag, Alt+Up / Alt+Down) only while the table shows the
+  // playlist's own order, all of it: in a sort or a search, a place among
+  // the rows shown is no place in the playlist.
+  const canMove = $derived(library.playlistSort(id) === null && shown === view.rows)
+  const move = (keys: ItemKey[]): void => playlists.move(id, keys)
+
   // from a song that can play: greyed ones are passed over
   function play(how: 'all' | 'shuffle'): void {
     if (p) playPage(how, playIds, p.name, link, (k) => itemInfo(k).state === 'ok')
@@ -86,6 +92,7 @@
     onsort={(k) => library.sortPlaylist(id, k)}
     playlistId={id}
     {link}
+    onmove={canMove ? move : undefined}
   >
     {#snippet head()}
       <div class="head">

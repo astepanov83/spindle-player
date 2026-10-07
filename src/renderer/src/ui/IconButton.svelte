@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import type { IconName } from './icons'
+  import { dropTarget, type DropTarget } from '../stores/song-drag.svelte'
 
   let {
     icon,
@@ -9,6 +10,7 @@
     toggle = false,
     act,
     disabled = false,
+    drop,
     onclick
   }: {
     icon: IconName
@@ -19,6 +21,8 @@
     // names a slot button, so focus can be handed to it
     act?: string
     disabled?: boolean
+    // songs dragged onto it (ticket 089)
+    drop?: DropTarget
     onclick: () => void
   } = $props()
 </script>
@@ -32,6 +36,7 @@
   title={label}
   data-act={act}
   {disabled}
+  use:dropTarget={drop}
   {onclick}><Icon name={icon} /></button
 >
 

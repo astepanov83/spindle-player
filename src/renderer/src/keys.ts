@@ -322,7 +322,7 @@ export const listShortcuts: { keys: string[]; does: string }[] = [
   { keys: ['ArrowRight', 'ArrowLeft'], does: 'On a station: to its star and menu, and back' },
   {
     keys: ['Alt+ArrowUp', 'Alt+ArrowDown'],
-    does: 'On a queue row or a saved station: move it, or the selected songs'
+    does: 'On a queue, playlist or saved station row: move it, or the selected songs'
   },
   { keys: ['Delete'], does: 'On a queue or playlist row: remove it, or the selected songs' }
 ]

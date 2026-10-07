@@ -16,6 +16,7 @@
   import { playlists } from '../stores/playlists.svelte'
   import { pageBlocks, playlistsEmpty, pluginTabs, typedIn } from '../plugins'
   import { tabsIn } from '../plugins/tabs'
+  import { dropTarget, type DropTarget } from '../stores/song-drag.svelte'
 
   // the tabs of the plugins that are on (ticket 059); playlists are listed
   // under their own heading
@@ -46,6 +47,9 @@
     playlists.editing = id
   }
 
+  // songs dragged onto a playlist are added to it (ticket 089)
+  const addTo = (id: string): DropTarget => ({ drop: (d) => playlists.add(id, d.keys) })
+
   scrollTopOnChange(
     () => scrollEl,
     () => libraryView()
@@ -54,8 +58,15 @@
   libraryOnScreen()
 </script>
 
-{#snippet item(current: boolean, pick: () => void, icon: IconName, label: string, full = false)}
-  <button class="sidebtn" aria-current={current} onclick={pick}>
+{#snippet item(
+  current: boolean,
+  pick: () => void,
+  icon: IconName,
+  label: string,
+  full = false,
+  drop: DropTarget | undefined = undefined
+)}
+  <button class="sidebtn" aria-current={current} onclick={pick} use:dropTarget={drop}>
     <Icon name={icon} size={18} /><span class="lbl" title={full ? label : undefined}>{label}</span>
   </button>
 {/snippet}
@@ -81,7 +92,14 @@
         >
       </div>
       {#each playlists.list as p (p.id)}
-        {@render item(playlist?.id === p.id, () => pickPlaylist(p.id), 'list', p.name, true)}
+        {@render item(
+          playlist?.id === p.id,
+          () => pickPlaylist(p.id),
+          'list',
+          p.name,
+          true,
+          addTo(p.id)
+        )}
       {:else}
         <div class="none">No playlists yet</div>
       {/each}

@@ -18,6 +18,7 @@
   import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
   import { theme } from '../stores/theme.svelte'
+  import { songDrag } from '../stores/song-drag.svelte'
 
   let {
     block: b,
@@ -65,6 +66,23 @@
   // not while radio plays
   const playing = (t: Tile): boolean => !!queues.item && !!t.playing?.(queues.item)
 
+  // A tile dragged takes all its songs to a playlist or the queue (ticket 089).
+  function press(e: PointerEvent, t: Tile): void {
+    songDrag.press(e, () => ({
+      keys: t.songs(),
+      from: t.from,
+      link: t.link,
+      title: t.title,
+      sub: t.subtitle,
+      cover: t.art?.cover ?? t.photo
+    }))
+  }
+
+  // the click that ends a drag opens and plays nothing
+  const unlessDragged = (run: () => void) => (): void => {
+    if (!songDrag.tookClick()) run()
+  }
+
   function openMenu(e: MouseEvent, x: unknown, t: Tile): void {
     const key = b.key(x)
     menu.showFor(
@@ -101,10 +119,14 @@
           class="card"
           class:round={b.round}
           role="group"
+          onpointerdown={(e) => press(e, t)}
           oncontextmenu={(e) => openMenu(e, x, t)}
         >
           <div class="wrap">
-            <button class="pic" aria-label="Open {t.title}" onclick={() => openFrom(tab, t.to)}
+            <button
+              class="pic"
+              aria-label="Open {t.title}"
+              onclick={unlessDragged(() => openFrom(tab, t.to))}
               >{#if b.round}<ArtistPic photo={t.photo} covers={t.covers ?? []} />{:else}<Cover
                   src={t.art?.cover}
                   tint={t.art?.palette[theme.light ? 'light' : 'dark'][0]}
@@ -114,7 +136,7 @@
             <button
               class="qp"
               aria-label="Play {t.title}"
-              onclick={() => queue.playList(t.songs(), 0, t.from, t.link)}
+              onclick={unlessDragged(() => queue.playList(t.songs(), 0, t.from, t.link))}
             >
               <Icon name="play" />
             </button>

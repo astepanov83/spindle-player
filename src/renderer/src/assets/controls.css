@@ -167,6 +167,18 @@ button.row:active:not(.cur-row) {
   border-top-right-radius: 0;
 }
 
+/* Songs on the move (ticket 089): the hand shows everywhere, and the
+   place under the pointer that takes them lights up. */
+:root.song-drag,
+:root.song-drag * {
+  cursor: grabbing !important;
+}
+[data-drop-over] {
+  background: color-mix(in srgb, var(--focus) 22%, transparent) !important;
+  box-shadow: inset 0 0 0 2px var(--focus);
+  color: var(--ink) !important;
+}
+
 /* Thin scrollbars with no arrows, in both themes. The thumb is see-through
    ink, so it shows on any ground (a tint, a panel). */
 ::-webkit-scrollbar {

@@ -844,7 +844,7 @@ describe('the bar, from what radio gives (ticket 058)', () => {
       id: 'stream',
       kind: 'choice',
       label: 'Stream',
-      short: '320',
+      short: '320k',
       options: [
         { id: '2', label: '320 kbps' },
         { id: '1', label: '128 kbps' },
@@ -864,7 +864,7 @@ describe('the bar, from what radio gives (ticket 058)', () => {
     expect(choose).toHaveBeenCalledWith('b', 'https://b/0')
     expect(loads()).toEqual(['load spindle://radio/b?stream=0 live'])
     expect(choice()?.picked).toBe('0')
-    expect(choice()?.short).toBe('64')
+    expect(choice()?.short).toBe('64k')
   })
 
   it('Save for a station from search: busy while main saves, gone once saved', async () => {

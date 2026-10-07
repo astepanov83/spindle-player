@@ -392,7 +392,7 @@ export type Action =
       kind: 'choice'
       // the menu's heading: "Stream"
       label: string
-      // what the bar shows: "320"
+      // what the bar shows: "320k"
       short: string
       options: { id: string; label: string }[]
       // an option's id, or none

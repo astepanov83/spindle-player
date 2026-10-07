@@ -146,16 +146,16 @@ describe('streamChoices', () => {
   it('lists the highest bitrate first, with its codec', () => {
     const list = streamChoices([s('a', 128, 'mp3'), s('b', 320, 'mp3'), s('c', 64, 'aac')])
     expect(list).toEqual([
-      { index: 1, label: '320 kbps mp3', short: '320' },
-      { index: 0, label: '128 kbps mp3', short: '128' },
-      { index: 2, label: '64 kbps aac', short: '64' }
+      { index: 1, label: '320 kbps mp3', short: '320k' },
+      { index: 0, label: '128 kbps mp3', short: '128k' },
+      { index: 2, label: '64 kbps aac', short: '64k' }
     ])
   })
 
   it('puts streams of unknown bitrate last, in list order', () => {
     const list = streamChoices([s('a'), s('b', 128), s('c', undefined, 'mp3')])
     expect(list.map((c) => [c.index, c.label, c.short])).toEqual([
-      [1, '128 kbps', '128'],
+      [1, '128 kbps', '128k'],
       [0, 'Bitrate unknown', 'Stream'],
       [2, 'mp3, bitrate unknown', 'mp3']
     ])
@@ -175,9 +175,9 @@ describe('streamChoices', () => {
   it('lists the same bitrate once per codec, the better codec first', () => {
     const list = streamChoices([s('m', 128, 'mp3'), s('a', 128, 'aac'), s('x', 64, 'aac')])
     expect(list).toEqual([
-      { index: 1, label: '128 kbps aac', short: '128 aac' },
-      { index: 0, label: '128 kbps mp3', short: '128 mp3' },
-      { index: 2, label: '64 kbps aac', short: '64' }
+      { index: 1, label: '128 kbps aac', short: '128k aac' },
+      { index: 0, label: '128 kbps mp3', short: '128k mp3' },
+      { index: 2, label: '64 kbps aac', short: '64k' }
     ])
   })
 

@@ -58,7 +58,7 @@ export interface StreamChoice {
   index: number
   // "320 kbps mp3", for the list
   label: string
-  // "320", for the bar's button
+  // "320k", for the bar's button
   short: string
 }
 
@@ -67,7 +67,8 @@ export interface StreamChoice {
 // only in the stream (decision 153), so those come last, in list order, as
 // "Bitrate unknown". Labels that would read the same get a number, so mirrors
 // of one stream can be told apart. The bar's short text names the codec when
-// another codec has the same bitrate ("128 aac", "128 mp3").
+// another codec has the same bitrate ("128k aac", "128k mp3"). The k says it
+// is a bitrate: a bare "320" read as nothing in particular.
 export function streamChoices(streams: Stream[]): StreamChoice[] {
   const order = streams
     .map((s, index) => ({ s, index }))
@@ -85,7 +86,7 @@ export function streamChoices(streams: Stream[]): StreamChoice[] {
     seen.set(label, n)
     if (n > 1) label += ` (${n})`
     const short = s.bitrate
-      ? [String(s.bitrate), sharedRate(s) && s.codec].filter(Boolean).join(' ')
+      ? [`${s.bitrate}k`, sharedRate(s) && s.codec].filter(Boolean).join(' ')
       : (s.codec ?? 'Stream')
     return { index, label, short }
   })

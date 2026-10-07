@@ -434,7 +434,7 @@ describe('the player bar', () => {
     id: 'stream',
     kind: 'choice',
     label: 'Stream',
-    short: '320',
+    short: '320k',
     options: [
       { id: '0', label: '320 kbps' },
       { id: '1', label: '128 kbps' }

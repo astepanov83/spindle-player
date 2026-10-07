@@ -293,15 +293,13 @@ function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
       { text: ` · ${fmtCount(tracks.length, 'song', 'songs')} · ${fmtLength(length)}` }
     ],
     buttons: [
-      // pauses and resumes while the queue plays it
       {
         play: 'all',
         label: 'Play',
         songs: () => items,
         from: al.title,
         link,
-        primary: true,
-        pauses: true
+        primary: true
       },
       { play: 'shuffle', label: 'Shuffle', songs: () => items, from: al.title, link },
       { menu: 'playlist', label: 'Add to playlist', songs: () => items },

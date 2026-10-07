@@ -1,4 +1,4 @@
-<!-- One playlist: its songs in a table, with Play, Rename and Delete. -->
+<!-- One playlist: its songs in a table, with Play, Shuffle, Rename and Delete. -->
 <script lang="ts">
   import SongTable from './SongTable.svelte'
   import Icon from '../ui/Icon.svelte'
@@ -7,7 +7,7 @@
   import { infoOf, itemInfo } from '../plugins'
   import { library } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
-  import { queue } from '../stores/queue.svelte'
+  import { playPage, playState } from '../blocks/page-play'
   import { queueLink } from '../../../shared/saved-queue'
   import type { ItemKey } from '../../../shared/plugins/items'
 
@@ -34,12 +34,11 @@
   // what the table shows, as sorted there
   const playIds = (): ItemKey[] => sortItems(shown, library.playlistSort(id), infoOf)
 
-  // from the first song that can play: greyed ones are passed over
-  function play(): void {
-    if (!p) return
-    const keys = playIds()
-    const first = keys.findIndex((k) => itemInfo(k).state === 'ok')
-    if (first >= 0) queue.playList(keys, first, p.name, queueLink('playlist', id))
+  const link = $derived(queueLink('playlist', id))
+
+  // from a song that can play: greyed ones are passed over
+  function play(how: 'all' | 'shuffle'): void {
+    if (p) playPage(how, playIds, p.name, link, (k) => itemInfo(k).state === 'ok')
   }
 
   // a step clears the text: it filtered this playlist's rows, and the list
@@ -81,7 +80,7 @@
     sort={library.playlistSort(id)}
     onsort={(k) => library.sortPlaylist(id, k)}
     playlistId={id}
-    link={queueLink('playlist', id)}
+    {link}
   >
     {#snippet head()}
       <div class="head">
@@ -104,7 +103,12 @@
           <h2 class="page-title clamp" title={p.name}>{p.name}</h2>
         {/if}
         <div class="acts">
-          <button class="pill" disabled={!shown.length} onclick={play}>Play</button>
+          <button class="pill play" disabled={!shown.length} onclick={() => play('all')}
+            >{playState(link, () => p.items) === 'pause' ? 'Pause' : 'Play'}</button
+          >
+          <button class="pill ghost" disabled={!shown.length} onclick={() => play('shuffle')}
+            >Shuffle</button
+          >
           <button class="pill ghost" onclick={() => (playlists.editing = id)}>Rename</button>
           {#if confirmDelete}
             <button class="pill danger" onclick={() => playlists.remove(id)}>Delete playlist</button
@@ -124,7 +128,7 @@
               openSongMenu(e, playIds(), {
                 onPlaylist: id,
                 from: p.name,
-                link: queueLink('playlist', id)
+                link
               })}><Icon name="more" size={18} /></button
           >
         </div>
@@ -166,6 +170,10 @@
     border-radius: 8px;
     outline: none;
     box-shadow: none;
+  }
+  /* as wide for Pause as for Play, so the pills beside it stay put */
+  .play {
+    min-width: 5.6em;
   }
   .acts {
     display: flex;

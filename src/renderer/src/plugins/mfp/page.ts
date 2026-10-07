@@ -165,15 +165,13 @@ function episodeBlocks(e: Episode, query: string): Block[] {
     link: { label: e.link.replace(/^https:\/\//, ''), url: e.link },
     note: { text: 'Song times are guessed: the site gives none.', items: [] },
     buttons: [
-      // pauses and resumes while the queue plays it
       {
         play: 'all',
         label: 'Play',
         songs: () => items,
         from: e.title,
         link,
-        primary: true,
-        pauses: true
+        primary: true
       },
       { play: 'shuffle', label: 'Shuffle', songs: () => items, from: e.title, link },
       { menu: 'playlist', label: 'Add to playlist', songs: () => items },

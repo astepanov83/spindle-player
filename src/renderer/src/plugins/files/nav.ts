@@ -4,7 +4,7 @@ import { crumbs, folderSearchText, shownFolder } from './folders'
 import { library } from '../../stores/library.svelte'
 import { files } from './store.svelte'
 import type { PageAddress, Tab } from '../types'
-import { artistPage, filesTabOf, parsePage } from './pages'
+import { artistPage, filesTabOf, folderPage, parsePage } from './pages'
 
 const isAlbum = (id: string): boolean => !!files.findAlbum(id)
 
@@ -107,3 +107,4 @@ function showLink(page: string): void {
 }
 
 export const showArtist = (key: string): void => showLink(artistPage(key))
+export const goToFolder = (key: string): void => showLink(folderPage(key))

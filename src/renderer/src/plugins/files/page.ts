@@ -11,9 +11,16 @@ import { cleanNames, editArtist, maxNameLength } from '../../../../shared/plugin
 import type { Album, Art } from '../../../../shared/library'
 import type { ItemKey } from '../../../../shared/plugins/items'
 import { queueLink } from '../../../../shared/saved-queue'
-import { fmtCount } from '../../format'
+import { fmtCount, fmtLength } from '../../format'
 import { albumLabel, albumLines, albumLink } from './album'
-import { artistCovers, artistLinks, artistPageSongs, artistSongs, filterArtists } from './artists'
+import {
+  allBy,
+  artistCovers,
+  artistLinks,
+  artistPageSongs,
+  artistSongs,
+  filterArtists
+} from './artists'
 import {
   commonFolder,
   crumbs,
@@ -41,7 +48,7 @@ import {
   type SearchGroup,
   type TilesBlock
 } from '../types'
-import { openArtist, showArtist, followArtist } from './nav'
+import { openArtist, showArtist, followArtist, goToFolder } from './nav'
 import { albumPage, artistPage, folderPage, parsePage } from './pages'
 import { trackKey, trackKeys, trackOf } from './tracks'
 
@@ -222,6 +229,7 @@ function artistsPage(page: string, query: string): Block[] {
 }
 
 const showFolderId = 'show-folder'
+const goFolderId = 'go-folder'
 
 // Where an album is on disk: its folder and that folder's parts as
 // folderParts gives them. None while the folder table is not in yet.
@@ -242,12 +250,19 @@ async function showAlbumFolder(id: string): Promise<void> {
     notice.show(`Couldn't open ${folderPath(where.parts)}`)
 }
 
+// "Go to folder": the album's folder in Folders, as a link (Back returns)
+function goToAlbumFolder(id: string): void {
+  const al = files.findAlbum(id)
+  const where = al && albumFolder(al)
+  if (where) goToFolder(files.folders.nodes[where.at].key)
+}
+
 function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
   const id = albumPage(al.id)
   const tracks = al.trackIds.map((t) => files.track(t))
   const items = trackKeys(al.trackIds)
   const link = albumLink(al)
-  const minutes = Math.round(tracks.reduce((s, t) => s + t.duration, 0) / 60)
+  const length = tracks.reduce((s, t) => s + t.duration, 0)
   const where = albumFolder(al)
   // one link per artist of a split credit
   const names = artistLinks(al, (key) => !!files.getArtist(key)).flatMap(
@@ -268,9 +283,15 @@ function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
     id,
     title: al.title,
     meta: albumLabel(al),
+    // the path is wanted now and then, not on every visit: a tooltip, and
+    // the menu goes there
+    ...(where ? { metaHint: folderPath(where.parts) } : {}),
     art: { src: al.coverLarge },
     back,
-    line: [...names, { text: ` · ${tracks.length} songs · ${minutes} min` }],
+    line: [
+      ...names,
+      { text: ` · ${fmtCount(tracks.length, 'song', 'songs')} · ${fmtLength(length)}` }
+    ],
     buttons: [
       // pauses and resumes while the queue plays it
       {
@@ -286,20 +307,34 @@ function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
       { menu: 'playlist', label: 'Add to playlist', songs: () => items },
       {
         menu: 'songs',
-        label: 'Play next, add to the queue or a playlist, show in file manager',
+        label: 'Play next, add to the queue or a playlist, go to its folder',
         songs: () => items,
         from: al.title,
         link,
-        ...(where ? { actions: [{ id: showFolderId, label: 'Show in file manager' }] } : {})
+        ...(where
+          ? {
+              actions: [
+                { id: goFolderId, label: 'Go to folder' },
+                { id: showFolderId, label: 'Show in file manager' }
+              ]
+            }
+          : {})
       }
     ]
   }
-  if (where)
-    head.where = {
-      text: folderPath(where.parts),
-      to: at(folderPage(files.folders.nodes[where.at].key))
+  return [
+    head,
+    {
+      kind: 'songs',
+      id,
+      items,
+      from: al.title,
+      link,
+      numbers,
+      groups,
+      artist: !allBy(tracks, al.artist)
     }
-  return [head, { kind: 'songs', id, items, from: al.title, link, numbers, groups }]
+  ]
 }
 
 // their albums in order, then the "Also on" songs as sorted
@@ -396,6 +431,10 @@ function artistBlocks(a: Artist): Block[] {
       // already counts the songs
       ...(albums.length ? { label: 'Also on' } : {}),
       count: albums.length > 0,
+      artist: !allBy(
+        a.also.map((t) => files.track(t)),
+        a.name
+      ),
       get sort() {
         return files.artistSort
       }
@@ -557,6 +596,7 @@ export function filesAct(target: string, id: string, value?: string): void {
   if (id === 'sort' && value) return sortBy(target, value as SortKey)
   const p = parsePage(target)
   if (p?.kind === 'album' && id === showFolderId) return void showAlbumFolder(p.id)
+  if (p?.kind === 'album' && id === goFolderId) return goToAlbumFolder(p.id)
   const a = p?.kind === 'artist' && !p.album ? files.getArtist(p.key) : undefined
   if (a) artistAct(a, id, value)
 }

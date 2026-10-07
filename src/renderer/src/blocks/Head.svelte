@@ -180,17 +180,10 @@
   <div class="albhead">
     <div class="cv"><Cover src={b.art?.src} /></div>
     <div class="words">
-      <div class="page-meta">{b.meta}</div>
+      <div class="page-meta" title={b.metaHint}>{b.meta}</div>
       <h2 class="page-title clamp" title={b.title}>{b.title}</h2>
       {@render line()}
       {#if b.note}<div class="page-meta">{@render noteItems(b.note)}</div>{/if}
-      {#if b.where}
-        {@const w = b.where}
-        {@const to = w.to}
-        <div class="page-meta path" title={w.text}>
-          <GoLink go={to ? () => openPage(to) : undefined}><bdi dir="ltr">{w.text}</bdi></GoLink>
-        </div>
-      {/if}
       {@render acts()}
     </div>
   </div>
@@ -290,16 +283,6 @@
   .words {
     flex: 1;
     min-width: 0;
-  }
-  /* the end of a long path is the part that tells albums apart; bdi keeps
-     the path itself left to right */
-  .path {
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    direction: rtl;
-    text-align: left;
   }
   @container (max-width: 560px) {
     .albhead .cv {

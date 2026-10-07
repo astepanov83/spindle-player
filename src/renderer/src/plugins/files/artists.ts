@@ -23,6 +23,14 @@ export function artistLinks(
   })
 }
 
+// Whether every song's credit is `name`, so a page about that artist (an
+// album's, an artist's) can leave out the Artist column (ticket 075). A
+// guest or a split credit keeps it.
+export function allBy(songs: ArtistCredit[], name: string): boolean {
+  const key = artistKey(name)
+  return songs.every((t) => artistKey(t.artist) === key)
+}
+
 // Their albums in order, then their songs on other albums.
 export function artistSongs(a: Artist, album: (id: string) => { trackIds: string[] }): string[] {
   return [...a.albums.flatMap((id) => album(id).trackIds), ...a.also]

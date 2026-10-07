@@ -113,6 +113,32 @@ button.row:active:not(.cur-row) {
   position: relative;
 }
 
+/* The column heads over a song list. Every list of songs has them, sorting
+   or not (ticket 075). They stick to the top of the scroll box, over its top
+   padding; the list sets the grid so the heads line up with its rows. */
+.song-head {
+  position: sticky;
+  top: calc(-1 * var(--scroll-pad-top, 20px));
+  z-index: 1;
+  height: 38px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--edge);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.song-head > * {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Up keeps the focused row clear of the sticky heads */
+.song-rows > .row {
+  scroll-margin-top: calc(38px + var(--scroll-pad-top, 20px));
+}
+
 /* The playing song or station, in the album accent (specs/themes.md). */
 .cur-row,
 .cur-row:hover {

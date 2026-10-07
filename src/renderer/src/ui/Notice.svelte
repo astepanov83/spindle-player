@@ -48,6 +48,15 @@
   $effect(() => {
     if (notice.text) measure()
   })
+
+  // The button went without a press (dropped, or a newer notice): focus on
+  // it would fall to the page, so it goes back too.
+  $effect(() => {
+    if (notice.action) return
+    const back = cameFrom
+    cameFrom = null
+    if (back?.isConnected && document.activeElement === document.body) back.focus()
+  })
 </script>
 
 <svelte:window onresize={() => notice.text && measure()} />

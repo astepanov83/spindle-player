@@ -16,6 +16,7 @@ import {
   prune,
   queueNotice,
   removeRow,
+  undoRemove,
   type QueueState
 } from './logic'
 import { queueLink } from '../../../shared/saved-queue'
@@ -319,6 +320,52 @@ describe('removeRow', () => {
     const s = q(1)
     expect(removeRow(s, 3)).toBe(s)
     expect(removeRow(s, -1)).toBe(s)
+  })
+})
+
+describe('undoRemove (ticket 071)', () => {
+  // remove row `at` from `before`, then undo it with the queue as `now`
+  const undo = (
+    before: QueueState,
+    at: number,
+    now: (after: QueueState) => QueueState = (a) => a
+  ): ReturnType<typeof undoRemove> => {
+    const after = removeRow(before, at)
+    return undoRemove(now(after), before, after, at)
+  }
+
+  it('puts a row back at its place, before or after the current song', () => {
+    expect(undo(q(2), 0)).toEqual({ state: q(2), restart: false })
+    expect(undo(q(0), 2)).toEqual({ state: q(0), restart: false })
+    expect(undo(q(1), 1)).toEqual({ state: q(1), restart: true })
+  })
+
+  it('makes a removed current song current again, also the last one left', () => {
+    const link = queueLink('album', 'a')
+    const one = { ...q(0, ['files:a/0']), link }
+    expect(undo(one, 0)).toEqual({ state: one, restart: true })
+    expect(undo(q(2), 2)).toEqual({ state: q(2), restart: true })
+  })
+
+  it('keeps the song picked since, with the removed current song back as a row', () => {
+    // a/1 went, a/2 played, then Previous went to a/0
+    const r = undo(q(1), 1, (a) => ({ ...a, index: 0 }))
+    expect(r).toEqual({ state: q(0), restart: false })
+    // a/0 went, then a/2 was picked
+    expect(undo(q(0), 0, (a) => ({ ...a, index: 1 }))).toEqual({ state: q(2), restart: false })
+  })
+
+  it('follows the current song when it moved on since', () => {
+    // a/0 went while a/1 played, then a/2 started
+    expect(undo(q(1), 0, (a) => ({ ...a, index: 1 }))).toEqual({ state: q(2), restart: false })
+  })
+
+  it('counts a Play next song again when it comes back', () => {
+    expect(undo(qn(0, 2), 1).state).toEqual(qn(0, 2))
+    expect(undo(qn(0, 2), 2).state).toEqual(qn(0, 2))
+    expect(undo(qn(0, 2), 3).state).toEqual(qn(0, 2))
+    // the current song came back as a row behind the song playing: not a Play next song
+    expect(undo(qn(0, 2), 0, (a) => ({ ...a, index: 1, next: 0 })).state.next).toBeUndefined()
   })
 })
 

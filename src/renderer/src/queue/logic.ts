@@ -113,6 +113,26 @@ export function removeRow(q: QueueState, i: number): QueueState {
   return withNext({ ...q, items, index }, countNext(marks, index))
 }
 
+// Undo of removeRow: `before` and `after` are the states around it, `now`
+// the queue at Undo, with the same rows as `after`. The row goes back at its
+// place. A removed current song is current again if no other song was picked
+// since (`restart`: it must load again); otherwise what plays now goes on.
+export function undoRemove(
+  now: QueueState,
+  before: QueueState,
+  after: QueueState,
+  at: number
+): { state: QueueState; restart: boolean } {
+  const wasCurrent = at === before.index
+  if (wasCurrent && now.index === after.index) return { state: before, restart: true }
+  const pos = Math.min(at, now.items.length)
+  const items = [...now.items.slice(0, pos), before.items[at], ...now.items.slice(pos)]
+  const marks = nextMarks(now)
+  marks.splice(pos, 0, !wasCurrent && nextMarks(before)[at])
+  const index = pos <= now.index ? now.index + 1 : now.index
+  return { state: withNext({ ...now, items, index }, countNext(marks, index)), restart: false }
+}
+
 // Moves the row at `from` so it ends up at `to`. The current song stays
 // current. A row that lands right after it, or among the Play next songs,
 // becomes one of them.
@@ -141,6 +161,12 @@ export function queueNotice(what: 'next' | 'add', ids: string[], title: string):
   const one = ids.length === 1
   if (what === 'next') return `Playing next: ${one ? `"${title}"` : `${ids.length} songs`}`
   return one ? `Added to the queue: "${title}"` : `Added ${ids.length} songs to the queue`
+}
+
+// A song taken out of the queue or a playlist ("the queue", or its name).
+// The title goes last, so a long one is what gets cut off.
+export function removedNotice(title: string, from = 'the queue'): string {
+  return title ? `Removed from ${from}: "${title}"` : `Removed a song from ${from}`
 }
 
 // A song that won't play is skipped, but after `max` failures in a row, or a

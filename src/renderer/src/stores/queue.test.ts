@@ -134,7 +134,7 @@ beforeEach(() => {
   player.repeat = false
   player.shuffle = false
   player.pos = 0
-  notice.text = ''
+  notice.hide()
   playAlbum('a', 0)
   fake.reset()
   log.mockClear()
@@ -704,6 +704,122 @@ describe('queue actions (ticket 037)', () => {
     queue.active = true
     expect(queue.items).toEqual(['files:b0'])
     expect(fake.calls).toEqual([])
+  })
+})
+
+describe('undo of Clear and Remove (ticket 071)', () => {
+  const undo = (): void => {
+    expect(notice.action?.label).toBe('Undo')
+    notice.press()
+  }
+
+  it('Clear brings the whole queue back, and the song playing plays on', () => {
+    queue.playNext(k('b0'))
+    queue.jump(2)
+    queue.playNext(k('b1'))
+    const before = { items: queue.items, index: queue.index, from: queue.from, link: queue.link }
+    fake.reset()
+    queue.clear()
+    expect(notice.text).toBe('Cleared the queue')
+    undo()
+    expect({ items: queue.items, index: queue.index, from: queue.from, link: queue.link }).toEqual(
+      before
+    )
+    expect(fake.calls).toEqual([])
+    expect(player.playing).toBe(true)
+    expect(saveQueue).toHaveBeenLastCalledWith(expect.objectContaining({ next: 1 }))
+    // the Play next song still plays first
+    player.shuffle = true
+    fake.on.ended!()
+    expect(playing()).toBe('b1')
+  })
+
+  it('a second Clear that stopped the song brings it back at its place, playing', () => {
+    queue.clear()
+    player.pos = 42
+    queue.clear()
+    expect(queue.items).toEqual([])
+    fake.reset()
+    undo()
+    expect(queue.items).toEqual(['files:a0'])
+    expect(queue.from).toBe('Album a')
+    expect(fake.calls).toEqual(['load media/a0', 'play'])
+    expect(player.pos).toBe(42)
+  })
+
+  it('Remove puts the row back at its place, with nothing reloaded', () => {
+    queue.jump(1)
+    fake.reset()
+    queue.remove(0)
+    expect(notice.text).toBe('Removed from the queue: "A 0"')
+    queue.remove(1)
+    expect(notice.text).toBe('Removed from the queue: "A 2"')
+    undo()
+    expect(queue.items).toEqual(['files:a1', 'files:a2'])
+    expect(playing()).toBe('a1')
+    expect(fake.calls).toEqual([])
+  })
+
+  it('Remove of the playing song brings it back where it was, playing', () => {
+    player.pos = 30
+    queue.remove(0)
+    expect(playing()).toBe('a1')
+    fake.reset()
+    undo()
+    expect(queue.items).toEqual(albums.a)
+    expect(playing()).toBe('a0')
+    expect(fake.calls).toEqual(['load media/a0', 'play'])
+    expect(player.pos).toBe(30)
+  })
+
+  it('Remove of the playing song in the last row plays it again after Undo', () => {
+    queue.jump(2)
+    queue.remove(2)
+    expect(player.playing).toBe(false)
+    fake.reset()
+    undo()
+    expect(playing()).toBe('a2')
+    expect(fake.calls).toEqual(['load media/a2', 'play'])
+  })
+
+  it('a removed song comes back as a row when another song was picked since', () => {
+    queue.remove(0)
+    queue.next()
+    expect(playing()).toBe('a2')
+    fake.reset()
+    undo()
+    expect(queue.items).toEqual(albums.a)
+    expect(playing()).toBe('a2')
+    expect(fake.calls).toEqual([])
+  })
+
+  it('Undo goes when the list changes otherwise', () => {
+    queue.remove(2)
+    expect(notice.action).toBeDefined()
+    queue.move(1, 0)
+    expect(notice.action).toBeUndefined()
+    expect(notice.text).toBe('Removed from the queue: "A 2"')
+    queue.clear()
+    queue.playList(k('b0', 'b1'), 0, 'B')
+    expect(notice.action).toBeUndefined()
+  })
+
+  it('Undo stays when the song only moves on, or ids change', () => {
+    queue.clear()
+    fake.on.ended!()
+    expect(notice.action).toBeDefined()
+    queue.moveIds('files', { a0: 'n0', a2: 'n2' })
+    expect(notice.action).toBeDefined()
+    undo()
+    expect(queue.items).toEqual(['files:n0', 'files:a1', 'files:n2'])
+    expect(playing()).toBe('n0')
+  })
+
+  it('a song with no title yet still says what went', () => {
+    plugin.songs.delete('files:a2')
+    plugin.loading.add('files')
+    queue.remove(2)
+    expect(notice.text).toBe('Removed a song from the queue')
   })
 })
 

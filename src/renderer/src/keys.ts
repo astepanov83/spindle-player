@@ -41,6 +41,7 @@ export type KeyAction =
   | 'seekForward'
   | 'volumeUp'
   | 'volumeDown'
+  | 'mute'
   | 'previous'
   | 'next'
   | 'back'
@@ -109,6 +110,7 @@ export const shortcuts: Shortcut[] = [
       arrow('ArrowDown', 'volumeDown', { yields: true })
     ]
   },
+  { does: 'Mute or unmute', chords: [{ action: 'mute', key: 'm' }] },
   {
     does: 'Previous or next song',
     chords: [

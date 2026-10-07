@@ -134,6 +134,14 @@ describe('keyAction', () => {
     expect(keyAction(press(' ', { code: 'Space', ctrlKey: true }), free)).toBe('block')
     expect(keyAction(press('v', { ctrlKey: true }), free)).toBe('none')
   })
+  it('mutes with M, once for a held key, not while typing or with Ctrl', () => {
+    expect(keyAction(press('m'), free)).toBe('mute')
+    expect(keyAction(press('m', { repeat: true }), free)).toBe('none')
+    expect(keyAction(press('m'), { ...free, typing: true })).toBe('none')
+    expect(keyAction(press('m', { ctrlKey: true }), free)).toBe('none')
+    // on a slider or in a list too: M is not an arrow
+    expect(keyAction(press('m'), { ...free, arrows: true })).toBe('mute')
+  })
   it('passes Escape on', () => expect(keyAction(press('Escape'), free)).toBe('escape'))
   it('leaves a text field its keys, but Ctrl+F and Ctrl+, still work', () => {
     const typing = { ...free, typing: true }
@@ -326,6 +334,7 @@ describe('shortcuts', () => {
       'seekForward',
       'volumeUp',
       'volumeDown',
+      'mute',
       'previous',
       'next',
       'back',
@@ -355,6 +364,7 @@ describe('shortcuts', () => {
       'Space',
       '← / →',
       '↑ / ↓',
+      'M',
       'Ctrl+← / Ctrl+→',
       'Ctrl+F, /',
       'Alt+← / Alt+→, Backspace',

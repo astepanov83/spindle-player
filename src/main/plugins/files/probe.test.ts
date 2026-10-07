@@ -24,6 +24,14 @@ const octoberRust = {
 }
 
 describe('probeToTags', () => {
+  it('reads ReplayGain tags from the format or the stream', () => {
+    const t = probeToTags({
+      streams: [{ codec_type: 'audio', tags: { REPLAYGAIN_ALBUM_GAIN: '-6.00 dB' } }],
+      format: { tags: { replaygain_track_gain: '-7.54 dB', REPLAYGAIN_TRACK_PEAK: '0.98' } }
+    })!
+    expect(normalizeTags(t).gain).toEqual({ track: -7.54, trackPeak: 0.98, album: -6 })
+  })
+
   it('reads MusicBrainz ids under their ffprobe names', () => {
     const t = probeToTags({
       streams: [{ codec_type: 'audio' }],

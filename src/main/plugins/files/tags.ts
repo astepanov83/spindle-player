@@ -1,5 +1,6 @@
 // Turns what music-metadata reads into a clean FileEntry, plus the file name rules.
 // Plain functions, so they are tested without real files.
+import { replayGainOf, type GainTags } from './replaygain'
 import type { FileEntry } from './types'
 
 // The part of music-metadata's result we use.
@@ -26,6 +27,10 @@ export interface RawTags {
     numberOfChannels?: number
     bitsPerSample?: number
   }
+  // ReplayGain tags as written (ticket 090); music-metadata's own reading
+  // misses APE album gains and Opus R128 gains, so they come from its
+  // native tags
+  gain?: GainTags
 }
 
 // Trims, joins runs of spaces and drops the NUL padding some ID3 tags have.
@@ -76,7 +81,8 @@ export function normalizeTags(raw: RawTags, ext = ''): Tags {
     codec: cleanText(f.codec),
     container: cleanText(f.container),
     mbReleaseGroup: mbid(c.musicbrainz_releasegroupid),
-    mbRelease: mbid(c.musicbrainz_albumid)
+    mbRelease: mbid(c.musicbrainz_albumid),
+    gain: replayGainOf(raw.gain)
   }
   if (needsDecoding(ext, out.codec)) {
     out.sampleRate = positive(f.sampleRate)

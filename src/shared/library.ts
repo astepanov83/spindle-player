@@ -27,6 +27,18 @@ export interface Track {
   // index in LibraryData.folders: the folder the file is in (a cue track's
   // is the sheet's folder)
   folder: number
+  // from the tags; none when the file has none (ticket 090)
+  gain?: ReplayGain
+}
+
+// ReplayGain from a song's tags (ticket 090). Gains are in dB, peaks are the
+// loudest sample as a share of full scale (1 is the most a file can hold
+// without clipping). Each is left out when the file has no such tag.
+export interface ReplayGain {
+  track?: number
+  trackPeak?: number
+  album?: number
+  albumPeak?: number
 }
 
 // A folder on disk that holds songs, or a folder above one. A number per

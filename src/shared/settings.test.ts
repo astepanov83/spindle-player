@@ -36,6 +36,7 @@ describe('parseStoredSettings', () => {
       plugins: { files: true, radio: false, mfp: true },
       viewSorts: { albums: 'added' },
       artistsShown: 'all',
+      loudness: 'song',
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowMaximized: { studio: true, focus: false },
       windowPlace: { x: -1200, y: 40 },
@@ -135,6 +136,7 @@ describe('parseStoredSettings with a base', () => {
     plugins: { files: true, radio: true, mfp: false },
     viewSorts: { albums: 'added' },
     artistsShown: 'all',
+    loudness: 'off',
     windowSizes: { focus: { width: 500, height: 700 } },
     windowMaximized: { focus: true },
     windowPlace: { x: 40, y: 60 },
@@ -406,6 +408,27 @@ describe('artists shown setting', () => {
 
   it('gives the page the field', () => {
     expect(pageSettings(parseStoredSettings({ artistsShown: 'all' })).artistsShown).toBe('all')
+  })
+})
+
+describe('loudness setting', () => {
+  it('evens out by album by default', () => {
+    expect(parseStoredSettings(undefined).loudness).toBe('album')
+  })
+
+  it('keeps a known choice and falls back on a wrong one', () => {
+    expect(parseStoredSettings({ loudness: 'off' }).loudness).toBe('off')
+    expect(parseStoredSettings({ loudness: 'song' }).loudness).toBe('song')
+    expect(parseStoredSettings({ loudness: 'track' }).loudness).toBe('album')
+  })
+
+  it('knows the field in a file', () => {
+    expect(isKnownSettingsFile({ loudness: 'song' })).toBe(true)
+    expect(isKnownSettingsFile({ loudness: 1 })).toBe(false)
+  })
+
+  it('gives the page the field', () => {
+    expect(pageSettings(parseStoredSettings({ loudness: 'off' })).loudness).toBe('off')
   })
 })
 

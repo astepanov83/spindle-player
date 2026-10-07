@@ -3,6 +3,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { oggDuration, oldApeHeader, readBudget, readTags, ReadLimitError } from './read-tags'
+import { normalizeTags } from './tags'
 
 const hex = (s: string): Uint8Array => Uint8Array.from(Buffer.from(s.replace(/\s/g, ''), 'hex'))
 
@@ -119,9 +120,13 @@ function flacWithPicture(picture: number): Uint8Array {
 
 // An APE with the new header, `audio` bytes of frames, and an APEv2 tag at the end.
 function apeWithEndTag(audio: number, title: string): Uint8Array {
-  const value = new TextEncoder().encode(title)
-  const key = new TextEncoder().encode('Title\0')
-  const items = 8 + key.length + value.length
+  return apeWithEndTags(audio, [['Title', title]])
+}
+
+function apeWithEndTags(audio: number, tags: [string, string][]): Uint8Array {
+  const enc = (t: string): Uint8Array => new TextEncoder().encode(t)
+  const parts = tags.map(([k, x]) => ({ key: enc(k + '\0'), value: enc(x) }))
+  const items = parts.reduce((n, p) => n + 8 + p.key.length + p.value.length, 0)
   const b = new Uint8Array(76 + audio + items + 32)
   const v = new DataView(b.buffer)
   b.set([0x4d, 0x41, 0x43, 0x20], 0)
@@ -138,14 +143,16 @@ function apeWithEndTag(audio: number, title: string): Uint8Array {
   v.setUint16(70, 2, true)
   v.setUint32(72, 44100, true)
   let at = 76 + audio
-  v.setUint32(at, value.length, true)
-  b.set(key, at + 8)
-  b.set(value, at + 8 + key.length)
-  at += items
-  b.set(new TextEncoder().encode('APETAGEX'), at)
+  for (const { key, value } of parts) {
+    v.setUint32(at, value.length, true)
+    b.set(key, at + 8)
+    b.set(value, at + 8 + key.length)
+    at += 8 + key.length + value.length
+  }
+  b.set(enc('APETAGEX'), at)
   v.setUint32(at + 8, 2000, true)
   v.setUint32(at + 12, items + 32, true)
-  v.setUint32(at + 16, 1, true)
+  v.setUint32(at + 16, parts.length, true)
   return b
 }
 
@@ -174,6 +181,27 @@ describe('readTags', () => {
     const m = await readTags(path, { budget: { small: 64 * 1024, single: 64 * 1024, total: MB } })
     expect(m.common.title).toBe('End Tag')
     expect(m.format.duration).toBe(1)
+  })
+
+  it('reads ReplayGain tags, also the album ones music-metadata leaves out of APE tags', async () => {
+    const path = join(dir, 'gain.ape')
+    await writeFile(
+      path,
+      apeWithEndTags(1024, [
+        ['Title', 'Loud'],
+        ['REPLAYGAIN_TRACK_GAIN', '-7.54 dB'],
+        ['REPLAYGAIN_TRACK_PEAK', '0.988831'],
+        ['replaygain_album_gain', '-6.10 dB'],
+        ['REPLAYGAIN_ALBUM_PEAK', '1.000000']
+      ])
+    )
+    const m = await readTags(path)
+    expect(normalizeTags(m, 'ape').gain).toEqual({
+      track: -7.54,
+      trackPeak: 0.988831,
+      album: -6.1,
+      albumPeak: 1
+    })
   })
 
   it('gets the length of an old APE from its header alone', async () => {

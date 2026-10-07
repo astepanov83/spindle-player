@@ -11,6 +11,7 @@ import {
   type IRandomAccessFileInfo,
   type IReadChunkOptions
 } from 'strtok3'
+import { gainTagsOf } from './replaygain'
 import { extOf, type Picture, type RawTags } from './tags'
 
 const MB = 1024 * 1024
@@ -120,7 +121,11 @@ export async function readTags(
       if (old) {
         // music-metadata can't read these; ffprobe can, including the tags
         const p = await options.probe?.(path).catch(() => undefined)
-        return { common: p?.common ?? {}, format: { ...p?.format, ...old } }
+        return {
+          common: p?.common ?? {},
+          format: { ...p?.format, ...old },
+          ...(p?.gain && { gain: p.gain })
+        }
       }
     }
     let meta: IAudioMetadata
@@ -145,7 +150,12 @@ export async function readTags(
     // an mp3 with no header that counts its frames: a guess from the bitrate
     // (the page takes the real length when the song plays)
     if (!duration && f.container === 'MPEG' && f.bitrate) duration = (size * 8) / f.bitrate
-    return { common: meta.common, format: { ...f, duration } }
+    const gain = gainTagsOf(
+      Object.values(meta.native)
+        .flat()
+        .map((t): [string, unknown] => [t.id, t.value])
+    )
+    return { common: meta.common, format: { ...f, duration }, ...(gain && { gain }) }
   } finally {
     await handle.close()
   }

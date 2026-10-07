@@ -46,7 +46,15 @@ function indexOf(files: FileEntry[]): LibraryIndex {
 
 describe('parseIndex', () => {
   it('reads back what serializeIndex wrote', () => {
-    const ix = indexOf([entry('/m/a.mp3', { title: 'A', track: 2, cover: 'abc', added: 7 })])
+    const ix = indexOf([
+      entry('/m/a.mp3', {
+        title: 'A',
+        track: 2,
+        cover: 'abc',
+        added: 7,
+        gain: { track: -7.5, trackPeak: 0.9, album: -6, albumPeak: 1 }
+      })
+    ])
     ix.images.set('/m', { path: '/m/cover.jpg', mtime: 5, size: 6, cover: 'def' })
     ix.images.set('/m/b', {
       path: '/m/b/Scans/front.jpg',
@@ -295,9 +303,10 @@ describe('cue sheets in the index', () => {
   const sheet = {
     title: 'October Rust',
     year: 1996,
+    gain: { album: -6.2, albumPeak: 0.99 },
     files: ['CDImage.ape'],
     tracks: [
-      { no: 1, file: 0, start: 0, title: 'Bad Ground' },
+      { no: 1, file: 0, start: 0, title: 'Bad Ground', gain: { track: -5.1 } },
       { no: 2, file: 0, start: 38.4 }
     ]
   }
@@ -403,11 +412,11 @@ describe('cue sheets in the index', () => {
 })
 
 describe('reading every file again for a new reader', () => {
-  it('reads every file again once for reader 3', () => {
+  it('reads every file again once for reader 4 (ReplayGain)', () => {
     const known = new Map([['/m/a.mp3', entry('/m/a.mp3', { title: 'A' })]])
     const found = [{ path: '/m/a.mp3', mtime: 1, size: 10 }]
-    expect(planReads(known, found, () => true, false, readAgain(2))).toEqual(['/m/a.mp3'])
-    expect(planReads(known, found, () => true, false, readAgain(3))).toEqual([])
+    expect(planReads(known, found, () => true, false, readAgain(3))).toEqual(['/m/a.mp3'])
+    expect(planReads(known, found, () => true, false, readAgain(4))).toEqual([])
   })
 
   it('keeps MusicBrainz ids through a save and load', () => {

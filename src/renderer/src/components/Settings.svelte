@@ -10,9 +10,11 @@
   import type { QueueMode, TemplateId } from '../../../shared/layout'
   import {
     closeActions,
+    loudnessChoices,
     themeChoices,
     visualizerStyles,
     type CloseAction,
+    type Loudness,
     type ThemeChoice,
     type VisualizerStyle
   } from '../../../shared/settings'
@@ -39,6 +41,18 @@
     ask: 'Closing the window asks whether to minimize or quit.',
     minimize: 'Closing the window minimizes it, and the music keeps playing.',
     quit: 'Closing the window quits Spindle.'
+  }
+
+  const loudnessNames: Record<Loudness, string> = {
+    off: 'Off',
+    song: 'By song',
+    album: 'By album'
+  }
+  const loudnessHints: Record<Loudness, string> = {
+    off: 'Songs play as loud as their files are.',
+    song: 'Each song plays as loud as the others, by the ReplayGain tags in its file. Songs without them play as they are.',
+    album:
+      'An album played in order plays as loud as other albums and keeps its quiet songs quiet. With shuffle, or songs from different albums, each song is evened out on its own. Songs without ReplayGain tags play as they are.'
   }
 
   const sections = settingsSections(plugins)
@@ -148,6 +162,16 @@
               value={settings.theme}
               onchange={(t: ThemeChoice) => (settings.theme = t)}
             />
+          </div>
+          <div class="set">
+            <span class="section-label">Even out loudness</span>
+            <Seg
+              label="Even out loudness"
+              options={loudnessChoices.map((l) => ({ value: l, label: loudnessNames[l] }))}
+              value={settings.loudness}
+              onchange={(l: Loudness) => (settings.loudness = l)}
+            />
+            <p class="hint">{loudnessHints[settings.loudness]}</p>
           </div>
           <div class="set">
             <span class="section-label">Closing the window</span>

@@ -4,6 +4,7 @@ import { paletteVersion, parseThemePalettes, type ThemePalettes } from '../../..
 import { isCoverHash } from '../../covers/cover-names'
 import type { CueSheet, CueTrack } from './cue'
 import type { Fetched } from './fetched-store'
+import { parseReplayGain } from './replaygain'
 import {
   cueReaderVersion,
   indexVersion,
@@ -57,6 +58,8 @@ function parseEntry(v: unknown): FileEntry | undefined {
     if (num(v[k]) && v[k] > 0) e[k] = v[k]
   if (num(v.duration) && v.duration > 0) e.duration = v.duration
   if (num(v.added) && v.added > 0) e.added = v.added
+  const gain = parseReplayGain(v.gain)
+  if (gain) e.gain = gain
   return e
 }
 
@@ -66,6 +69,8 @@ function parseCueTrack(v: unknown, files: number): CueTrack | undefined {
   const t: CueTrack = { no: v.no, file: v.file, start: v.start }
   if (str(v.title)) t.title = v.title
   if (str(v.performer)) t.performer = v.performer
+  const gain = parseReplayGain(v.gain)
+  if (gain) t.gain = gain
   return t
 }
 
@@ -78,6 +83,8 @@ function parseCueSheet(v: unknown): CueSheet | undefined {
   const sheet: CueSheet = { files, tracks: tracks as CueTrack[] }
   for (const k of ['title', 'performer', 'genre'] as const) if (str(v[k])) sheet[k] = v[k]
   for (const k of ['year', 'disc'] as const) if (num(v[k])) sheet[k] = v[k]
+  const gain = parseReplayGain(v.gain)
+  if (gain) sheet.gain = gain
   return sheet
 }
 
@@ -200,7 +207,8 @@ export function planReads(
 }
 
 // Files an older tag reader read are read again once: reader 2 added ffprobe
-// for files music-metadata can't read, reader 3 the MusicBrainz ids.
+// for files music-metadata can't read, reader 3 the MusicBrainz ids, reader 4
+// the ReplayGain tags.
 export function readAgain(reader: number): ((e: FileEntry) => boolean) | undefined {
   return reader < readerVersion ? () => true : undefined
 }

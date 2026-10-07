@@ -28,6 +28,7 @@
     showSeekInMediaSession,
     showStateInMediaSession
   } from './stores/media-session'
+  import { playStateOf } from './stores/play-state'
   import { itemsVersion, navTabs } from './plugins'
   import { library } from './stores/library.svelte'
   import { player } from './stores/player.svelte'
@@ -83,6 +84,18 @@
   $effect(() => showSeekInMediaSession(queues.active))
   $effect(() => showStateInMediaSession())
   $effect(() => showPositionInMediaSession(player.pos, player.duration))
+
+  // The tray menu shows what plays and has Play, Next and Previous (ticket 088).
+  $effect(() => window.playbackApi.state(playStateOf(queues)))
+  $effect(() =>
+    window.playbackApi.onControl((c) => {
+      // the menu can be a step behind the page
+      if (queues.nothing) return
+      if (c === 'toggle') queues.togglePlay()
+      else if (c === 'next') void queues.next()
+      else if (c === 'previous') void queues.prev()
+    })
+  )
 
   // Every change goes to main, which saves it and applies the window size and
   // theme. Settings that failed to load are applied but not saved.

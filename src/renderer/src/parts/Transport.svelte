@@ -17,6 +17,7 @@
       icon="shuffle"
       label="Shuffle"
       on={player.shuffle}
+      toggle
       onclick={() => (player.shuffle = !player.shuffle)}
     />
   {/if}
@@ -42,6 +43,7 @@
       icon="repeat"
       label="Repeat"
       on={player.repeat}
+      toggle
       onclick={() => (player.repeat = !player.repeat)}
     />
   {/if}

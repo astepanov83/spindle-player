@@ -6,6 +6,7 @@
     icon,
     label,
     on = false,
+    toggle = false,
     act,
     disabled = false,
     onclick
@@ -13,6 +14,8 @@
     icon: IconName
     label: string
     on?: boolean
+    // a two-state button (Shuffle, Mute): screen readers hear `on` as pressed
+    toggle?: boolean
     // names a slot button, so focus can be handed to it
     act?: string
     disabled?: boolean
@@ -21,8 +24,15 @@
 </script>
 
 <!-- the title shows the name on hover; the icon alone doesn't say it -->
-<button class="icobtn" class:on aria-label={label} title={label} data-act={act} {disabled} {onclick}
-  ><Icon name={icon} /></button
+<button
+  class="icobtn"
+  class:on
+  aria-label={label}
+  aria-pressed={toggle ? on : undefined}
+  title={label}
+  data-act={act}
+  {disabled}
+  {onclick}><Icon name={icon} /></button
 >
 
 <style>

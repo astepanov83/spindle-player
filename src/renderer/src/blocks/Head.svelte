@@ -163,6 +163,8 @@
     count={b.count ?? ''}
     {hint}
     below={b.line ? line : undefined}
+    choice={b.choice}
+    onchoose={(v) => b.choice && act(b.choice.id, v)}
   />
 {:else if b.look === 'album'}
   {@render back()}

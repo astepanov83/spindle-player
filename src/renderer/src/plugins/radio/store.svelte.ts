@@ -7,6 +7,7 @@ import type { RadioCover, RadioLogo, RadioTitle } from '../../../../shared/plugi
 import {
   addEntry,
   historyTitle,
+  moveStation,
   songArt,
   stationArt,
   withLogo,
@@ -306,12 +307,18 @@ class RadioStore {
     }
   }
 
-  // One place up (-1) or down (1) in My stations.
-  async move(id: string, by: -1 | 1): Promise<void> {
+  // To place `to` in My stations. Shown at once, so a dragged row lands where
+  // it was dropped instead of jumping back while main saves.
+  async move(id: string, to: number): Promise<void> {
+    const was = this.stations
+    const next = moveStation(was, id, to)
+    if (next === was) return
+    this.stations = next
     try {
-      this.stations = await window.radioApi.move(id, by)
+      this.stations = await window.radioApi.move(id, to)
     } catch (e) {
       window.playbackApi.log(`Radio ${id}: radio:move failed: ${String(e)}`)
+      if (this.stations === next) this.stations = was
     }
   }
 

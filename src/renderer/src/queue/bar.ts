@@ -53,7 +53,7 @@ export type ChoiceView =
   | { kind: 'text'; text: string }
   | undefined
 
-// short: the bar's few letters ("320"); else the picked option's label.
+// short: the bar's few letters ("320k"); else the picked option's label.
 export function choiceView(a: ChoiceAction, short: boolean): ChoiceView {
   const picked = a.options.find((o) => o.id === a.picked)?.label
   if (a.options.length > 1) {

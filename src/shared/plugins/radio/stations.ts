@@ -220,13 +220,14 @@ export function removeStation(list: Station[], id: string): Station[] {
   return list.filter((s) => s.id !== id)
 }
 
-// One place up (-1) or down (1). At an end, or for an unknown id, the same list comes back.
-export function moveStation(list: Station[], id: string, by: -1 | 1): Station[] {
+// To place `to` (0 is the top), the others closing up behind it: Move up and
+// Move down, and a drag. Already there, out of range or an unknown id: the
+// same list comes back.
+export function moveStation(list: Station[], id: string, to: number): Station[] {
   const from = list.findIndex((s) => s.id === id)
-  const to = from + by
-  if (from < 0 || to < 0 || to >= list.length) return list
+  if (from < 0 || from === to || !Number.isInteger(to) || to < 0 || to >= list.length) return list
   const next = [...list]
-  ;[next[from], next[to]] = [next[to], next[from]]
+  next.splice(to, 0, ...next.splice(from, 1))
   return next
 }
 

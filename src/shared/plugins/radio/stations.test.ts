@@ -196,12 +196,21 @@ describe('changing the list', () => {
     expect(removeStation([st('a'), st('b')], 'a').map((s) => s.id)).toEqual(['b'])
   })
 
-  it('moves a station one place, and stops at the ends', () => {
+  it('moves a station to a place, the others closing up', () => {
+    const list = [st('a'), st('b'), st('c'), st('d')]
+    const ids = (l: Station[]): string[] => l.map((s) => s.id)
+    expect(ids(moveStation(list, 'b', 0))).toEqual(['b', 'a', 'c', 'd'])
+    expect(ids(moveStation(list, 'b', 2))).toEqual(['a', 'c', 'b', 'd'])
+    expect(ids(moveStation(list, 'a', 3))).toEqual(['b', 'c', 'd', 'a'])
+    expect(ids(moveStation(list, 'd', 0))).toEqual(['d', 'a', 'b', 'c'])
+  })
+
+  it('gives the same list back for no move, a place out of range or an unknown id', () => {
     const list = [st('a'), st('b'), st('c')]
-    expect(moveStation(list, 'b', -1).map((s) => s.id)).toEqual(['b', 'a', 'c'])
-    expect(moveStation(list, 'b', 1).map((s) => s.id)).toEqual(['a', 'c', 'b'])
+    expect(moveStation(list, 'b', 1)).toBe(list)
     expect(moveStation(list, 'a', -1)).toBe(list)
-    expect(moveStation(list, 'c', 1)).toBe(list)
+    expect(moveStation(list, 'c', 3)).toBe(list)
+    expect(moveStation(list, 'b', 0.5)).toBe(list)
     expect(moveStation(list, 'zzz', 1)).toBe(list)
   })
 

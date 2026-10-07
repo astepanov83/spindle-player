@@ -1,4 +1,4 @@
-// Logos of Radio Browser search results (ticket 029), served to the page as
+// Logos of Radio Browser search results (ticket 029) and popular stations (082), served to the page as
 // spindle://radio-logo/<station id>: the page's img-src stays closed to the web.
 // The rows' images load lazily, so only rows on screen ask. Main fetches a few
 // at a time (with 030's fetchLogo, which refuses what is not a picture or is
@@ -41,6 +41,9 @@ export class ResultLogos {
   #source = new Map<string, string>()
   // the stations of the newest search: rows of an older one are gone
   #latest = new Set<string>()
+  // Popular stations (ticket 082) -> logo address. Shown under My stations
+  // whatever was searched, and asked once a run, so kept apart.
+  #popular = new Map<string, string>()
   // by logo address, oldest first
   #kept = new Map<string, Kept>()
   #bytes = 0
@@ -61,10 +64,22 @@ export class ResultLogos {
       if (s.logoUrl) this.#source.set(s.id, s.logoUrl)
     }
     // rows that are gone never ask again
-    this.#waiting = this.#waiting.filter((w) => this.#latest.has(w.id) || (w.drop(), false))
+    this.#waiting = this.#waiting.filter((w) => this.#shown(w.id) || (w.drop(), false))
   }
 
-  // Radio went off: forget every search. Rows still waiting never start a fetch.
+  // The popular stations the tab shows before a search.
+  popular(stations: Station[]): void {
+    this.#popular = new Map()
+    for (const s of stations) if (s.logoUrl) this.#popular.set(s.id, s.logoUrl)
+  }
+
+  #shown(id: string): boolean {
+    return this.#latest.has(id) || this.#popular.has(id)
+  }
+
+  // Radio went off: forget every search and every logo. Rows still waiting
+  // never start a fetch. The popular stations stay: the page asks for them
+  // once a run, and shows them again when radio comes back on.
   clear(): void {
     this.#latest = new Set()
     this.#source.clear()
@@ -78,7 +93,7 @@ export class ResultLogos {
   // The logo of a station from search, or undefined for none.
   async get(id: string): Promise<ResultLogo | undefined> {
     // rows of an older search are gone; the page can't ask for any station
-    const url = this.#latest.has(id) ? this.#source.get(id) : undefined
+    const url = this.#latest.has(id) ? this.#source.get(id) : this.#popular.get(id)
     if (!url) return undefined
     const now = (this.d.now ?? Date.now)()
     const kept = this.#kept.get(url)

@@ -13,6 +13,7 @@ export const RadioChannel = {
   lastAnswer: 'radio:last-answer',
   stop: 'radio:stop',
   search: 'radio:search',
+  popular: 'radio:popular',
   // main to page: a new song title in the stream playing
   title: 'radio:title',
   // main to page: main made or dropped a station's logo (ticket 030)
@@ -45,7 +46,8 @@ export interface RadioCover {
 }
 
 // Radio Browser's stations for a search, grouped, best voted first (ticket
-// 029). ok false: no Radio Browser server could be reached.
+// 029), or its popular ones (082). ok false: no Radio Browser server could be
+// reached.
 // `saved`: My stations, when the search added streams to one of them
 export type RadioSearch = { ok: true; stations: Station[]; saved?: Station[] } | { ok: false }
 
@@ -66,8 +68,8 @@ export interface RadioApi {
   remove(id: string): Promise<Station[]>
   // Undo of remove: back where it was, as it was
   restore(id: string): Promise<Station[]>
-  // one place up (-1) or down (1)
-  move(id: string, by: -1 | 1): Promise<Station[]>
+  // to place `to` in My stations (0 is the top)
+  move(id: string, to: number): Promise<Station[]>
   // the stream url the user picked for the station
   choose(id: string, url: string): Promise<Station[]>
   // the last 50 titles, oldest first
@@ -85,6 +87,9 @@ export interface RadioApi {
   // Radio Browser's stations by name and by tag. Their logos load from
   // spindle://radio-logo/<station id> while main remembers the search.
   search(q: string): Promise<RadioSearch>
+  // Radio Browser's best voted stations, for the tab before a search (ticket
+  // 082). Main asks once a run; their logos load as a search's do.
+  popular(): Promise<RadioSearch>
   // Returns a function that stops listening.
   onTitle(listener: (title: RadioTitle) => void): () => void
   // Main fetches a logo when a station is saved or played, after it answered.
@@ -106,4 +111,5 @@ export interface RadioChannels {
   [RadioChannel.lastAnswer]: RadioApi['lastAnswer']
   [RadioChannel.stop]: RadioApi['stop']
   [RadioChannel.search]: RadioApi['search']
+  [RadioChannel.popular]: RadioApi['popular']
 }

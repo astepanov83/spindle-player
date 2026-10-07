@@ -12,9 +12,11 @@ export function fmtClock(s: number): string {
   return `${h}:${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 }
 
-// The length of a list: 125 -> "2 min", 18440 -> "5 h 7 min". A few seconds is "1 min", not "0 min".
+// The length of a list: 125 -> "2 min", 18440 -> "5 h 7 min". A few seconds
+// is "under a minute": "0 min" reads as nothing, "1 min" as more than it is.
 export function fmtLength(s: number): string {
-  const m = s > 0 ? Math.max(1, Math.round(s / 60)) : 0
+  if (s > 0 && s < 60) return 'under a minute'
+  const m = Math.round(Math.max(0, s) / 60)
   const h = Math.floor(m / 60)
   if (!h) return `${m} min`
   return m % 60 ? `${h} h ${m % 60} min` : `${h} h`

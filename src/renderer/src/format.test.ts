@@ -19,7 +19,11 @@ it('formats a long time as h:mm:ss, a short one as m:ss', () => {
 
 it('formats the length of a list in minutes, with hours past an hour', () => {
   expect(fmtLength(0)).toBe('0 min')
-  expect(fmtLength(25)).toBe('1 min')
+  expect(fmtLength(25)).toBe('under a minute')
+  expect(fmtLength(59.5)).toBe('under a minute')
+  expect(fmtLength(60)).toBe('1 min')
+  expect(fmtLength(89)).toBe('1 min')
+  expect(fmtLength(3900)).toBe('1 h 5 min')
   expect(fmtLength(125)).toBe('2 min')
   expect(fmtLength(3569)).toBe('59 min')
   expect(fmtLength(3600)).toBe('1 h')

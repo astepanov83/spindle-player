@@ -4,7 +4,7 @@
   import IconButton from '../ui/IconButton.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import LiveHistory from './LiveHistory.svelte'
-  import { fmtLength, fmtTime } from '../format'
+  import { fmtCount, fmtLength, fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { roving } from '../ui/roving'
   import { dropIndex, dropSlot, rowShift } from '../ui/drag-rows'
@@ -63,10 +63,7 @@
     const s = itemInfo(key)
     return s.state === 'ok' ? (s.info.length ?? 0) : 0
   }
-  const sum = $derived(
-    `${queue.items.length.toLocaleString()} ${queue.items.length === 1 ? 'song' : 'songs'}` +
-      ` · ${fmtLength(total)}`
-  )
+  const sum = $derived(`${fmtCount(queue.items.length, 'song', 'songs')} · ${fmtLength(total)}`)
   // "From" opens a playlist, or the plugin's page (an album, artist, folder),
   // while it is still there
   const openFrom = $derived.by(() => {

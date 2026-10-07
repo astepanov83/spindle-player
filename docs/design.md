@@ -118,6 +118,7 @@ Lists (song table, queue, album page, search results songs, radio stations) are 
 | Enter | play the row |
 | → / ← | on a station: to its star and back |
 | Alt+↑ / Alt+↓ | on a queue row: move the song |
+| Delete | on a queue row: remove the song from the queue; on a playlist row: remove it from the playlist. Focus goes to the row that takes its place. The notice offers Undo |
 
 Tab into a list lands on the row last focused, else the playing song, else the first row on screen. A new sort or search forgets the row last focused, since its place now holds another song. When a scroll takes the focused row off the page (the song table and queue draw only the rows near the screen), the focus moves to the nearest row still drawn, so the arrows keep working in the list. Arrows in a list (or on the volume slider) move there, not the song; Shift+arrows seek and set the volume from anywhere.
 

@@ -160,6 +160,18 @@ export function listStep(key: string, i: number, count: number, page: number): n
   return clamp(i + by[key], 0, count - 1)
 }
 
+// Delete on a queue or playlist row takes it out. Not Backspace: that is
+// Back. A held key takes out one row only.
+export function isRemoveKey(e: FullKey): boolean {
+  return e.key === 'Delete' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey
+}
+
+// The row to focus after row `i` left a list that now has `count` rows: the
+// one that took its place, else the new last one. null when none are left.
+export function rowAfterRemove(i: number, count: number): number | null {
+  return count ? Math.min(i, count - 1) : null
+}
+
 // A group of choices (Settings' segmented buttons): arrows go round.
 export function radioStep(key: string, i: number, count: number): number | null {
   if (key === 'Home') return 0

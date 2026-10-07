@@ -46,7 +46,7 @@ export class SettingsStore {
   }
 
   // Checks the value like a file read, so a bad message can't store junk; a bad
-  // field keeps its current value. Window sizes, place, folders and the AI
+  // field keeps its current value. Window sizes, maximized, place, folders and the AI
   // choices stay main's own.
   // toFile false: the page could not load the settings, so its choices only
   // reach the window (size per template, theme), never the file.
@@ -56,6 +56,7 @@ export class SettingsStore {
     this.#live = pageSettings(next)
     if (toFile) {
       next.windowSizes = this.#data.windowSizes
+      next.windowMaximized = this.#data.windowMaximized
       next.windowPlace = this.#data.windowPlace
       next.folders = this.#data.folders
       next.ai = this.#data.ai
@@ -71,6 +72,12 @@ export class SettingsStore {
     const old = this.#data.windowSizes[id]
     if (old && old.width === size.width && old.height === size.height) return
     this.#replace({ ...this.#data, windowSizes: { ...this.#data.windowSizes, [id]: size } })
+  }
+
+  setWindowMaximized(id: TemplateId, on: boolean): void {
+    if ((this.#data.windowMaximized[id] ?? false) === on) return
+    const windowMaximized = { ...this.#data.windowMaximized, [id]: on }
+    this.#replace({ ...this.#data, windowMaximized })
   }
 
   setWindowPlace(raw: WindowPlace): void {

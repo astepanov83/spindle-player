@@ -30,11 +30,10 @@ export interface Size {
 }
 
 // Where the window was when the app closed: its top-left corner (of the
-// normal size when maximized), and whether it was maximized.
+// normal size when maximized). Whether it was maximized is per template.
 export interface WindowPlace {
   x: number
   y: number
-  maximized: boolean
 }
 
 // The AI service's choices (spec "AI models"). Main's own: the page gets
@@ -52,6 +51,8 @@ export interface AiSettings {
 export interface StoredSettings extends Settings {
   // the last size the user chose per template; missing means the template's own size
   windowSizes: Partial<Record<TemplateId, Size>>
+  // whether each template was left maximized; missing means not
+  windowMaximized: Partial<Record<TemplateId, boolean>>
   // none until the window was first closed or moved; then it opens there again
   windowPlace: WindowPlace | null
   // music folders, absolute paths. Only main changes them: through the folder
@@ -117,13 +118,34 @@ export function parseSize(v: unknown, template: Template): Size | undefined {
 // Past any screen's corner, so a broken number can't place the window far away.
 const maxPos = 100000
 
+// An old file also has `maximized` here, one for all templates. It is read
+// into windowMaximized instead (parseStoredSettings).
 export function parseWindowPlace(v: unknown): WindowPlace | null {
   if (!isObject(v)) return null
   const { x, y, maximized } = v
-  if (typeof x !== 'number' || typeof y !== 'number' || typeof maximized !== 'boolean') return null
+  if (typeof x !== 'number' || typeof y !== 'number') return null
+  if (maximized !== undefined && typeof maximized !== 'boolean') return null
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null
   const clamp = (n: number): number => Math.min(maxPos, Math.max(-maxPos, Math.round(n)))
-  return { x: clamp(x), y: clamp(y), maximized }
+  return { x: clamp(x), y: clamp(y) }
+}
+
+function parseMaximized(v: unknown): StoredSettings['windowMaximized'] {
+  const r = isObject(v) ? v : {}
+  const out: StoredSettings['windowMaximized'] = {}
+  for (const id of templateIds) if (typeof r[id] === 'boolean') out[id] = r[id]
+  return out
+}
+
+// Before windowMaximized, one flag in windowPlace said the window was maximized.
+// It goes to the template the app was in.
+function oldMaximized(
+  r: Record<string, unknown>,
+  template: TemplateId,
+  base: StoredSettings['windowMaximized']
+): StoredSettings['windowMaximized'] {
+  const old = isObject(r.windowPlace) && r.windowPlace.maximized === true
+  return old ? { ...base, [template]: true } : { ...base }
 }
 
 function parseVolume(v: unknown, fallback: number): number {
@@ -222,6 +244,7 @@ export function defaultStoredSettings(): StoredSettings {
   return {
     ...defaultSettings(),
     windowSizes: {},
+    windowMaximized: {},
     windowPlace: null,
     folders: [],
     ai: defaultAiSettings()
@@ -248,8 +271,9 @@ export function parseStoredSettings(
     if (size) windowSizes[id] = size
   }
 
+  const template = oneOf(r.template, templateIds, base.template)
   return {
-    template: oneOf(r.template, templateIds, base.template),
+    template,
     queue,
     visualizer: oneOf(r.visualizer, visualizerStyles, base.visualizer),
     theme: oneOf(r.theme, themeChoices, base.theme),
@@ -259,6 +283,10 @@ export function parseStoredSettings(
     closeAction: oneOf(r.closeAction, closeActions, base.closeAction),
     plugins: parsePlugins(r.plugins, r, base.plugins),
     windowSizes,
+    windowMaximized:
+      r.windowMaximized === undefined
+        ? oldMaximized(r, template, base.windowMaximized)
+        : parseMaximized(r.windowMaximized),
     windowPlace: r.windowPlace === undefined ? base.windowPlace : parseWindowPlace(r.windowPlace),
     folders: Array.isArray(r.folders) ? parseFolders(r.folders) : [...base.folders],
     ai: parseAi(r.ai, base.ai)
@@ -296,11 +324,23 @@ function isKnownSizes(v: unknown): boolean {
   })
 }
 
-// Kept as it is: whole numbers in range and no other fields.
+// Kept as it is: whole numbers in range and no other fields. The old
+// `maximized` is fine, as it is read into windowMaximized.
 function isKnownPlace(v: unknown): boolean {
   const parsed = parseWindowPlace(v)
   return (
-    !!parsed && isObject(v) && Object.keys(v).length === 3 && parsed.x === v.x && parsed.y === v.y
+    !!parsed &&
+    isObject(v) &&
+    Object.keys(v).every((k) => ['x', 'y', 'maximized'].includes(k)) &&
+    parsed.x === v.x &&
+    parsed.y === v.y
+  )
+}
+
+function isKnownMaximized(v: unknown): boolean {
+  if (!isObject(v)) return false
+  return Object.entries(v).every(
+    ([id, on]) => templateIds.includes(id as TemplateId) && typeof on === 'boolean'
   )
 }
 
@@ -319,6 +359,7 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('queue') && !isKnownQueue(raw.queue)) return false
   if (has('windowSizes') && !isKnownSizes(raw.windowSizes)) return false
   if (has('windowPlace') && raw.windowPlace !== null && !isKnownPlace(raw.windowPlace)) return false
+  if (has('windowMaximized') && !isKnownMaximized(raw.windowMaximized)) return false
   if (has('fetchCovers') && typeof raw.fetchCovers !== 'boolean') return false
   if (oldSwitches.some((k) => has(k) && typeof raw[k] !== 'boolean')) return false
   if (

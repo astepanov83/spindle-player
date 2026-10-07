@@ -127,12 +127,35 @@ describe('SettingsStore window sizes', () => {
   it('stores the window place so the file stays known, and the page cannot change it', () => {
     const path = join(dir, 'settings.json')
     const store = new SettingsStore(path)
-    store.setWindowPlace({ x: 12.4, y: -30, maximized: true })
-    store.setFromPage({ theme: 'dark', windowPlace: { x: 0, y: 0, maximized: false } })
+    store.setWindowPlace({ x: 12.4, y: -30 })
+    store.setFromPage({ theme: 'dark', windowPlace: { x: 0, y: 0 } })
     store.flushSync()
     const file = JSON.parse(readFileSync(path, 'utf8'))
     expect(isKnownSettingsFile(file)).toBe(true)
-    expect(file.windowPlace).toEqual({ x: 12, y: -30, maximized: true })
+    expect(file.windowPlace).toEqual({ x: 12, y: -30 })
+  })
+
+  it('stores maximized per template, and the page cannot change it', () => {
+    const path = join(dir, 'settings.json')
+    const store = new SettingsStore(path)
+    store.setWindowMaximized('studio', true)
+    store.setWindowMaximized('focus', false)
+    store.setFromPage({ theme: 'dark', windowMaximized: { studio: false, classic: true } })
+    store.flushSync()
+    const file = JSON.parse(readFileSync(path, 'utf8'))
+    expect(isKnownSettingsFile(file)).toBe(true)
+    expect(file.windowMaximized).toEqual({ studio: true })
+  })
+
+  it('moves the old maximized flag to the template the app was in', () => {
+    const path = join(dir, 'settings.json')
+    const old = { template: 'classic', windowPlace: { x: 5, y: 6, maximized: true } }
+    writeFileSync(path, JSON.stringify(old))
+    const store = new SettingsStore(path)
+    expect(store.get().windowMaximized).toEqual({ classic: true })
+    expect(store.get().windowPlace).toEqual({ x: 5, y: 6 })
+    // known, so no copy of the old file is made
+    expect(readdirSync(dir)).toEqual(['settings.json'])
   })
 
   it('stores a size below the minimum as the minimum', () => {

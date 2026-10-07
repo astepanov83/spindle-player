@@ -10,6 +10,7 @@ import {
 const defaults = {
   ...defaultSettings(),
   windowSizes: {},
+  windowMaximized: {},
   windowPlace: null,
   folders: [],
   ai: { provider: 'openrouter', tasks: {}, providers: {} }
@@ -34,7 +35,8 @@ describe('parseStoredSettings', () => {
       closeAction: 'minimize',
       plugins: { files: true, radio: false, mfp: true },
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
-      windowPlace: { x: -1200, y: 40, maximized: true },
+      windowMaximized: { studio: true, focus: false },
+      windowPlace: { x: -1200, y: 40 },
       folders: ['/home/me/Music', '/mnt/nas/music'],
       ai: { provider: 'other', tasks: { a: true, b: false }, providers: { other: { model: 'x' } } }
     }
@@ -130,7 +132,8 @@ describe('parseStoredSettings with a base', () => {
     closeAction: 'quit',
     plugins: { files: true, radio: true, mfp: false },
     windowSizes: { focus: { width: 500, height: 700 } },
-    windowPlace: { x: 40, y: 60, maximized: false },
+    windowMaximized: { focus: true },
+    windowPlace: { x: 40, y: 60 },
     folders: ['/m'],
     ai: { provider: 'p', tasks: { a: true }, providers: {} }
   }
@@ -211,17 +214,16 @@ describe('window place', () => {
   it('rounds the corner and drops a place that is broken', () => {
     const place = (windowPlace: unknown): unknown =>
       parseStoredSettings({ windowPlace }).windowPlace
-    expect(place({ x: 10.6, y: -3.2, maximized: false })).toEqual({
-      x: 11,
-      y: -3,
-      maximized: false
-    })
-    expect(place({ x: 1e9, y: 0, maximized: false })).toEqual({ x: 100000, y: 0, maximized: false })
+    expect(place({ x: 10.6, y: -3.2 })).toEqual({ x: 11, y: -3 })
+    expect(place({ x: 1e9, y: 0 })).toEqual({ x: 100000, y: 0 })
+    // an old file's flag is read into windowMaximized, not kept here
+    expect(place({ x: 1, y: 2, maximized: true })).toEqual({ x: 1, y: 2 })
     for (const bad of [
       null,
       'x',
-      { x: 1, y: 2 },
-      { x: '1', y: 2, maximized: false },
+      { x: 1 },
+      { x: '1', y: 2 },
+      { x: 1, y: 2, maximized: 'yes' },
       { x: NaN, y: 2, maximized: true }
     ])
       expect(place(bad)).toBeNull()
@@ -229,14 +231,42 @@ describe('window place', () => {
 
   it('checks the place in the file', () => {
     expect(isKnownSettingsFile({ windowPlace: null })).toBe(true)
+    expect(isKnownSettingsFile({ windowPlace: { x: -5, y: 30 } })).toBe(true)
+    // an old file, read into windowMaximized
     expect(isKnownSettingsFile({ windowPlace: { x: -5, y: 30, maximized: true } })).toBe(true)
-    for (const windowPlace of [
-      { x: 1.5, y: 30, maximized: true },
-      { x: 1, y: 30 },
-      { x: 1, y: 30, maximized: true, w: 3 },
-      [1, 30]
-    ])
+    for (const windowPlace of [{ x: 1.5, y: 30 }, { x: 1 }, { x: 1, y: 30, w: 3 }, [1, 30]])
       expect(isKnownSettingsFile({ windowPlace })).toBe(false)
+  })
+})
+
+describe('window maximized', () => {
+  it('keeps true and false per known template', () => {
+    const s = parseStoredSettings({ windowMaximized: { studio: true, focus: 'yes', mini: true } })
+    expect(s.windowMaximized).toEqual({ studio: true })
+  })
+
+  it('gives the old maximized flag to the saved template', () => {
+    const s = parseStoredSettings({
+      template: 'focus',
+      windowPlace: { x: 1, y: 2, maximized: true }
+    })
+    expect(s.windowMaximized).toEqual({ focus: true })
+    const off = parseStoredSettings({ windowPlace: { x: 1, y: 2, maximized: false } })
+    expect(off.windowMaximized).toEqual({})
+  })
+
+  it('takes windowMaximized over the old flag when the file has both', () => {
+    const s = parseStoredSettings({
+      windowMaximized: { classic: true },
+      windowPlace: { x: 1, y: 2, maximized: true }
+    })
+    expect(s.windowMaximized).toEqual({ classic: true })
+  })
+
+  it('checks windowMaximized in the file', () => {
+    expect(isKnownSettingsFile({ windowMaximized: { studio: true, focus: false } })).toBe(true)
+    for (const windowMaximized of [{ mini: true }, { studio: 1 }, [true], 'yes'])
+      expect(isKnownSettingsFile({ windowMaximized })).toBe(false)
   })
 })
 

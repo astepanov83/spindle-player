@@ -11,7 +11,7 @@ import type { SettingsStore } from './settings-store'
 import { closeStep } from './close-ask'
 import { RestartBudget } from './restart'
 import { blockNavigation, canOpenExternal } from './web-guard'
-import { AppliedSize, placeCentered, placeSaved, sizeFor } from './window-place'
+import { AppliedSize, placeCentered, placeSaved, settleMs, sizeFor } from './window-place'
 
 export function currentBackground(): string {
   return nativeTheme.shouldUseDarkColors ? windowBackground.dark : windowBackground.light
@@ -31,6 +31,9 @@ export class MainWindow {
   // so a size cut down to a small screen doesn't replace the one they picked,
   // and neither is the window manager's rounding of it.
   #applied = new AppliedSize()
+  // Until then, maximize and unmaximize come from our own template switch,
+  // not the user, so they are not saved.
+  #switchedUntil = -Infinity
   // when the last resize came
   #resizedAt = -Infinity
   // a page that keeps crashing is loaded again a few times, not forever
@@ -83,7 +86,7 @@ export class MainWindow {
         // the window manager may change the size as the window is first shown
         this.#applied.settle(Date.now())
         // bounds above are the normal size, so un-maximizing goes back to them
-        if (s.windowPlace?.maximized) win.maximize()
+        if (s.windowMaximized[s.template]) win.maximize()
         win.show()
       }, this.showDelay())
     })
@@ -97,10 +100,12 @@ export class MainWindow {
     })
     win.on('maximize', () => {
       win.webContents.send(WinChannel.maximized, true)
+      this.#rememberMaximized(true)
       this.#rememberPlace()
     })
     win.on('unmaximize', () => {
       win.webContents.send(WinChannel.maximized, false)
+      this.#rememberMaximized(false)
       this.#rememberPlace()
     })
     win.on('minimize', () => {
@@ -209,24 +214,34 @@ export class MainWindow {
     if (size) this.store.setWindowSize(id, size)
   }
 
+  #switching(): boolean {
+    return Date.now() < this.#switchedUntil
+  }
+
+  #rememberMaximized(on: boolean): void {
+    if (!this.#switching()) this.store.setWindowMaximized(this.store.live().template, on)
+  }
+
   // One place for all templates: the top-left corner, of the normal size
   // when maximized. A minimized or full screen window keeps the last one.
   #rememberPlace(): void {
     clearTimeout(this.#moveTimer)
     const win = this.win
     if (win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return
-    const maximized = win.isMaximized()
-    const { x, y } = maximized ? win.getNormalBounds() : win.getBounds()
-    this.store.setWindowPlace({ x, y, maximized })
+    const { x, y } = win.isMaximized() ? win.getNormalBounds() : win.getBounds()
+    this.store.setWindowPlace({ x, y })
   }
 
-  // Saves the size of the template we leave, then moves to the next one's
-  // size around the same center, kept on the same screen.
+  // Saves the size and maximized state of the template we leave, then moves
+  // to the next one's size around the same center, kept on the same screen,
+  // and maximizes it there if it was left maximized.
   applyTemplate(from: TemplateId, to: TemplateId): void {
     this.#rememberSize(from)
     const win = this.win
     const t = templates[to]
     const maximized = win.isMaximized()
+    // right after a switch the window may not have its new state yet
+    if (!this.#switching()) this.store.setWindowMaximized(from, maximized)
     // setBounds is ignored while maximized, so go back to the normal size first.
     const old = maximized ? win.getNormalBounds() : win.getBounds()
     if (maximized) win.unmaximize()
@@ -236,5 +251,8 @@ export class MainWindow {
     // Minimum first, or a larger old minimum blocks shrinking.
     win.setMinimumSize(t.window.minWidth, t.window.minHeight)
     win.setBounds(bounds)
+    this.#switchedUntil = Date.now() + settleMs
+    // after setBounds, so un-maximizing goes back to this template's size
+    if (this.store.get().windowMaximized[to]) win.maximize()
   }
 }

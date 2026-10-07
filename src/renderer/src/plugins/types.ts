@@ -1,7 +1,7 @@
 // What the core asks a plugin's page half about its items. See
 // work/specs/plugins.md, "Items". Plain data: the core draws it.
 import type { IdMoves } from '../../../shared/id-moves'
-import type { Art } from '../../../shared/library'
+import type { Art, ReplayGain } from '../../../shared/library'
 import type { PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
@@ -473,6 +473,8 @@ export interface Playable {
   actions?: Action[]
   // the format, for the log when it won't play
   codec?: string
+  // ReplayGain from its tags, to even out loudness (ticket 090)
+  gain?: ReplayGain
 }
 
 // A plugin's page half.

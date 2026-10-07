@@ -8,6 +8,9 @@ export type CoverSource = 'musicbrainz' | 'deezer' | 'itunes'
 export type CloseAction = 'ask' | 'minimize' | 'quit'
 // the Artists view: artists with an album of their own, or every artist
 export type ArtistsShown = 'album' | 'all'
+// Even out loudness with ReplayGain (ticket 090): off, each song by its own
+// gain, or by its album's gain while the album plays in order
+export type Loudness = 'off' | 'song' | 'album'
 
 export interface Settings {
   template: TemplateId
@@ -28,6 +31,7 @@ export interface Settings {
   // plugin knows the values; a view left out is in its own order.
   viewSorts: Record<string, string>
   artistsShown: ArtistsShown
+  loudness: Loudness
 }
 
 export interface Size {
@@ -73,6 +77,7 @@ export const themeChoices: ThemeChoice[] = ['dark', 'light', 'system']
 export const coverSources: CoverSource[] = ['musicbrainz', 'deezer', 'itunes']
 export const closeActions: CloseAction[] = ['ask', 'minimize', 'quit']
 export const artistsShownChoices: ArtistsShown[] = ['album', 'all']
+export const loudnessChoices: Loudness[] = ['off', 'song', 'album']
 
 function pluginDefaults(): Record<PluginId, boolean> {
   return Object.fromEntries(plugins.map((p) => [p.id, p.defaultOn])) as Record<PluginId, boolean>
@@ -90,7 +95,8 @@ export function defaultSettings(): Settings {
     closeAction: 'ask',
     plugins: pluginDefaults(),
     viewSorts: {},
-    artistsShown: 'album'
+    artistsShown: 'album',
+    loudness: 'album'
   }
 }
 
@@ -303,6 +309,7 @@ export function parseStoredSettings(
     plugins: parsePlugins(r.plugins, r, base.plugins),
     viewSorts: parseViewSorts(r.viewSorts, base.viewSorts),
     artistsShown: oneOf(r.artistsShown, artistsShownChoices, base.artistsShown),
+    loudness: oneOf(r.loudness, loudnessChoices, base.loudness),
     windowSizes,
     windowMaximized:
       r.windowMaximized === undefined
@@ -392,6 +399,7 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('closeAction') && !closeActions.includes(raw.closeAction as CloseAction)) return false
   if (has('artistsShown') && !artistsShownChoices.includes(raw.artistsShown as ArtistsShown))
     return false
+  if (has('loudness') && !loudnessChoices.includes(raw.loudness as Loudness)) return false
   if (
     has('coverSources') &&
     (!isObject(raw.coverSources) ||
@@ -427,6 +435,7 @@ export function pageSettings(s: StoredSettings): Settings {
     closeAction: s.closeAction,
     plugins: { ...s.plugins },
     viewSorts: { ...s.viewSorts },
-    artistsShown: s.artistsShown
+    artistsShown: s.artistsShown,
+    loudness: s.loudness
   }
 }

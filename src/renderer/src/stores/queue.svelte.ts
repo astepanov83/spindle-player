@@ -8,6 +8,7 @@ import type { PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink, QueuePlace, SavedQueue } from '../../../shared/saved-queue'
 import { engine, type EngineError, type EngineEvents } from '../audio/engine'
+import { gainFactor, gainUse } from '../audio/replaygain'
 import {
   advance,
   afterFailure,
@@ -38,6 +39,7 @@ import { infoOf, itemInfo, playItem } from '../plugins'
 import type { ItemAnswer, ItemInfo, Playable } from '../plugins/types'
 import { notice, type NoticeAction } from './notice.svelte'
 import { play, player, seek as seekSong } from './player.svelte'
+import { settings } from './settings.svelte'
 
 // The position goes to main this often while playing (plus on pause, seek and quit).
 const savePosEverySec = 5
@@ -61,6 +63,17 @@ const isOff = (key: ItemKey): boolean => itemInfo(key).state === 'off'
 
 // a song the engine was given to play next, and what the queue does then
 type Sent = { step: EndStep; key: ItemKey; p: Playable }
+
+// Two songs are of one album when their album pages are the same.
+function albumOf(key: ItemKey): string | undefined {
+  const to = infoOf(key)?.groupTo
+  return to && `${to.plugin}/${to.page}`
+}
+
+// The level song `p` plays at as the current song of `q` (ticket 090).
+function gainIn(p: Playable, q: QueueState): number {
+  return gainFactor(p.gain, gainUse(settings.loudness, q, player.shuffle, albumOf))
+}
 
 class TrackQueue {
   items: ItemKey[] = $state.raw([])
@@ -260,7 +273,7 @@ class TrackQueue {
   #load(key: ItemKey, p: Playable, at: number, andPlay: boolean): void {
     this.#loaded = { key, p }
     player.duration = typeof p.length === 'number' ? p.length : 0
-    engine.load(p.url, at, p.part)
+    engine.load(p.url, at, p.part, { gain: gainIn(p, this.#state()) })
     if (andPlay) play()
     else player.playing = false
     this.planNext()
@@ -309,7 +322,7 @@ class TrackQueue {
   // track of a disc image): the sound goes on, with no reload and no gap.
   #carryOn(key: ItemKey, p: Playable): void {
     this.#took(key, p)
-    engine.continueWith(p.part!)
+    engine.continueWith(p.part!, gainIn(p, this.#state()))
     this.savePos()
     this.planNext()
   }
@@ -368,7 +381,8 @@ class TrackQueue {
     const n = ++this.#plans
     const send = (s: Sent | undefined): void => {
       this.#sent = s
-      engine.setNext(s && { url: s.p.url, part: s.p.part })
+      const q = s?.step.kind === 'play' ? s.step.state : this.#state()
+      engine.setNext(s && { url: s.p.url, part: s.p.part, gain: gainIn(s.p, q) })
     }
     const l = this.#loaded
     if (!this.active || !l || l.key !== this.current || l.p.length === 'live')
@@ -388,6 +402,15 @@ class TrackQueue {
       },
       () => {}
     )
+  }
+
+  // The loudness setting changed: the song playing glides to its new level,
+  // and the song loaded ahead gets its own (App.svelte calls this).
+  regain(): void {
+    const l = this.#loaded
+    if (!this.active || !l || l.key !== this.current) return
+    engine.setGain(gainIn(l.p, this.#state()))
+    this.planNext()
   }
 
   // Replaces the queue with a list of songs and plays the clicked one.

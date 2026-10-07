@@ -100,5 +100,6 @@ export function trackPlayable(id: string): Playable | undefined {
   const p: Playable = { url: mediaUrl(t.part?.file ?? t.id), length: t.duration, can }
   if (t.part) p.part = t.part
   if (t.codec) p.codec = t.codec
+  if (t.gain) p.gain = t.gain
   return p
 }

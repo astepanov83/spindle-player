@@ -62,18 +62,34 @@ const node = (): unknown => ({ connect: (n: unknown) => n })
 class FakeParam {
   value = 1
   later: [number, number][] = []
+  // where setTargetAtTime glides to, from when
+  glide: [number, number] | undefined
   setValueAtTime(v: number, t: number): void {
     this.later.push([v, t])
   }
+  setTargetAtTime(v: number, t: number): void {
+    this.glide = [v, t]
+  }
   cancelScheduledValues(): void {
     this.later = []
+    this.glide = undefined
+  }
+  // the value it ends up at
+  get level(): number {
+    return this.glide?.[0] ?? this.value
   }
 }
+// every gain made, in order: the volume, then each element's
+const params: FakeParam[] = []
 class FakeContext {
   destination = {}
   createAnalyser = (): unknown => ({ ...(node() as object), fftSize: 0 })
   currentTime = 0
-  createGain = (): unknown => ({ ...(node() as object), gain: new FakeParam() })
+  createGain = (): unknown => {
+    const gain = new FakeParam()
+    params.push(gain)
+    return { ...(node() as object), gain }
+  }
   createMediaElementSource = node
   resume = (): Promise<void> => Promise.resolve()
   // the join's worklet never loads here: the elements go straight on
@@ -117,6 +133,7 @@ let got: string[]
 beforeEach(() => {
   vi.useFakeTimers()
   made.length = 0
+  params.length = 0
   e = new AudioEngine()
   el = e.el as unknown as FakeAudio
   got = []
@@ -571,5 +588,76 @@ describe('the next song (ticket 087)', () => {
     e.clear()
     expect(el.getAttribute('src')).toBe(null)
     expect(o.getAttribute('src')).toBe(null)
+  })
+})
+
+describe('each song’s level (ReplayGain, ticket 090)', () => {
+  const gainOf = (a: unknown): FakeParam => params[1 + made.indexOf(a as FakeAudio)]
+  const other = (): FakeAudio => made.find((a) => a !== (e.el as unknown as FakeAudio))!
+
+  it('a song loads at its level, and one without is at 1', () => {
+    e.load('spindle://media/a', 0, undefined, { gain: 0.5 })
+    expect(gainOf(el).value).toBe(0.5)
+    expect(gainOf(el).glide).toBeUndefined()
+    e.load('spindle://media/b')
+    expect(gainOf(el).value).toBe(1)
+  })
+
+  it('the volume is its own gain and stays apart', () => {
+    e.load('spindle://media/a', 0, undefined, { gain: 0.5 })
+    e.setVolume(0)
+    expect(params[0].value).toBe(0)
+    expect(gainOf(el).value).toBe(0.5)
+  })
+
+  it('the next song loads ahead at its own level and keeps it as it starts', () => {
+    e.load('spindle://media/a', 0, undefined, { gain: 0.5 })
+    el.meta(100)
+    e.play()
+    el.currentTime = 90
+    e.setNext({ url: 'spindle://media/b', gain: 2 })
+    const o = other()
+    expect(o.loads).toEqual(['spindle://media/b'])
+    expect(gainOf(o).value).toBe(2)
+    expect(gainOf(el).value).toBe(0.5)
+    o.meta(50)
+    o.readyState = 4
+    el.fire('ended')
+    expect(e.el).toBe(o)
+    expect(gainOf(o).level).toBe(2)
+  })
+
+  it('the same next song at another level is set again, with no new load', () => {
+    e.load('spindle://media/a', 0)
+    el.meta(100)
+    e.play()
+    el.currentTime = 90
+    e.setNext({ url: 'spindle://media/b', gain: 2 })
+    const o = other()
+    e.setNext({ url: 'spindle://media/b', gain: 0.25 })
+    expect(o.loads).toEqual(['spindle://media/b'])
+    expect(gainOf(o).value).toBe(0.25)
+  })
+
+  it('load of the song loaded ahead takes the level it is given', () => {
+    e.load('spindle://media/a', 0)
+    el.meta(100)
+    e.play()
+    el.currentTime = 90
+    e.setNext({ url: 'spindle://media/b', gain: 2 })
+    const o = other()
+    e.load('spindle://media/b', 0, undefined, { gain: 0.8 })
+    expect(e.el).toBe(o)
+    expect(gainOf(o).value).toBe(0.8)
+  })
+
+  it('the next part of a file and a new setting glide the song playing to its level', () => {
+    e.load('spindle://media/img', 0, { start: 0, end: 60 }, { gain: 0.5 })
+    el.meta(300)
+    e.play()
+    e.continueWith({ start: 60, end: 120 }, 0.7)
+    expect(gainOf(el).glide?.[0]).toBe(0.7)
+    e.setGain(1.2)
+    expect(gainOf(el).level).toBe(1.2)
   })
 })

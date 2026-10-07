@@ -48,6 +48,12 @@
     untrack(() => queue.planNext())
   })
 
+  // a new loudness setting is heard on the song playing, not only the next
+  $effect(() => {
+    void settings.loudness
+    untrack(() => queue.regain())
+  })
+
   // The visualizer loop runs outside Svelte; it only hears about slow changes.
   $effect(() =>
     setLook({

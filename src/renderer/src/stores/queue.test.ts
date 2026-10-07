@@ -1,9 +1,10 @@
 // The queue store with a fake engine and a fake plugin: what it plays after
 // an end, a failure, Previous and a change in the plugin's data. It knows
 // songs only by what plugins/index.ts answers (ticket 056).
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EngineError, EngineEvents } from '../audio/engine'
 import type { ItemKey } from '../../../shared/plugins/items'
+import type { ReplayGain } from '../../../shared/library'
 import { queueLink } from '../../../shared/saved-queue'
 import type { ItemAnswer, ItemInfo, Playable, PlayablePart } from '../plugins/types'
 
@@ -13,6 +14,10 @@ const fake = vi.hoisted(() => ({
   calls: [] as string[],
   // what the engine was last told to play next ('' for nothing)
   next: '',
+  // the levels last given (ticket 090): the song loaded, the next song, a new setting
+  gain: 1,
+  nextGain: 1,
+  setGain: 0,
   reset() {
     this.calls = []
   }
@@ -24,13 +29,23 @@ vi.mock('../audio/engine', () => ({
     get loaded() {
       return fake.loaded
     },
-    load: (url: string, at = 0, part?: { start: number; end?: number }) => {
+    load: (
+      url: string,
+      at = 0,
+      part?: { start: number; end?: number },
+      opts?: { gain?: number }
+    ) => {
       fake.loaded = true
+      fake.gain = opts?.gain ?? 1
       fake.calls.push(`load ${url}` + (part ? ` ${part.start}-${part.end ?? 'end'} at ${at}` : ''))
     },
-    continueWith: (part: { start: number; end?: number }) =>
-      fake.calls.push(`continue ${part.start}-${part.end ?? 'end'}`),
-    setNext: (n?: { url: string; part?: { start: number; end?: number } }) => {
+    continueWith: (part: { start: number; end?: number }, gain = 1) => {
+      fake.gain = gain
+      fake.calls.push(`continue ${part.start}-${part.end ?? 'end'}`)
+    },
+    setGain: (g: number) => (fake.setGain = g),
+    setNext: (n?: { url: string; part?: { start: number; end?: number }; gain?: number }) => {
+      fake.nextGain = n?.gain ?? 1
       fake.next = n ? n.url + (n.part ? ` ${n.part.start}-${n.part.end ?? 'end'}` : '') : ''
     },
     play: () => fake.calls.push('play'),
@@ -48,7 +63,7 @@ vi.mock('../audio/engine', () => ({
 // The fake plugins: songs by key, plugins that are off, plugins whose data is
 // not in yet (a song they don't have is loading then, not missing).
 const plugin = vi.hoisted(() => ({
-  songs: new Map<string, { info: ItemInfo; part?: PlayablePart }>(),
+  songs: new Map<string, { info: ItemInfo; part?: PlayablePart; gain?: ReplayGain }>(),
   off: new Set<string>(),
   loading: new Set<string>(),
   // answers come later, as radio's will
@@ -75,6 +90,7 @@ vi.mock('../plugins', () => {
       can: { seek: true, pause: true, next: true, previous: true }
     }
     if (s.part) p.part = s.part
+    if (s.gain) p.gain = s.gain
     return p
   }
   return {
@@ -101,6 +117,7 @@ const { queue } = await import('./queue.svelte')
 Object.assign(fake.on, queue.events)
 const { player } = await import('./player.svelte')
 const { notice } = await import('./notice.svelte')
+const { settings } = await import('./settings.svelte')
 
 // Albums of `n` songs, keys "<plugin>:<album><i>", titles "<ALBUM> <i>".
 function songs(album: string, n: number, of = 'files'): ItemKey[] {
@@ -1361,5 +1378,70 @@ describe('the next song, loaded ahead (ticket 087)', () => {
     queue.clear()
     queue.clear()
     expect(fake.next).toBe('')
+  })
+})
+
+describe('each song’s level (ReplayGain, ticket 090)', () => {
+  const db = (f: number): number => Math.round(20 * Math.log10(f) * 100) / 100
+
+  // album a: track gain -8, album gain -6; album b: -2 and -4
+  beforeEach(() => {
+    for (const [key, s] of plugin.songs) {
+      const album = key.slice(key.indexOf(':') + 1)[0]
+      s.info = { ...s.info, groupTo: { plugin: 'files', page: `album/${album}` } }
+      s.gain = album === 'a' ? { track: -8, album: -6 } : { track: -2, album: -4 }
+    }
+    settings.loudness = 'album'
+  })
+  afterEach(() => {
+    settings.loudness = 'album'
+  })
+
+  it('By album plays an album in order at its album gain, the next song too', () => {
+    playAlbum('a', 0)
+    expect(db(fake.gain)).toBe(-6)
+    expect(fake.next).toBe('media/a1')
+    expect(db(fake.nextGain)).toBe(-6)
+  })
+
+  it('By song plays each song at its own gain', () => {
+    settings.loudness = 'song'
+    playAlbum('a', 0)
+    expect(db(fake.gain)).toBe(-8)
+    expect(db(fake.nextGain)).toBe(-8)
+  })
+
+  it('Off plays songs as they are', () => {
+    settings.loudness = 'off'
+    playAlbum('a', 0)
+    expect(fake.gain).toBe(1)
+    expect(fake.nextGain).toBe(1)
+  })
+
+  it('By album with shuffle uses each song’s own gain', () => {
+    player.shuffle = true
+    playAlbum('a', 0)
+    queue.planNext()
+    expect(db(fake.nextGain)).toBe(-8)
+  })
+
+  it('By album in a list that mixes albums uses each song’s own gain', () => {
+    queue.playList(k('a0', 'b0', 'a1'), 0, 'Mix')
+    expect(db(fake.gain)).toBe(-8)
+    expect(db(fake.nextGain)).toBe(-2)
+  })
+
+  it('a song without tags plays as it is', () => {
+    plugin.songs.get('files:a0')!.gain = undefined
+    playAlbum('a', 0)
+    expect(fake.gain).toBe(1)
+  })
+
+  it('a new setting is heard on the song playing and the next one', () => {
+    playAlbum('a', 0)
+    settings.loudness = 'song'
+    queue.regain()
+    expect(db(fake.setGain)).toBe(-8)
+    expect(db(fake.nextGain)).toBe(-8)
   })
 })

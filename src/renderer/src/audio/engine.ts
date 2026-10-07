@@ -18,6 +18,10 @@
 //
 // A live stream (radio) is loaded with { live: true } (ticket 027): it has no length,
 // and its errors go straight to its live plugin, which reconnects (ticket 057).
+//
+// Each song comes with its own level (ReplayGain, ticket 090), set on its
+// element's gain node. That is before the analyser, so the visualizer sees
+// the evened level, and apart from the volume, which comes after.
 
 export type EngineError = {
   // MediaError code: 2 network, 3 decode, 4 format not supported
@@ -54,6 +58,8 @@ export interface EngineEvents {
 export interface LoadOptions {
   // a radio stream: no ?decode retry, no HEAD, no length
   live?: boolean
+  // the song's level as a factor (replaygain.ts); 1 when left out
+  gain?: number
 }
 
 import { firstLead, learnLead, nextMove, plainLead } from './gapless'
@@ -83,16 +89,21 @@ export interface Part {
 export interface Next {
   url: string
   part?: Part
+  // as in LoadOptions
+  gain?: number
 }
 
 const wholeFile: Part = { start: 0 }
 // how close to a part's end counts as there
 const endSlack = 0.005
+// A change of level on a song that plays glides this fast (a time constant,
+// in seconds), so it makes no click.
+const glide = 0.02
 
 // One <audio> element with its own gain, into the graph both share.
 class Deck {
   readonly el: HTMLAudioElement
-  // This song's own gain, before the analyser. ReplayGain goes here (ticket
+  // This song's own gain, before the analyser: its ReplayGain level (ticket
   // 090). It also cuts a part of a file off where it ends, once the next
   // song took over and the file would go on.
   readonly gain: GainNode
@@ -105,6 +116,9 @@ class Deck {
   // where to go once the length is known, in file time
   startAt = 0
   live = false
+  // The song's ReplayGain level, as a factor. Kept here, not only in the
+  // node, so a new graph can set it again on its own nodes.
+  level = 1
 
   // tells the join this element has a new song, or none
   readonly #reset: () => void
@@ -125,16 +139,30 @@ class Deck {
   }
 
   // `at` is in file time
-  load(url: string, at: number, live: boolean): void {
+  load(url: string, at: number, live: boolean, gain: number): void {
     this.url = url
     this.decoding = false
     this.firstError = ''
     this.startAt = at
     this.live = live
-    this.gain.gain.cancelScheduledValues(0)
-    this.gain.gain.value = 1
+    this.setGain(gain)
     this.el.src = url
     this.#reset()
+  }
+
+  // At once, for a song not heard yet.
+  setGain(gain: number): void {
+    this.level = gain
+    this.gain.gain.cancelScheduledValues(0)
+    this.gain.gain.value = gain
+  }
+
+  // From now on, gliding there, for a song that plays.
+  glideGain(gain: number, now: number): void {
+    this.level = gain
+    const p = this.gain.gain
+    p.cancelScheduledValues(now)
+    p.setTargetAtTime(gain, now, glide)
   }
 
   // `at` is in file time; before the length is known, it waits for loadedmetadata
@@ -174,7 +202,7 @@ export class AudioEngine {
   // play() was asked for last, not pause()
   #wantPlay = false
   // the song to play after this one (setNext)
-  #next: (Part & { url: string }) | undefined
+  #next: (Part & { url: string; gain: number }) | undefined
   // the other element has it, loading or ready
   #nextLoaded = false
   // it could not load there: it loads the usual way when its turn comes,
@@ -406,7 +434,7 @@ export class AudioEngine {
       lead: this.#join ? this.#lead : plainLead
     })
     if (move.kind === 'load') {
-      this.#other.load(next.url, next.start, false)
+      this.#other.load(next.url, next.start, false, next.gain)
       this.#nextLoaded = true
     } else if (move.kind === 'start') this.#startNext(left)
     else if (move.kind === 'wait') this.#nextTimer = setTimeout(() => this.#plan(), move.ms)
@@ -473,6 +501,7 @@ export class AudioEngine {
   // other element (it takes over). A live stream always opens a new connection.
   load(url: string, at = 0, part: Part = wholeFile, opts: LoadOptions = {}): void {
     const live = !!opts.live
+    const gain = opts.gain ?? 1
     const d = this.#deck
     const o = this.#other
     const same = !live && !d.live && url === d.url && d.loaded && !d.el.error
@@ -486,7 +515,8 @@ export class AudioEngine {
         this.#next = undefined
         this.#nextLoaded = false
         d.clear()
-      }
+        o.setGain(gain)
+      } else this.#deck.glideGain(gain, this.context.currentTime)
       this.#sendDuration()
       this.seek(at)
       this.#on.time?.(at)
@@ -494,12 +524,14 @@ export class AudioEngine {
     }
     // a stream has no end to start a next song at
     if (live) this.setNext()
-    d.load(url, part.start + at, live)
+    d.load(url, part.start + at, live, gain)
   }
 
   // The song after the one playing is the next part of the same file: the
   // sound goes on as it is, and times are from the new part from now on.
-  continueWith(part: Part): void {
+  // `gain` is the new part's level.
+  continueWith(part: Part, gain = 1): void {
+    this.#deck.glideGain(gain, this.context.currentTime)
     this.#part = part
     this.#endSent = false
     this.#sendDuration()
@@ -513,16 +545,23 @@ export class AudioEngine {
   // comes instead of `ended`. Not for a part that follows this one in the
   // same file: continueWith carries on there.
   setNext(next?: Next): void {
-    const n = next && { url: next.url, ...(next.part ?? wholeFile) }
+    const n = next && { url: next.url, ...(next.part ?? wholeFile), gain: next.gain ?? 1 }
     const was = this.#next
-    if (n && was && n.url === was.url && n.start === was.start && n.end === was.end) return
+    const o = this.#other
+    if (n && was && n.url === was.url && n.start === was.start && n.end === was.end) {
+      // the same song at another level: not heard yet, so set at once
+      if (n.gain !== was.gain && this.#nextLoaded) o.setGain(n.gain)
+      this.#next = n
+      return
+    }
     this.#next = n
     this.#nextFailed = false
-    const o = this.#other
     if (this.#nextLoaded) {
       // the same file: only another place in it
-      if (n && n.url === o.url && !o.el.error) o.seek(n.start)
-      else {
+      if (n && n.url === o.url && !o.el.error) {
+        o.seek(n.start)
+        o.setGain(n.gain)
+      } else {
         o.clear()
         this.#nextLoaded = false
       }
@@ -564,6 +603,11 @@ export class AudioEngine {
 
   setVolume(volume: number): void {
     this.#volume.gain.value = gain(volume)
+  }
+
+  // A new level for the song playing (the setting changed): it glides there.
+  setGain(gain: number): void {
+    if (this.loaded) this.#deck.glideGain(gain, this.context.currentTime)
   }
 
   // Nothing to play: drop both files so they stop loading.

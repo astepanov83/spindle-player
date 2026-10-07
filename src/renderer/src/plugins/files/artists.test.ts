@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 import type { Artist } from '../../../../shared/plugins/files/artists'
 import type { Track } from '../../../../shared/library'
 import { fallbackPalettes, type ThemePalettes } from '../../../../shared/palette'
-import { artistLinks, artistCovers, artistPageSongs, artistSongs, filterArtists } from './artists'
+import {
+  allBy,
+  artistLinks,
+  artistCovers,
+  artistPageSongs,
+  artistSongs,
+  filterArtists
+} from './artists'
 import type { Sort } from '../../library/views'
 
 const artist = (name: string, albums: string[] = [], also: string[] = []): Artist => ({
@@ -100,5 +107,22 @@ describe('artistLinks (ticket 040)', () => {
 
   it('gives no key to a name with no artist page', () => {
     expect(artistLinks({ artist: 'Nobody' }, has)).toEqual([{ name: 'Nobody', key: null }])
+  })
+})
+
+describe('allBy: the Artist column is left out (ticket 075)', () => {
+  it('when every song has the page artist, by name key', () => {
+    expect(allBy([{ artist: 'Marina Vale' }, { artist: 'marina  vale' }], 'Marina Vale')).toBe(true)
+  })
+
+  it('not with a guest, another artist or a split credit', () => {
+    expect(
+      allBy([{ artist: 'Marina Vale' }, { artist: 'Marina Vale feat. Kai' }], 'Marina Vale')
+    ).toBe(false)
+    // a compilation: its rows have their own artists
+    expect(allBy([{ artist: 'Kai' }, { artist: 'Juno Park' }], 'Various Artists')).toBe(false)
+    expect(
+      allBy([{ artist: 'The Ochre Band, Kai', artists: ['The Ochre Band', 'Kai'] }], 'Kai')
+    ).toBe(false)
   })
 })

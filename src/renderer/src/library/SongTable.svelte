@@ -7,7 +7,7 @@
   import type { QueueLink } from '../../../shared/saved-queue'
   import Eq from '../ui/Eq.svelte'
   import Thumb from '../ui/Thumb.svelte'
-  import { fmtTime } from '../format'
+  import { fmtCount, fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
   import { roving } from '../ui/roving'
@@ -28,7 +28,8 @@
     playlistId,
     link,
     head,
-    count = true
+    count = true,
+    artist = true
   }: {
     title: string
     meta: string
@@ -45,15 +46,19 @@
     head?: Snippet
     // the song count on the right; off where the page's header says it already
     count?: boolean
+    // the Artist column; off where every song has the page's artist
+    artist?: boolean
   } = $props()
 
   const ROW = 54
-  const cols: [SortKey, string][] = [
+  const allCols: [SortKey, string][] = [
     ['t', 'Title'],
     ['a', 'Artist'],
     ['al', 'Album'],
     ['d', 'Time']
   ]
+  // a sort by a hidden column stays, as in a narrow table
+  const cols = $derived(artist ? allCols : allCols.filter(([k]) => k !== 'a'))
 
   const sort = $derived(given === undefined ? library.sort : given)
   // ties keep the order given
@@ -89,13 +94,13 @@
     </div>
   {/if}
   {#if count}
-    <div class="page-meta">{rows.length} {rows.length === 1 ? 'song' : 'songs'}</div>
+    <div class="page-meta">{fmtCount(rows.length, 'song', 'songs')}</div>
   {/if}
 </div>
-<div class="tbl">
+<div class="tbl" class:noartist={!artist}>
   <!-- The rows are buttons in a list, not a table, so the heads are sort
        buttons, not column headers; each says how it sorts. -->
-  <div class="th" role="group" aria-label="Sort songs">
+  <div class="th song-head" role="group" aria-label="Sort songs">
     <span></span>
     {#each cols as [k, label] (k)}
       {@const on = sort?.k === k}
@@ -110,7 +115,7 @@
     {/each}
   </div>
   <div
-    class="rows lines"
+    class="rows lines song-rows"
     bind:this={list}
     style:height="{v.total}px"
     use:roving={{ rows, count: rows.length, scrollTo: (i) => v.scrollToIndex(i) }}
@@ -139,11 +144,11 @@
             <Thumb src={t.art?.cover} size={36} radius={4} />
             <span class="words">
               <span class="nm" title={t.title}>{t.title}</span>
-              <!-- shown only when the Artist column is gone -->
-              <span class="sub" title={t.subtitle}>{t.subtitle ?? ''}</span>
+              <!-- shown only when a narrow table drops the Artist column -->
+              {#if artist}<span class="sub" title={t.subtitle}>{t.subtitle ?? ''}</span>{/if}
             </span>
           </span>
-          <span class="o ar" title={t.subtitle}>{t.subtitle ?? ''}</span>
+          {#if artist}<span class="o ar" title={t.subtitle}>{t.subtitle ?? ''}</span>{/if}
           <span class="o al" title={t.group}>{t.group ?? ''}</span>
           <span class="d">{t.length === undefined ? '' : fmtTime(t.length)}</span>
         {:else}
@@ -151,7 +156,7 @@
             <Thumb src={undefined} size={36} radius={4} />
             <span class="words"><span class="nm">{s.state === 'off' ? s.text : ''}</span></span>
           </span>
-          <span class="o ar"></span>
+          {#if artist}<span class="o ar"></span>{/if}
           <span class="o al"></span>
           <span class="d"></span>
         {/if}
@@ -180,15 +185,6 @@
     gap: 16px;
     align-items: center;
     padding: 0 12px;
-  }
-  /* sticks to the top of the scroll box, over its top padding */
-  .th {
-    position: sticky;
-    top: calc(-1 * var(--scroll-pad-top, 20px));
-    background: var(--bg);
-    z-index: 1;
-    height: 38px;
-    border-bottom: 1px solid var(--edge);
   }
   .th button {
     font-size: var(--text-xs);
@@ -219,10 +215,6 @@
     right: 0;
     height: 54px;
     font-size: var(--text-l);
-  }
-  /* Up keeps the focused row clear of the sticky head */
-  .tr {
-    scroll-margin-top: calc(38px + var(--scroll-pad-top, 20px));
   }
   .tr > span {
     white-space: nowrap;
@@ -288,6 +280,17 @@
     }
     .sub {
       display: block;
+    }
+  }
+  /* every song has the page's artist: the title and album get its room */
+  .noartist .th,
+  .noartist .tr {
+    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) 56px;
+  }
+  @container (max-width: 520px) {
+    .noartist .th,
+    .noartist .tr {
+      --cols: 44px minmax(0, 1fr) 56px;
     }
   }
   .o {

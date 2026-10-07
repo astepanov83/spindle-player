@@ -52,7 +52,15 @@
 {#snippet songList(f: FoundGroup, keys: ItemKey[])}
   <section class="songs">
     {@render more(f)}
-    <div class="lines" use:roving={{ rows: keys }}>
+    <!-- the heads every song list has (ticket 075); the rows say it all to a
+         screen reader -->
+    <div class="rhead song-head" aria-hidden="true">
+      <span>Title</span>
+      <span>Artist</span>
+      <span class="al">Album</span>
+      <span class="end">Time</span>
+    </div>
+    <div class="lines song-rows" use:roving={{ rows: keys }}>
       {#each keys.slice(0, TOP_SONGS) as key, i (key)}
         {@const t = infoOf(key)}
         {@const cur = queues.isItem(key)}
@@ -159,14 +167,20 @@
     padding-bottom: 16px;
   }
   /* the song table's rows, with no number column */
+  .rhead,
   .srow {
     display: grid;
     grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 56px;
     gap: 16px;
     align-items: center;
+    padding: 0 12px;
+  }
+  .rhead .end {
+    text-align: right;
+  }
+  .srow {
     width: 100%;
     height: 54px;
-    padding: 0 12px;
     font-size: var(--text-l);
   }
   /* a narrow list drops the album; the album group is below */
@@ -174,6 +188,7 @@
     container-type: inline-size;
   }
   @container (max-width: 520px) {
+    .rhead,
     .srow {
       grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 44px;
     }

@@ -157,6 +157,7 @@ describe('pages', () => {
     const [h] = page.filesPage('albums', 'album/a', '')
     const more = head(h).buttons?.find((b) => 'menu' in b && b.menu === 'songs')
     expect(more && 'actions' in more && more.actions).toEqual([
+      { id: 'go-folder', label: 'Go to folder' },
       { id: 'show-folder', label: 'Show in file manager' }
     ])
     page.filesAct(head(h).id, 'show-folder')
@@ -185,8 +186,9 @@ describe('pages', () => {
       { text: 'Marina Vale', to: at('artist/marinavale') },
       { text: ' · 3 songs · 6 min' }
     ])
-    // the songs are in two folders: the album is in the one above both
-    expect(head(h).where?.to).toEqual(at(`folder/${files.folders.nodes[1].key}`))
+    // the songs are in two folders: the album is in the one above both. Its
+    // path is the tooltip of the line over the title, not a line of its own.
+    expect(head(h).metaHint).toBe('/m/Rock')
     expect(head(h).buttons?.map((b) => b.label)[0]).toBe('Play')
     expect(songs(s)).toMatchObject({
       items: ['files:a1', 'files:a2', 'files:a3'],
@@ -198,6 +200,47 @@ describe('pages', () => {
       ]
     })
     expect(songs(s)).not.toHaveProperty('sort')
+    // every song is Marina Vale's, as the album is: no Artist column
+    expect(songs(s).artist).toBe(false)
+  })
+
+  it('"Go to folder" opens the album\'s folder in Folders, a step Back undoes (ticket 075)', () => {
+    library.openPage('albums', 'album/a')
+    page.filesAct('album/a', 'go-folder')
+    expect(library.tab).toBe('folders')
+    expect(library.page('folders')).toBe(`folder/${files.folders.nodes[1].key}`)
+    library.back()
+    expect([library.tab, library.page('albums')]).toEqual(['albums', 'album/a'])
+  })
+
+  it('an album of one song says "1 song" and "under a minute"', () => {
+    files.load({
+      albums: [album('s', ['s1'])],
+      tracks: [track('s1', 's', { duration: 40 })],
+      folders: lib().folders
+    })
+    const [h] = page.filesPage('albums', 'album/s', '')
+    expect(head(h).line?.at(-1)).toEqual({ text: ' · 1 song · under a minute' })
+  })
+
+  it('keeps the Artist column where a song has another artist (ticket 075)', () => {
+    files.load({
+      albums: [album('v', ['v1', 'v2'], { artist: 'Various Artists' }), album('g', ['g1', 'g2'])],
+      tracks: [
+        track('v1', 'v', { artist: 'Kai' }),
+        track('v2', 'v', { artist: 'Juno Park' }),
+        track('g1', 'g'),
+        track('g2', 'g', { artist: 'Marina Vale feat. Kai' })
+      ],
+      folders: lib().folders
+    })
+    // a compilation, and an album with a guest
+    expect(songs(page.filesPage('albums', 'album/v', '')[1]).artist).toBe(true)
+    expect(songs(page.filesPage('albums', 'album/g', '')[1]).artist).toBe(true)
+    // Kai has only a song on the compilation: their page's table leaves out
+    // the Artist column, the guest credit is its own artist
+    const kai = page.filesPage('artists', 'artist/kai', '')
+    expect(songs(kai.at(-1)!)).toMatchObject({ items: ['files:v1'], artist: false })
   })
 
   it('an album that is gone shows the grid', () => {

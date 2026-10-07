@@ -120,8 +120,8 @@ export interface HeadBlock {
   line?: Piece[]
   // a web page, after the line; it opens in the browser (an https address)
   link?: { label: string; url: string }
-  // where it is, under that, cut at its start: "/music/Rock/Album"
-  where?: Piece
+  // the tooltip of the line over the title: where the album is on disk
+  metaHint?: string
   // the big picture: a cover, or a round photo made from `covers` when there is none
   art?: { src: string | undefined; round?: boolean; covers?: CoverArt[] }
   // the link back over it: "All albums"
@@ -193,6 +193,8 @@ export interface SongsBlock {
   label?: string
   // the song count on the right; off where the head says it already
   count?: boolean
+  // the Artist column; off where every song has the page's artist
+  artist?: boolean
   // a column head was clicked: act(id, 'sort', its key). May be a getter, so
   // a sort click only sorts and doesn't build the page's list again.
   sort?: Sort | null

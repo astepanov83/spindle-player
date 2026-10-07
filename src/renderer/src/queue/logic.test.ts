@@ -125,7 +125,7 @@ describe('onEnded', () => {
 
   it('shuffle picks another song from the list', () => {
     const r = onEnded(q(0), false, { shuffle: true, random: () => 0.99 })
-    expect(r).toEqual({ kind: 'play', state: q(2) })
+    expect(r.kind === 'play' && r.state.index).toBe(1)
   })
 })
 
@@ -450,11 +450,12 @@ describe('Play next songs with shuffle and repeat', () => {
 
   it('shuffle plays the Play next songs first, in order', () => {
     const s1 = advance(qn(0, 2), o)
-    expect(s1).toEqual(qn(1, 1))
+    expect({ ...s1, shuffle: undefined }).toEqual({ ...qn(1, 1), shuffle: undefined })
     const s2 = advance(s1, o)
-    expect(s2).toEqual({ ...qn(2, 0), next: undefined })
-    // then random again
-    expect(advance(s2, o).index).toBe(4)
+    expect(s2.index).toBe(2)
+    expect(s2.next).toBeUndefined()
+    // then the walk again, on the rows not played yet
+    expect([3, 4]).toContain(advance(s2, o).index)
   })
 
   it('without shuffle they are simply next, counted down as they play', () => {
@@ -511,5 +512,170 @@ describe('passOver (ticket 056)', () => {
   it('gives the same state when none after can play', () => {
     const s = q(1, ['files:a', 'mfp:b', 'mfp:c'])
     expect(passOver(s, off, next)).toBe(s)
+  })
+})
+
+describe('the shuffle walk (ticket 076)', () => {
+  // a fixed sequence, so a failing case can be run again
+  function seeded(seed: number): () => number {
+    let a = seed
+    return () => {
+      a = (a + 0x6d2b79f5) | 0
+      let t = Math.imul(a ^ (a >>> 15), 1 | a)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+  }
+  const keys = (n: number, p = 's'): ItemKey[] =>
+    Array.from({ length: n }, (_, i) => `files:${p}${i}` as ItemKey)
+  const cur = (s: QueueState): ItemKey => s.items[s.index]
+  // the songs Next plays, by key, as rows move
+  function walk(
+    s: QueueState,
+    steps: number,
+    o: { shuffle: boolean; random: () => number }
+  ): { s: QueueState; played: ItemKey[] } {
+    const played: ItemKey[] = []
+    for (let i = 0; i < steps; i++) {
+      s = advance(s, o)
+      played.push(cur(s))
+    }
+    return { s, played }
+  }
+
+  it('plays every song once before any repeats, round after round', () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const o = { shuffle: true, random: seeded(seed) }
+      let s: QueueState = { items: keys(10), index: 3, from: 'X' }
+      const first = walk(s, 9, o)
+      expect(new Set([cur(s), ...first.played]).size).toBe(10)
+      s = first.s
+      const second = walk(s, 10, o)
+      expect(new Set(second.played).size).toBe(10)
+      // no song twice in a row where one round meets the next
+      expect(second.played[0]).not.toBe(cur(s))
+    }
+  })
+
+  it('Play next songs come first, and play once in the round', () => {
+    const o = { shuffle: true, random: seeded(7) }
+    let s: QueueState = { items: keys(6), index: 0, from: 'X' }
+    s = walk(s, 2, o).s
+    s = insertNext(s, ['files:n0', 'files:n1'])
+    const r = walk(s, 5, o)
+    expect(r.played.slice(0, 2)).toEqual(['files:n0', 'files:n1'])
+    // the rest of the round: the 3 songs not played yet
+    const before = new Set([...keys(6)].filter((k) => !r.played.includes(k)))
+    expect(before.size).toBe(3)
+    expect(new Set(r.played).size).toBe(5)
+  })
+
+  it('songs added to the queue play in this round; removed ones never', () => {
+    const o = { shuffle: true, random: seeded(11) }
+    let s: QueueState = { items: keys(5), index: 0, from: 'X' }
+    s = walk(s, 2, o).s
+    const played = new Set(s.shuffle!.order.slice(0, 3).map((r) => s.items[r]))
+    s = append(s, ['files:x0', 'files:x1'])
+    const gone = s.items.findIndex((k) => !played.has(k))
+    const goneKey = s.items[gone]
+    s = removeRow(s, gone)
+    const r = walk(s, 3, o)
+    expect(r.played).not.toContain(goneKey)
+    expect(r.played).toEqual(expect.arrayContaining(['files:x0', 'files:x1']))
+    expect(new Set([...played, ...r.played]).size).toBe(6)
+  })
+
+  it('moved rows keep their place in the walk', () => {
+    const o = { shuffle: true, random: seeded(5) }
+    let s: QueueState = { items: keys(6), index: 2, from: 'X' }
+    const a = walk(s, 2, o)
+    s = moveRow(a.s, 0, 5)
+    s = moveRow(s, 4, 1)
+    const b = walk(s, 3, o)
+    expect(new Set(['files:s2', ...a.played, ...b.played]).size).toBe(6)
+  })
+
+  it('removing the current song plays the one the walk had next', () => {
+    const o = { shuffle: true, random: seeded(3) }
+    const s = walk({ items: keys(6), index: 0, from: 'X' }, 1, o).s
+    const w = s.shuffle!
+    const nextKey = s.items[w.order[w.at + 1]]
+    const r = removeRow(s, s.index)
+    expect(cur(r)).toBe(nextKey)
+    expect(r.shuffle!.order[r.shuffle!.at]).toBe(r.index)
+  })
+
+  it('Previous goes back along the walk, and Next goes the same way again', () => {
+    const o = { shuffle: true, random: seeded(9) }
+    const start: QueueState = { items: keys(8), index: 4, from: 'X' }
+    const a = walk(start, 3, o)
+    let s = a.s
+    s = back(s, 0, true).state
+    expect(cur(s)).toBe(a.played[1])
+    s = back(s, 0, true).state
+    expect(cur(s)).toBe(a.played[0])
+    s = back(s, 0, true).state
+    expect(cur(s)).toBe('files:s4')
+    // the start of the walk: Previous restarts
+    expect(back(s, 0, true).restart).toBe(true)
+    expect(walk(s, 3, o).played).toEqual(a.played)
+  })
+
+  it('Previous restarts when shuffle has not picked a song yet', () => {
+    const s = q(2)
+    expect(back(s, 0, true)).toEqual({ state: s, restart: true })
+  })
+
+  it('Previous keeps Play next songs waiting behind the song you left', () => {
+    const o = { shuffle: true, random: seeded(2) }
+    let s = walk({ items: keys(6), index: 0, from: 'X' }, 2, o).s
+    const left = cur(s)
+    s = insertNext(s, ['files:n0'])
+    s = back(s, 0, true).state
+    expect(s.next).toBeUndefined()
+    expect(walk(s, 2, o).played).toEqual([left, 'files:n0'])
+  })
+
+  it('a click plays that row, and it does not play again in the round', () => {
+    const o = { shuffle: true, random: seeded(4) }
+    let s = walk({ items: keys(5), index: 0, from: 'X' }, 1, o).s
+    const w = s.shuffle!
+    const later = w.order[w.order.length - 1]
+    s = jump(s, later)
+    const r = walk(s, 2, o)
+    expect(r.played).not.toContain(keys(5)[later])
+    expect(new Set(r.played).size).toBe(2)
+  })
+
+  it('Clear and a rescan keep the walk on the current song', () => {
+    const o = { shuffle: true, random: seeded(6) }
+    let s = walk({ items: keys(5), index: 0, from: 'X' }, 2, o).s
+    const c = clearQueue(s)
+    expect(c.shuffle!.order[c.shuffle!.at]).toBe(0)
+    const k = cur(s)
+    s = prune(s, (id) => id === k || id === 'files:s0' || id === 'files:s4')
+    expect(cur(s)).toBe(k)
+    expect(s.shuffle!.order[s.shuffle!.at]).toBe(s.index)
+  })
+
+  it('Undo of a Remove puts a played song back among the played ones', () => {
+    const o = { shuffle: true, random: seeded(8) }
+    const s = walk({ items: keys(5), index: 0, from: 'X' }, 2, o).s
+    // the first song played this round
+    const after = removeRow(s, 0)
+    const { state } = undoRemove(after, s, after, 0)
+    expect(state.items).toEqual(s.items)
+    const r = walk(state, 2, o)
+    expect(r.played).not.toContain('files:s0')
+    expect(
+      new Set([...s.shuffle!.order.slice(0, 3).map((x) => s.items[x]), ...r.played]).size
+    ).toBe(5)
+  })
+
+  it('shuffle off drops the walk', () => {
+    const o = { shuffle: true, random: seeded(1) }
+    const s = walk({ items: keys(5), index: 0, from: 'X' }, 1, o).s
+    expect(s.shuffle).toBeDefined()
+    if (s.index < 4) expect(advance(s, { shuffle: false }).shuffle).toBeUndefined()
   })
 })

@@ -14,7 +14,105 @@ export interface QueueState {
   // How many songs right after the current one were put there with "Play
   // next". Shuffle plays them first, in order. Left out when none.
   next?: number
+  // The shuffle walk, while shuffle is on and has picked a song. Not saved.
+  shuffle?: Walk
 }
+
+// Rows in the order shuffle plays them (ticket 076). Up to `at` they have
+// played, `order[at]` being the current song; after it they wait. A round
+// begins at `start` and plays each row once. Rows with no place in the round
+// (added since, or all of them when shuffle just went on) get random places
+// among the waiting ones at the next step. When none wait, a new round starts.
+export interface Walk {
+  order: number[]
+  at: number
+  start: number
+}
+
+// The state with this walk, the field left out for none.
+function withWalk(q: QueueState, walk: Walk | undefined): QueueState {
+  const s = { ...q }
+  if (walk) s.shuffle = walk
+  else delete s.shuffle
+  return s
+}
+
+// The walk with `index` as the current song. A row that waited is taken out
+// of the waiting ones, so it does not play twice in a round.
+function walkTo(w: Walk, index: number): Walk {
+  if (w.order[w.at] === index) return w
+  const waiting = w.order.slice(w.at + 1).filter((r) => r !== index)
+  const order = [...w.order.slice(0, w.at + 1), index, ...waiting]
+  return { order, at: w.at + 1, start: Math.min(w.start, w.at + 1) }
+}
+
+// The walk after an edit: `to` gives each old row's new place, -1 when it
+// went. The current song is `index` afterwards.
+function remapWalk(
+  w: Walk | undefined,
+  to: (row: number) => number,
+  index: number
+): Walk | undefined {
+  if (!w) return undefined
+  const order: number[] = []
+  let at = -1
+  let start = 0
+  w.order.forEach((r, k) => {
+    if (k === w.start) start = order.length
+    const n = to(r)
+    if (n >= 0) order.push(n)
+    if (k === w.at) at = order.length - 1
+  })
+  return walkTo({ order, at, start: Math.max(0, Math.min(start, at)) }, index)
+}
+
+// Gives rows with no place in this round random places among the waiting
+// ones. The waiting ones keep their order, so Next after Previous goes the
+// same way again.
+function placeNew(w: Walk, n: number, random: () => number): Walk {
+  const seen = new Set(w.order.slice(w.start))
+  const fresh: number[] = []
+  for (let r = 0; r < n; r++) if (!seen.has(r)) fresh.push(r)
+  if (!fresh.length) return w
+  shuffleInPlace(fresh, random)
+  const waiting = w.order.slice(w.at + 1)
+  // which places in the new waiting list the new rows take
+  const slots = waiting.map(() => false).concat(fresh.map(() => true))
+  shuffleInPlace(slots, random)
+  let a = 0
+  let b = 0
+  const merged = slots.map((isNew) => (isNew ? fresh[b++] : waiting[a++]))
+  return { ...w, order: [...w.order.slice(0, w.at + 1), ...merged] }
+}
+
+function shuffleInPlace<T>(a: T[], random: () => number): void {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+}
+
+// The next song under shuffle: the next waiting row, or the first of a new
+// round when every row has played once. A new round has every row, but not
+// the song that just played first. It keeps the round before it, so Previous
+// can go back through it.
+function shuffleStep(q: QueueState, random: () => number): QueueState {
+  const n = q.items.length
+  let w = placeNew(q.shuffle ? walkTo(q.shuffle, q.index) : fresh(q.index), n, random)
+  if (w.at + 1 >= w.order.length) {
+    const at = w.at - w.start
+    w = placeNew({ order: w.order.slice(w.start), at, start: at + 1 }, n, random)
+    const order = w.order
+    if (order[at + 1] === q.index) {
+      const k = at + 2 + Math.floor(random() * (n - 1))
+      ;[order[at + 1], order[k]] = [order[k], order[at + 1]]
+    }
+  }
+  const index = w.order[w.at + 1]
+  return withWalk({ ...q, index }, { ...w, at: w.at + 1 })
+}
+
+const fresh = (index: number): Walk => ({ order: [index], at: 0, start: 0 })
 
 // The state with `next` songs waiting to play next, the field left out for none.
 function withNext(q: QueueState, next: number): QueueState {
@@ -45,18 +143,16 @@ export interface NextOptions {
 // The song after the current one. At the end of the queue the same state
 // comes back: playback stops there, no other album is added.
 export function advance(q: QueueState, o: NextOptions): QueueState {
-  const random = o.random ?? Math.random
   const next = q.next ?? 0
   // Play next songs come first, with shuffle too
-  if (next > 0) return withNext({ ...q, index: q.index + 1 }, next - 1)
-  if (o.shuffle && q.items.length > 1) {
-    // a random other song
-    let i = Math.floor(random() * (q.items.length - 1))
-    if (i >= q.index) i++
-    return { ...q, index: i }
+  if (next > 0) {
+    const index = q.index + 1
+    const walk = o.shuffle ? walkTo(q.shuffle ?? fresh(q.index), index) : undefined
+    return withWalk(withNext({ ...q, index }, next - 1), walk)
   }
+  if (o.shuffle && q.items.length > 1) return shuffleStep(q, o.random ?? Math.random)
   if (q.index + 1 >= q.items.length) return q
-  return { ...q, index: q.index + 1 }
+  return withWalk({ ...q, index: q.index + 1 }, undefined)
 }
 
 // What to do when a song ends by itself: repeat replays it, otherwise the
@@ -72,7 +168,8 @@ export function onEnded(q: QueueState, repeat: boolean, o: NextOptions): EndStep
 // Clicking a queue row. Play next songs after the clicked one still wait.
 export function jump(q: QueueState, index: number): QueueState {
   if (index < 0 || index >= q.items.length || index === q.index) return q
-  return withNext({ ...q, index }, countNext(nextMarks(q), index))
+  const walk = q.shuffle && walkTo(q.shuffle, index)
+  return withWalk(withNext({ ...q, index }, countNext(nextMarks(q), index)), walk)
 }
 
 // An empty queue takes the songs, the first one current.
@@ -91,7 +188,8 @@ export function insertNext(
   if (!keys.length) return q
   if (!q.items.length) return filled(keys, from, link)
   const items = [...q.items.slice(0, q.index + 1), ...keys, ...q.items.slice(q.index + 1)]
-  return withNext({ ...q, items }, (q.next ?? 0) + keys.length)
+  const walk = remapWalk(q.shuffle, (r) => (r > q.index ? r + keys.length : r), q.index)
+  return withWalk(withNext({ ...q, items }, (q.next ?? 0) + keys.length), walk)
 }
 
 // "Add to queue": the songs go at the end.
@@ -102,15 +200,21 @@ export function append(q: QueueState, keys: ItemKey[], from = '', link?: QueueLi
 }
 
 // Takes a row out. When it was the current song, the one after it takes its
-// place, or the one before when it was the last.
+// place, or the one before when it was the last. Under shuffle that is the
+// one shuffle would play next, unless Play next songs wait.
 export function removeRow(q: QueueState, i: number): QueueState {
   if (i < 0 || i >= q.items.length) return q
   if (q.items.length === 1) return { items: [], index: 0, from: '' }
   const items = q.items.filter((_, k) => k !== i)
   const marks = nextMarks(q).filter((_, k) => k !== i)
+  const to = (r: number): number => (r === i ? -1 : r > i ? r - 1 : r)
   let index = i < q.index ? q.index - 1 : q.index
   if (index >= items.length) index = items.length - 1
-  return withNext({ ...q, items, index }, countNext(marks, index))
+  const w = q.shuffle
+  const waits = w && w.order[w.at] === i ? w.order.slice(w.at + 1).find((r) => r !== i) : undefined
+  if (i === q.index && !q.next && waits !== undefined) index = to(waits)
+  const walk = remapWalk(w, to, index)
+  return withWalk(withNext({ ...q, items, index }, countNext(marks, index)), walk)
 }
 
 // Undo of removeRow: `before` and `after` are the states around it, `now`
@@ -130,7 +234,19 @@ export function undoRemove(
   const marks = nextMarks(now)
   marks.splice(pos, 0, !wasCurrent && nextMarks(before)[at])
   const index = pos <= now.index ? now.index + 1 : now.index
-  return { state: withNext({ ...now, items, index }, countNext(marks, index)), restart: false }
+  let walk = remapWalk(now.shuffle, (r) => (r >= pos ? r + 1 : r), index)
+  if (walk && playedInRound(before.shuffle, at)) {
+    // it played this round already: it goes back among the played ones
+    const order = [...walk.order]
+    order.splice(walk.start, 0, pos)
+    walk = { ...walk, order, at: walk.at + 1 }
+  }
+  const state = withWalk(withNext({ ...now, items, index }, countNext(marks, index)), walk)
+  return { state, restart: false }
+}
+
+function playedInRound(w: Walk | undefined, row: number): boolean {
+  return !!w && w.order.slice(w.start, w.at + 1).includes(row)
 }
 
 // Moves the row at `from` so it ends up at `to`. The current song stays
@@ -146,14 +262,18 @@ export function moveRow(q: QueueState, from: number, to: number): QueueState {
   const marks = order.map((k) => old[k])
   const index = order.indexOf(q.index)
   if (from !== q.index && (to === index + 1 || (marks[to - 1] && marks[to + 1]))) marks[to] = true
-  return withNext({ ...q, items, index }, countNext(marks, index))
+  const place: number[] = []
+  order.forEach((k, j) => (place[k] = j))
+  const walk = remapWalk(q.shuffle, (r) => place[r], index)
+  return withWalk(withNext({ ...q, items, index }, countNext(marks, index)), walk)
 }
 
 // The Clear button: only the current song is left, so what plays goes on.
 // A second Clear takes that one out too.
 export function clearQueue(q: QueueState): QueueState {
   if (q.items.length <= 1) return { items: [], index: 0, from: '' }
-  return withNext({ ...q, items: [q.items[q.index]], index: 0 }, 0)
+  const walk = remapWalk(q.shuffle, (r) => (r === q.index ? 0 : -1), 0)
+  return withWalk(withNext({ ...q, items: [q.items[q.index]], index: 0 }, 0), walk)
 }
 
 // The notice for Play next and Add to queue: one song by its title, more by count.
@@ -192,12 +312,33 @@ export function failNotice(
   return `${why}${then}: "${title}"`
 }
 
-// Previous restarts the song after 3s, otherwise goes one back. Play next
-// songs still wait, now behind the song you left.
-export function back(q: QueueState, pos: number): { state: QueueState; restart: boolean } {
+// Previous restarts the song after 3s, otherwise goes one back: under
+// shuffle, one back along the walk. Play next songs still wait, now behind
+// the song you left.
+export function back(
+  q: QueueState,
+  pos: number,
+  shuffle = false
+): { state: QueueState; restart: boolean } {
+  if (shuffle) return backShuffled(q, pos)
   if (pos > 3 || q.index === 0) return { state: q, restart: true }
   const next = q.next ? q.next + 1 : 0
   return { state: withNext({ ...q, index: q.index - 1 }, next), restart: false }
+}
+
+// The walk keeps the Play next songs right after the song you left. They
+// are no longer right after the current song, so they no longer count as
+// Play next songs: the walk plays them.
+function backShuffled(q: QueueState, pos: number): { state: QueueState; restart: boolean } {
+  const w = q.shuffle
+  if (pos > 3 || !w || w.order[w.at] !== q.index || w.at === 0) return { state: q, restart: true }
+  const n = q.next ?? 0
+  const waiting = Array.from({ length: n }, (_, k) => q.index + 1 + k)
+  const rest = w.order.slice(w.at + 1).filter((r) => !waiting.includes(r))
+  const order = [...w.order.slice(0, w.at + 1), ...waiting, ...rest]
+  const at = w.at - 1
+  const walk = { order, at, start: Math.min(w.start, at) }
+  return { state: withWalk(withNext({ ...q, index: order[at] }, 0), walk), restart: false }
 }
 
 // Drops songs their plugin says are gone. The current song stays current; if
@@ -205,17 +346,21 @@ export function back(q: QueueState, pos: number): { state: QueueState; restart: 
 export function prune(q: QueueState, has: (key: ItemKey) => boolean): QueueState {
   const items: ItemKey[] = []
   const marks: boolean[] = []
+  const place: number[] = []
   const old = nextMarks(q)
   let index = -1
   q.items.forEach((id, i) => {
+    place.push(-1)
     if (!has(id)) return
     if (index < 0 && i >= q.index) index = items.length
+    place[i] = items.length
     items.push(id)
     marks.push(old[i])
   })
   if (items.length === q.items.length) return q
   if (index < 0) index = Math.max(0, items.length - 1)
-  return withNext({ ...q, items, index }, countNext(marks, index))
+  const walk = items.length ? remapWalk(q.shuffle, (r) => place[r], index) : undefined
+  return withWalk(withNext({ ...q, items, index }, countNext(marks, index)), walk)
 }
 
 // `b` starts where `a` ends in the same file (the next track of a disc image),

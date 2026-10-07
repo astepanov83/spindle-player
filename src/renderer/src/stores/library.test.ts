@@ -36,6 +36,7 @@ function lib(...ids: string[]): LibraryData {
     title: `Album ${id}`,
     artist: 'X',
     year: 0,
+    added: 0,
     palette: defaultPalettes,
     cover: '',
     coverLarge: '',
@@ -684,6 +685,7 @@ describe('Music For Programming (tickets 052, 061)', () => {
       title: `Episode ${id}`,
       artist: 'Mixer',
       year: 0,
+      added: 0,
       link: '',
       length: 2,
       songs: [1, 2].map((n) => ({

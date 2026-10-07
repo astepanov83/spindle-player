@@ -1,8 +1,11 @@
 <!-- The title over a list view (Albums, Artists, Playlists, Radio), in the
-     look of the song table's: every view in both templates has one. -->
+     look of the song table's: every view in both templates has one. A choice
+     sits over the count: a few options as segments, more (a sort) as a
+     button that opens a menu. -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import Seg from '../ui/Seg.svelte'
+  import { menu } from '../stores/menu.svelte'
 
   let {
     title,
@@ -21,10 +24,30 @@
     hint?: string
     // a line of links under the title, in place of `hint`
     below?: Snippet
-    // what the list shows ("Album artists | All artists"), over the count it changes
-    choice?: { label: string; value: string; options: { value: string; label: string }[] }
+    // what the list shows ("Album artists | All artists") or how it sorts,
+    // over the count it changes; `menu`: a button with a menu, for many options
+    choice?: {
+      label: string
+      value: string
+      options: { value: string; label: string }[]
+      menu?: { prefix: string }
+    }
     onchoose?: (value: string) => void
   } = $props()
+
+  const picked = $derived(choice?.options.find((o) => o.value === choice.value)?.label ?? '')
+
+  function open(e: MouseEvent): void {
+    if (!choice) return
+    menu.showFor(e, [
+      { heading: choice.label },
+      ...choice.options.map((o) => ({
+        label: o.label,
+        checked: o.value === choice.value,
+        run: () => onchoose?.(o.value)
+      }))
+    ])
+  }
 </script>
 
 <div class="vhead">
@@ -34,7 +57,17 @@
     {#if below}{@render below()}{:else if hint}<div class="page-meta">{hint}</div>{/if}
   </div>
   <div class="side">
-    {#if choice}
+    {#if choice?.menu}
+      <button
+        class="pick chip"
+        aria-haspopup="menu"
+        aria-label="{choice.label}: {picked}"
+        title={choice.label}
+        onclick={open}
+        ><span class="prefix">{choice.menu.prefix}</span>
+        {picked}<span class="arrow">▾</span></button
+      >
+    {:else if choice}
       <Seg
         small
         label={choice.label}
@@ -63,5 +96,20 @@
   }
   .count {
     white-space: nowrap;
+  }
+  .pick {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+  .prefix {
+    color: var(--ink-3);
+  }
+  .arrow {
+    font-size: 10px;
+    margin-left: 2px;
   }
 </style>

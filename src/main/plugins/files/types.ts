@@ -13,6 +13,11 @@ export interface FileEntry {
   // last change time in ms, and size in bytes; a file with both unchanged is not read again
   mtime: number
   size: number
+  // When the scan first found it, in ms (ticket 085): the time the file came
+  // on the disk (its birth time, else its mtime), kept when it is read again
+  // or moves. Albums sort by it as "Recently added". None in an older index
+  // until the next scan.
+  added?: number
   title?: string
   artist?: string
   albumArtist?: string

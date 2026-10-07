@@ -11,12 +11,14 @@ import './assets/controls.css'
 import App from './App.svelte'
 import { startAi } from './ai.svelte'
 import { playlists } from './stores/playlists.svelte'
+import { plays } from './stores/plays.svelte'
 import { queues } from './stores/queues.svelte'
 import { queue } from './stores/queue.svelte'
 import { loadSettings } from './stores/settings.svelte'
 import { dropOn, startPlugins, takesDrops } from './plugins'
 import { orFallback } from './start'
 import { moveQueue, movePlaylists } from '../../shared/id-moves'
+import { movePlays } from '../../shared/plays'
 import { emptyQueues } from '../../shared/saved-queue'
 import { defaultSettings } from '../../shared/settings'
 
@@ -40,10 +42,11 @@ window.addEventListener('drop', (e) => {
 // wait doesn't show. A failed ask shows the app with defaults. Settings and
 // playlists that failed to load are not saved this run, so the defaults can't
 // replace the user's files.
-const [saved, lists, lastQueue, started] = await Promise.all([
+const [saved, lists, lastQueue, counts, started] = await Promise.all([
   orFallback(() => window.settingsApi.load(), defaultSettings(), 'the settings'),
   orFallback(() => window.playlistsApi.load(), [], 'the playlists'),
   orFallback(() => window.playbackApi.loadQueue(), emptyQueues(), 'the queue'),
+  orFallback(() => window.playbackApi.loadPlays(), {}, 'the play counts'),
   startPlugins()
 ])
 loadSettings(saved.value, saved.ok)
@@ -54,17 +57,21 @@ startAi(window.aiApi)
 // the queue doesn't drop those songs.
 let startLists = lists.value
 let startQueue = lastQueue.value
+let startPlays = counts.value
 for (const { plugin, moves } of started.load()) {
   startLists = movePlaylists(startLists, plugin, moves)
   startQueue = moveQueue(startQueue, plugin, moves)
+  startPlays = movePlays(startPlays, plugin, moves)
 }
 playlists.load(startLists, lists.ok)
+plays.load(startPlays)
 // paused where it was; songs their plugin says are gone leave the queue.
 // A live item (a station) comes back picked, paused.
 queues.restore(startQueue)
 started.listen((plugin, moves) => {
   queue.moveIds(plugin, moves)
   playlists.moveIds(plugin, moves)
+  plays.moveIds(plugin, moves)
 })
 
 const app = mount(App, {

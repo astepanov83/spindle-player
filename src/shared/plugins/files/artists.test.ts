@@ -29,6 +29,7 @@ function album(id: string, artist: string, songs: (string | undefined)[] = [unde
     title: `Album ${id}`,
     artist,
     year: 0,
+    added: 0,
     palette: defaultPalettes,
     cover: '',
     coverLarge: '',

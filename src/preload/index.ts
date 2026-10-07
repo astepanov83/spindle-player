@@ -54,6 +54,7 @@ const apis = pluginApis()
 // Asked for early too, so the first paint has the playlists and the last queue.
 const playlists = invoke(PlaylistChannel.load)
 const savedQueue = invoke(PlaybackChannel.loadQueue)
+const plays = invoke(PlaybackChannel.loadPlays)
 
 const playlistsApi: PlaylistsApi = {
   load: () => playlists,
@@ -72,7 +73,9 @@ const playbackApi: PlaybackApi = {
     const handler = (_: Electron.IpcRendererEvent, control: PlayControl): void => listener(control)
     ipcRenderer.on(PlaybackChannel.control, handler)
     return () => ipcRenderer.off(PlaybackChannel.control, handler)
-  }
+  },
+  loadPlays: () => plays,
+  played: (key) => send(PlaybackChannel.played, key)
 }
 
 // Asked for early like the settings; a state pushed before the page listens is kept.

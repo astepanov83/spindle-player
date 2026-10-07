@@ -1,6 +1,8 @@
 import type { AiState } from './ai'
 import type { PluginChannels } from './plugins'
+import type { ItemKey } from './plugins/items'
 import type { Playlist } from './playlists'
+import type { Plays } from './plays'
 import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
 import type { Settings } from './settings'
 
@@ -69,7 +71,10 @@ export const PlaybackChannel = {
   // page to main: what the tray menu shows (ticket 088)
   state: 'playback:state',
   // main to page: a tray menu item was clicked
-  control: 'playback:control'
+  control: 'playback:control',
+  // play counts and when each song was last played (ticket 085)
+  loadPlays: 'plays:load',
+  played: 'plays:played'
 } as const
 
 // What plays, as the player bar shows it, for the tray menu and its tooltip.
@@ -109,6 +114,10 @@ export interface PlaybackApi {
   state(state: PlayState): void
   // Returns a function that stops listening.
   onControl(listener: (control: PlayControl) => void): () => void
+  // every song's plays, as they were when the page loaded
+  loadPlays(): Promise<Plays>
+  // a song was heard long enough to count as played; main adds it
+  played(key: ItemKey): void
 }
 
 export const AiChannel = {
@@ -156,6 +165,8 @@ export interface CoreChannels {
   [PlaybackChannel.playing]: PlaybackApi['playing']
   [PlaybackChannel.log]: PlaybackApi['log']
   [PlaybackChannel.state]: PlaybackApi['state']
+  [PlaybackChannel.loadPlays]: PlaybackApi['loadPlays']
+  [PlaybackChannel.played]: PlaybackApi['played']
   [AiChannel.load]: AiApi['load']
   [AiChannel.act]: AiApi['act']
   [AiChannel.setTask]: AiApi['setTask']

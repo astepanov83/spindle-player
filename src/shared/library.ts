@@ -103,6 +103,8 @@ export interface Album extends Art {
   grouped?: true
   // 0 when unknown
   year: number
+  // when its first song was added to the library, in ms (ticket 085); 0 when unknown
+  added: number
   trackIds: string[]
 }
 

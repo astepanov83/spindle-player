@@ -34,6 +34,7 @@ const album = (id: string, trackIds: string[], more: Partial<Album> = {}): Album
   title: id,
   artist: 'A',
   year: 0,
+  added: 0,
   palette,
   cover: '',
   coverLarge: '',

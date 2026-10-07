@@ -102,6 +102,7 @@ describe('filesSettings and the artist groups task', () => {
           id: 'a',
           title: 'A',
           year: 1976,
+          added: 0,
           palette: defaultPalettes,
           cover: '',
           coverLarge: '',

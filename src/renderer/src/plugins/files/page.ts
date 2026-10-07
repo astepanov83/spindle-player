@@ -32,8 +32,12 @@ import {
 import { libraryProblem, scanLine, settingsText, stoppedText } from './scan-text'
 import { filterAlbums, nextSort, searchSongs, songRows, type SortKey } from '../../library/views'
 import { library } from '../../stores/library.svelte'
-import { settings } from '../../stores/settings.svelte'
+import { plays } from '../../stores/plays.svelte'
+import { setViewSort, settings, viewSort } from '../../stores/settings.svelte'
 import { artistsShownChoices, type ArtistsShown } from '../../../../shared/settings'
+import { playsOf } from '../../library/plays'
+import type { Plays } from '../../../../shared/plays'
+import { albumSorts, albumsView, parseAlbumSort, sortAlbums, type AlbumSort } from './album-sort'
 import { files } from './store.svelte'
 import { notice } from '../../stores/notice.svelte'
 import {
@@ -138,6 +142,7 @@ function songsPage(query: string): Block[] {
     items,
     from: 'Songs',
     meta: 'Library',
+    plays: true,
     get sort() {
       return library.sort
     }
@@ -154,10 +159,36 @@ function albumsPage(page: string, query: string): Block[] {
   const p = parsePage(page)
   if (p?.kind === 'album' && files.findAlbum(p.id))
     return albumBlocks(files.album(p.id), { label: 'All albums', to: at('') })
+  const by = parseAlbumSort(viewSort(albumsView))
   return [
-    listHead('Albums', fmtCount(files.albums.length, 'album', 'albums')),
-    albumTiles(files.albums)
+    {
+      ...listHead('Albums', fmtCount(files.albums.length, 'album', 'albums')),
+      id: albumsView,
+      choice: {
+        id: 'sort',
+        label: 'Sort albums',
+        value: by,
+        options: albumSorts.map((o) => ({ value: o.id, label: o.label })),
+        menu: { prefix: 'Sort:' }
+      }
+    },
+    albumTiles(sortedAlbums(by))
   ]
+}
+
+// The last sort, kept while the albums, the sort and the plays are the same:
+// the page is built again on every scan patch and search key.
+let sorted: { albums: Album[]; by: AlbumSort; plays: Plays; out: Album[] } | undefined
+
+function sortedAlbums(by: AlbumSort): Album[] {
+  const albums = files.albums
+  // only the play sorts read the plays, so only they sort again after a play
+  const counts = by === 'played' || by === 'plays' ? plays.all : undefined
+  const s = sorted
+  if (s && s.albums === albums && s.by === by && (!counts || s.plays === counts)) return s.out
+  const out = sortAlbums(albums, by, (al) => playsOf(trackKeys(al.trackIds), (k) => plays.of(k)))
+  sorted = { albums, by, plays: plays.all, out }
+  return out
 }
 
 // Albums as covers. On an artist's page the line under names the year, and
@@ -723,7 +754,7 @@ export function filesSearch(query: string): SearchGroup[] {
 // A block's button was used (see the blocks above for the targets).
 export function filesAct(target: string, id: string, value?: string): void {
   if (id === 'add-folder') return void window.libraryApi.addFolder()
-  if (id === 'sort' && value) return sortBy(target, value as SortKey)
+  if (id === 'sort' && value) return sortBy(target, value)
   if (id === artistsShownId && artistsShownChoices.includes(value as ArtistsShown))
     return void (settings.artistsShown = value as ArtistsShown)
   const p = parsePage(target)
@@ -734,11 +765,12 @@ export function filesAct(target: string, id: string, value?: string): void {
   if (a) artistAct(a, id, value)
 }
 
-function sortBy(target: string, k: SortKey): void {
+function sortBy(target: string, k: string): void {
   const p = parsePage(target)
-  if (target === songsTarget) library.sort = nextSort(library.sort, k)
-  else if (target === foldersTarget || p?.kind === 'folder') files.sortFolder(k)
-  else if (p?.kind === 'artist') files.sortArtist(k)
+  if (target === albumsView) setViewSort(albumsView, parseAlbumSort(k))
+  else if (target === songsTarget) library.sort = nextSort(library.sort, k as SortKey)
+  else if (target === foldersTarget || p?.kind === 'folder') files.sortFolder(k as SortKey)
+  else if (p?.kind === 'artist') files.sortArtist(k as SortKey)
 }
 
 function artistAct(a: Artist, id: string, value?: string): void {

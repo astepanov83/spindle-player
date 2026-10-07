@@ -17,3 +17,12 @@ export function loadSettings(saved: Settings, ok = true): void {
 export function pluginOn(id: PluginId): boolean {
   return settings.plugins[id]
 }
+
+// A list view's saved sort; the view's plugin checks the value.
+export function viewSort(view: string): string | undefined {
+  return settings.viewSorts[view]
+}
+
+export function setViewSort(view: string, sort: string): void {
+  settings.viewSorts = { ...settings.viewSorts, [view]: sort }
+}

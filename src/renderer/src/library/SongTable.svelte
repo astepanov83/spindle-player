@@ -19,6 +19,8 @@
   import { openSongMenu } from './song-menu'
   import { isRemoveKey, rowAfterRemove } from '../keys'
   import { playlists } from '../stores/playlists.svelte'
+  import { plays as playCounts } from '../stores/plays.svelte'
+  import { lastPlayedText } from './plays'
 
   let {
     title,
@@ -31,7 +33,8 @@
     link,
     head,
     count = true,
-    artist = true
+    artist = true,
+    plays = false
   }: {
     title: string
     meta: string
@@ -50,6 +53,8 @@
     count?: boolean
     // the Artist column; off where every song has the page's artist
     artist?: boolean
+    // Plays and Last played columns (Classic's Songs, ticket 085)
+    plays?: boolean
   } = $props()
 
   const ROW = 54
@@ -57,14 +62,24 @@
     ['t', 'Title'],
     ['a', 'Artist'],
     ['al', 'Album'],
+    ['p', 'Plays'],
+    ['lp', 'Last played'],
     ['d', 'Time']
   ]
+  const playCols: SortKey[] = ['p', 'lp']
   // a sort by a hidden column stays, as in a narrow table
-  const cols = $derived(artist ? allCols : allCols.filter(([k]) => k !== 'a'))
+  const cols = $derived(
+    allCols.filter(([k]) => (artist || k !== 'a') && (plays || !playCols.includes(k)))
+  )
 
   const sort = $derived(given === undefined ? library.sort : given)
   // ties keep the order given
-  const rows = $derived(sortItems(items, sort, infoOf))
+  const rows = $derived(sortItems(items, sort, infoOf, (k) => playCounts.of(k)))
+  // "today" for Last played: new with each play, not ticking past midnight
+  const now = $derived.by(() => {
+    void playCounts.all
+    return Date.now()
+  })
   let list: HTMLDivElement | undefined = $state()
 
   const v = virtualList(() => ({ count: rows.length, scrollEl, list, size: ROW }), 10)
@@ -113,14 +128,14 @@
     <div class="page-meta">{fmtCount(rows.length, 'song', 'songs')}</div>
   {/if}
 </div>
-<div class="tbl" class:noartist={!artist}>
+<div class="tbl" class:noartist={!artist} class:plays>
   <!-- The rows are buttons in a list, not a table, so the heads are sort
        buttons, not column headers; each says how it sorts. -->
   <div class="th song-head" role="group" aria-label="Sort songs">
     <span></span>
     {#each cols as [k, label] (k)}
       {@const on = sort?.k === k}
-      <span class="h-{k}" class:end={k === 'd'}>
+      <span class="h-{k}" class:end={k === 'd' || k === 'p' || k === 'lp'}>
         <button
           class:on
           aria-pressed={on}
@@ -167,6 +182,11 @@
           </span>
           {#if artist}<span class="o ar" title={t.subtitle}>{t.subtitle ?? ''}</span>{/if}
           <span class="o al" title={t.group}>{t.group ?? ''}</span>
+          {#if plays}
+            {@const p = playCounts.of(key)}
+            <span class="pl">{p ? p.n.toLocaleString() : ''}</span>
+            <span class="lp">{p ? lastPlayedText(p.last, now) : ''}</span>
+          {/if}
           <span class="d">{t.length === undefined ? '' : fmtTime(t.length)}</span>
         {:else}
           <span class="tt">
@@ -175,6 +195,7 @@
           </span>
           {#if artist}<span class="o ar"></span>{/if}
           <span class="o al"></span>
+          {#if plays}<span class="pl"></span><span class="lp"></span>{/if}
           <span class="d"></span>
         {/if}
       </button>
@@ -239,7 +260,9 @@
     text-overflow: ellipsis;
   }
   .n,
-  .d {
+  .d,
+  .pl,
+  .lp {
     color: var(--ink-3);
     font-variant-numeric: tabular-nums;
     font-size: var(--text-m);
@@ -273,11 +296,31 @@
     margin-top: 2px;
   }
 
+  /* Classic's Songs: Plays and Last played before Time, dropped first when narrow */
+  .plays .th,
+  .plays .tr {
+    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 68px 112px 56px;
+  }
+  @container (max-width: 760px) {
+    .plays .th,
+    .plays .tr {
+      --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 56px;
+    }
+    .pl,
+    .lp,
+    .h-p,
+    .h-lp {
+      display: none;
+    }
+  }
+
   /* A narrow table drops Album, then Artist, which moves under the title.
      Sorting by a dropped column stays; its header comes back when wider. */
   @container (max-width: 520px) {
     .th,
-    .tr {
+    .tr,
+    .plays .th,
+    .plays .tr {
       --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) 56px;
     }
     .al,
@@ -287,7 +330,9 @@
   }
   @container (max-width: 380px) {
     .th,
-    .tr {
+    .tr,
+    .plays .th,
+    .plays .tr {
       --cols: 44px minmax(0, 1fr) 56px;
       gap: 12px;
     }

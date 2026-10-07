@@ -26,6 +26,7 @@
   import { itemsVersion, navTabs } from './plugins'
   import { library } from './stores/library.svelte'
   import { player } from './stores/player.svelte'
+  import { plays } from './stores/plays.svelte'
   import { queues } from './stores/queues.svelte'
   import { queue } from './stores/queue.svelte'
   import { settings, settingsState } from './stores/settings.svelte'
@@ -69,6 +70,13 @@
   $effect.pre(() => {
     const tabs = navTabs()
     untrack(() => library.setTabs(tabs))
+  })
+
+  // Counts a play once enough of the song was heard (ticket 085). From what
+  // the player shows, not the audio element, so any way a song starts counts.
+  $effect(() => {
+    const at = [queues.item, player.pos, player.duration, queues.songPlaying] as const
+    untrack(() => plays.hear(...at))
   })
 
   // The library scan slows down while a song plays, so the audio gets the disk first.

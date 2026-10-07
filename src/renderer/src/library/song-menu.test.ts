@@ -160,6 +160,7 @@ describe('Go to (ticket 040)', () => {
       title: 'Blue Hours',
       artist,
       year: 0,
+      added: 0,
       palette: defaultPalettes,
       cover: '',
       coverLarge: '',

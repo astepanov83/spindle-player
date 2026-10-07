@@ -1,9 +1,11 @@
 // Search, sort and grid math for the library views. No DOM.
 import type { Album, Track } from '../../../shared/library'
+import type { Play } from '../../../shared/plays'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { ItemInfo } from '../plugins/types'
 
-export type SortKey = 't' | 'a' | 'al' | 'd'
+// title, artist, album, time; plays and last played (ticket 085)
+export type SortKey = 't' | 'a' | 'al' | 'd' | 'p' | 'lp'
 export interface Sort {
   k: SortKey
   dir: 1 | -1
@@ -104,7 +106,10 @@ const keyOf: Record<SortKey, (t: Track) => string | number> = {
   t: (t) => t.title,
   a: (t) => t.artist,
   al: (t) => t.album,
-  d: (t) => t.duration
+  d: (t) => t.duration,
+  // only Classic's Songs shows these, and it sorts items (sortItems)
+  p: () => 0,
+  lp: () => 0
 }
 
 // Ties keep library order (album, then track number), as in the prototype.
@@ -119,15 +124,18 @@ export function sortRows(rows: Track[], sort: Sort | null, order: (t: Track) => 
   })
 }
 
+// Plays and Last played start with the most and the latest.
+const firstDir = (k: SortKey): 1 | -1 => (k === 'p' || k === 'lp' ? -1 : 1)
+
 // Clicking the sorted column again reverses it.
 export function nextSort(sort: Sort, k: SortKey): Sort {
-  return sort.k === k ? { k, dir: sort.dir === 1 ? -1 : 1 } : { k, dir: 1 }
+  return sort.k === k ? { k, dir: sort.dir === 1 ? -1 : 1 } : { k, dir: firstDir(k) }
 }
 
 // Playlists start in their own order. A third click on a column goes back to it.
 export function nextPlaylistSort(sort: Sort | null, k: SortKey): Sort | null {
-  if (!sort || sort.k !== k) return { k, dir: 1 }
-  return sort.dir === 1 ? { k, dir: -1 } : null
+  if (!sort || sort.k !== k) return { k, dir: firstDir(k) }
+  return sort.dir === firstDir(k) ? { k, dir: -sort.dir as 1 | -1 } : null
 }
 
 // Each playlist's sort, by playlist id. One in its own order has no entry.
@@ -171,19 +179,31 @@ export function filterItems(keys: ItemKey[], q: string, info: InfoOf): ItemKey[]
   })
 }
 
-const itemField: Record<SortKey, (i: ItemInfo | undefined) => string | number> = {
-  t: (i) => i?.title ?? '',
-  a: (i) => i?.subtitle ?? '',
-  al: (i) => i?.group ?? '',
-  d: (i) => i?.length ?? 0
-}
+type PlayOf = (key: ItemKey) => Play | undefined
+
+const itemField: Record<SortKey, (key: ItemKey, info: InfoOf, played: PlayOf) => string | number> =
+  {
+    t: (k, info) => info(k)?.title ?? '',
+    a: (k, info) => info(k)?.subtitle ?? '',
+    al: (k, info) => info(k)?.group ?? '',
+    d: (k, info) => info(k)?.length ?? 0,
+    p: (k, _, played) => played(k)?.n ?? 0,
+    lp: (k, _, played) => played(k)?.last ?? 0
+  }
 
 // Ties keep the order given (library order in the library's lists). Each
 // item is asked once, not in every compare: a list can hold 50k songs.
-export function sortItems(keys: ItemKey[], sort: Sort | null, info: InfoOf): ItemKey[] {
+// `played` is asked only for a sort by plays, so a play counted doesn't
+// sort the other tables again.
+export function sortItems(
+  keys: ItemKey[],
+  sort: Sort | null,
+  info: InfoOf,
+  played: PlayOf = () => undefined
+): ItemKey[] {
   if (!sort) return keys
   const field = itemField[sort.k]
-  const rows = keys.map((key, i) => ({ key, i, v: field(info(key)) }))
+  const rows = keys.map((key, i) => ({ key, i, v: field(key, info, played) }))
   rows.sort((x, y) => (x.v > y.v ? 1 : x.v < y.v ? -1 : 0) * sort.dir || x.i - y.i)
   return rows.map((r) => r.key)
 }

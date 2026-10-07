@@ -3,6 +3,9 @@
   import Queue from '../parts/Queue.svelte'
   import { layout } from '../stores/layout.svelte'
 
+  // fill: over all of its host, not 360px at its right side
+  let { fill = false }: { fill?: boolean } = $props()
+
   let el: HTMLDivElement | undefined = $state()
 
   // Closing with focus inside makes it inert and drops the focus, so the
@@ -15,7 +18,13 @@
   })
 </script>
 
-<div class="drawer" bind:this={el} class:open={layout.showQueue} inert={!layout.showQueue}>
+<div
+  class="drawer"
+  bind:this={el}
+  class:open={layout.showQueue}
+  class:fill
+  inert={!layout.showQueue}
+>
   <div class="part part-queue"><Queue header close /></div>
 </div>
 
@@ -40,6 +49,9 @@
     transition: 0.25s;
     display: flex;
     flex-direction: column;
+  }
+  .drawer.fill {
+    width: 100%;
   }
   .drawer.open {
     transform: none;

@@ -41,8 +41,19 @@
       return
     }
     const tabs = document.querySelector('[data-notice-under]')
-    const y = tabs ? tabs.getBoundingClientRect().bottom - a.top + 8 : 46
-    place = { x: a.width / 2, y, bottom: false, width: a.width }
+    if (!tabs) {
+      place = { x: a.width / 2, y: 46, bottom: false, width: a.width }
+      return
+    }
+    // in the middle of what holds the tabs: the right column in Focus's wide layout
+    const r = tabs.getBoundingClientRect()
+    const box = (tabs.parentElement ?? tabs).getBoundingClientRect()
+    place = {
+      x: box.left - a.left + box.width / 2,
+      y: r.bottom - a.top + 8,
+      bottom: false,
+      width: box.width
+    }
   }
 
   $effect(() => {

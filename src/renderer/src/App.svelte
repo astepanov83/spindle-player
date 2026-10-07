@@ -150,9 +150,9 @@
   }
 
   // A drawer that turns back into a Column hands its focus on to the Column.
-  function resized(width: number): void {
+  function resized(): void {
     const at = layout.queueMode === 'drawer' ? drawerFocus() : null
-    layout.resized(width)
+    layout.resized(window.innerWidth, window.innerHeight)
     if (at !== null && layout.queueMode === 'col') focusColumnQueue(at)
   }
 
@@ -166,13 +166,13 @@
   }
 </script>
 
-<!-- the last position goes to main before the window closes; the width picks
-     how a queue Column is drawn (layout/narrow.ts) -->
+<!-- the last position goes to main before the window closes; the size picks
+     how a queue Column is drawn (layout/narrow.ts) and the wide layout (layout/wide.ts) -->
 <svelte:window
   {onkeydown}
   onmouseup={onSideButton}
   onpagehide={() => queue.savePos()}
-  bind:innerWidth={null, resized}
+  onresize={resized}
 />
 
 <div

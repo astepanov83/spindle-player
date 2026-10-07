@@ -106,7 +106,8 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 10px 22px 18px;
+    /* full width for the background, the controls themselves --content-max at most */
+    padding: 10px max(22px, (100% - var(--content-max, 100%)) / 2) 18px;
   }
   .times {
     display: flex;

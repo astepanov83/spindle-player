@@ -241,6 +241,35 @@ export function yourKeys(f: ArtistsFile): Set<string> {
   return out
 }
 
+// What a run changed, for its status line: of these tag keys, the ones the
+// AI now splits into several artists, and the ones it shows under another
+// name (a spelling joined to an artist). A key the AI links to its own
+// spelling, or no longer links, shows as written and is not counted.
+export function aiFixCounts(
+  f: ArtistsFile,
+  keys: Iterable<string>,
+  spelling: Spelling
+): { joined: number; split: number } {
+  const names = new Map<string, string[]>()
+  for (const a of f.artists)
+    for (const l of a.tags)
+      if (l.by === 'ai') {
+        const n = names.get(keyOf(l))
+        if (n) n.push(a.name)
+        else names.set(keyOf(l), [a.name])
+      }
+  const yours = yourKeys(f)
+  let joined = 0
+  let split = 0
+  for (const k of new Set(keys)) {
+    const n = names.get(k)
+    if (!n || yours.has(k)) continue
+    if (n.length > 1) split++
+    else if (n[0] !== (spelling(k) ?? k)) joined++
+  }
+  return { joined, split }
+}
+
 // The keys of tags with a link by the AI, to count what a run grouped.
 export function aiKeys(f: ArtistsFile): Set<string> {
   const out = new Set<string>()
@@ -295,7 +324,14 @@ const hasYours = (f: ArtistsFile, key: string): boolean =>
 // new artist goes next to the one named before it, so a split keeps the
 // order it was typed in where it can. rename: the names were just typed, so
 // their spelling wins over the one saved.
-function linkYours(f: ArtistsFile, tag: string, names: string[], rename: boolean): void {
+// by: whose links they are; 'ai' only to put back the AI's links as they were.
+function linkYours(
+  f: ArtistsFile,
+  tag: string,
+  names: string[],
+  rename: boolean,
+  by: By = 'you'
+): void {
   let prev: ArtistEntry | undefined
   names.forEach((name, i) => {
     let a = byName(f, artistKey(name))
@@ -305,7 +341,7 @@ function linkYours(f: ArtistsFile, tag: string, names: string[], rename: boolean
         a.nameBy = 'you'
       }
     } else {
-      a = { name, nameBy: 'you', tags: [] }
+      a = { name, nameBy: by, tags: [] }
       const next = names
         .slice(i + 1)
         .map((n) => byName(f, artistKey(n)))
@@ -314,18 +350,20 @@ function linkYours(f: ArtistsFile, tag: string, names: string[], rename: boolean
       if (at < 0) f.artists.push(a)
       else f.artists.splice(at, 0, a)
     }
-    addLink(a, tag, 'you')
+    addLink(a, tag, by)
     prev = a
   })
 }
 
 const snapshot = (f: ArtistsFile): string => JSON.stringify(f.artists)
 
-// The page's changes (Edit artist, "Use tag") as links by you. Each tag gets
-// its names, and its old links go, the AI's too. null: the tag as its own
+// The page's changes (Edit artist, "Keep separate") as links by you. Each tag
+// gets its names, and its old links go, the AI's too. null: the tag as its own
 // name, so the AI leaves it alone. Names are what the user typed, so their
 // spelling wins over the saved one (one artist per name key, so a tag pinned
-// with "Use tag" follows a new spelling of its name). True when something changed.
+// with "Keep separate" follows a new spelling of its name). { ai }: the Undo
+// of "Keep separate" on an AI link, which puts the AI's links back and keeps
+// the names as saved. True when something changed.
 export function applyChanges(f: ArtistsFile, c: ArtistChanges, spelling: Spelling): boolean {
   const before = snapshot(f)
   for (const [key, names] of Object.entries(c)) {
@@ -334,6 +372,10 @@ export function applyChanges(f: ArtistsFile, c: ArtistChanges, spelling: Spellin
     unlink(f, key)
     // an artist left with no links must not lend its spelling to the new ones
     dropEmpty(f)
+    if (names && !Array.isArray(names)) {
+      linkYours(f, tag, cleanNames(names.ai), false, 'ai')
+      continue
+    }
     const own = names === null || (names.length === 1 && names[0] === tag)
     linkYours(f, tag, own ? [tag] : cleanNames(names), true)
   }

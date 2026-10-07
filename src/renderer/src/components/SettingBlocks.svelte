@@ -2,6 +2,7 @@
      The blocks sit in the parent's column, so its gap spaces them. An `ai`
      block is a box with its own blocks drawn by this same view. -->
 <script lang="ts">
+  import { tick } from 'svelte'
   import type { PluginId } from '../../../shared/plugins'
   import { folderParts } from '../ui/path-ends'
   import { actOnSetting } from '../plugins'
@@ -56,7 +57,8 @@
     return parts.map((p) => `${p.kind} ${(seen[p.kind] = (seen[p.kind] ?? -1) + 1)}`)
   })
 
-  // The row that is asked to confirm its removal, one at a time.
+  // The row that is asked to confirm its removal, or the button asked to
+  // confirm its press, one at a time.
   let asking: string | null = $state(null)
 
   // the AI blocks' ids say so; they go to the AI service, not to the plugin
@@ -85,6 +87,33 @@
     delete secrets[id]
     changing[id] = false
     act(id, 'set', text)
+  }
+
+  // a list's row key has its list id first, so this can't be one
+  const buttonKey = (id: string): string => `\n${id}`
+
+  function focusNow(node: HTMLElement): void {
+    node.focus()
+  }
+
+  // back to the button once it is drawn again
+  async function stopAsking(id: string): Promise<void> {
+    asking = null
+    await tick()
+    document.getElementById(`${uid}-${id}-btn`)?.focus()
+  }
+
+  // Escape cancels the question and must not close Settings too
+  function askKey(e: KeyboardEvent, id: string): void {
+    if (e.key !== 'Escape') return
+    e.preventDefault()
+    e.stopPropagation()
+    void stopAsking(id)
+  }
+
+  function goOn(id: string): void {
+    act(id, 'press')
+    void stopAsking(id)
   }
 
   function remove(list: string, row: string): void {
@@ -152,9 +181,29 @@
   {:else if b.kind === 'buttons'}
     <div class="acts">
       {#each b.buttons as x (x.id)}
-        <button class="btn" disabled={x.disabled} onclick={() => act(x.id, 'press')}
-          >{x.label}</button
-        >
+        {#if asking === buttonKey(x.id) && x.confirm && !x.disabled}
+          <div class="ask" role="group" aria-labelledby="{uid}-{x.id}-ask">
+            <p class="hint" id="{uid}-{x.id}-ask">{x.confirm}</p>
+            <button class="sm pill" onkeydown={(e) => askKey(e, x.id)} onclick={() => goOn(x.id)}
+              >Go on</button
+            >
+            <!-- focus starts on Cancel, so a second Enter can't run it unread -->
+            <button
+              class="sm pill ghost"
+              use:focusNow
+              onkeydown={(e) => askKey(e, x.id)}
+              onclick={() => stopAsking(x.id)}>Cancel</button
+            >
+          </div>
+        {:else}
+          <button
+            class="btn"
+            id="{uid}-{x.id}-btn"
+            disabled={x.disabled}
+            onclick={() => (x.confirm ? (asking = buttonKey(x.id)) : act(x.id, 'press'))}
+            >{x.label}</button
+          >
+        {/if}
       {/each}
     </div>
   {:else if b.kind === 'text'}
@@ -317,7 +366,19 @@
   }
   .acts {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
+  }
+  /* the question takes the row, its buttons go under it when narrow */
+  .ask {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+  }
+  .ask .hint {
+    flex: 1 1 100%;
+    color: var(--ink);
   }
   .btn {
     font: 500 var(--text-s) var(--ui);

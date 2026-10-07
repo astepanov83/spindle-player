@@ -1,6 +1,7 @@
 // The `ai` block of Settings as plain blocks (spec "Settings"): the task's
-// switch, and only while it is on, the service choice, the chosen provider's
-// blocks and what the task sends. Kept as data so it is tested without a page.
+// switch, and only while it is on, the service choice, what the chosen
+// service is (its about line, which says what may cost money), its blocks and
+// what the task sends. Kept as data so it is tested without a page.
 // Each id says where its act goes, so one list of blocks serves all views.
 import type { AiState } from '../../shared/ai'
 import type { SettingBlock } from '../../shared/setting-blocks'
@@ -40,6 +41,8 @@ export function aiBlocks(task: string, state: AiState | undefined): SettingBlock
       value: state.provider,
       options: state.providers.map((p) => ({ id: p.id, label: p.name }))
     })
+  const about = state.providers.find((p) => p.id === state.provider)?.about
+  if (about) out.push({ kind: 'status', text: about })
   for (const b of state.blocks) out.push('id' in b ? { ...b, id: aiId('block', task, b.id) } : b)
   if (t.info.sends) out.push({ kind: 'status', text: t.info.sends })
   return out

@@ -6,6 +6,7 @@
   import { actOnPage, typedIn, widerTabs } from '../plugins'
   import type { Block, EmptyBlock, NavKind } from '../plugins/types'
   import { library } from '../stores/library.svelte'
+  import Changes from './Changes.svelte'
   import Head from './Head.svelte'
   import Nothing from './Nothing.svelte'
   import Results from './Results.svelte'
@@ -115,6 +116,8 @@
         <p class="note">{b.text}</p>
         {#if hasButtons(b)}<div class="acts note-acts">{@render emptyButtons(b)}</div>{/if}
       {/if}
+    {:else if b.kind === 'changes'}
+      <Changes block={b} {tab} {plugin} />
     {:else if b.kind === 'text'}
       <h3 class="part section-label" class:over-rows={overRows(i)} class:top={underHead(i)}>
         {b.text}

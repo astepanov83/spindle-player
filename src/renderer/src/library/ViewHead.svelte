@@ -1,11 +1,14 @@
 <!-- The title over a list view (Albums, Artists, Playlists, Radio), in the
      look of the song table's: every view in both templates has one. -->
 <script lang="ts">
+  import type { Snippet } from 'svelte'
+
   let {
     title,
     meta = 'Library',
     count,
-    hint
+    hint,
+    below
   }: {
     title: string
     meta?: string
@@ -13,6 +16,8 @@
     count: string
     // a line under the title
     hint?: string
+    // a line of links under the title, in place of `hint`
+    below?: Snippet
   } = $props()
 </script>
 
@@ -20,7 +25,7 @@
   <div>
     <div class="page-meta">{meta}</div>
     <h2 class="page-title">{title}</h2>
-    {#if hint}<div class="page-meta">{hint}</div>{/if}
+    {#if below}{@render below()}{:else if hint}<div class="page-meta">{hint}</div>{/if}
   </div>
   <div class="page-meta count">{count}</div>
 </div>

@@ -12,6 +12,7 @@ import {
   removedAt,
   removeItems,
   rename,
+  reorderItems,
   type Playlist
 } from './playlists'
 import type { ItemKey } from './plugins/items'
@@ -205,5 +206,29 @@ describe('isKnownPlaylistsFile', () => {
       { version: 2, playlists: [{ ...pl('a', 'Mix'), smart: true }] }
     ])
       expect(isKnownPlaylistsFile(raw)).toBe(false)
+  })
+})
+
+describe('reorderItems (ticket 089)', () => {
+  const k = (...n: number[]): ItemKey[] => n.map((i) => `files:t${i}` as ItemKey)
+  const list = [pl('a', 'Mix', k(1, 2, 3, 4, 5)), pl('b', 'Other', k(1))]
+
+  it('puts the songs in the new order', () => {
+    const out = reorderItems(list, 'a', k(3, 1, 2, 4, 5))
+    expect(out[0].items).toEqual(k(3, 1, 2, 4, 5))
+    expect(out[1]).toBe(list[1])
+  })
+
+  it('keeps songs not shown at their places', () => {
+    // 2 and 4 are not in the library now: the shown songs move around them
+    const out = reorderItems(list, 'a', k(5, 1, 3))
+    expect(out[0].items).toEqual(k(5, 2, 1, 4, 3))
+  })
+
+  it('changes nothing for the same order, other songs, or a playlist that is gone', () => {
+    expect(reorderItems(list, 'a', k(1, 2, 3, 4, 5))).toBe(list)
+    expect(reorderItems(list, 'a', k(2, 1, 9))).toBe(list)
+    expect(reorderItems(list, 'a', k(2, 2, 1))).toBe(list)
+    expect(reorderItems(list, 'x', k(1))).toBe(list)
   })
 })

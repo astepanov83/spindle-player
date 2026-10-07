@@ -896,6 +896,47 @@ describe('several rows at once (ticket 086)', () => {
   })
 })
 
+describe('songs dropped on the queue (ticket 089)', () => {
+  it('go in at the drop place, with nothing reloaded and the notice for adding', () => {
+    queue.insert(k('b0', 'b1'), 2)
+    expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:b0', 'files:b1', 'files:a2'])
+    expect(playing()).toBe('a0')
+    expect(fake.calls).toEqual([])
+    expect(notice.text).toBe('Added 2 songs to the queue')
+  })
+
+  it('go after the current song at the earliest, as Play next songs right after it', () => {
+    queue.jump(1)
+    fake.reset()
+    queue.insert(k('b0'), 0)
+    expect(queue.items).toEqual(['files:a0', 'files:a1', 'files:b0', 'files:a2'])
+    expect(playing()).toBe('a1')
+    expect(saveQueue).toHaveBeenLastCalledWith(expect.objectContaining({ index: 1, next: 1 }))
+  })
+
+  it('fill an empty queue, the first loaded paused and named where they came from', () => {
+    queue.clear()
+    queue.clear()
+    fake.reset()
+    queue.insert(k('b0', 'b1'), 0, 'Album b', queueLink('album', 'b'))
+    expect(queue.items).toEqual(['files:b0', 'files:b1'])
+    expect(queue.from).toBe('Album b')
+    expect(queue.link).toEqual(queueLink('album', 'b'))
+    expect(fake.calls).toEqual(['load media/b0'])
+    expect(player.playing).toBe(false)
+  })
+
+  it('after the end, move on to the first song dropped, paused', () => {
+    queue.jump(2)
+    fake.on.ended!()
+    fake.reset()
+    queue.insert(k('b0'), 3)
+    expect(playing()).toBe('b0')
+    expect(queue.ended).toBe(false)
+    expect(fake.calls).toEqual(['load media/b0'])
+  })
+})
+
 describe('the shuffle walk (ticket 076)', () => {
   beforeEach(() => {
     setSongs(['s', 6])

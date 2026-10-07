@@ -8,19 +8,21 @@ import {
   dropSlotAt,
   firstShown,
   followsSong,
+  insertLineTop,
+  insertSlotAt,
   keepTop,
   lineAt,
   lineCount,
   lineOf,
   lineSize,
   lineTop,
-  movedTo,
   showsCover,
   startLine,
   type Line,
   type Shape
 } from './up-next'
 import { moveOrder } from './logic'
+import { movedTo } from '../ui/drag-rows'
 
 const lines = (s: Shape): Line[] => Array.from({ length: lineCount(s) }, (_, i) => lineAt(i, s))
 const row = (index: number): Line => ({ kind: 'row', index })
@@ -134,6 +136,35 @@ describe('dragging several rows (ticket 086)', () => {
     expect([u.now, u.row(2), u.next]).toEqual([HEAD + ROW, 2 * HEAD + ROW, 2 * HEAD + 2 * ROW])
     const below = 3 * HEAD + 2 * ROW
     expect([0, 4, 3, 5].map((i) => u.row(i))).toEqual([0, 1, 2, 3].map((k) => below + k * ROW))
+  })
+})
+
+describe('songs dragged in (ticket 089)', () => {
+  // Played folded, Now playing (song 2), Up next with songs 3 and 4
+  const s = { count: 5, current: 2, open: false }
+
+  it('go after the current song, never among the played ones', () => {
+    expect(insertSlotAt(0, s)).toBe(3)
+    expect(insertSlotAt(HEAD + HEAD + ROW, s)).toBe(3)
+    expect(insertSlotAt(3 * HEAD + 2 * ROW, s)).toBe(4)
+    expect(insertSlotAt(3 * HEAD + 3 * ROW - 2, s)).toBe(5)
+    expect(insertSlotAt(5000, s)).toBe(5)
+    expect(insertSlotAt(5000, { count: 5, current: 2, open: true })).toBe(5)
+    expect(insertSlotAt(0, { count: 5, current: 2, open: true })).toBe(3)
+  })
+
+  it('fill an empty queue', () => {
+    expect(insertSlotAt(40, { count: 0, current: 0, open: false })).toBe(0)
+    expect(insertLineTop(0, { count: 0, current: 0, open: false })).toBe(0)
+  })
+
+  it('show a line under the current song, above a row, or under the last row', () => {
+    // under the current song: the top of the Up next heading
+    expect(insertLineTop(3, s)).toBe(2 * HEAD + ROW)
+    expect(insertLineTop(4, s)).toBe(3 * HEAD + 2 * ROW)
+    expect(insertLineTop(5, s)).toBe(3 * HEAD + 3 * ROW)
+    // the current song last: under it
+    expect(insertLineTop(3, { count: 3, current: 2, open: false })).toBe(2 * HEAD + ROW)
   })
 })
 

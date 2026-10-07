@@ -8,6 +8,7 @@ import {
   failNotice,
   back,
   follows,
+  insertAt,
   insertNext,
   jump,
   moveOrder,
@@ -284,6 +285,65 @@ describe('append', () => {
       from: 'Mix',
       link
     })
+  })
+})
+
+describe('insertAt (ticket 089)', () => {
+  const abc: ItemKey[] = ['files:a', 'files:b', 'files:c', 'files:d']
+
+  it('puts the songs in at the gap, keeping the current song', () => {
+    const s = insertAt(qn(1, 0, abc), ['files:x', 'files:y'], 3)
+    expect(s.items).toEqual(['files:a', 'files:b', 'files:c', 'files:x', 'files:y', 'files:d'])
+    expect(s.index).toBe(1)
+    expect(s.next).toBeUndefined()
+    expect(insertAt(qn(1, 0, abc), ['files:x'], 4).items).toEqual([...abc, 'files:x'])
+    expect(insertAt(qn(1, 0, abc), ['files:x'], 99).items).toEqual([...abc, 'files:x'])
+  })
+
+  it('never puts them before the current song or among the played ones', () => {
+    for (const slot of [0, 1, 2]) {
+      const s = insertAt(qn(1, 0, abc), ['files:x'], slot)
+      expect(s.items).toEqual(['files:a', 'files:b', 'files:x', 'files:c', 'files:d'])
+      expect(s.index).toBe(1)
+    }
+  })
+
+  it('joins the Play next songs right after the current song or among them', () => {
+    // c and d are Play next songs
+    const s = qn(1, 2, [...abc, 'files:e'])
+    expect(insertAt(s, ['files:x'], 2).next).toBe(3)
+    expect(insertAt(s, ['files:x'], 3).next).toBe(3)
+    // after the last of them: a plain song, and they stay two
+    expect(insertAt(s, ['files:x'], 4).next).toBe(2)
+    expect(insertAt(qn(1, 0, abc), ['files:x', 'files:y'], 2).next).toBe(2)
+  })
+
+  it('fills an empty queue, with the first song current and where it came from', () => {
+    const link = queueLink('album', 'blue')
+    expect(insertAt({ items: [], index: 0, from: '' }, ['files:x'], 5, 'Blue', link)).toEqual({
+      items: ['files:x'],
+      index: 0,
+      from: 'Blue',
+      link
+    })
+  })
+
+  it('does nothing with no songs', () => {
+    const s = q(1)
+    expect(insertAt(s, [], 2)).toBe(s)
+  })
+
+  it('keeps the shuffle order of the rows there, and new songs wait in this round', () => {
+    const s: QueueState = {
+      items: abc,
+      index: 1,
+      from: 'A',
+      shuffle: { order: [3, 1, 0, 2], at: 1, start: 0 }
+    }
+    const out = insertAt(s, ['files:x'], 2)
+    // d played, b plays, a and c wait; x has no place until the next step
+    expect(out.shuffle).toEqual({ order: [4, 1, 0, 3], at: 1, start: 0 })
+    expect(out.items[out.shuffle!.order[0]]).toBe('files:d')
   })
 })
 

@@ -16,6 +16,7 @@ import {
   clearQueue,
   failNotice,
   follows,
+  insertAt,
   insertNext,
   jump,
   moveOrder,
@@ -329,6 +330,14 @@ class TrackQueue {
   append(keys: ItemKey[], from = '', link?: QueueLink): void {
     const s = append(this.#state(), keys, from, link)
     this.#add(s, this.items.length, queueNotice('add', keys, this.#title(keys)))
+  }
+
+  // Songs dropped on the queue part (ticket 089): in at the gap before row
+  // `slot`, after the current song at the earliest.
+  insert(keys: ItemKey[], slot: number, from = '', link?: QueueLink): void {
+    const s = insertAt(this.#state(), keys, slot, from, link)
+    const at = Math.max(this.index + 1, Math.min(slot, this.items.length))
+    this.#add(s, at, queueNotice('add', keys, this.#title(keys)))
   }
 
   // `at` is where the first added song lands. A queue that ran out moves on

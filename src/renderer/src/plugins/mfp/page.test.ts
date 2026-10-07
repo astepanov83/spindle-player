@@ -162,8 +162,8 @@ describe('an episode', () => {
       'Play next, add to the queue or a playlist'
     ])
     const play = head(h).buttons![0]
-    expect('play' in play && [play.pauses, play.songs(), play.link]).toEqual([
-      true,
+    expect('play' in play && [play.play, play.songs(), play.link]).toEqual([
+      'all',
       ['mfp:b0', 'mfp:b1', 'mfp:b2'],
       { plugin: 'mfp', page: 'episode/b' }
     ])

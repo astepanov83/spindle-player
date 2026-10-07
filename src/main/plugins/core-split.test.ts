@@ -46,6 +46,7 @@ const coreTests = [
   'src/main/plugins/core-split.test.ts',
   'src/main/plugins/list.test.ts',
   'src/main/stores.test.ts',
+  'src/renderer/src/blocks/page-play.test.ts',
   'src/renderer/src/blocks/play.test.ts',
   'src/renderer/src/library/song-menu.test.ts',
   'src/renderer/src/library/views.test.ts',

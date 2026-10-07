@@ -63,7 +63,8 @@ export interface Piece {
 }
 
 // A button in a head: Play or Shuffle (the core plays the songs), a core menu
-// for the songs, or one the plugin acts on.
+// for the songs, or one the plugin acts on. Play plays in order and is Pause
+// while the queue plays these songs from this link; Shuffle plays shuffled.
 export type HeadButton =
   | {
       play: 'all' | 'shuffle'
@@ -74,8 +75,6 @@ export type HeadButton =
       link?: QueueLink
       // the filled one
       primary?: boolean
-      // Pause while the queue plays these songs from this link (an album's)
-      pauses?: boolean
       disabled?: boolean
     }
   | {

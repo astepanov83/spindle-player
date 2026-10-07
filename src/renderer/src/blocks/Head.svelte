@@ -13,10 +13,7 @@
   import Icon from '../ui/Icon.svelte'
   import { actOnPage, openFrom, openPage } from '../plugins'
   import type { HeadBlock, HeadButton, NavKind } from '../plugins/types'
-  import { player } from '../stores/player.svelte'
-  import { queues } from '../stores/queues.svelte'
-  import { queue } from '../stores/queue.svelte'
-  import { playOrPause } from './play'
+  import { playPage, playState as pagePlayState } from './page-play'
 
   let {
     block: b,
@@ -40,26 +37,8 @@
 
   type Play = Extract<HeadButton, { play: string }>
 
-  function playState(p: Play): 'play' | 'pause' | 'resume' {
-    if (!p.pauses) return 'play'
-    const songs = p.songs()
-    return playOrPause(p.link, (k) => songs.includes(k), {
-      link: queue.link,
-      current: queue.current,
-      ended: queue.ended,
-      queuePlays: queues.active === 'track',
-      sounding: queues.wantsSound
-    })
-  }
-
-  function play(p: Play): void {
-    if (playState(p) !== 'play') return queues.togglePlay()
-    const ids = p.songs()
-    if (!ids.length) return
-    const shuffle = p.play === 'shuffle'
-    if (shuffle) player.shuffle = true
-    queue.playList(ids, shuffle ? Math.floor(Math.random() * ids.length) : 0, p.from, p.link)
-  }
+  const playState = (p: Play): 'play' | 'pause' | 'resume' =>
+    p.play === 'all' ? pagePlayState(p.link, p.songs) : 'play'
 
   // the names in the editor: one renames, two or more split
   let draft: string[] = $state([])
@@ -138,9 +117,10 @@
           <button
             class="pill"
             class:ghost={!btn.primary}
-            class:play={btn.pauses}
+            class:play={btn.play === 'all'}
             disabled={btn.disabled}
-            onclick={() => play(btn)}>{playState(btn) === 'pause' ? 'Pause' : btn.label}</button
+            onclick={() => playPage(btn.play, btn.songs, btn.from, btn.link)}
+            >{playState(btn) === 'pause' ? 'Pause' : btn.label}</button
           >
         {:else if 'menu' in btn && btn.menu === 'songs'}
           <button

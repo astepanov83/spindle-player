@@ -27,7 +27,8 @@ import {
   removeRow,
   undoRemove,
   type NextOptions,
-  type QueueState
+  type QueueState,
+  type Walk
 } from '../queue/logic'
 import { infoOf, itemInfo, playItem } from '../plugins'
 import type { ItemAnswer, ItemInfo, Playable } from '../plugins/types'
@@ -61,6 +62,8 @@ class TrackQueue {
   link: QueueLink | undefined = $state.raw()
   // Play next songs right after the current one (see queue/logic.ts)
   #next = 0
+  // the shuffle walk (queue/logic.ts), only while shuffle is on
+  #walk: Walk | undefined
   // Goes up each time a song is loaded, so the queue scrolls to a new song
   // but not when rows only move around it.
   starts = $state(0)
@@ -173,6 +176,8 @@ class TrackQueue {
     this.from = s.from
     this.link = s.link
     this.#next = s.next ?? 0
+    // shuffle went off: it starts a new walk when it goes on again
+    this.#walk = player.shuffle ? s.shuffle : undefined
     if (listChanged) {
       this.#saveList()
       // any other change to the list: Undo would put back an older one
@@ -367,7 +372,8 @@ class TrackQueue {
     const key = q.items[i]
     const pos = player.pos
     const wasPlaying = this.#sounding()
-    const goesOn = wasPlaying && s.index === i
+    // the one before is not the next song, except under shuffle, which never runs out
+    const goesOn = wasPlaying && (s.index === i || player.shuffle)
     this.#set(s)
     if (wasCurrent) this.#start(goesOn)
     this.#offerUndo(removedNotice(this.#title([key])), {
@@ -516,7 +522,7 @@ class TrackQueue {
   prev(): void {
     if (!this.items.length) return
     const fromRadio = this.#claim()
-    const r = back(this.#state(), player.pos)
+    const r = back(this.#state(), player.pos, player.shuffle)
     if (r.restart && fromRadio) this.#start()
     else if (r.restart) {
       player.pos = 0
@@ -525,7 +531,12 @@ class TrackQueue {
     } else {
       this.#fails = 0
       // songs whose plugin is off are passed over going back too
-      this.#set(passOver(r.state, isOff, (x) => (x.index > 0 ? back(x, 0).state : x)))
+      this.#set(
+        passOver(r.state, isOff, (x) => {
+          const b = back(x, 0, player.shuffle)
+          return b.restart ? x : b.state
+        })
+      )
       this.#start()
     }
   }
@@ -602,6 +613,7 @@ class TrackQueue {
     this.from = s.from
     this.link = s.link
     this.#next = s.next ?? 0
+    this.#walk = undefined
     // a different current song means the old one is gone: start it from the top
     const same = s.items[s.index] === saved.items[saved.index]
     this.#start(false, same ? saved.pos : 0)
@@ -611,12 +623,15 @@ class TrackQueue {
     const s: QueueState = { items: this.items, index: this.index, from: this.from }
     if (this.link) s.link = this.link
     if (this.#next) s.next = this.#next
+    if (this.#walk && player.shuffle) s.shuffle = this.#walk
     return s
   }
 
-  // the position follows right after, from #start
+  // the position follows right after, from #start. The walk is not saved.
   #saveList(): void {
-    window.playbackApi.saveQueue({ ...this.#state(), pos: player.pos })
+    const s = this.#state()
+    delete s.shuffle
+    window.playbackApi.saveQueue({ ...s, pos: player.pos })
   }
 
   // The current song and position, without the list.

@@ -823,6 +823,91 @@ describe('undo of Clear and Remove (ticket 071)', () => {
   })
 })
 
+describe('the shuffle walk (ticket 076)', () => {
+  beforeEach(() => {
+    setSongs(['s', 6])
+    player.shuffle = true
+    queue.playList(albums.s, 0, 'S')
+    fake.reset()
+  })
+
+  // the songs Next plays
+  function nexts(n: number): string[] {
+    const out: string[] = []
+    for (let i = 0; i < n; i++) {
+      queue.next()
+      out.push(playing()!)
+    }
+    return out
+  }
+
+  it('Next plays every song once before any repeats', () => {
+    const played = ['s0', ...nexts(5)]
+    expect(new Set(played).size).toBe(6)
+    expect(new Set(nexts(6)).size).toBe(6)
+  })
+
+  it('Previous goes back along the songs played', () => {
+    const played = nexts(3)
+    queue.prev()
+    expect(playing()).toBe(played[1])
+    queue.prev()
+    queue.prev()
+    expect(playing()).toBe('s0')
+    // back at the start, Previous plays it again
+    fake.reset()
+    queue.prev()
+    expect(playing()).toBe('s0')
+    expect(fake.calls).toEqual(['seek 0', 'play'])
+  })
+
+  it('the walk is not saved in queue.json', () => {
+    nexts(2)
+    queue.append(k('b0'))
+    expect(saveQueue.mock.calls.at(-1)![0]).not.toHaveProperty('shuffle')
+  })
+
+  it('shuffle off and on starts a new walk', () => {
+    nexts(2)
+    player.shuffle = false
+    queue.jump(queue.index === 3 ? 4 : 3)
+    player.shuffle = true
+    const at = playing()
+    fake.reset()
+    // nothing to go back to: it plays again
+    queue.prev()
+    expect(playing()).toBe(at)
+    expect(fake.calls).toEqual(['seek 0', 'play'])
+  })
+
+  it('removing the song playing plays on with a song not played yet', () => {
+    const played = ['s0', ...nexts(2)]
+    queue.remove(queue.index)
+    expect(player.playing).toBe(true)
+    expect(played).not.toContain(playing())
+  })
+
+  it('Undo of Clear brings back the walk too', () => {
+    const played = nexts(3)
+    queue.clear()
+    notice.press()
+    expect(queue.items).toEqual(albums.s)
+    queue.prev()
+    expect(playing()).toBe(played[1])
+    const rest = nexts(3)
+    expect(new Set(['s0', ...played, ...rest]).size).toBe(6)
+  })
+
+  it('Undo of Remove keeps a played song played', () => {
+    const played = nexts(2)
+    queue.remove(queue.items.indexOf(`files:${played[0]}` as ItemKey))
+    notice.press()
+    expect(queue.items).toEqual(albums.s)
+    const rest = nexts(3)
+    expect(new Set(['s0', ...played, ...rest]).size).toBe(6)
+  })
+})
+
 describe('songs of a plugin that is off (ticket 056)', () => {
   beforeEach(() => {
     setSongs(['a', 2], ['e', 2, 'mfp'])

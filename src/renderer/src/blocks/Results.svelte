@@ -2,6 +2,7 @@
      (tickets 039, 059), group after group, each cut short with "Show all".
      Songs play with every song of their group as the queue. -->
 <script lang="ts">
+  import SearchButtons from './SearchButtons.svelte'
   import Tiles from './Tiles.svelte'
   import Empty from '../library/Empty.svelte'
   import SongTable from '../library/SongTable.svelte'
@@ -12,13 +13,19 @@
   import { fmtTime } from '../format'
   import { roving } from '../ui/roving'
   import { infoOf } from '../plugins'
+  import type { ShownTab } from '../plugins/tabs'
   import type { FoundGroup, ResultsBlock } from '../plugins/types'
   import type { ItemKey } from '../../../shared/plugins/items'
   import { library } from '../stores/library.svelte'
   import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
 
-  let { block: b, scrollEl }: { block: ResultsBlock; scrollEl: HTMLElement | undefined } = $props()
+  // `wider`: the other tabs to search, under "No matches" or after the groups
+  let {
+    block: b,
+    scrollEl,
+    wider = []
+  }: { block: ResultsBlock; scrollEl: HTMLElement | undefined; wider?: ShownTab[] } = $props()
 
   const TOP_SONGS = 8
   // 2, 3, 4 or 6 columns fill their rows
@@ -108,7 +115,11 @@
     <Tiles block={whole.group.tiles} tab={library.tab} plugin={whole.plugin} {scrollEl} />
   {/if}
 {:else if !groups.length}
-  <Empty title="No matches" text={b.empty} />
+  {#if wider.length}
+    <Empty title="No matches" text={b.empty}><SearchButtons tabs={wider} /></Empty>
+  {:else}
+    <Empty title="No matches" text={b.empty} />
+  {/if}
 {:else}
   {#each groups as f (f.key)}
     {#if 'songs' in f.group}
@@ -125,11 +136,18 @@
       </section>
     {/if}
   {/each}
+  {#if wider.length}<div class="wider"><SearchButtons tabs={wider} /></div>{/if}
 {/if}
 
 <style>
   section + section {
     margin-top: 14px;
+  }
+  .wider {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 22px;
   }
   .grouphead {
     display: flex;

@@ -40,6 +40,10 @@ export interface Tab {
   searchShort?: string
   // shown only there (Classic's Songs); none: in both
   only?: NavKind
+  // Its search looks past one list (Albums' results, the stations): a search
+  // that found nothing on another tab offers a button to search here, named
+  // by `search` and the text: 'Search stations for "har"' (ticket 077).
+  searchWide?: boolean
 }
 
 // A page is a list of blocks: the plugin gives the data, the core draws each
@@ -276,16 +280,21 @@ export interface TreeBlock {
   path: { title: string; hint?: string; to: PageAddress; here?: boolean }[]
 }
 
-// Nothing to show. Alone on a page it fills it ("No music yet"), with its
-// button; among other blocks it is a short note ("No matches"), or with no
-// title one quiet line under a list ("No stations found.").
+// Nothing to show. Alone on a page it fills it ("No music yet"); among other
+// blocks it is a short note ("No matches"), or with no title one quiet line
+// under a list ("No stations found."). Each way shows its button.
 export interface EmptyBlock {
   kind: 'empty'
   // act's target for the button
   id: string
   title?: string
   text: string
+  // act(id, the action's id)
   action?: { label: string; id: string }
+  // It says the search text found nothing here: the core adds a button for
+  // each other tab that searches wider ('Search your library for "har"').
+  // Without it, those buttons go at the end of the page (ticket 077).
+  nothingFound?: boolean
 }
 
 // A small heading between blocks: "Albums" on an artist's page.

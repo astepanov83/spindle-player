@@ -1,11 +1,13 @@
 <!-- One playlist: its songs in a table, with Play, Shuffle, Rename and Delete. -->
 <script lang="ts">
   import SongTable from './SongTable.svelte'
+  import SearchButtons from '../blocks/SearchButtons.svelte'
   import Icon from '../ui/Icon.svelte'
   import { openSongMenu } from './song-menu'
   import { filterItems, playlistRows, sortItems } from './views'
-  import { infoOf, itemInfo } from '../plugins'
-  import { library } from '../stores/library.svelte'
+  import { infoOf, itemInfo, widerTabs } from '../plugins'
+  import type { NavKind } from '../plugins/types'
+  import { library, playlistsTab } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
   import { playPage, playState } from '../blocks/page-play'
   import { queueLink } from '../../../shared/saved-queue'
@@ -14,8 +16,9 @@
   let {
     id,
     scrollEl,
+    nav,
     back = false
-  }: { id: string; scrollEl: HTMLElement | undefined; back?: boolean } = $props()
+  }: { id: string; scrollEl: HTMLElement | undefined; nav: NavKind; back?: boolean } = $props()
 
   const p = $derived(playlists.get(id))
   const view = $derived(
@@ -23,6 +26,8 @@
   )
   // the search box filters the rows; Play takes what is shown
   const shown = $derived(filterItems(view.rows, library.query, infoOf))
+  // the other tabs to search, while there is text (ticket 077)
+  const wider = $derived(widerTabs(playlistsTab, nav))
   let confirmDelete = $state(false)
 
   // a different playlist starts without the delete question
@@ -142,6 +147,9 @@
   {:else if view.rows.length && !shown.length}
     <p class="hint">No song in this playlist has that in its title, artist or album.</p>
   {/if}
+  {#if p.items.length && wider.length}
+    <div class="wider" class:found={shown.length > 0}><SearchButtons tabs={wider} /></div>
+  {/if}
 {/if}
 
 <style>
@@ -180,6 +188,15 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 12px;
+  }
+  .wider {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .wider.found {
+    padding: 22px 0 0;
   }
   .hint {
     color: var(--ink-3);

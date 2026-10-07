@@ -47,6 +47,7 @@ function lib(): { albums: Album[]; tracks: Map<string, Track> } {
       title,
       artist,
       year: 2020,
+      added: 0,
       palette: defaultPalettes,
       cover: '',
       coverLarge: '',

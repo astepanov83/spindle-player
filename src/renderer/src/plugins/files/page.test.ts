@@ -31,6 +31,7 @@ const album = (id: string, trackIds: string[], extra: Partial<Album> = {}): Albu
   title: `Album ${id}`,
   artist: 'Marina Vale',
   year: 2003,
+  added: 0,
   palette: defaultPalettes,
   cover: `c-${id}`,
   coverLarge: `C-${id}`,

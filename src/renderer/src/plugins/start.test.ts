@@ -19,6 +19,7 @@ const library: LibraryData = {
       title: 'Album',
       artist: 'A',
       year: 0,
+      added: 0,
       palette: defaultPalettes,
       cover: '',
       coverLarge: '',

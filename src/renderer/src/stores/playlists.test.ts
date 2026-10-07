@@ -100,6 +100,7 @@ describe('a new playlist from songs (ticket 045)', () => {
     title,
     artist: '',
     year: 0,
+    added: 0,
     trackIds,
     cover: '',
     coverLarge: '',

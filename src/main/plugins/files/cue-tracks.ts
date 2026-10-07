@@ -88,6 +88,7 @@ function imageTracks(
       path: image.path,
       mtime: image.mtime,
       size: image.size,
+      added: image.added,
       title:
         t.title ?? (whole ? image.title : undefined) ?? `Track ${String(t.no).padStart(2, '0')}`,
       artist: t.performer ?? sheet.performer ?? image.artist,

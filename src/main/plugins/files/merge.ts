@@ -56,6 +56,7 @@ function parseEntry(v: unknown): FileEntry | undefined {
   for (const k of ['track', 'disc', 'year', 'sampleRate', 'channels', 'bits'] as const)
     if (num(v[k]) && v[k] > 0) e[k] = v[k]
   if (num(v.duration) && v.duration > 0) e.duration = v.duration
+  if (num(v.added) && v.added > 0) e.added = v.added
   return e
 }
 

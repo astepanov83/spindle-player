@@ -12,6 +12,9 @@ import {
   statusLines
 } from './scan-text'
 import { files } from './store.svelte'
+import { nameFixes } from './name-fixes'
+import { showFixes } from './nav'
+import { layout } from '../../stores/layout.svelte'
 import { ai } from '../../ai.svelte'
 import { artistGroupsTask } from '../../../../shared/plugins/files/artists-file'
 import type { SettingBlock } from '../../../../shared/setting-blocks'
@@ -53,6 +56,10 @@ function groupsBlocks(): SettingBlock[] {
   const line = groupsLine(g, service)
   const out: SettingBlock[] = []
   if (line) out.push({ kind: 'status', ...line })
+  // the AI's changes, to check and undo; Focus has no library to show them in
+  const fixes = nameFixes(files.artists)
+  if ((fixes.split.length || fixes.joined.length) && layout.hasLibrary)
+    out.push({ kind: 'button', id: 'ai-fixes', label: 'See the changes' })
   // asking needs the provider ready, not only the switch
   out.push({
     kind: 'button',
@@ -76,6 +83,10 @@ export function filesActSetting(id: string, actionId: string, value?: string): v
   else if (id === 'add' && actionId === 'press') window.libraryApi.addFolder()
   else if (id === 'rescan' && actionId === 'press') window.libraryApi.rescan()
   else if (id === 'ai-recheck' && actionId === 'press') window.libraryApi.aiRecheck()
+  else if (id === 'ai-fixes' && actionId === 'press') {
+    layout.closeSettings()
+    showFixes()
+  }
 }
 
 // A scan, next to the chips. With no songs yet the empty page shows it instead.

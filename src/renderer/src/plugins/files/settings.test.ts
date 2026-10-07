@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { filesActSetting, filesSettings } from './settings'
 import { files } from './store.svelte'
 import { ai } from '../../ai.svelte'
+import { library } from '../../stores/library.svelte'
+import { defaultPalettes } from '../../../../shared/palette'
 import type { AiState } from '../../../../shared/ai'
 import type { SettingBlock } from '../../../../shared/setting-blocks'
 
@@ -49,7 +51,7 @@ describe('filesSettings and the artist groups task', () => {
   })
 
   it('enables the button when no run is going, and sends the message when pressed', () => {
-    files.status = { ...files.status, groups: { state: 'done', grouped: 1, at: 0 } }
+    files.status = { ...files.status, groups: { state: 'done', joined: 1, split: 0, at: 0 } }
     ai.state = state(true)
     expect(own().at(-1)).toMatchObject({ id: 'ai-recheck', disabled: false })
     const aiRecheck = vi.fn()
@@ -64,7 +66,7 @@ describe('filesSettings and the artist groups task', () => {
   })
 
   it('keeps the line, and says why the button is disabled while switched on but not ready', () => {
-    files.status = { ...files.status, groups: { state: 'done', grouped: 1, at: 0 } }
+    files.status = { ...files.status, groups: { state: 'done', joined: 1, split: 0, at: 0 } }
     ai.state = state(true, false)
     const blocks = own()
     expect(blocks.at(-3)).toMatchObject({ kind: 'status' })
@@ -73,7 +75,7 @@ describe('filesSettings and the artist groups task', () => {
   })
 
   it('asks before checking every name when an ask may cost money', () => {
-    files.status = { ...files.status, groups: { state: 'done', grouped: 1, at: 0 } }
+    files.status = { ...files.status, groups: { state: 'done', joined: 1, split: 0, at: 0 } }
     ai.state = state(true, true, false)
     expect(own().at(-1)).not.toHaveProperty('confirm')
     ai.state = state(true, true, true)
@@ -89,8 +91,48 @@ describe('filesSettings and the artist groups task', () => {
     expect(own()[0]).toMatchObject({ text: expect.stringContaining('Could not reach OpenRouter') })
   })
 
+  it('offers to see the changes once the AI changed a name, and opens them', () => {
+    files.status = { ...files.status, groups: { state: 'done', joined: 1, split: 0, at: 0 } }
+    ai.state = state(true)
+    expect(own().some((b) => b.kind === 'button' && b.id === 'ai-fixes')).toBe(false)
+    const grouped = { artist: 'Abba', artistTag: 'ABBA!', grouped: true as const }
+    files.load({
+      albums: [
+        {
+          id: 'a',
+          title: 'A',
+          year: 1976,
+          palette: defaultPalettes,
+          cover: '',
+          coverLarge: '',
+          trackIds: ['t'],
+          ...grouped
+        }
+      ],
+      tracks: [
+        {
+          id: 't',
+          title: 'T',
+          duration: 1,
+          albumId: 'a',
+          album: 'A',
+          no: 1,
+          disc: 1,
+          codec: '',
+          folder: 0,
+          ...grouped
+        }
+      ],
+      folders: [{ name: '/m', parent: -1 }]
+    })
+    expect(own()).toContainEqual({ kind: 'button', id: 'ai-fixes', label: 'See the changes' })
+    filesActSetting('ai-fixes', 'press')
+    expect(library.tab).toBe('artists')
+    expect(library.page('artists')).toBe('name-fixes')
+  })
+
   it('shows neither the line nor the button while switched off', () => {
-    files.status = { ...files.status, groups: { state: 'done', grouped: 1, at: 0 } }
+    files.status = { ...files.status, groups: { state: 'done', joined: 1, split: 0, at: 0 } }
     ai.state = state(false)
     expect(own()).toEqual([])
   })

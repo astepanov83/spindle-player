@@ -1,14 +1,17 @@
 // The files plugin's page strings. Links use the ones of queue.json (ruling
 // R1): "album/<id>", "artist/<key>", "folder/<key>". An album opened from an
 // artist is "album/<id>/artist/<key>" in the Artists tab: album ids hold no
-// "/", artist and folder keys may. '' is a tab's top.
+// "/", artist and folder keys may. '' is a tab's top. "name-fixes" is the
+// Artists tab's list of name fixes (ticket 074).
 
 export type FilesPage =
   | { kind: 'top' }
   | { kind: 'album'; id: string }
   | { kind: 'artist'; key: string; album?: string }
   | { kind: 'folder'; key: string }
+  | { kind: 'fixes' }
 
+export const fixesPage = 'name-fixes'
 export const albumPage = (id: string): string => `album/${id}`
 export const folderPage = (key: string): string => `folder/${key}`
 export const artistPage = (key: string, album?: string | null): string =>
@@ -17,6 +20,7 @@ export const artistPage = (key: string, album?: string | null): string =>
 // Undefined for a page this version doesn't know.
 export function parsePage(page: string): FilesPage | undefined {
   if (!page) return { kind: 'top' }
+  if (page === fixesPage) return { kind: 'fixes' }
   const at = page.indexOf('/')
   const kind = page.slice(0, at)
   const rest = page.slice(at + 1)
@@ -30,11 +34,11 @@ export function parsePage(page: string): FilesPage | undefined {
   return key ? { kind: 'artist', key, album: rest.slice(0, end) } : undefined
 }
 
-// The tab a link opens in: Albums, Artists or Folders.
+// The tab a link opens in: Albums, Artists (an artist, the name fixes) or Folders.
 export function filesTabOf(page: string): string | undefined {
   const p = parsePage(page)
   if (p?.kind === 'album') return 'albums'
-  if (p?.kind === 'artist' && !p.album) return 'artists'
+  if ((p?.kind === 'artist' && !p.album) || p?.kind === 'fixes') return 'artists'
   if (p?.kind === 'folder') return 'folders'
   return undefined
 }

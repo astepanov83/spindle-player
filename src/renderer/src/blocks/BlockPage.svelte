@@ -6,6 +6,7 @@
   import { typedIn } from '../plugins'
   import type { Block, NavKind } from '../plugins/types'
   import { library } from '../stores/library.svelte'
+  import Changes from './Changes.svelte'
   import Head from './Head.svelte'
   import Nothing from './Nothing.svelte'
   import Results from './Results.svelte'
@@ -83,6 +84,8 @@
       <Tree block={b} {tab} />
     {:else if b.kind === 'empty'}
       {#if b.title}<Empty title={b.title} text={b.text} />{:else}<p class="note">{b.text}</p>{/if}
+    {:else if b.kind === 'changes'}
+      <Changes block={b} {tab} {plugin} />
     {:else if b.kind === 'text'}
       <h3 class="part section-label" class:over-rows={overRows(i)} class:top={underHead(i)}>
         {b.text}

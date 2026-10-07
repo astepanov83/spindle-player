@@ -368,22 +368,68 @@ describe('a grouped tag (ticket 068)', () => {
     files.load(d)
   })
 
-  it('is marked "(grouped)" under the name, with Use tag', () => {
+  it('is marked "(joined by AI)" under the name, with Keep separate named for the tag', () => {
     const [h] = page.filesPage('artists', 'artist/marinavale', '')
     expect(head(h).note).toEqual({
       text: 'From tags:',
       items: [
         { text: 'Marina Vale' },
         {
-          text: 'Marina Vail (grouped)',
-          action: { id: 'use-tag', label: 'Use tag', value: 'marinavail' }
+          text: 'Marina Vail (joined by AI)',
+          action: {
+            id: 'keep-tag',
+            label: 'Keep separate',
+            value: 'marinavail',
+            hint: 'Keep Marina Vail separate'
+          }
         }
       ]
     })
   })
 
-  it("Use tag saves the tag's own name, so the group can't take it again", () => {
-    page.filesAct('artist/marinavale', 'use-tag', 'marinavail')
+  it('Keep separate says so, and its Undo puts the AI link back', async () => {
+    page.filesAct('artist/marinavale', 'keep-tag', 'marinavail')
+    const { notice } = await import('../../stores/notice.svelte')
+    expect(notice.text).toBe('Marina Vail is its own artist now')
+    expect(notice.action?.label).toBe('Undo')
+    notice.press()
+    expect(api.setArtists.mock.calls.map((c) => c[0])).toEqual([
+      { marinavail: null },
+      { marinavail: { ai: ['Marina Vale'] } }
+    ])
+  })
+
+  it('links the Artists head to the name fixes, which list it under Joined by AI', () => {
+    const [h] = page.filesPage('artists', '', '')
+    expect(head(h).line).toEqual([{ text: '1 name fix', to: at('name-fixes') }])
+    const blocks = page.filesPage('artists', 'name-fixes', '')
+    expect(kinds(blocks)).toEqual(['head', 'text', 'changes'])
+    expect(head(blocks[0])).toMatchObject({ title: 'Name fixes', back: { to: at('') } })
+    expect(blocks[1]).toEqual({ kind: 'text', text: 'Joined by AI' })
+    expect(blocks[2]).toEqual({
+      kind: 'changes',
+      id: 'name-fixes',
+      label: 'Joined by AI',
+      rows: [
+        {
+          key: 'marinavail',
+          from: 'Marina Vail',
+          to: [{ text: 'Marina Vale', to: at('artist/marinavale') }],
+          action: {
+            id: 'undo-fix',
+            label: 'Undo',
+            value: 'marinavail',
+            hint: 'Undo Marina Vail to Marina Vale'
+          }
+        }
+      ]
+    })
+    page.filesAct('name-fixes', 'undo-fix', 'marinavail')
+    expect(api.setArtists).toHaveBeenCalledWith({ marinavail: null })
+  })
+
+  it("Keep separate saves the tag's own name, so the group can't take it again", () => {
+    page.filesAct('artist/marinavale', 'keep-tag', 'marinavail')
     const sent = api.setArtists.mock.calls[0][0] as Record<string, null>
     expect(sent).toEqual({ marinavail: null })
     // the library built from artists.json with that change, the AI on
@@ -403,5 +449,24 @@ describe('a grouped tag (ticket 068)', () => {
     expect(files.getArtist('marinavale')?.tags).toEqual([
       { key: 'marinavale', name: 'Marina Vale' }
     ])
+  })
+})
+
+describe('name fixes with none', () => {
+  beforeEach(() => files.load(lib()))
+
+  it('has no link on the Artists head, and the page says what it lists', () => {
+    expect(head(page.filesPage('artists', '', '')[0]).line).toBeUndefined()
+    const blocks = page.filesPage('artists', 'name-fixes', '')
+    expect(kinds(blocks)).toEqual(['head', 'empty'])
+    // the AI task is off in this test, so the page says so
+    expect(blocks[1]).toMatchObject({ text: expect.stringContaining('Fix artist names is off') })
+  })
+
+  it('offers the other artists to join in Edit, and says how', () => {
+    files.editingArtist = 'marinavale'
+    const e = head(page.filesPage('artists', 'artist/marinavale', '')[0]).edit
+    expect(e?.suggest).toEqual(['Juno Park'])
+    expect(e?.hint).toContain("Type another artist's name to join them.")
   })
 })

@@ -88,7 +88,7 @@ Plan: remember the last size the user chose for each template, and fall back to 
 
 ## Keyboard
 
-Every key is decided in `src/renderer/src/keys.ts` (plain functions with tests); `App.svelte` runs what they return.
+Every key is decided in `src/renderer/src/keys.ts` (plain functions with tests); `App.svelte` runs what they return. The keys below are a list there (`shortcuts`) that `keyAction` reads, and Settings, Keyboard draws its table from the same list, so the table can't drift from what the keys do.
 
 | Key | Does |
 |---|---|
@@ -99,6 +99,7 @@ Every key is decided in `src/renderer/src/keys.ts` (plain functions with tests);
 | Ctrl+F, / | focus the search box and select its text |
 | Alt+← / Alt+→, Backspace | Back / Forward through the library's history, the same as the mouse side buttons and the ‹ › buttons |
 | Ctrl+, | open or close Settings |
+| ? | open Settings on Keyboard (this list); again closes it |
 | Esc | close the menu, then Settings, then the queue drawer; in the search box: clear, then leave |
 | V | next visualizer style |
 | Q | switch to the queue tab, or open / close the drawer |
@@ -121,7 +122,7 @@ Lists (song table, queue, album page, search results songs, radio stations) are 
 
 Tab into a list lands on the row last focused, else the playing song, else the first row on screen. A new sort or search forgets the row last focused, since its place now holds another song. When a scroll takes the focused row off the page (the song table and queue draw only the rows near the screen), the focus moves to the nearest row still drawn, so the arrows keep working in the list. Arrows in a list (or on the volume slider) move there, not the song; Shift+arrows seek and set the volume from anywhere.
 
-Settings' segmented choices (Layout, Queue, Visualizer, Theme) are radio groups: one Tab stop each, and the arrows, Home and End pick the next choice.
+Settings' segmented choices (Layout, Queue, Visualizer, Theme) are radio groups: one Tab stop each, and the arrows, Home and End pick the next choice. Its switches (plugins, Fix artist names, covers) are buttons with `role="switch"`: Enter or a click flips one, and Space plays and pauses as on any button.
 
 The Now playing / Queue tabs are a tab row: one Tab stop, and ← / →, Home and End pick the next tab. ↑ / ↓ still set the volume there.
 

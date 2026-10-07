@@ -1,7 +1,7 @@
 // The join with made-up sound: one tone cut in two songs, the second one
 // started early or late, and what comes out must be the tone unbroken.
 import { describe, expect, it } from 'vitest'
-import { Joiner, lookahead, quantum, type JoinOut } from './join'
+import { Joiner, lookahead, lookaheadFor, quantum, ringSize, type JoinOut } from './join'
 
 const rate = 44100
 const w = (2 * Math.PI * 441.7) / rate
@@ -89,6 +89,46 @@ describe('the join', () => {
     expect(corner(out, lookahead + 10, 8800)).toBeLessThan(1e-6)
     // the tone goes on where it would have, 480 frames later than usual
     expect(out[8000]).toBeCloseTo(tone(8000 - lookahead), 6)
+  })
+
+  it('holds as long at a high rate, with the ring made for its rate (ticket 091)', () => {
+    expect([22050, 44100, 48000, 96000, 192000].map(ringSize)).toEqual([
+      16384, 32768, 32768, 65536, 131072
+    ])
+    // B starts 0.1 s (the most the lead aims) before A ends, at 96 kHz
+    const early = 9600
+    const at = (size: number): { out: Float32Array; said: JoinOut[] } =>
+      run({
+        songs: cutTone(20000, 20000 - early),
+        arms: [[20000 - early - 20, 0, 1]],
+        frames: 34000,
+        joiner: new Joiner(size)
+      })
+    const { out, said } = at(ringSize(96000))
+    expect(said).toEqual([{ joined: 1, skew: early, early }])
+    expect(corner(out, lookahead + 10, 33800)).toBeLessThan(1e-6)
+    // the ring for 44.1 kHz would have given up holding it
+    expect(at(ringSize(44100)).said[0].early).toBeNull()
+  })
+
+  it('looks as far ahead in time at a high rate (ticket 091)', () => {
+    expect([22050, 44100, 48000, 96000, 192000].map(lookaheadFor)).toEqual([
+      256, 384, 384, 768, 1536
+    ])
+    // B starts 6 ms after A ended, at 96 kHz: more than 384 frames
+    const late = 576
+    const at = (ahead: number): { out: Float32Array; said: JoinOut[] } =>
+      run({
+        songs: cutTone(20000, 20000 + late),
+        arms: [[19900, 0, 1]],
+        frames: 26000,
+        joiner: new Joiner(ringSize(96000), 2, ahead)
+      })
+    const { out, said } = at(lookaheadFor(96000))
+    expect(said).toEqual([{ joined: 1, skew: -late, early: -late }])
+    expect(corner(out, 768 + 10, 25800)).toBeLessThan(1e-6)
+    // 384 frames could not take it in: a gap
+    expect(zeros(at(lookahead).out, 20000, 21000)).toBeGreaterThan(100)
   })
 
   it('takes a start a bit late out of the lookahead: no gap', () => {

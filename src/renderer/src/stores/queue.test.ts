@@ -18,6 +18,9 @@ const fake = vi.hoisted(() => ({
   gain: 1,
   nextGain: 1,
   setGain: 0,
+  // the sample rates last given (ticket 091): the song loaded, the next song
+  rate: undefined as number | undefined,
+  nextRate: undefined as number | undefined,
   reset() {
     this.calls = []
   }
@@ -33,10 +36,11 @@ vi.mock('../audio/engine', () => ({
       url: string,
       at = 0,
       part?: { start: number; end?: number },
-      opts?: { gain?: number }
+      opts?: { gain?: number; rate?: number }
     ) => {
       fake.loaded = true
       fake.gain = opts?.gain ?? 1
+      fake.rate = opts?.rate
       fake.calls.push(`load ${url}` + (part ? ` ${part.start}-${part.end ?? 'end'} at ${at}` : ''))
     },
     continueWith: (part: { start: number; end?: number }, gain = 1) => {
@@ -44,8 +48,14 @@ vi.mock('../audio/engine', () => ({
       fake.calls.push(`continue ${part.start}-${part.end ?? 'end'}`)
     },
     setGain: (g: number) => (fake.setGain = g),
-    setNext: (n?: { url: string; part?: { start: number; end?: number }; gain?: number }) => {
+    setNext: (n?: {
+      url: string
+      part?: { start: number; end?: number }
+      gain?: number
+      rate?: number
+    }) => {
       fake.nextGain = n?.gain ?? 1
+      fake.nextRate = n?.rate
       fake.next = n ? n.url + (n.part ? ` ${n.part.start}-${n.part.end ?? 'end'}` : '') : ''
     },
     play: () => fake.calls.push('play'),
@@ -63,7 +73,10 @@ vi.mock('../audio/engine', () => ({
 // The fake plugins: songs by key, plugins that are off, plugins whose data is
 // not in yet (a song they don't have is loading then, not missing).
 const plugin = vi.hoisted(() => ({
-  songs: new Map<string, { info: ItemInfo; part?: PlayablePart; gain?: ReplayGain }>(),
+  songs: new Map<
+    string,
+    { info: ItemInfo; part?: PlayablePart; gain?: ReplayGain; rate?: number }
+  >(),
   off: new Set<string>(),
   loading: new Set<string>(),
   // answers come later, as radio's will
@@ -91,6 +104,7 @@ vi.mock('../plugins', () => {
     }
     if (s.part) p.part = s.part
     if (s.gain) p.gain = s.gain
+    if (s.rate) p.rate = s.rate
     return p
   }
   return {
@@ -1484,5 +1498,23 @@ describe('each song’s level (ReplayGain, ticket 090)', () => {
     queue.regain()
     expect(db(fake.setGain)).toBe(-8)
     expect(db(fake.nextGain)).toBe(-8)
+  })
+})
+
+describe('each song’s sample rate (ticket 091)', () => {
+  it('goes to the engine with the song loaded and the song sent ahead', () => {
+    setSongs(['a', 2])
+    plugin.songs.get('files:a0')!.rate = 48000
+    plugin.songs.get('files:a1')!.rate = 96000
+    playAlbum('a', 0)
+    expect(fake.rate).toBe(48000)
+    expect(fake.nextRate).toBe(96000)
+  })
+
+  it('is left out for a song with no known rate', () => {
+    setSongs(['a', 2])
+    playAlbum('a', 0)
+    expect(fake.rate).toBeUndefined()
+    expect(fake.nextRate).toBeUndefined()
   })
 })

@@ -22,6 +22,12 @@
 // Each song comes with its own level (ReplayGain, ticket 090), set on its
 // element's gain node. That is before the analyser, so the visualizer sees
 // the evened level, and apart from the volume, which comes after.
+//
+// The elements, the join and the analyser make a graph (graph.ts) that runs
+// at the playing song's sample rate (ticket 091), so nothing is resampled
+// before the join. A next song at another rate loads in a new graph at its
+// rate, and starts there as plainly as a timer can (no join across two
+// graphs). The old graph closes once its song has sounded out.
 
 export type EngineError = {
   // MediaError code: 2 network, 3 decode, 4 format not supported
@@ -60,11 +66,14 @@ export interface LoadOptions {
   live?: boolean
   // the song's level as a factor (replaygain.ts); 1 when left out
   gain?: number
+  // the song's sample rate in Hz, when known: the graph runs at it
+  rate?: number
 }
 
-import { firstLead, learnLead, nextMove, plainLead } from './gapless'
-import type { JoinIn, JoinOut } from './join'
-import joinUrl from './join-worklet?worker&url'
+import { firstLead, learnLead, nextMove, plainLead, targetOverlap } from './gapless'
+import { Graph, type Deck } from './graph'
+import type { JoinOut } from './join'
+import { crossLead, firstRate, rateFor } from './rate'
 import { gain } from './volume'
 
 // True when main has no readable file for a song URL (404), or doesn't answer
@@ -91,107 +100,23 @@ export interface Next {
   part?: Part
   // as in LoadOptions
   gain?: number
+  rate?: number
 }
 
 const wholeFile: Part = { start: 0 }
+// see #leadFor
+const unseenMargin = 0.01
 // how close to a part's end counts as there
 const endSlack = 0.005
-// A change of level on a song that plays glides this fast (a time constant,
-// in seconds), so it makes no click.
-const glide = 0.02
-
-// One <audio> element with its own gain, into the graph both share.
-class Deck {
-  readonly el: HTMLAudioElement
-  // This song's own gain, before the analyser: its ReplayGain level (ticket
-  // 090). It also cuts a part of a file off where it ends, once the next
-  // song took over and the file would go on.
-  readonly gain: GainNode
-  // the file loaded, without ?decode
-  url = ''
-  // main is decoding it with ffmpeg: Chromium could not play it as it is
-  decoding = false
-  // why the try without ?decode failed
-  firstError = ''
-  // where to go once the length is known, in file time
-  startAt = 0
-  live = false
-  // The song's ReplayGain level, as a factor. Kept here, not only in the
-  // node, so a new graph can set it again on its own nodes.
-  level = 1
-
-  // tells the join this element has a new song, or none
-  readonly #reset: () => void
-
-  constructor(context: AudioContext, out: AudioNode, reset: () => void) {
-    this.#reset = reset
-    const el = new Audio()
-    // Without this the analyser only gets silence: spindle:// answers with CORS headers.
-    el.crossOrigin = 'anonymous'
-    el.preload = 'auto'
-    this.el = el
-    this.gain = context.createGain()
-    context.createMediaElementSource(el).connect(this.gain).connect(out)
-  }
-
-  get loaded(): boolean {
-    return !!this.el.getAttribute('src')
-  }
-
-  // `at` is in file time
-  load(url: string, at: number, live: boolean, gain: number): void {
-    this.url = url
-    this.decoding = false
-    this.firstError = ''
-    this.startAt = at
-    this.live = live
-    this.setGain(gain)
-    this.el.src = url
-    this.#reset()
-  }
-
-  // At once, for a song not heard yet.
-  setGain(gain: number): void {
-    this.level = gain
-    this.gain.gain.cancelScheduledValues(0)
-    this.gain.gain.value = gain
-  }
-
-  // From now on, gliding there, for a song that plays.
-  glideGain(gain: number, now: number): void {
-    this.level = gain
-    const p = this.gain.gain
-    p.cancelScheduledValues(now)
-    p.setTargetAtTime(gain, now, glide)
-  }
-
-  // `at` is in file time; before the length is known, it waits for loadedmetadata
-  seek(at: number): void {
-    if (this.el.readyState < HTMLMediaElement.HAVE_METADATA) this.startAt = at
-    else this.el.currentTime = at
-  }
-
-  // Drops the file so it stops loading.
-  clear(): void {
-    this.url = ''
-    this.live = false
-    this.el.pause()
-    this.el.removeAttribute('src')
-    this.el.load()
-    this.#reset()
-  }
-}
 
 export class AudioEngine {
-  readonly context: AudioContext
-  readonly analyser: AnalyserNode
-  // Volume is set here, after the analyser, so the visualizer sees the same
-  // levels at any volume. The elements themselves stay at full volume.
-  readonly #volume: GainNode
-  readonly #decks: [Deck, Deck]
-  // the join, once its worklet loaded; until then (or if it fails) the
-  // elements go to the analyser as they are
-  #join: AudioWorkletNode | undefined
+  // the graph the song playing is in
+  #graph: Graph
+  // A graph made for the next song, at its rate, when that is not this
+  // graph's; its first element has the next song while #nextLoaded.
+  #ahead: Graph | undefined
+  // the volume's gain factor, for every graph
+  #volume = 1
   // the one that plays, or is loaded to play
   #deck: Deck
   #on: Partial<EngineEvents> = {}
@@ -202,39 +127,31 @@ export class AudioEngine {
   // play() was asked for last, not pause()
   #wantPlay = false
   // the song to play after this one (setNext)
-  #next: (Part & { url: string; gain: number }) | undefined
+  #next: (Part & { url: string; gain: number; rate?: number }) | undefined
   // the other element has it, loading or ready
   #nextLoaded = false
   // it could not load there: it loads the usual way when its turn comes,
   // and fails then as any song does
   #nextFailed = false
   #nextTimer: ReturnType<typeof setTimeout> | undefined
-  // the other element still sounds out the song before, until the timer
+  // a start of the next song held past the end (#atEnd)
+  #late: ReturnType<typeof setTimeout> | undefined
+  // An element still sounds out the song before, until the timer: the other
+  // one of this graph, or one of the graph before.
   #finishing: { deck: Deck; timer: ReturnType<typeof setTimeout> } | undefined
   // How long before the end the next song is told to play, learned from the
-  // overlap the join measures at each start.
+  // overlap the join measures at each start. By the graph's rate, since how
+  // long an element takes to start differs by rate (longer at 96 kHz in the
+  // app check); see #leadFor for a rate not seen yet.
+  #leads = new Map<number, number>()
   #lead = firstLead
   // seconds the playing song's sound goes out later than usual: the join
   // held it back by its overlap
   #skew = 0
 
   constructor() {
-    // 44.1 kHz, the rate of most music (CDs). A song at the graph's rate
-    // joins the next one to the sample (join.ts); one at another rate is
-    // resampled on its own, which leaves a faint trace high up at a join.
-    // Chromium takes the graph's sound to the device's rate in one go.
-    this.context = new AudioContext({ sampleRate: 44100 })
-    this.analyser = this.context.createAnalyser()
-    this.analyser.fftSize = 4096
-    this.analyser.smoothingTimeConstant = 0.5
-    this.#volume = this.context.createGain()
-    this.analyser.connect(this.#volume).connect(this.context.destination)
-    const deck = (i: number): Deck =>
-      new Deck(this.context, this.analyser, () => this.#tell({ reset: i }))
-    this.#decks = [deck(0), deck(1)]
-    this.#deck = this.#decks[0]
-    for (const d of this.#decks) this.#listen(d)
-    void this.#loadJoin()
+    this.#graph = this.#build(firstRate, false)!
+    this.#deck = this.#graph.decks[0]
 
     // A context made before any click may start suspended; the first gesture wakes it.
     const wake = (): void => {
@@ -246,42 +163,50 @@ export class AudioEngine {
     addEventListener('keydown', wake, true)
   }
 
-  async #loadJoin(): Promise<void> {
-    try {
-      await this.context.audioWorklet.addModule(joinUrl)
-    } catch (e) {
-      console.error('The gapless join did not load; songs still play, each start a few ms off', e)
-      return
-    }
-    const join = new AudioWorkletNode(this.context, 'spindle-join', {
-      numberOfInputs: 2,
-      numberOfOutputs: 1,
-      outputChannelCount: [2],
-      // mono and 5.1 come in as two channels, as the speakers would get them
-      channelCount: 2,
-      channelCountMode: 'explicit',
-      channelInterpretation: 'speakers'
-    })
-    join.port.onmessage = (e: MessageEvent<JoinOut>) => this.#joined(e.data)
-    this.#decks.forEach((d, i) => {
-      d.gain.disconnect()
-      d.gain.connect(join, 0, i)
-    })
-    join.connect(this.analyser)
-    this.#join = join
+  // The graph the song playing is in. Ticket 008 reads the analyser from its
+  // own requestAnimationFrame loop; both change when a song at another rate
+  // starts.
+  get context(): AudioContext {
+    return this.#graph.context
   }
 
-  #tell(m: JoinIn): void {
-    this.#join?.port.postMessage(m)
+  get analyser(): AnalyserNode {
+    return this.#graph.analyser
+  }
+
+  // A new graph at `rate`, its elements listened to; none if the context
+  // can't be made (the first one must be).
+  #build(rate: number, waits: boolean): Graph | undefined {
+    let g: Graph
+    try {
+      g = new Graph(rate, { volume: this.#volume, waits, joined: (g, m) => this.#joined(g, m) })
+    } catch (e) {
+      if (!waits) throw e
+      console.error(`No audio graph at ${rate} Hz; the song plays in the one there is`, e)
+      return undefined
+    }
+    for (const d of g.decks) this.#listen(d)
+    return g
+  }
+
+  // Closes a graph that is no longer needed, and forgets its song sounding out.
+  #close(g: Graph): void {
+    if (this.#finishing?.deck.graph === g) {
+      clearTimeout(this.#finishing.timer)
+      this.#finishing = undefined
+    }
+    g.close()
   }
 
   // The join let the next song through, held back by its skew: that counts
   // toward the end of its song. How early its sound came aims the next start.
-  #joined(m: JoinOut): void {
-    if (this.#decks[m.joined] !== this.#deck) return
-    const rate = this.context.sampleRate
-    this.#skew = m.skew / rate
-    if (m.early !== null) this.#lead = learnLead(this.#lead, m.early / rate)
+  #joined(g: Graph, m: JoinOut): void {
+    if (g !== this.#graph || g.decks[m.joined] !== this.#deck) return
+    this.#skew = m.skew / g.rate
+    if (m.early !== null) {
+      this.#lead = learnLead(this.#leadFor(g.rate), m.early / g.rate)
+      this.#leads.set(g.rate, this.#lead)
+    }
     this.#plan()
   }
 
@@ -290,8 +215,10 @@ export class AudioEngine {
     return this.#deck.el
   }
 
+  // where the next song loads: the other element, or the first one of a
+  // graph at its rate
   get #other(): Deck {
-    return this.#decks[this.#decks[0] === this.#deck ? 1 : 0]
+    return this.#ahead?.decks[0] ?? this.#graph.other(this.#deck)
   }
 
   #listen(d: Deck): void {
@@ -319,7 +246,7 @@ export class AudioEngine {
     el.addEventListener('ended', () => {
       if (!plays() || this.#endSent) return
       // the join holds the last song back: its sound goes on a bit yet
-      if (this.#nextReady() && this.#wantPlay) this.#startNext(0)
+      if (this.#nextReady() && this.#wantPlay) this.#atEnd(0)
       else this.#on.ended?.()
     })
     el.addEventListener('playing', () => {
@@ -369,8 +296,7 @@ export class AudioEngine {
     }
     if (!plays) {
       this.#nextFailed = true
-      this.#nextLoaded = false
-      d.clear()
+      this.#dropNext()
       return
     }
     const url = d.url
@@ -408,7 +334,7 @@ export class AudioEngine {
     const left = end - this.el.currentTime
     if (left <= endSlack) {
       // the join holds the last song back: its sound goes on a bit yet
-      if (this.#nextReady() && this.#wantPlay) return this.#startNext(left)
+      if (this.#nextReady() && this.#wantPlay) return this.#atEnd(left)
       this.#endSent = true
       this.#on.ended?.()
       return
@@ -431,36 +357,92 @@ export class AudioEngine {
       ready: this.#nextReady(),
       playing: this.#wantPlay && !d.el.paused && !this.#endSent,
       free: !this.#finishing,
-      lead: this.#join ? this.#lead : plainLead
+      lead: this.#leadNow()
     })
     if (move.kind === 'load') {
+      const g = this.#graph
+      const rate = rateFor(next.rate, g.rate)
+      if (rate !== g.rate) this.#ahead = this.#build(rate, true)
       this.#other.load(next.url, next.start, false, next.gain)
       this.#nextLoaded = true
     } else if (move.kind === 'start') this.#startNext(left)
     else if (move.kind === 'wait') this.#nextTimer = setTimeout(() => this.#plan(), move.ms)
   }
 
+  // How long before the end the next song is told to play. In this graph
+  // the join holds it back, so it aims a bit early; in a graph of its own it
+  // aims at the end, with what play() takes (learned from the joins) and
+  // the two graphs' delays.
+  #leadNow(): number {
+    const g = this.#graph
+    const a = this.#ahead
+    if (a && this.#nextLoaded) {
+      const play = (this.#leads.get(a.rate) ?? this.#lead) - targetOverlap
+      return crossLead(Math.max(0, play), g.delay, a.delay)
+    }
+    return g.join ? this.#leadFor(g.rate) : plainLead
+  }
+
+  // A rate with no join yet aims 10 ms earlier than the last learned: an
+  // element may take longer to start there, and an early start is only held.
+  #leadFor(rate: number): number {
+    return this.#leads.get(rate) ?? Math.min(0.1, this.#lead + unseenMargin)
+  }
+
   // the next song is loaded in the other element and can start at once
   #nextReady(): boolean {
-    const o = this.#other.el
-    return this.#nextLoaded && o.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA && !o.seeking
+    const o = this.#other
+    return (
+      this.#nextLoaded &&
+      o.graph.ready &&
+      o.el.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA &&
+      !o.el.seeking
+    )
+  }
+
+  // The song playing is at its end, or `left` seconds before it (a part of a
+  // file). The next song starts now, or a bit later when it plays in a graph
+  // of its own that takes less time to the speakers than this one.
+  #atEnd(left: number): void {
+    const late = left - this.#leadNow()
+    if (late <= 0.002) return this.#startNext(left)
+    if (this.#late !== undefined) return
+    const d = this.#deck
+    // a part's file goes on: it stops at the part's end all the same
+    if (this.#part.end !== undefined)
+      d.gain.gain.setValueAtTime(0, d.graph.context.currentTime + Math.max(0, left))
+    this.#late = setTimeout(() => {
+      this.#late = undefined
+      if (this.#deck === d && this.#nextReady() && this.#wantPlay) this.#startNext(left - late)
+      else d.setGain(d.level)
+    }, late * 1000)
+  }
+
+  #stopLate(): void {
+    clearTimeout(this.#late)
+    this.#late = undefined
   }
 
   // The next song starts now, `left` seconds before this one's file ends.
   #startNext(left: number): void {
     const from = this.#deck
+    const to = this.#other
     const next = this.#next!
     const cut = this.#part.end !== undefined
     const sounding = Math.max(0, left) + this.#skew
     clearTimeout(this.#endTimer)
-    this.#deck = this.#other
+    this.#deck = to
+    if (this.#ahead) {
+      // in a graph of its own, played plainly
+      this.#graph = this.#ahead
+      this.#ahead = undefined
+    } else this.#graph.tell({ arm: { from: from.i, to: to.i } })
     this.#part =
       next.end === undefined ? { start: next.start } : { start: next.start, end: next.end }
     this.#endSent = false
     this.#next = undefined
     this.#nextLoaded = false
     this.#skew = 0
-    this.#tell({ arm: { from: this.#decks.indexOf(from), to: this.#decks.indexOf(this.#deck) } })
     this.#playElement()
     this.#finish(from, Math.max(0, left), cut, sounding)
     this.#on.nextStarted?.()
@@ -469,11 +451,12 @@ export class AudioEngine {
     this.#watchEnd()
   }
 
-  // The song before sounds out its last `left` seconds in the other element,
-  // and is heard `sounding` seconds more. A part of a file is cut where it
-  // ends, since the file goes on. Then the element is free for the song after.
+  // The song before sounds out its last `left` seconds in its element, and
+  // is heard `sounding` seconds more. A part of a file is cut where it
+  // ends, since the file goes on. Then the element is free for the song
+  // after, or its graph closes if it was another.
   #finish(d: Deck, left: number, cut: boolean, sounding: number): void {
-    if (cut) d.gain.gain.setValueAtTime(0, this.context.currentTime + left)
+    if (cut) d.gain.gain.setValueAtTime(0, d.graph.context.currentTime + left)
     const timer = setTimeout(() => this.#free(), sounding * 1000 + 200)
     this.#finishing = { deck: d, timer }
   }
@@ -483,8 +466,42 @@ export class AudioEngine {
     if (!f) return
     clearTimeout(f.timer)
     this.#finishing = undefined
-    f.deck.clear()
+    if (f.deck.graph === this.#graph) f.deck.clear()
+    else f.deck.graph.close()
     this.#plan()
+  }
+
+  // Drops the song loaded ahead: the other element lets it go, or its graph closes.
+  #dropNext(): void {
+    if (this.#ahead) this.#ahead.close()
+    else if (this.#nextLoaded) this.#other.clear()
+    this.#ahead = undefined
+    this.#nextLoaded = false
+  }
+
+  // A song to load now at another rate: a new graph at its rate takes over,
+  // and the old ones close. No graph at that rate: it plays in this one.
+  #moveTo(rate: number): void {
+    const g = this.#build(rate, true)
+    if (!g) return
+    this.#dropNext()
+    const old = this.#graph
+    const f = this.#finishing?.deck.graph
+    // first, so the old elements' events are no longer this song's
+    this.#graph = g
+    this.#deck = g.decks[0]
+    if (f && f !== old) this.#close(f)
+    this.#close(old)
+  }
+
+  // every graph that may still sound
+  #graphs(): Graph[] {
+    const f = this.#finishing?.deck.graph
+    return [
+      this.#graph,
+      ...(this.#ahead ? [this.#ahead] : []),
+      ...(f && f !== this.#graph ? [f] : [])
+    ]
   }
 
   on(events: Partial<EngineEvents>): void {
@@ -498,8 +515,10 @@ export class AudioEngine {
   // Starts loading a song, `at` seconds into it (into `part`, if it is a part
   // of the file). Call play() to hear it. Another part of the file already
   // loaded is only a seek, and so is the next song already loaded in the
-  // other element (it takes over). A live stream always opens a new connection.
+  // other element (it takes over). A live stream always opens a new
+  // connection. A song at another rate than the graph's gets a new graph.
   load(url: string, at = 0, part: Part = wholeFile, opts: LoadOptions = {}): void {
+    this.#stopLate()
     const live = !!opts.live
     const gain = opts.gain ?? 1
     const d = this.#deck
@@ -514,9 +533,14 @@ export class AudioEngine {
         this.#deck = o
         this.#next = undefined
         this.#nextLoaded = false
-        d.clear()
+        if (this.#ahead) {
+          const old = this.#graph
+          this.#graph = this.#ahead
+          this.#ahead = undefined
+          this.#close(old)
+        } else d.clear()
         o.setGain(gain)
-      } else this.#deck.glideGain(gain, this.context.currentTime)
+      } else this.#deck.glideGain(gain)
       this.#sendDuration()
       this.seek(at)
       this.#on.time?.(at)
@@ -524,14 +548,17 @@ export class AudioEngine {
     }
     // a stream has no end to start a next song at
     if (live) this.setNext()
-    d.load(url, part.start + at, live, gain)
+    // a stream's rate is not known: it plays in the graph there is
+    const rate = live ? this.#graph.rate : rateFor(opts.rate, this.#graph.rate)
+    if (rate !== this.#graph.rate) this.#moveTo(rate)
+    this.#deck.load(url, part.start + at, live, gain)
   }
 
   // The song after the one playing is the next part of the same file: the
   // sound goes on as it is, and times are from the new part from now on.
   // `gain` is the new part's level.
   continueWith(part: Part, gain = 1): void {
-    this.#deck.glideGain(gain, this.context.currentTime)
+    this.#deck.glideGain(gain)
     this.#part = part
     this.#endSent = false
     this.#sendDuration()
@@ -545,7 +572,13 @@ export class AudioEngine {
   // comes instead of `ended`. Not for a part that follows this one in the
   // same file: continueWith carries on there.
   setNext(next?: Next): void {
-    const n = next && { url: next.url, ...(next.part ?? wholeFile), gain: next.gain ?? 1 }
+    this.#stopLate()
+    const n = next && {
+      url: next.url,
+      ...(next.part ?? wholeFile),
+      gain: next.gain ?? 1,
+      rate: next.rate
+    }
     const was = this.#next
     const o = this.#other
     if (n && was && n.url === was.url && n.start === was.start && n.end === was.end) {
@@ -561,10 +594,7 @@ export class AudioEngine {
       if (n && n.url === o.url && !o.el.error) {
         o.seek(n.start)
         o.setGain(n.gain)
-      } else {
-        o.clear()
-        this.#nextLoaded = false
-      }
+      } else this.#dropNext()
     }
     this.#plan()
   }
@@ -579,8 +609,17 @@ export class AudioEngine {
   }
 
   #playElement(): void {
-    void this.context.resume()
-    this.el.play().catch((e: DOMException) => {
+    const g = this.#graph
+    const d = this.#deck
+    // a new graph plays once its join is in
+    if (!g.ready) {
+      void g.joinLoaded.then(() => {
+        if (this.#wantPlay && this.#deck === d) this.#playElement()
+      })
+      return
+    }
+    void g.context.resume()
+    d.el.play().catch((e: DOMException) => {
       // AbortError: a newer load() came first. NotSupportedError: the error event handles it.
       if (e.name !== 'AbortError' && e.name !== 'NotSupportedError')
         this.#on.refused?.(`${e.name}: ${e.message}`)
@@ -588,6 +627,7 @@ export class AudioEngine {
   }
 
   pause(): void {
+    this.#stopLate()
     this.#wantPlay = false
     clearTimeout(this.#nextTimer)
     this.el.pause()
@@ -595,6 +635,7 @@ export class AudioEngine {
 
   // `pos` seconds into the song
   seek(pos: number): void {
+    this.#stopLate()
     if (!this.loaded) return
     this.#endSent = false
     clearTimeout(this.#nextTimer)
@@ -602,27 +643,31 @@ export class AudioEngine {
   }
 
   setVolume(volume: number): void {
-    this.#volume.gain.value = gain(volume)
+    this.#volume = gain(volume)
+    for (const g of this.#graphs()) g.volume.gain.value = this.#volume
   }
 
   // A new level for the song playing (the setting changed): it glides there.
   setGain(gain: number): void {
-    if (this.loaded) this.#deck.glideGain(gain, this.context.currentTime)
+    if (this.loaded) this.#deck.glideGain(gain)
   }
 
-  // Nothing to play: drop both files so they stop loading.
+  // Nothing to play: drop both files so they stop loading. The graph stays.
   clear(): void {
+    this.#stopLate()
     this.#wantPlay = false
     this.#part = wholeFile
     this.#next = undefined
-    this.#nextLoaded = false
     this.#nextFailed = false
     this.#skew = 0
     clearTimeout(this.#endTimer)
     clearTimeout(this.#nextTimer)
+    this.#dropNext()
+    const f = this.#finishing?.deck.graph
+    if (f && f !== this.#graph) this.#close(f)
     clearTimeout(this.#finishing?.timer)
     this.#finishing = undefined
-    for (const d of this.#decks) d.clear()
+    for (const d of this.#graph.decks) d.clear()
   }
 }
 

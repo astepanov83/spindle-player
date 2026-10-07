@@ -81,19 +81,45 @@ class FakeParam {
 }
 // every gain made, in order: the volume, then each element's
 const params: FakeParam[] = []
+// How the join's worklet loads: never (the elements go straight on), or it
+// fails (a new graph then plays at once, without it).
+let worklet: 'hang' | 'fail' = 'hang'
+// every context made, in order: one per graph
+const contexts: FakeContext[] = []
 class FakeContext {
   destination = {}
+  sampleRate: number
+  state = 'running'
+  baseLatency = 0
+  outputLatency = 0
+  // this graph's gains (the volume, then each element's) and elements
+  gains: FakeParam[] = []
+  els: FakeAudio[] = []
+  constructor(o: { sampleRate: number }) {
+    this.sampleRate = o.sampleRate
+    contexts.push(this)
+  }
   createAnalyser = (): unknown => ({ ...(node() as object), fftSize: 0 })
   currentTime = 0
   createGain = (): unknown => {
     const gain = new FakeParam()
     params.push(gain)
+    this.gains.push(gain)
     return { ...(node() as object), gain }
   }
-  createMediaElementSource = node
+  createMediaElementSource = (el: FakeAudio): unknown => {
+    this.els.push(el)
+    return node()
+  }
   resume = (): Promise<void> => Promise.resolve()
-  // the join's worklet never loads here: the elements go straight on
-  audioWorklet = { addModule: (): Promise<void> => new Promise(() => {}) }
+  close = (): Promise<void> => {
+    this.state = 'closed'
+    return Promise.resolve()
+  }
+  audioWorklet = {
+    addModule: (): Promise<void> =>
+      worklet === 'fail' ? Promise.reject(new Error('no worklet')) : new Promise(() => {})
+  }
 }
 
 // every element made, in order: the engine makes two
@@ -134,6 +160,8 @@ beforeEach(() => {
   vi.useFakeTimers()
   made.length = 0
   params.length = 0
+  contexts.length = 0
+  worklet = 'hang'
   e = new AudioEngine()
   el = e.el as unknown as FakeAudio
   got = []
@@ -659,5 +687,229 @@ describe('each song’s level (ReplayGain, ticket 090)', () => {
     expect(gainOf(el).glide?.[0]).toBe(0.7)
     e.setGain(1.2)
     expect(gainOf(el).level).toBe(1.2)
+  })
+})
+
+describe('a graph per sample rate (ticket 091)', () => {
+  const ctx = (): FakeContext => contexts.at(-1)!
+  const playing = (): FakeAudio => e.el as unknown as FakeAudio
+
+  beforeEach(() => {
+    // a new graph plays once its join loaded or failed; here it fails
+    worklet = 'fail'
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  // A 100 s song at `rate` playing, at 90 s.
+  async function playAt(rate: number | undefined, url = 'spindle://media/a'): Promise<void> {
+    e.load(url, 0, undefined, { rate })
+    playing().meta(100)
+    e.play()
+    await vi.advanceTimersByTimeAsync(0)
+    playing().currentTime = 90
+    got = []
+  }
+
+  function ready(o: FakeAudio): void {
+    o.meta(50)
+    o.readyState = 4
+    o.fire('canplay')
+  }
+
+  it('starts at 44.1 kHz, and a song at another rate gets a graph at its rate', async () => {
+    expect(contexts.map((c) => c.sampleRate)).toEqual([44100])
+    expect(e.context).toBe(contexts[0])
+    e.load('spindle://media/a', 0, undefined, { rate: 96000 })
+    expect(contexts.map((c) => c.sampleRate)).toEqual([44100, 96000])
+    expect(contexts[0].state).toBe('closed')
+    expect(e.context).toBe(contexts[1])
+    expect(e.analyser).not.toBeUndefined()
+    // its own elements: an element stays with the context it was joined to
+    expect(contexts[1].els).toContain(playing())
+    expect(playing().loads).toEqual(['spindle://media/a'])
+  })
+
+  it('a new graph plays once its join is in', async () => {
+    worklet = 'hang'
+    e.load('spindle://media/a', 0, undefined, { rate: 48000 })
+    playing().meta(100)
+    e.play()
+    await vi.advanceTimersByTimeAsync(10)
+    expect(playing().paused).toBe(true)
+    worklet = 'fail'
+    e.load('spindle://media/b', 0, undefined, { rate: 96000 })
+    e.play()
+    expect(playing().paused).toBe(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(playing().paused).toBe(false)
+  })
+
+  it('keeps the graph for a song at its rate, with no rate, out of reach, or a stream', async () => {
+    e.load('spindle://media/a', 0, undefined, { rate: 44100 })
+    e.load('spindle://media/b')
+    e.load('spindle://media/c', 0, undefined, { rate: 1000 })
+    e.load('spindle://media/d', 0, undefined, { rate: 48000.5 })
+    e.load('spindle://radio/x?stream=0', 0, undefined, { live: true, rate: 48000 })
+    expect(contexts).toHaveLength(1)
+    expect(playing().loads.at(-1)).toBe('spindle://radio/x?stream=0')
+  })
+
+  it('a next song at the same rate loads in the other element of the same graph', async () => {
+    await playAt(48000)
+    e.setNext({ url: 'spindle://media/b', rate: 48000 })
+    expect(contexts).toHaveLength(2)
+    expect(ctx().els.find((a) => a !== playing())!.loads).toEqual(['spindle://media/b'])
+  })
+
+  it('a next song at another rate loads in a new graph, starts there and the old one closes after its end', async () => {
+    await playAt(44100)
+    const a = playing()
+    e.setNext({ url: 'spindle://media/b', rate: 96000 })
+    const next = ctx()
+    expect(next.sampleRate).toBe(96000)
+    const o = next.els[0]
+    expect(o.loads).toEqual(['spindle://media/b'])
+    await vi.advanceTimersByTimeAsync(0)
+    ready(o)
+    a.currentTime = 99.999
+    a.fire('timeupdate')
+    expect(o.paused).toBe(false)
+    expect(e.el).toBe(o)
+    expect(e.context).toBe(next)
+    expect(got).toEqual(['time 100.00', 'next', 'duration 50', 'time 0.00'])
+    // the old graph sounds out its song, then closes
+    expect(contexts[0].state).toBe('running')
+    await vi.advanceTimersByTimeAsync(300)
+    expect(contexts[0].state).toBe('closed')
+    expect(a.getAttribute('src')).toBe(null)
+    // the song after, at the new rate, goes in the new graph's other element
+    o.currentTime = 40
+    e.setNext({ url: 'spindle://media/c', rate: 96000 })
+    expect(contexts).toHaveLength(2)
+    expect(next.els[1].loads).toEqual(['spindle://media/c'])
+  })
+
+  it('a next song at another rate not ready at the end: the song ends, and its load takes over the new graph', async () => {
+    await playAt(44100)
+    e.setNext({ url: 'spindle://media/b', rate: 48000 })
+    const next = ctx()
+    const o = next.els[0]
+    playing().currentTime = 100
+    playing().fire('ended')
+    expect(got).toEqual(['ended'])
+    e.load('spindle://media/b', 0, undefined, { rate: 48000 })
+    expect(e.el).toBe(o)
+    expect(e.context).toBe(next)
+    expect(o.loads).toEqual(['spindle://media/b'])
+    expect(contexts[0].state).toBe('closed')
+    expect(contexts).toHaveLength(2)
+  })
+
+  it('starts the next song in a new graph as close to the end as it can: what play() takes and the two delays', async () => {
+    await playAt(44100)
+    contexts[0].baseLatency = 0.01
+    e.setNext({ url: 'spindle://media/b', rate: 48000 })
+    ctx().baseLatency = 0.02
+    await vi.advanceTimersByTimeAsync(0)
+    const o = ctx().els[0]
+    ready(o)
+    // plainLead (no join here) 5 ms, plus 10 ms more delay in the new graph
+    playing().currentTime = 99.98
+    playing().fire('timeupdate')
+    expect(o.paused).toBe(true)
+    playing().currentTime = 99.984
+    await vi.advanceTimersByTimeAsync(5)
+    expect(o.paused).toBe(false)
+  })
+
+  it('starts the next song after the end when its graph takes less time to the speakers', async () => {
+    await playAt(96000)
+    ctx().baseLatency = 0.04
+    e.setNext({ url: 'spindle://media/b', rate: 44100 })
+    const o = ctx().els[0]
+    await vi.advanceTimersByTimeAsync(0)
+    ready(o)
+    // 5 ms for play(), less 40 ms quicker: 35 ms after the end
+    playing().currentTime = 100
+    playing().fire('ended')
+    expect(o.paused).toBe(true)
+    expect(got).toEqual([])
+    await vi.advanceTimersByTimeAsync(30)
+    expect(o.paused).toBe(true)
+    await vi.advanceTimersByTimeAsync(10)
+    expect(o.paused).toBe(false)
+    expect(got).toEqual(['next', 'duration 50', 'time 0.00'])
+  })
+
+  it('a start held after the end is dropped by a pause', async () => {
+    await playAt(96000)
+    ctx().baseLatency = 0.04
+    e.setNext({ url: 'spindle://media/b', rate: 44100 })
+    const o = ctx().els[0]
+    await vi.advanceTimersByTimeAsync(0)
+    ready(o)
+    playing().currentTime = 100
+    playing().fire('ended')
+    e.pause()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(o.paused).toBe(true)
+  })
+
+  it('another next song, or none, closes the graph made for the one before', async () => {
+    await playAt(44100)
+    e.setNext({ url: 'spindle://media/b', rate: 48000 })
+    const b = ctx()
+    e.setNext({ url: 'spindle://media/c', rate: 96000 })
+    expect(b.state).toBe('closed')
+    const c = ctx()
+    expect(c.sampleRate).toBe(96000)
+    e.setNext({ url: 'spindle://media/d' })
+    expect(c.state).toBe('closed')
+    expect(contexts[0].els.find((a) => a !== playing())!.loads).toEqual(['spindle://media/d'])
+    e.setNext({ url: 'spindle://media/e', rate: 48000 })
+    e.clear()
+    expect(ctx().state).toBe('closed')
+    expect(contexts[0].state).toBe('running')
+  })
+
+  it('a song loaded at a third rate closes both graphs', async () => {
+    await playAt(44100)
+    e.setNext({ url: 'spindle://media/b', rate: 48000 })
+    e.load('spindle://media/c', 0, undefined, { rate: 96000 })
+    expect(contexts.map((c) => [c.sampleRate, c.state])).toEqual([
+      [44100, 'closed'],
+      [48000, 'closed'],
+      [96000, 'running']
+    ])
+  })
+
+  it('a next song that fails to load closes its graph, and fails in its turn as usual', async () => {
+    await playAt(44100)
+    e.setNext({ url: 'spindle://media/bad', rate: 48000 })
+    const b = ctx()
+    const o = b.els[0]
+    o.error = { code: 4, message: '' }
+    o.fire('error')
+    o.error = { code: 4, message: '' }
+    o.fire('error')
+    expect(b.state).toBe('closed')
+  })
+
+  it('the volume and each song’s level are set on a new graph', async () => {
+    e.setVolume(0)
+    await playAt(44100)
+    e.setNext({ url: 'spindle://media/b', rate: 48000, gain: 0.5 })
+    const b = ctx()
+    // the volume, then each element's gain
+    expect(b.gains[0].value).toBe(0)
+    expect(b.gains[1].value).toBe(0.5)
+    // a new volume reaches both graphs
+    e.setVolume(50)
+    expect(contexts[0].gains[0].value).toBe(0.25)
+    expect(b.gains[0].value).toBe(0.25)
+    e.load('spindle://media/c', 0, undefined, { rate: 96000, gain: 2 })
+    expect(ctx().gains[0].value).toBe(0.25)
+    expect(ctx().gains[1].value).toBe(2)
   })
 })

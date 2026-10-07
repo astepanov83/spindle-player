@@ -47,7 +47,8 @@
         : ', '}{/if}{#each k.split(' / ') as half, j (j)}{#if j}<span class="pair">/</span>{/if}<kbd
         >{half}</kbd
       >{/each}{/each} work there. Inside a list or on a slider the arrows move there; hold Shift to seek
-  and set the volume instead.
+  and set the volume instead. In a song list, Shift+↑ and Shift+↓ select songs, so the volume needs the
+  focus out of the list.
 </p>
 
 <style>

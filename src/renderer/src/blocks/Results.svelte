@@ -10,13 +10,15 @@
   import Icon from '../ui/Icon.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import { fmtTime } from '../format'
-  import { roving } from '../ui/roving'
+  import { roving, type RovingSelect } from '../ui/roving'
   import { infoOf } from '../plugins'
   import type { FoundGroup, ResultsBlock } from '../plugins/types'
   import type { ItemKey } from '../../../shared/plugins/items'
   import { library } from '../stores/library.svelte'
   import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { rowSelection } from '../stores/selection.svelte'
+  import { listRows } from '../ui/selection'
 
   let { block: b, scrollEl }: { block: ResultsBlock; scrollEl: HTMLElement | undefined } = $props()
 
@@ -37,6 +39,39 @@
   // the clicked song, with every song of its group found after it as the queue
   function play(keys: ItemKey[], i: number): void {
     queue.playList(keys, i, from)
+  }
+
+  // One selection over the songs shown in every group (ticket 086), so a
+  // Shift+click can reach into the next group. A group's rows are numbered
+  // from `at` in it.
+  const songGroups = $derived.by(() => {
+    let at = 0
+    return groups.flatMap((f) => {
+      if (!('songs' in f.group)) return []
+      const keys = f.group.songs.slice(0, TOP_SONGS)
+      const g = { key: f.key, keys, at }
+      at += keys.length
+      return [g]
+    })
+  })
+  const shown = $derived(listRows(songGroups.flatMap((g) => g.keys)))
+  const sel = rowSelection(
+    () => shown,
+    (keys) => keys
+  )
+  const startOf = (f: FoundGroup): number => songGroups.find((g) => g.key === f.key)?.at ?? 0
+
+  function onrowclick(e: MouseEvent, f: FoundGroup, keys: ItemKey[], i: number): void {
+    if (!sel.click(startOf(f) + i, e)) play(keys, i)
+  }
+
+  // the list keys of one group, in its own row numbers
+  function selectIn(f: FoundGroup, keys: ItemKey[]): RovingSelect {
+    return {
+      step: (a, b) => sel.step(startOf(f) + a, startOf(f) + b),
+      all: () => sel.only(keys.slice(0, TOP_SONGS)),
+      clear: () => sel.clear()
+    }
   }
 </script>
 
@@ -60,17 +95,18 @@
       <span class="al">Album</span>
       <span class="end">Time</span>
     </div>
-    <div class="lines song-rows" use:roving={{ rows: keys }}>
+    <div class="lines song-rows" use:roving={{ rows: keys, select: selectIn(f, keys) }}>
       {#each keys.slice(0, TOP_SONGS) as key, i (key)}
         {@const t = infoOf(key)}
         {@const cur = queues.isItem(key)}
         <button
           class="srow row"
           class:cur-row={cur}
+          class:selected={sel.has(key)}
           data-row
           aria-current={cur ? 'true' : undefined}
-          onclick={() => play(keys, i)}
-          oncontextmenu={(e) => openSongMenu(e, [key], { from })}
+          onclick={(e) => onrowclick(e, f, keys, i)}
+          oncontextmenu={(e) => openSongMenu(e, sel.menu(startOf(f) + i), { from })}
         >
           <span class="tt">
             <Thumb src={t?.art?.cover} size={36} radius={4} />

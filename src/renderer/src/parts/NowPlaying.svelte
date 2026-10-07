@@ -12,7 +12,8 @@
   const hint = $derived(
     startHint({
       anyPluginOn: plugins.some((p) => settings.plugins[p.id]),
-      hasLibrary: layout.hasLibrary
+      hasLibrary: layout.hasLibrary,
+      firstPlugin: plugins[0].id
     })
   )
 </script>
@@ -28,7 +29,8 @@
       <div class="song-title">Nothing playing</div>
       <div class="song-sub">{hint.text}</div>
       {#if hint.settings}
-        <button class="chip open" onclick={() => (layout.settingsOpen = true)}>Open Settings</button
+        {@const section = hint.settings}
+        <button class="chip open" onclick={() => layout.openSettings(section)}>Open Settings</button
         >
       {/if}
     {/if}

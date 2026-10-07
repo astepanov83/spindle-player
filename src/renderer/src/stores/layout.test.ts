@@ -58,3 +58,29 @@ describe('a Column in a narrow window (ticket 043)', () => {
     expect(layout.showQueue).toBe(true)
   })
 })
+
+describe('the Settings page (ticket 072)', () => {
+  beforeEach(() => layout.closeSettings())
+
+  it('opens on the section its opener names, and where it was last without one', () => {
+    expect(layout.settingsOpen).toBe(false)
+    layout.openSettings()
+    expect(layout.settingsAt).toBe('general')
+    layout.settingsAt = 'keys'
+    layout.closeSettings()
+    expect(layout.settingsOpen).toBe(false)
+    layout.openSettings()
+    expect(layout.settingsAt).toBe('keys')
+    layout.openSettings('layout')
+    expect(layout.settingsAt).toBe('layout')
+  })
+
+  it('toggles, opening on a section when it was closed', () => {
+    layout.toggleSettings('layout')
+    expect(layout.settingsAt).toBe('layout')
+    layout.toggleSettings('layout')
+    expect(layout.settingsOpen).toBe(false)
+    layout.toggleSettings()
+    expect(layout.settingsAt).toBe('layout')
+  })
+})

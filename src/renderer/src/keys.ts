@@ -47,6 +47,7 @@ export type KeyAction =
   | 'forward'
   | 'search'
   | 'settings'
+  | 'keys'
   | 'escape'
   | 'visualizer'
   | 'queue'
@@ -59,47 +60,151 @@ export interface KeyPlace {
   menuOpen: boolean
 }
 
-const arrowActions: Record<string, KeyAction> = {
-  ArrowLeft: 'seekBack',
-  ArrowRight: 'seekForward',
-  ArrowUp: 'volumeUp',
-  ArrowDown: 'volumeDown'
+// One key press that runs an action. Meta never counts; Ctrl and Alt must be
+// as written. Shift may be held unless `shift` says.
+export interface Chord {
+  action: KeyAction
+  // KeyboardEvent.key, or with `code`, KeyboardEvent.code: the key's place,
+  // so it works on any keyboard layout
+  key: string
+  code?: boolean
+  ctrl?: boolean
+  alt?: boolean
+  shift?: false
+  // a held key goes on
+  repeats?: boolean
+  // works in a text field too
+  inText?: boolean
+  // a focused list or slider takes it first; Shift reaches past them
+  yields?: boolean
 }
+
+// A line of the shortcut list in Settings (Keyboard): one or more chords that
+// do one thing. keyAction reads the chords from here, so the list can't drift.
+export interface Shortcut {
+  does: string
+  chords: Chord[]
+}
+
+const arrow = (key: string, action: KeyAction, more: Partial<Chord> = {}): Chord => ({
+  action,
+  key,
+  repeats: true,
+  ...more
+})
+
+export const shortcuts: Shortcut[] = [
+  { does: 'Play or pause', chords: [{ action: 'toggle', key: 'Space', code: true }] },
+  {
+    does: 'Seek 5 s back or forward',
+    chords: [
+      arrow('ArrowLeft', 'seekBack', { yields: true }),
+      arrow('ArrowRight', 'seekForward', { yields: true })
+    ]
+  },
+  {
+    does: 'Volume up or down 5%',
+    chords: [
+      arrow('ArrowUp', 'volumeUp', { yields: true }),
+      arrow('ArrowDown', 'volumeDown', { yields: true })
+    ]
+  },
+  {
+    does: 'Previous or next song',
+    chords: [
+      arrow('ArrowLeft', 'previous', { ctrl: true }),
+      arrow('ArrowRight', 'next', { ctrl: true })
+    ]
+  },
+  {
+    does: 'Find: go to the search box',
+    chords: [
+      { action: 'search', key: 'KeyF', code: true, ctrl: true, inText: true },
+      { action: 'search', key: '/' }
+    ]
+  },
+  {
+    // a held Alt+Left must not go back page after page
+    does: 'Back or forward through the library',
+    chords: [
+      { action: 'back', key: 'ArrowLeft', alt: true },
+      { action: 'forward', key: 'ArrowRight', alt: true },
+      { action: 'back', key: 'Backspace', shift: false }
+    ]
+  },
+  {
+    does: 'Open or close Settings',
+    chords: [{ action: 'settings', key: 'Comma', code: true, ctrl: true, inText: true }]
+  },
+  { does: 'This list of keys', chords: [{ action: 'keys', key: '?' }] },
+  {
+    does: 'Close the menu, then Settings, then the queue drawer',
+    chords: [{ action: 'escape', key: 'Escape', repeats: true }]
+  },
+  { does: 'Next visualizer style', chords: [{ action: 'visualizer', key: 'v' }] },
+  {
+    does: 'Queue: switch to its tab, or open or close the drawer',
+    chords: [{ action: 'queue', key: 'q' }]
+  }
+]
+
+const chords = shortcuts.flatMap((s) => s.chords)
+
+const matches = (e: FullKey, c: Chord): boolean =>
+  (c.code ? e.code === c.key : e.key === c.key) &&
+  e.ctrlKey === !!c.ctrl &&
+  e.altKey === !!c.alt &&
+  !e.metaKey &&
+  (c.shift === undefined || e.shiftKey === c.shift)
 
 const notTyping: Target = { tagName: 'DIV', isContentEditable: false }
 
-// Ctrl+F and Ctrl+, go by the key's place (code), so they work on any layout.
 export function keyAction(e: FullKey, place: KeyPlace): KeyAction {
   if (place.menuOpen) return e.key === 'Escape' ? 'escape' : 'none'
-  const ctrlOnly = e.ctrlKey && !e.altKey && !e.metaKey
-  if (ctrlOnly && !e.repeat && e.code === 'KeyF') return 'search'
-  if (ctrlOnly && !e.repeat && e.code === 'Comma') return 'settings'
+  // Space with a modifier or held never presses the focused button
+  if (!place.typing && spaceAction(e, notTyping, false) === 'block') return 'block'
+  const c = chords.find((c) => matches(e, c))
+  if (!c) return 'none'
   // a text field keeps the rest, Escape too (the search box has its own)
-  if (place.typing) return 'none'
-  if (e.code === 'Space') return spaceAction(e, notTyping, false)
-  if (e.key === 'Escape') return 'escape'
-  if (e.metaKey) return 'none'
-  const arrow = arrowActions[e.key]
-  if (arrow && ctrlOnly) {
-    if (e.key === 'ArrowLeft') return 'previous'
-    if (e.key === 'ArrowRight') return 'next'
-    return 'none'
+  if (place.typing && !c.inText) return 'none'
+  if (e.repeat && !c.repeats) return 'none'
+  if (c.yields && place.arrows && !e.shiftKey) return 'none'
+  return c.action
+}
+
+const keyNames: Record<string, string> = {
+  Space: 'Space',
+  ArrowLeft: '←',
+  ArrowRight: '→',
+  ArrowUp: '↑',
+  ArrowDown: '↓',
+  Escape: 'Esc',
+  Comma: ',',
+  PageUp: 'Page Up',
+  PageDown: 'Page Down'
+}
+
+// How a chord is written in the list: "Ctrl+←", "Ctrl+F", "V".
+export function chordText(c: Pick<Chord, 'key' | 'ctrl' | 'alt'>): string {
+  const name = keyNames[c.key] ?? (/^Key[A-Z]$/.test(c.key) ? c.key.slice(3) : c.key)
+  const key = name.length === 1 ? name.toUpperCase() : name
+  return `${c.ctrl ? 'Ctrl+' : ''}${c.alt ? 'Alt+' : ''}${key}`
+}
+
+// The keys of a line, one entry per way to press it: ["Ctrl+F", "/"],
+// ["← / →"]. A pair that steps both ways shares an entry.
+export function shortcutKeys(s: Pick<Shortcut, 'chords'>): string[] {
+  const out: string[] = []
+  const cs = s.chords
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i]
+    const next = cs[i + 1]
+    if (next && next.ctrl === c.ctrl && next.alt === c.alt && next.action !== c.action) {
+      out.push(`${chordText(c)} / ${chordText(next)}`)
+      i++
+    } else out.push(chordText(c))
   }
-  // a held Alt+Left must not go back page after page
-  if (arrow && e.altKey && !e.ctrlKey && !e.repeat) {
-    if (e.key === 'ArrowLeft') return 'back'
-    if (e.key === 'ArrowRight') return 'forward'
-    return 'none'
-  }
-  if (e.ctrlKey || e.altKey) return 'none'
-  // a held arrow keeps seeking; Shift reaches past a list or slider
-  if (arrow) return place.arrows && !e.shiftKey ? 'none' : arrow
-  if (e.repeat) return 'none'
-  if (e.key === 'Backspace' && !e.shiftKey) return 'back'
-  if (e.key === '/') return 'search'
-  if (e.key === 'v') return 'visualizer'
-  if (e.key === 'q') return 'queue'
-  return 'none'
+  return out
 }
 
 // Escape closes one thing at a time, the one on top first.
@@ -170,6 +275,25 @@ export function isRemoveKey(e: FullKey): boolean {
 // one that took its place, else the new last one. null when none are left.
 export function rowAfterRemove(i: number, count: number): number | null {
   return count ? Math.min(i, count - 1) : null
+}
+
+// The keys inside a list (song table, queue, album page, search songs,
+// radio lists), for the list in Settings. listStep, ui/roving.ts (Enter),
+// the radio rows and the queue rows run them; a test checks listStep's.
+export const listShortcuts: { keys: string[]; does: string }[] = [
+  { keys: ['ArrowUp', 'ArrowDown'], does: 'Previous or next row' },
+  { keys: ['PageUp', 'PageDown'], does: 'A screen of rows up or down' },
+  { keys: ['Home', 'End'], does: 'First or last row' },
+  { keys: ['Enter'], does: 'Play the row' },
+  { keys: ['ArrowRight', 'ArrowLeft'], does: 'On a station: to its star and back' },
+  { keys: ['Alt+ArrowUp', 'Alt+ArrowDown'], does: 'On a queue row: move the song' },
+  { keys: ['Delete'], does: 'On a queue or playlist row: remove it' }
+]
+
+// "Alt+ArrowUp" as "Alt+↑"
+export const keyText = (k: string): string => {
+  const alt = k.startsWith('Alt+')
+  return chordText({ key: alt ? k.slice(4) : k, alt })
 }
 
 // A group of choices (Settings' segmented buttons): arrows go round.

@@ -46,5 +46,7 @@ export type SettingBlock =
       disabled?: boolean
     }
   // A plugin's place for a task: the core draws the task's switch here, and
-  // while it is on, the AI setup blocks under it. Drawn from a later task on.
-  | { kind: 'ai'; task: string }
+  // while it is on, the AI setup blocks under it, then `blocks`: the task's
+  // own lines and buttons from the plugin. All in one box, so it reads as a
+  // part of the plugin.
+  | { kind: 'ai'; task: string; blocks?: SettingBlock[] }

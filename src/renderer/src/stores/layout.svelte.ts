@@ -28,7 +28,14 @@ class LayoutStore {
   showQueue = $state(false)
   // 0: the first tab, 1: Queue
   tabSel = $state(0)
-  settingsOpen = $state(false)
+  // the Settings page's section while it is open, else null
+  // (components/settings-sections.ts)
+  settingsAt: string | null = $state(null)
+  // the section it opens on next, the last one shown
+  #lastSection = 'general'
+  get settingsOpen(): boolean {
+    return this.settingsAt !== null
+  }
   // the short "Spectrum" label on the stage after a style change
   vzLabel = $state(false)
   #vzTimer: ReturnType<typeof setTimeout> | undefined
@@ -36,6 +43,28 @@ class LayoutStore {
   #reset(): void {
     this.showQueue = false
     this.tabSel = 0
+  }
+
+  // what had focus before Settings opened; it gets it back on close
+  settingsOpener: HTMLElement | null = null
+
+  // `section`: where the opener knows to go, else where it was last
+  openSettings(section?: string): void {
+    if (!this.settingsOpen && typeof document !== 'undefined') {
+      const at = document.activeElement
+      this.settingsOpener = at instanceof HTMLElement && at !== document.body ? at : null
+    }
+    this.settingsAt = section ?? this.#lastSection
+  }
+
+  closeSettings(): void {
+    if (this.settingsAt !== null) this.#lastSection = this.settingsAt
+    this.settingsAt = null
+  }
+
+  toggleSettings(section?: string): void {
+    if (this.settingsOpen) this.closeSettings()
+    else this.openSettings(section)
   }
 
   chooseTemplate(id: TemplateId): void {

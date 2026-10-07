@@ -4,10 +4,14 @@ import {
   isTyping,
   keyAction,
   isRemoveKey,
+  keyText,
+  listShortcuts,
   listStep,
   rowAfterRemove,
   radioStep,
   seekStep,
+  shortcutKeys,
+  shortcuts,
   sliderKey,
   spaceAction,
   tabStep,
@@ -294,5 +298,77 @@ describe('tabStep', () => {
     expect(tabStep('ArrowUp', 1, 2)).toBe(null)
     expect(tabStep('ArrowDown', 0, 2)).toBe(null)
     expect(tabStep('Enter', 0, 2)).toBe(null)
+  })
+})
+
+describe('shortcuts', () => {
+  it('opens the key list with ?, not while typing', () => {
+    expect(keyAction(press('?', { code: 'Slash', shiftKey: true }), free)).toBe('keys')
+    expect(
+      keyAction(press('?', { code: 'Slash', shiftKey: true }), { ...free, typing: true })
+    ).toBe('none')
+  })
+  it('leaves Shift+V, Shift+Backspace and Meta alone', () => {
+    expect(keyAction(press('V', { shiftKey: true }), free)).toBe('none')
+    expect(keyAction(press('Backspace', { shiftKey: true }), free)).toBe('none')
+    expect(keyAction(press('f', { ctrlKey: true, metaKey: true }), free)).toBe('none')
+    expect(keyAction(press('ArrowLeft', { metaKey: true }), free)).toBe('none')
+  })
+  it('does not repeat Alt+Left or V when held', () => {
+    expect(keyAction(press('ArrowLeft', { altKey: true, repeat: true }), free)).toBe('none')
+    expect(keyAction(press('v', { repeat: true }), free)).toBe('none')
+  })
+  it('lists every action keyAction can give', () => {
+    const listed = new Set(shortcuts.flatMap((s) => s.chords.map((c) => c.action)))
+    const all = [
+      'toggle',
+      'seekBack',
+      'seekForward',
+      'volumeUp',
+      'volumeDown',
+      'previous',
+      'next',
+      'back',
+      'forward',
+      'search',
+      'settings',
+      'keys',
+      'escape',
+      'visualizer',
+      'queue'
+    ]
+    expect([...listed].sort()).toEqual(all.sort())
+  })
+  it('runs what each line of the list says', () => {
+    for (const s of shortcuts)
+      for (const c of s.chords) {
+        const e = press(c.key, {
+          code: c.code ? c.key : 'Other',
+          ctrlKey: !!c.ctrl,
+          altKey: !!c.alt
+        })
+        expect(keyAction(e, free)).toBe(c.action)
+      }
+  })
+  it('writes the keys as the list shows them', () => {
+    expect(shortcuts.map((s) => shortcutKeys(s).join(', '))).toEqual([
+      'Space',
+      '← / →',
+      '↑ / ↓',
+      'Ctrl+← / Ctrl+→',
+      'Ctrl+F, /',
+      'Alt+← / Alt+→, Backspace',
+      'Ctrl+,',
+      '?',
+      'Esc',
+      'V',
+      'Q'
+    ])
+    expect(keyText('Alt+ArrowUp')).toBe('Alt+↑')
+    expect(keyText('PageDown')).toBe('Page Down')
+  })
+  it('lists keys that listStep takes', () => {
+    for (const k of listShortcuts.slice(0, 3).flatMap((s) => s.keys))
+      expect(listStep(k, 2, 10, 3)).not.toBe(null)
   })
 })

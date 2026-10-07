@@ -3,6 +3,7 @@
   import { defaultPalettes } from '../../shared/palette'
   import TitleBar from './components/TitleBar.svelte'
   import Settings from './components/Settings.svelte'
+  import { keysSection } from './components/settings-sections'
   import CloseAsk from './components/CloseAsk.svelte'
   import Node from './layout/Node.svelte'
   import Menu from './ui/Menu.svelte'
@@ -127,7 +128,8 @@
     else if (act === 'back') goBack()
     else if (act === 'forward') goForward()
     else if (act === 'search') focusSearch()
-    else if (act === 'settings') layout.settingsOpen = !layout.settingsOpen
+    else if (act === 'settings') layout.toggleSettings()
+    else if (act === 'keys') toggleKeys()
     else if (act === 'escape') escape()
     else if (act === 'visualizer') layout.cycleVisualizer()
     else if (act === 'queue') layout.toggleQueue()
@@ -137,8 +139,14 @@
     const drawer = layout.queueMode === 'drawer' && layout.showQueue
     const to = escapeTarget({ menu: !!menu.open, settings: layout.settingsOpen, drawer })
     if (to === 'menu') menu.close()
-    else if (to === 'settings') layout.settingsOpen = false
+    else if (to === 'settings') layout.closeSettings()
     else if (to === 'drawer') layout.showQueue = false
+  }
+
+  // ? opens Settings on the key list, and closes it from there
+  function toggleKeys(): void {
+    if (layout.settingsAt === keysSection) layout.closeSettings()
+    else layout.openSettings(keysSection)
   }
 
   // A drawer that turns back into a Column hands its focus on to the Column.
@@ -152,7 +160,7 @@
   function focusSearch(): void {
     const box = document.querySelector<HTMLInputElement>('input[data-search]')
     if (!box) return
-    layout.settingsOpen = false
+    layout.closeSettings()
     box.focus()
     box.select()
   }
@@ -178,9 +186,10 @@
   <TitleBar
     title="Spindle · {layout.template.name}"
     settingsOpen={layout.settingsOpen}
-    onSettings={() => (layout.settingsOpen = !layout.settingsOpen)}
+    onSettings={() => layout.toggleSettings()}
   />
-  <main class="winbody">
+  <!-- inert under the Settings page, so Tab and clicks stay on the page -->
+  <main class="winbody" inert={layout.settingsOpen}>
     <Node node={layout.built.root} />
   </main>
   {#if layout.settingsOpen}<Settings />{/if}

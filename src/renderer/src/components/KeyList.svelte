@@ -1,7 +1,7 @@
 <!-- Settings, Keyboard: every shortcut, read from the lists in keys.ts that
      keyAction and the lists use, so this can't drift from what the keys do. -->
 <script lang="ts">
-  import { chordText, keyText, listShortcuts, shortcutKeys, shortcuts } from '../keys'
+  import { keyText, listShortcuts, shortcutKeys, shortcuts } from '../keys'
 
   const uid = $props.id()
 
@@ -10,12 +10,12 @@
     keys: [s.keys.map(keyText).join(' / ')],
     does: s.does
   }))
-  // "Ctrl+F and Ctrl+,"
+  // the keys that work in a text field, a line's together: "Ctrl+F",
+  // "Ctrl+,", "Ctrl+1 / Ctrl+2 / Ctrl+3"
   const inText = shortcuts
-    .flatMap((s) => s.chords)
-    .filter((c) => c.inText)
-    .map(chordText)
-    .join(' and ')
+    .map((s) => s.chords.filter((c) => c.inText))
+    .filter((cs) => cs.length)
+    .flatMap((chords) => shortcutKeys({ chords }))
   const groups = [
     { label: 'Anywhere', rows: anywhere },
     { label: 'In a list', rows: inList }
@@ -42,8 +42,12 @@
   </div>
 {/each}
 <p class="hint">
-  A text field keeps its keys: only {inText} work there. Inside a list or on a slider the arrows move
-  there; hold Shift to seek and set the volume instead.
+  A text field keeps its keys: only {#each inText as k, i (k)}{#if i}{i === inText.length - 1
+        ? ' and '
+        : ', '}{/if}{#each k.split(' / ') as half, j (j)}{#if j}<span class="pair">/</span>{/if}<kbd
+        >{half}</kbd
+      >{/each}{/each} work there. Inside a list or on a slider the arrows move there; hold Shift to seek
+  and set the volume instead.
 </p>
 
 <style>

@@ -3,6 +3,7 @@
   import { templateIds, templates } from '../../../shared/templates'
   import { settings } from '../stores/settings.svelte'
   import { layout } from '../stores/layout.svelte'
+  import { layoutChord } from '../keys'
   import Icon from '../ui/Icon.svelte'
   import type { IconName } from '../ui/icons'
 
@@ -18,11 +19,6 @@
     studio: 'layoutStudio',
     classic: 'layoutClassic',
     focus: 'layoutFocus'
-  }
-
-  // the picked one again would only clear the library's history
-  function pick(id: TemplateId): void {
-    if (id !== settings.template) layout.chooseTemplate(id)
   }
 
   $effect(() => {
@@ -43,8 +39,9 @@
           class:on={settings.template === id}
           aria-pressed={settings.template === id}
           aria-label="{templates[id].name} layout"
-          title="{templates[id].name} layout"
-          onclick={() => pick(id)}
+          aria-keyshortcuts={layoutChord(id).replace('Ctrl', 'Control')}
+          title="{templates[id].name} ({layoutChord(id)})"
+          onclick={() => layout.chooseTemplate(id)}
         >
           <Icon name={layoutIcons[id]} size={16} />
         </button>
@@ -120,13 +117,32 @@
     border-radius: 6px;
     color: var(--ink-2);
   }
-  button:hover,
+  button:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
   .tbbtn.on {
     background: var(--active);
     color: var(--ink);
   }
   .tbbtn {
     width: 30px;
+  }
+  /* the chosen layout also gets a bar in the album's color, so a hovered
+     one never looks chosen too */
+  .layouts .tbbtn {
+    position: relative;
+  }
+  .layouts .tbbtn.on::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    width: 14px;
+    height: 2px;
+    margin-left: -7px;
+    border-radius: 1px;
+    background: var(--c2);
   }
   .layouts {
     display: flex;

@@ -805,3 +805,98 @@ describe('tabs from the plugins that are on (ticket 059)', () => {
     expect([library.tab, filesPages.shownAlbum()]).toEqual(['albums', null])
   })
 })
+
+// Studio's chips and Classic's sidebar each keep their history; the place
+// and the search text go along (ticket 078). Focus draws no library, so it
+// never calls showIn.
+describe('switching layout (ticket 078)', () => {
+  it('starts the other library with no history, on the same place and search', () => {
+    filesPages.openAlbum('a')
+    library.query = 'har'
+    library.showIn('sidebar')
+    expect([library.tab, filesPages.shownAlbum(), library.query]).toEqual(['albums', 'a', 'har'])
+    expect(library.canBack).toBe(false)
+  })
+
+  it("puts a library's history back when it shows again", () => {
+    filesPages.openAlbum('a')
+    filesPages.openAlbum('b')
+    library.showIn('sidebar')
+    library.showIn('chips')
+    expect(filesPages.shownAlbum()).toBe('b')
+    library.back()
+    expect(filesPages.shownAlbum()).toBe('a')
+    library.back()
+    expect(filesPages.shownAlbum()).toBeNull()
+  })
+
+  it('keeps Forward when it comes back to the place it was left at', () => {
+    filesPages.openAlbum('a')
+    filesPages.openAlbum('b')
+    library.back()
+    library.showIn('sidebar')
+    library.showIn('chips')
+    expect(filesPages.shownAlbum()).toBe('a')
+    expect(library.canForward).toBe(true)
+    library.forward()
+    expect(filesPages.shownAlbum()).toBe('b')
+  })
+
+  it('makes the place it was left at a step back when the other one moved on', () => {
+    filesPages.openAlbum('a')
+    library.showIn('sidebar')
+    library.pickTab('radio')
+    library.showIn('chips')
+    expect(library.tab).toBe('radio')
+    library.back()
+    expect([library.tab, filesPages.shownAlbum()]).toEqual(['albums', 'a'])
+    library.back()
+    expect([library.tab, filesPages.shownAlbum()]).toEqual(['albums', null])
+  })
+
+  it("brings Classic's Songs back as a step, though Studio has no Songs", () => {
+    library.showIn('sidebar')
+    library.pickTab('songs')
+    library.query = 'blue'
+    library.showIn('chips')
+    // Studio shows its first chip; the text was for songs
+    expect([library.tab, library.query]).toEqual(['albums', ''])
+    filesPages.openAlbum('a')
+    library.showIn('sidebar')
+    library.back()
+    expect([library.tab, library.query]).toEqual(['songs', 'blue'])
+    library.back()
+    expect(library.tab).toBe('albums')
+  })
+
+  it('a step it kept with the search text gives the text back', () => {
+    library.pickTab('radio')
+    library.query = 'jazz'
+    library.showIn('sidebar')
+    library.pickTab('songs')
+    library.showIn('chips')
+    expect(library.query).toBe('')
+    library.back()
+    expect([library.tab, library.query]).toEqual(['radio', 'jazz'])
+  })
+
+  it('a playlist deleted while the other library shows leaves its kept steps', () => {
+    library.openPlaylistPage('p1')
+    library.pickTab('radio')
+    library.openPlaylistPage('p1')
+    library.showIn('sidebar')
+    library.pickTab('songs')
+    library.forgetPlaylist('p1')
+    library.showIn('chips')
+    expect([library.tab, library.openPlaylist]).toEqual(['albums', null])
+    library.back()
+    expect([library.tab, library.openPlaylist]).toEqual(['playlists', null])
+    library.back()
+    expect(library.tab).toBe('radio')
+    library.back()
+    expect([library.tab, library.openPlaylist]).toEqual(['playlists', null])
+    library.back()
+    expect(library.tab).toBe('albums')
+    expect(library.canBack).toBe(false)
+  })
+})

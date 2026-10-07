@@ -106,7 +106,10 @@
               value={settings.template}
               onchange={(id: TemplateId) => layout.chooseTemplate(id)}
             />
-            <p class="hint">The buttons left of the gear in the title bar switch it too.</p>
+            <p class="hint">
+              The buttons left of the gear in the title bar switch it too, and so do Ctrl+1, Ctrl+2
+              and Ctrl+3.
+            </p>
           </div>
           <div class="set">
             <span class="section-label">Queue</span>

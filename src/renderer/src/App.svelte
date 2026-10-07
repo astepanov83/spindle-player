@@ -133,6 +133,7 @@
     else if (act === 'escape') escape()
     else if (act === 'visualizer') layout.cycleVisualizer()
     else if (act === 'queue') layout.toggleQueue()
+    else if (act === 'studio' || act === 'classic' || act === 'focus') layout.chooseTemplate(act)
   }
 
   function escape(): void {

@@ -7,14 +7,15 @@ export type Look = 'tint' | 'ambient'
 // A part never knows where it sits. Its options come from the template.
 export type PartNode =
   | { part: 'library'; opts: { nav: 'chips' | 'sidebar' } }
-  | { part: 'nowplaying'; opts: { style: 'panel' | 'full' } }
+  // show: only the stage or only the words; both when left out
+  | { part: 'nowplaying'; opts: { style: 'panel' | 'full'; show?: 'stage' | 'text' } }
   | { part: 'controls'; opts: { style: 'stack' | 'bar' } }
 
 interface NodeBase {
   // "1fr" or a fixed length like "380px"
   size?: string
-  // the Drawer slides in inside this node
-  drawerHost?: boolean
+  // the Drawer slides in inside this node; 'fill': it covers all of it
+  drawerHost?: true | 'fill'
 }
 
 interface BoxOpts {
@@ -49,4 +50,7 @@ export interface Template {
   // what settings may offer; the first one is the default
   queueOptions: QueueMode[]
   layout: TemplateNode
+  // another layout for a window at least `ratio` times as wide as it is tall
+  // and at least `minWidth` wide (layout/wide.ts)
+  wide?: { ratio: number; minWidth: number; layout: TemplateNode }
 }

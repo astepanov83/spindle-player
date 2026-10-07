@@ -5,6 +5,7 @@ import { queueModeFor, visualizerStyles, type VisualizerStyle } from '../../../s
 import { templates } from '../../../shared/templates'
 import { buildLayout, partsOf, type BuiltLayout, type Slots } from '../layout/build'
 import { shownQueueMode } from '../layout/narrow'
+import { isWide } from '../layout/wide'
 import { library } from './library.svelte'
 import { settings } from './settings.svelte'
 
@@ -13,11 +14,14 @@ class LayoutStore {
   // the page's width, so a narrow window builds its Drawer from the start;
   // 0 (not known) outside a page
   width = $state(typeof window === 'undefined' ? 0 : window.innerWidth)
+  height = $state(typeof window === 'undefined' ? 0 : window.innerHeight)
   // what Settings shows and saves
   queueSetting: QueueMode = $derived(queueModeFor(this.template, settings.queue[settings.template]))
   // what is drawn: a Column is a Drawer while the window is too narrow for it
   queueMode: QueueMode = $derived(shownQueueMode(this.template, this.queueSetting, this.width))
-  built: BuiltLayout = $derived(buildLayout(this.template, this.queueMode))
+  // a wide, short window: the template's wide layout, if it has one
+  wide: boolean = $derived(isWide(this.template, this.width, this.height))
+  built: BuiltLayout = $derived(buildLayout(this.template, this.queueMode, this.wide))
   // Focus has none: links to an album or artist are plain text there (ticket 040)
   hasLibrary: boolean = $derived(partsOf(this.built.root).some((p) => p.part === 'library'))
   get slots(): Slots {
@@ -51,10 +55,13 @@ class LayoutStore {
 
   // An open drawer closes when it turns back into a Column, so it does not
   // come back open on the next narrow resize. The Column shows the queue anyway.
-  resized(width: number): void {
+  // It closes on a switch to or from the wide layout too, which builds a new one.
+  resized(width: number, height: number): void {
     const was = this.queueMode
+    const wasWide = this.wide
     this.width = width
-    if (this.queueMode !== was) this.showQueue = false
+    this.height = height
+    if (this.queueMode !== was || this.wide !== wasWide) this.showQueue = false
   }
 
   chooseVisualizer(v: VisualizerStyle): void {

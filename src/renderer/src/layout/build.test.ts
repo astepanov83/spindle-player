@@ -8,6 +8,8 @@ function names(node: BuiltNode): string[] {
   return partsOf(node).map((p) => {
     if (p.part === 'queue')
       return 'queue' + (p.opts.header ? ':header' : '') + (p.opts.close ? ':close' : '')
+    if (p.part === 'nowplaying')
+      return 'nowplaying:' + p.opts.style + (p.opts.show ? ':' + p.opts.show : '')
     return p.part + ':' + ('nav' in p.opts ? p.opts.nav : p.opts.style)
   })
 }
@@ -17,7 +19,7 @@ function find(node: BuiltNode, test: (n: BuiltNode) => boolean): BuiltNode[] {
   return [...(test(node) ? [node] : []), ...kids.flatMap((k) => find(k, test))]
 }
 
-const drawerHosts = (root: BuiltNode): BuiltNode[] => find(root, (n) => n.drawer)
+const drawerHosts = (root: BuiltNode): BuiltNode[] => find(root, (n) => !!n.drawer)
 const tabs = (root: BuiltNode): BuiltNode[] => find(root, (n) => n.kind === 'tabs')
 
 describe('Studio', () => {
@@ -101,31 +103,83 @@ describe('Focus', () => {
     expect(names(b.root)).toEqual(['nowplaying:full', 'controls:stack'])
     const [host] = drawerHosts(b.root)
     expect(host.kind === 'part' && host.part.part).toBe('nowplaying')
+    expect(host.drawer).toBe('side')
     expect(host.flex).toBe('1 1 0')
   })
 
   it('keeps its words and controls 560px wide at most; the other templates have no such width', () => {
     const b = buildLayout(t, 'tab')
     expect(b.root.kind === 'box' && b.root.contentWidth).toBe('560px')
+    expect(b.wide).toBe(false)
     for (const other of [templates.studio, templates.classic]) {
       const boxes = find(buildLayout(other, 'drawer').root, (n) => n.kind === 'box')
+      expect(boxes.map((n) => n.kind === 'box' && n.contentWidth)).not.toContain('560px')
       expect(boxes.every((n) => n.kind === 'box' && n.contentWidth === null)).toBe(true)
     }
+  })
+
+  it('wide, tab: the stage on the left, the words and the queue share the tabs on the right', () => {
+    const b = buildLayout(t, 'tab', true)
+    expect(b.wide).toBe(true)
+    expect(names(b.root)).toEqual([
+      'nowplaying:full:stage',
+      'nowplaying:full:text',
+      'queue',
+      'controls:stack'
+    ])
+    const root = b.root
+    expect(root.kind === 'box' && root.dir).toBe('row')
+    expect(root.kind === 'box' && root.look).toBe('ambient')
+    expect(root.kind === 'box' && root.contentWidth).toBe('560px')
+    expect(root.kind === 'box' && root.children.map((c) => c.flex)).toEqual([
+      '1 1 0',
+      '0 0 clamp(420px, 40%, 620px)'
+    ])
+    const [tb] = tabs(b.root)
+    expect(tb.kind === 'tabs' && tb.labels).toEqual(['Now playing', 'Queue'])
+  })
+
+  it('wide, drawer: it covers the words, not the stage or the controls', () => {
+    const b = buildLayout(t, 'drawer', true)
+    expect(names(b.root)).toEqual([
+      'nowplaying:full:stage',
+      'nowplaying:full:text',
+      'controls:stack'
+    ])
+    const [host] = drawerHosts(b.root)
+    expect(host.kind === 'part' && host.part.part === 'nowplaying' && host.part.opts.show).toBe(
+      'text'
+    )
+    expect(host.drawer).toBe('fill')
+    expect(b.slots['player.buttons']).toEqual([{ act: 'queue', label: 'Show queue' }])
+  })
+
+  it('a template with no wide layout ignores the ask', () => {
+    const b = buildLayout(templates.studio, 'tab', true)
+    expect(b.wide).toBe(false)
+    expect(names(b.root)).toEqual(names(buildLayout(templates.studio, 'tab').root))
   })
 })
 
 describe('every template and queue option', () => {
   for (const t of Object.values(templates)) {
     for (const mode of t.queueOptions) {
-      it(`${t.id} / ${mode}: one queue somewhere and at most one drawer`, () => {
-        const b = buildLayout(t, mode)
-        const queues = partsOf(b.root).filter((p) => p.part === 'queue').length
-        const drawers = drawerHosts(b.root).length
-        expect(queues + drawers).toBe(1)
-        expect(b.queueMode).toBe(mode)
-        // every player style renders the slot, so a controls part must exist
-        expect(names(b.root).some((n) => n.startsWith('controls:'))).toBe(true)
-      })
+      for (const wide of t.wide ? [false, true] : [false]) {
+        it(`${t.id}${wide ? ' wide' : ''} / ${mode}: one queue somewhere and at most one drawer`, () => {
+          const b = buildLayout(t, mode, wide)
+          const queues = partsOf(b.root).filter((p) => p.part === 'queue').length
+          const drawers = drawerHosts(b.root).length
+          expect(queues + drawers).toBe(1)
+          expect(b.queueMode).toBe(mode)
+          // every player style renders the slot, so a controls part must exist
+          expect(names(b.root).some((n) => n.startsWith('controls:'))).toBe(true)
+          // and never two big stages (Classic's is in its bar)
+          const stages = names(b.root).filter(
+            (n) => n.startsWith('nowplaying:') && !n.endsWith(':text')
+          )
+          expect(stages.length).toBeLessThanOrEqual(1)
+        })
+      }
     }
   }
 })

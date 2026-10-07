@@ -316,9 +316,13 @@ describe('groupsLine', () => {
     })
   })
 
-  it('says how many it grouped and when', () => {
-    expect(groupsLine({ state: 'done', grouped: 12, at })?.text).toBe('Grouped 12 artists, 10:42')
-    expect(groupsLine({ state: 'done', grouped: 1, at })?.text).toBe('Grouped 1 artist, 10:42')
+  it('says how many spellings it joined and credits it split, and when', () => {
+    const line = (joined: number, split: number): string | undefined =>
+      groupsLine({ state: 'done', joined, split, at })?.text
+    expect(line(9, 3)).toBe('Joined 9 spellings, split 3 credits, 10:42')
+    expect(line(1, 0)).toBe('Joined 1 spelling, 10:42')
+    expect(line(0, 1)).toBe('Split 1 credit, 10:42')
+    expect(line(0, 0)).toBe('No new name fixes, 10:42')
   })
 
   it('says when it goes on after a limit, naming the service', () => {

@@ -3,6 +3,7 @@ import {
   addAiGroup,
   addAiSplit,
   addAsked,
+  aiFixCounts,
   aiKeys,
   aiSplits,
   applyChanges,
@@ -295,6 +296,36 @@ describe('applyChanges', () => {
     addAiGroup(f, ['bjork(live)', 'bjork'], 'Björk', tags)
     expect(f).toEqual(file(artist('Bjork', 'you', ['Bjork', 'you'], ['bjork (live)', 'ai'])))
     expect(shown(f)).toEqual({ 'bjork(live)': { names: ['Bjork'], byAi: true } })
+  })
+
+  it('Undo after Keep separate on an AI link puts the AI links back as they were', () => {
+    const before = file(artist('Björk', 'ai', ['bjork (live)', 'ai'], ['Bjork', 'ai']))
+    const f = structuredClone(before)
+    applyChanges(f, { bjork: null }, tags)
+    expect(shown(f).bjork).toBeUndefined()
+    expect(applyChanges(f, { bjork: { ai: ['Björk'] } }, tags)).toBe(true)
+    expect(f).toEqual(before)
+    expect(shown(f).bjork).toEqual({ names: ['Björk'], byAi: true })
+  })
+
+  it('Undo puts back an AI split, making its artists again in order', () => {
+    const before = file(
+      artist('Magogaio', 'ai', ['Magogaio/Sadness', 'ai']),
+      artist('Sadness', 'ai', ['Magogaio/Sadness', 'ai'])
+    )
+    const f = structuredClone(before)
+    applyChanges(f, { 'magogaio/sadness': null }, tags)
+    expect(f).toEqual(file(artist('Magogaio/Sadness', 'you', ['Magogaio/Sadness', 'you'])))
+    applyChanges(f, { 'magogaio/sadness': { ai: ['Magogaio', 'Sadness'] } }, tags)
+    expect(f).toEqual(before)
+  })
+
+  it('Undo after Keep separate on a link by you puts your link back', () => {
+    const before = file(artist('Кино', 'you', ['Kino', 'you']))
+    const f = structuredClone(before)
+    applyChanges(f, { kino: null }, tags)
+    applyChanges(f, { kino: ['Кино'] }, tags)
+    expect(f).toEqual(before)
   })
 
   it('Use tag undoes a rename that only changed case', () => {
@@ -836,5 +867,23 @@ describe('the old files', () => {
     })
     expect(g).toEqual({ groups: new Map([['ok', 'Y']]), asked: new Set(['ok']) })
     expect(parseOldGroups({ version: 1, groups: {} }).groups.size).toBe(0)
+  })
+})
+
+describe('aiFixCounts', () => {
+  const tags = spell('Bjork', 'Björk', 'Magogaio/Sadness', 'Sadness', 'Kino')
+
+  it('counts splits and spellings shown under another name, of the keys given', () => {
+    const f = file(
+      artist('Björk', 'ai', ['Bjork', 'ai'], ['Björk', 'ai']),
+      artist('Magogaio', 'ai', ['Magogaio/Sadness', 'ai']),
+      artist('Sadness', 'ai', ['Magogaio/Sadness', 'ai'], ['Sadness', 'ai']),
+      artist('Кино', 'you', ['Kino', 'you'])
+    )
+    const all = ['bjork', 'björk', 'magogaio/sadness', 'sadness', 'kino', 'gone']
+    // a link to the tag's own spelling shows no change; yours and gone ones don't count
+    expect(aiFixCounts(f, all, tags)).toEqual({ joined: 1, split: 1 })
+    expect(aiFixCounts(f, ['bjork'], tags)).toEqual({ joined: 1, split: 0 })
+    expect(aiFixCounts(f, [], tags)).toEqual({ joined: 0, split: 0 })
   })
 })

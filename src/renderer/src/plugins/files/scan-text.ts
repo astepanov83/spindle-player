@@ -115,8 +115,13 @@ export function groupsLine(
         text: `${g.step === 'split' ? 'Splitting credits' : 'Matching spellings'}: ${n(g.checked)} of ${n(g.total)}`,
         busy: true
       }
-    case 'done':
-      return { text: `Grouped ${plural(g.grouped, 'artist', 'artists')}, ${clock(g.at)}` }
+    case 'done': {
+      const parts: string[] = []
+      if (g.joined) parts.push(`joined ${plural(g.joined, 'spelling', 'spellings')}`)
+      if (g.split) parts.push(`split ${plural(g.split, 'credit', 'credits')}`)
+      const what = parts.length ? parts.join(', ') : 'no new name fixes'
+      return { text: `${cap(what)}, ${clock(g.at)}` }
+    }
     case 'limit': {
       // a wait the same day is a rate limit; a later one is a daily limit
       if (g.at === undefined)

@@ -2,7 +2,7 @@
      keys; each row shows what the song's plugin says (ticket 056), greyed
      while its plugin is off or its data is not in yet. -->
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import { tick, type Snippet } from 'svelte'
   import type { ItemKey } from '../../../shared/plugins/items'
   import type { QueueLink } from '../../../shared/saved-queue'
   import Eq from '../ui/Eq.svelte'
@@ -17,6 +17,8 @@
   import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
+  import { isRemoveKey, rowAfterRemove } from '../keys'
+  import { playlists } from '../stores/playlists.svelte'
 
   let {
     title,
@@ -82,6 +84,20 @@
     if (itemInfo(rows[i]).state !== 'ok') return
     queue.playList(rows, i, title, link)
   }
+
+  // Delete in a playlist takes the row out of it; focus goes to the row
+  // that takes its place.
+  function onrowkey(e: KeyboardEvent, i: number): void {
+    if (!playlistId || !isRemoveKey(e)) return
+    e.preventDefault()
+    playlists.removeItems(playlistId, [rows[i]])
+    tick().then(() => {
+      const to = rowAfterRemove(i, rows.length)
+      const row = to === null ? null : list?.querySelector<HTMLElement>(`[data-index="${to}"]`)
+      row?.focus()
+      row?.scrollIntoView({ block: 'nearest' })
+    })
+  }
 </script>
 
 <div class="tblhead">
@@ -133,6 +149,7 @@
         aria-current={cur ? 'true' : undefined}
         style:transform="translateY({v.offset(item)}px)"
         onclick={() => play(item.index)}
+        onkeydown={(e) => onrowkey(e, item.index)}
         oncontextmenu={(e) => openSongMenu(e, [key], { inPlaylist: playlistId, from: title, link })}
       >
         <span class="n"

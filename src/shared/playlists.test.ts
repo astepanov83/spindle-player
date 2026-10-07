@@ -7,7 +7,9 @@ import {
   nameForSongs,
   newName,
   parsePlaylists,
+  putBack,
   remove,
+  removedAt,
   removeItems,
   rename,
   type Playlist
@@ -145,6 +147,40 @@ describe('edits', () => {
     expect(
       removeItems([pl('a', 'A', ['files:t1', 'files:t2', 'files:t3'])], 'a', ['files:t2'])[0].items
     ).toEqual(['files:t1', 'files:t3'])
+  })
+})
+
+describe('putting removed songs back (ticket 071)', () => {
+  const keys = (...n: number[]): ItemKey[] => n.map((i) => `files:t${i}` as ItemKey)
+  const list = [pl('a', 'A', keys(1, 2, 3, 4, 5)), pl('b', 'B', keys(1))]
+
+  it('finds each removed song with its place', () => {
+    expect(removedAt(list, 'a', keys(4, 2, 9))).toEqual([
+      { key: 'files:t2', at: 1 },
+      { key: 'files:t4', at: 3 }
+    ])
+    expect(removedAt(list, 'gone', keys(1))).toEqual([])
+  })
+
+  it('puts them back at their places', () => {
+    const taken = removedAt(list, 'a', keys(1, 4, 5))
+    const after = removeItems(list, 'a', keys(1, 4, 5))
+    const back = putBack(after, 'a', taken.reverse())
+    expect(back[0].items).toEqual(keys(1, 2, 3, 4, 5))
+    expect(back[1]).toBe(list[1])
+  })
+
+  it('puts one at the end when the playlist got shorter, and skips one added again', () => {
+    const taken = removedAt(list, 'a', keys(2, 5))
+    const after = removeItems(list, 'a', keys(2, 3, 4, 5))
+    expect(putBack(after, 'a', taken)[0].items).toEqual(keys(1, 2, 5))
+    const again = addItems(removeItems(list, 'a', keys(2)), 'a', keys(2)).list
+    expect(putBack(again, 'a', removedAt(list, 'a', keys(2)))).toBe(again)
+  })
+
+  it('does nothing for a playlist that is gone', () => {
+    const after = remove(list, 'a')
+    expect(putBack(after, 'a', [{ key: 'files:t1', at: 0 }])).toBe(after)
   })
 })
 

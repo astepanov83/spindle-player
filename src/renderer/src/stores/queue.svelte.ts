@@ -23,17 +23,31 @@ import {
   passOver,
   prune,
   queueNotice,
+  removedNotice,
   removeRow,
+  undoRemove,
   type NextOptions,
   type QueueState
 } from '../queue/logic'
 import { infoOf, itemInfo, playItem } from '../plugins'
 import type { ItemAnswer, ItemInfo, Playable } from '../plugins/types'
-import { notice } from './notice.svelte'
+import { notice, type NoticeAction } from './notice.svelte'
 import { play, player, seek as seekSong } from './player.svelte'
 
 // The position goes to main this often while playing (plus on pause, seek and quit).
 const savePosEverySec = 5
+
+// The last Clear or Remove, while its notice offers Undo. `after` is the
+// queue it left; `at` the row removed (none for Clear). `pos` is where the
+// song that went (or was stopped) was, `play` whether it played then.
+interface Undo {
+  before: QueueState
+  after: QueueState
+  at?: number
+  pos: number
+  play: boolean
+  action: NoticeAction
+}
 
 // Only songs their plugin says are gone leave the queue; off and loading ones stay.
 const notMissing = (key: ItemKey): boolean => itemInfo(key).state !== 'missing'
@@ -74,6 +88,7 @@ class TrackQueue {
 
   #fails = 0
   #savedPos = 0
+  #undo: Undo | undefined
   // what the engine has: the song and how it plays, for the gapless carry-on
   // and the player bar
   #loaded: { key: ItemKey; p: Playable } | undefined = $state.raw()
@@ -158,7 +173,15 @@ class TrackQueue {
     this.from = s.from
     this.link = s.link
     this.#next = s.next ?? 0
-    if (listChanged) this.#saveList()
+    if (listChanged) {
+      this.#saveList()
+      // any other change to the list: Undo would put back an older one
+      const u = this.#undo
+      if (u && s.items !== u.after.items) {
+        this.#undo = undefined
+        notice.drop(u.action)
+      }
+    }
   }
 
   // Loads the current song at `at` seconds, and plays it if `andPlay`.
@@ -335,22 +358,71 @@ class TrackQueue {
   // "Remove from queue". When the current song goes, the one after it loads,
   // playing if it was. With none after, the one before loads paused: it has
   // been heard already.
+  // Its notice offers Undo.
   remove(i: number): void {
     const wasCurrent = i === this.index
     const q = this.#state()
     const s = removeRow(q, i)
     if (s === q) return
+    const key = q.items[i]
+    const pos = player.pos
+    const wasPlaying = this.#sounding()
+    const goesOn = wasPlaying && s.index === i
     this.#set(s)
-    if (wasCurrent) this.#start(player.playing && s.index === i)
+    if (wasCurrent) this.#start(goesOn)
+    this.#offerUndo(removedNotice(this.#title([key])), {
+      before: q,
+      after: s,
+      at: i,
+      pos: wasCurrent ? pos : 0,
+      play: wasCurrent && wasPlaying && !goesOn
+    })
   }
 
   // The Clear button: all but the current song go, so it plays on. With only
-  // that one left, it goes too and the player stops.
+  // that one left, it goes too and the player stops. Undo brings them back.
   clear(): void {
     if (!this.items.length) return
-    this.#set(clearQueue(this.#state()))
-    if (!this.items.length) this.#start(false)
-    notice.show('Cleared the queue')
+    const q = this.#state()
+    const pos = player.pos
+    const wasPlaying = this.#sounding()
+    this.#set(clearQueue(q))
+    const emptied = !this.items.length
+    if (emptied) this.#start(false)
+    this.#offerUndo('Cleared the queue', {
+      before: q,
+      after: this.#state(),
+      pos,
+      play: emptied && wasPlaying
+    })
+  }
+
+  // Sound comes, or will once the song loads.
+  #sounding(): boolean {
+    return player.playing || this.wantsPlay
+  }
+
+  #offerUndo(text: string, u: Omit<Undo, 'action'>): void {
+    const action: NoticeAction = { label: 'Undo', run: () => this.#undoLast() }
+    this.#undo = { ...u, action }
+    notice.show(text, action)
+  }
+
+  // Puts back what the last Clear or Remove took, while the list is as it
+  // left it. The song playing now goes on; a song that went (or was stopped)
+  // comes back at its place in it, playing if sound was on.
+  #undoLast(): void {
+    const u = this.#undo
+    this.#undo = undefined
+    if (!u || this.items !== u.after.items) return
+    const now = this.#state()
+    const r =
+      u.at === undefined
+        ? { state: u.before, restart: !now.items.length }
+        : undoRemove(now, u.before, u.after, u.at)
+    const andPlay = this.#sounding() || u.play
+    this.#set(r.state)
+    if (r.restart) this.#start(andPlay, u.pos)
   }
 
   #nextOptions(): NextOptions {
@@ -507,6 +579,12 @@ class TrackQueue {
     // the loaded song keeps its new key, so the bar still reads its playable
     const l = this.#loaded
     if (l) this.#loaded = { ...l, key: moveKeys([l.key], plugin, moves)[0] }
+    // an Undo on offer puts back the same songs, by their new ids
+    const u = this.#undo
+    if (u && u.after.items === this.items) {
+      u.after = { ...u.after, items }
+      u.before = { ...u.before, items: moveKeys(u.before.items, plugin, moves) }
+    }
     this.#set({ ...this.#state(), items })
   }
 

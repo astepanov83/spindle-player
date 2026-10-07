@@ -7,6 +7,7 @@
   import { fmtCount, fmtLength, fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { roving } from '../ui/roving'
+  import { isRemoveKey, rowAfterRemove } from '../keys'
   import { dropIndex, dropSlot, rowShift } from '../ui/drag-rows'
   import { layout } from '../stores/layout.svelte'
   import { library } from '../stores/library.svelte'
@@ -86,15 +87,27 @@
     }
   })
 
-  // Alt+Up / Alt+Down move the focused row; focus goes with it.
+  // Alt+Up / Alt+Down move the focused row; focus goes with it. Delete
+  // takes it out; focus goes to the row that takes its place.
   function onrowkey(e: KeyboardEvent, i: number): void {
+    if (isRemoveKey(e)) {
+      e.preventDefault()
+      queue.remove(i)
+      focusRow(rowAfterRemove(i, queue.items.length))
+      return
+    }
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
     e.preventDefault()
     const to = e.key === 'ArrowUp' ? i - 1 : i + 1
     if (to < 0 || to >= queue.items.length) return
     queue.move(i, to)
+    focusRow(to)
+  }
+
+  function focusRow(i: number | null): void {
+    if (i === null) return
     tick().then(() => {
-      const row = list?.querySelector<HTMLElement>(`[data-index="${to}"]`)
+      const row = list?.querySelector<HTMLElement>(`[data-index="${i}"]`)
       row?.focus()
       row?.scrollIntoView({ block: 'nearest' })
     })

@@ -29,6 +29,20 @@ describe('notice', () => {
     expect(notice.action).toBeUndefined()
   })
 
+  it('drops a button that no longer fits, keeping the text its plain time (ticket 071)', () => {
+    const undo = { label: 'Undo', run: vi.fn() }
+    notice.show('Cleared the queue', undo)
+    notice.drop({ label: 'Undo', run: vi.fn() })
+    expect(notice.action).toBe(undo)
+    vi.advanceTimersByTime(1000)
+    notice.drop(undo)
+    expect(notice.action).toBeUndefined()
+    expect(notice.text).toBe('Cleared the queue')
+    vi.advanceTimersByTime(4000)
+    expect(notice.text).toBe('')
+    expect(undo.run).not.toHaveBeenCalled()
+  })
+
   it('a newer notice drops the older one and its button', () => {
     const run = vi.fn()
     notice.show('Removed Metal Only', { label: 'Undo', run })

@@ -3,7 +3,9 @@ import {
   escapeTarget,
   isTyping,
   keyAction,
+  isRemoveKey,
   listStep,
+  rowAfterRemove,
   radioStep,
   seekStep,
   sliderKey,
@@ -230,6 +232,36 @@ describe('listStep', () => {
     expect(listStep('ArrowDown', -1, 0, 5)).toBe(null)
     expect(listStep('ArrowLeft', 2, 10, 5)).toBe(null)
     expect(listStep('Enter', 2, 10, 5)).toBe(null)
+  })
+})
+
+describe('removing a row (ticket 071)', () => {
+  const key = (
+    k: string,
+    more: Partial<KeyboardEvent> = {}
+  ): Parameters<typeof isRemoveKey>[0] => ({
+    key: k,
+    code: k,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+    shiftKey: false,
+    repeat: false,
+    ...more
+  })
+
+  it('takes Delete alone, not Backspace, a held key or one with a modifier', () => {
+    expect(isRemoveKey(key('Delete'))).toBe(true)
+    expect(isRemoveKey(key('Backspace'))).toBe(false)
+    expect(isRemoveKey(key('Delete', { repeat: true }))).toBe(false)
+    expect(isRemoveKey(key('Delete', { shiftKey: true }))).toBe(false)
+    expect(isRemoveKey(key('Delete', { ctrlKey: true }))).toBe(false)
+  })
+
+  it('focuses the row that took its place, else the new last one', () => {
+    expect(rowAfterRemove(2, 9)).toBe(2)
+    expect(rowAfterRemove(9, 9)).toBe(8)
+    expect(rowAfterRemove(0, 0)).toBeNull()
   })
 })
 

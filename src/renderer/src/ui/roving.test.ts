@@ -1,7 +1,7 @@
 // The DOM part of roving.ts is checked in the app: the project has no DOM
 // library for tests (no jsdom or happy-dom). These are its choices.
 import { describe, expect, it } from 'vitest'
-import { nearestRow, rowStep, tabStop } from './roving'
+import { nearestRow, tabStop } from './roving'
 
 describe('tabStop', () => {
   const drawn = [4, 5, 6, 7, 8]
@@ -24,21 +24,4 @@ describe('nearestRow', () => {
     expect(nearestRow([10, 11, 12], 30)).toBe(12)
   })
   it('is nothing in an empty list', () => expect(nearestRow([], 3)).toBe(undefined))
-})
-
-describe('rowStep', () => {
-  it('moves as in a whole list when every row is shown', () => {
-    expect(rowStep('ArrowDown', 3, 0, 10, 4)).toBe(4)
-    expect(rowStep('Home', 3, 0, 10, 4)).toBe(0)
-    expect(rowStep('End', 3, 0, 10, 4)).toBe(9)
-  })
-
-  it('stays in the rows shown when the first ones are folded away', () => {
-    expect(rowStep('ArrowUp', 5, 5, 10, 4)).toBe(5)
-    expect(rowStep('Home', 8, 5, 10, 4)).toBe(5)
-    expect(rowStep('PageUp', 8, 5, 10, 4)).toBe(5)
-    expect(rowStep('ArrowDown', 5, 5, 10, 4)).toBe(6)
-    expect(rowStep('End', 5, 5, 10, 4)).toBe(9)
-    expect(rowStep('a', 5, 5, 10, 4)).toBe(null)
-  })
 })

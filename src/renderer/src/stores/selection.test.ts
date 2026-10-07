@@ -30,7 +30,7 @@ describe('RowSelection', () => {
     const items = ['x', 'y', 'x']
     const a = new RowSelection(() => songs, same)
     const q = new RowSelection(
-      () => numberRows(0, 3),
+      () => numberRows(3),
       (rows) => same(rows.map((r) => items[r]))
     )
     a.all()

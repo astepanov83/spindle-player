@@ -131,17 +131,17 @@ describe('menuSelect', () => {
 })
 
 describe('numberRows (the queue)', () => {
-  it('counts only the rows shown when the played ones are folded', () => {
-    const shown = numberRows(3, 7)
+  it('selects rows by their place', () => {
+    const shown = numberRows(4)
     expect(shown.length).toBe(4)
-    expect(shown.at(0)).toBe(3)
-    expect(shown.indexOf(5)).toBe(2)
-    expect(shown.indexOf(1)).toBe(-1)
-    expect(shown.indexOf(7)).toBe(-1)
-    let s = clickSelect(noneSelected<number>(), shown, 0, plain)
+    expect(shown.at(3)).toBe(3)
+    expect(shown.indexOf(2)).toBe(2)
+    expect(shown.indexOf(-1)).toBe(-1)
+    expect(shown.indexOf(4)).toBe(-1)
+    let s = clickSelect(noneSelected<number>(), shown, 1, plain)
     s = clickSelect(s, shown, 2, shift)
-    expect(ids(s)).toEqual([3, 4, 5])
-    expect(ids(selectAll(s, shown))).toEqual([3, 4, 5, 6])
+    expect(ids(s)).toEqual([1, 2])
+    expect(ids(selectAll(s, shown))).toEqual([0, 1, 2, 3])
   })
 
   it('keeps the same rows selected after they move', () => {

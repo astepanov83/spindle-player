@@ -140,12 +140,12 @@ export function listRows<T>(list: readonly T[]): Rows<T> {
   }
 }
 
-// Row numbers `first` to `count - 1`: the queue's rows shown (its played
-// rows can be folded away).
-export function numberRows(first: number, count: number): Rows<number> {
+// Row numbers 0 to `count - 1`: the queue's rows, which select by place
+// since a song can be in it twice.
+export function numberRows(count: number): Rows<number> {
   return {
-    length: Math.max(0, count - first),
-    at: (i) => (i >= 0 && first + i < count ? first + i : undefined),
-    indexOf: (n) => (n >= first && n < count && Number.isInteger(n) ? n - first : -1)
+    length: count,
+    at: (i) => (i >= 0 && i < count ? i : undefined),
+    indexOf: (n) => (n >= 0 && n < count && Number.isInteger(n) ? n : -1)
   }
 }

@@ -1,5 +1,8 @@
 // A provider for tests and app checks: a key box, two models and canned
 // answers. Nothing leaves the computer. Listed only with SPINDLE_FAKE_AI=1.
+// The key picks how it acts, so an app check can see each case: a key with
+// "paid" in it is an account with credit, "limit" hits the daily limit and
+// "offline" can't reach the service.
 import type { Answer, JsonRequest } from '../../../../shared/ai'
 import type { SettingBlock } from '../../../../shared/setting-blocks'
 import type { ModelInfo, Provider, ProviderContext } from '../../types'
@@ -27,7 +30,15 @@ export class FakeProvider implements Provider {
   }
 
   ready(): boolean {
-    return !!this.#ctx?.secrets.get('key')
+    return !!this.#key()
+  }
+
+  paid(): boolean {
+    return this.#key().includes('paid')
+  }
+
+  #key(): string {
+    return this.#ctx?.secrets.get('key') ?? ''
   }
 
   blocks(): SettingBlock[] {
@@ -48,6 +59,14 @@ export class FakeProvider implements Provider {
   }
 
   async ask(model: ModelInfo, req: JsonRequest): Promise<Answer> {
+    const key = this.#key()
+    if (key.includes('limit')) {
+      // the start of tomorrow, like a daily limit
+      const at = new Date()
+      at.setHours(24, 0, 0, 0)
+      return { ok: false, error: 'limit', retryAt: at.getTime() }
+    }
+    if (key.includes('offline')) return { ok: false, error: 'network' }
     return this.answer(model, req)
   }
 

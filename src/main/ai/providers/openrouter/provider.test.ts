@@ -147,7 +147,7 @@ describe('login', () => {
     expect(t.secrets.get('key')).toBe('sk-secret')
     expect(t.provider.ready()).toBe(true)
     expect(cb.server.closed).toBeGreaterThan(0)
-    expect(t.provider.blocks()[0]).toEqual({ kind: 'status', text: 'Connected' })
+    expect(t.provider.blocks()[0]).toMatchObject({ kind: 'status', text: /^Connected/ })
   })
 
   const fails = async (
@@ -306,6 +306,72 @@ describe('login', () => {
   })
 })
 
+describe('what the account allows', () => {
+  const line = (t: Setup): SettingBlock => t.provider.blocks()[0]
+  const loaded = async (o: { model?: string; credit: unknown }): Promise<Setup> => {
+    const t = setup({ key: 'k', model: o.model })
+    t.replies.push(() => json(models))
+    t.replies.push(() => json(o.credit))
+    await t.provider.models(noSignal)
+    return t
+  }
+
+  it('says it is checking until the credit is read', () => {
+    const t = setup({ key: 'k' })
+    expect(line(t)).toEqual({
+      kind: 'status',
+      text: 'Connected. Checking your account…',
+      busy: true
+    })
+    expect(t.provider.paid()).toBe(false)
+  })
+
+  it('says paid models may be used while the account has credit', async () => {
+    const t = await loaded({ credit: credits(10, 0.09) })
+    expect(line(t)).toEqual({
+      kind: 'status',
+      text: 'Connected. Your account has credit, so paid models may be used.'
+    })
+    expect(t.provider.paid()).toBe(true)
+  })
+
+  it('says free models only with no credit, or with a free model picked', async () => {
+    for (const t of [
+      await loaded({ credit: credits(5, 5) }),
+      await loaded({ credit: credits(10, 0), model: 'qwen/qwen3.8-27b:free' })
+    ]) {
+      expect(line(t)).toEqual({ kind: 'status', text: 'Connected. Free models only.' })
+      expect(t.provider.paid()).toBe(false)
+    }
+  })
+
+  it("says a paid model picked by hand can't answer with no credit", async () => {
+    const t = await loaded({ credit: credits(5, 5), model: 'google/gemini-3.8-flash' })
+    expect(line(t)).toMatchObject({ error: true, text: expect.stringContaining('no credit') })
+    expect(t.provider.paid()).toBe(false)
+  })
+
+  it('tells the page when the credit runs out on a 402', async () => {
+    const t = await loaded({ credit: credits(10, 0.09) })
+    t.changed.mockClear()
+    t.replies.push(() => json({ error: { code: 402, message: 'Insufficient credits' } }, 402))
+    t.replies.push(() => json(credits(2, 2)))
+    await t.provider.ask(model({ id: 'google/gemini-3.8-flash' }), req, noSignal)
+    expect(t.changed).toHaveBeenCalled()
+    expect(t.provider.paid()).toBe(false)
+  })
+
+  it('names no money in the login line', () => {
+    const t = setup()
+    expect(t.provider.blocks()[1]).toEqual({
+      kind: 'status',
+      text: 'Opens openrouter.ai in your browser to log in.'
+    })
+    // the about line, shown by the core, says what may cost money
+    expect(t.provider.info.about).toContain('paid models')
+  })
+})
+
 describe('models', () => {
   const list = async (t: Setup): Promise<ModelInfo[]> => {
     t.replies.push(() => json(models))
@@ -407,12 +473,13 @@ describe('models', () => {
       t.provider.blocks().find((b) => b.kind === 'choice')
     expect(choice()).toMatchObject({ value: 'qwen/qwen3.8-27b:free' })
     const options = (choice() as { options: { id: string }[] }).options
-    expect(options[0]).toEqual({ id: 'auto', label: 'Best model' })
-    // the paid ones are listed, marked
+    expect(options[0]).toEqual({ id: 'auto', label: 'Automatic (recommended)' })
+    // the paid ones are listed, marked; no context note on any
     expect(options).toHaveLength(10)
-    expect(options.slice(1, 3)).toMatchObject([
-      { id: 'google/gemini-3.8-flash', label: 'Google: Gemini 3.8 Flash (paid)' },
-      { id: 'anthropic/claude-sonnet-5.5', label: 'Anthropic: Claude Sonnet 5.5 (paid)' }
+    expect(options.slice(1, 4)).toEqual([
+      { id: 'google/gemini-3.8-flash', label: 'Google: Gemini 3.8 Flash (uses credit)' },
+      { id: 'anthropic/claude-sonnet-5.5', label: 'Anthropic: Claude Sonnet 5.5 (uses credit)' },
+      { id: 'thinkingmachines/inkling-small:free', label: expect.not.stringContaining('credit') }
     ])
     await t.provider.act('model', 'set', 'auto')
     expect(t.settings.get('model')).toBe('auto')

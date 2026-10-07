@@ -89,10 +89,13 @@ export interface AiClient {
 
 // What the page gets to draw each task's place in Settings.
 export interface AiState {
-  // for the service choice, shown with 2+
-  providers: { id: string; name: string }[]
+  // for the service choice, shown with 2+, and the chosen one's about line
+  providers: ProviderInfo[]
   // the chosen one
   provider: string
+  // the chosen provider is ready and an ask may cost money now (paid models),
+  // so a task asks before a big run
+  paid: boolean
   // per task id: `ready` is on() of AiClient
   tasks: Record<string, { info: AiTaskInfo; on: boolean; ready: boolean }>
   // the chosen provider's setup blocks, shared by every task that is on

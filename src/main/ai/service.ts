@@ -174,8 +174,9 @@ export function createAiService(env: AiEnv): AiService {
       for (const info of env.tasks)
         tasks[info.id] = { info, on: taskOn(info.id), ready: client.on(info.id) }
       return {
-        providers: env.providers.map((x) => ({ id: x.info.id, name: x.info.name })),
+        providers: env.providers.map((x) => ({ ...x.info })),
         provider: p?.info.id ?? env.settings.get().provider,
+        paid: !!p?.ready() && p.paid(),
         tasks,
         blocks: p ? [...(env.secrets.safe ? [] : [unsafeKeys]), ...p.blocks()] : []
       }

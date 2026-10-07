@@ -102,6 +102,7 @@ function imageTracks(
       duration: length > 0 ? Math.round(length * 100) / 100 : 0,
       codec: image.codec,
       container: image.container,
+      sampleRate: image.sampleRate,
       cover: image.cover,
       gain: cueTrackGain(sheet.gain, t.gain, image.gain, whole)
     }

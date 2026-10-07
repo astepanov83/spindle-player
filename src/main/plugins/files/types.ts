@@ -30,9 +30,12 @@ export interface FileEntry {
   duration: number
   codec?: string
   container?: string
+  // The rate the sound decodes at, in Hz: the page's audio graph runs at it
+  // (ticket 091), and ffmpeg makes its WAV at it. None in an index from an
+  // older reader until the next scan reads the file again.
+  sampleRate?: number
   // Kept only for files Chromium can't play, which ffmpeg decodes to WAV
   // (see needsDecoding in tags.ts)
-  sampleRate?: number
   channels?: number
   bits?: number
   // hash of the embedded cover picture
@@ -91,7 +94,8 @@ export interface LibraryIndex {
 export const indexVersion = 1
 // 2: ffprobe reads what music-metadata can't (ticket 012).
 // 3: MusicBrainz release ids are kept (ticket 014).
-// 4: ReplayGain tags are kept (ticket 090).
+// 4: ReplayGain tags (ticket 090) and every file's sample rate (ticket 091)
+// are kept.
 // Every file an older reader read is read again once.
 export const readerVersion = 4
 // 2: a non-UTF-8 sheet may be cp1252, not only cp1251 (ticket 011).

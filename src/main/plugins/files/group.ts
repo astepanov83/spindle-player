@@ -287,6 +287,7 @@ export function buildLibrary(
       }
       if (part) t.part = part
       if (e.gain) t.gain = e.gain
+      if (e.sampleRate) t.rate = e.sampleRate
       if (e.cover && e.cover !== cover && hasCover(e.cover))
         t.art = { palette: paletteOf(ix, e.cover, id), ...coverUrls(e.cover) }
       return t

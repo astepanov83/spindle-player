@@ -29,6 +29,9 @@ export interface Track {
   folder: number
   // from the tags; none when the file has none (ticket 090)
   gain?: ReplayGain
+  // the sample rate the file decodes at, in Hz (ticket 091); none until an
+  // older index is scanned again
+  rate?: number
 }
 
 // ReplayGain from a song's tags (ticket 090). Gains are in dB, peaks are the

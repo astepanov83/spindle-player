@@ -32,7 +32,7 @@ import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
 import { devRetryData, isDevRetry, takeLock } from './single-instance'
 import { parseCloseAnswer } from './close-ask'
-import { hasTrayHost, hidesOnMinimize, makeTray } from './tray'
+import { hasTrayHost, hidesOnMinimize, makeTray, parsePlayState, type SpindleTray } from './tray'
 import { currentBackground, MainWindow } from './window'
 
 let store: SettingsStore
@@ -46,7 +46,7 @@ let coverCache: CoverCache | undefined
 // language models for the plugins' tasks; made at start whatever is on
 let ai: AiService | undefined
 // kept here so it isn't garbage collected, which would remove the icon
-let tray: Electron.Tray | null = null
+let tray: SpindleTray | null = null
 
 registerScheme()
 
@@ -78,9 +78,11 @@ function createWindow(splash?: Splash): void {
   // a crashed page sends no pause; a reloaded one sends its state again
   main.win.webContents.on('render-process-gone', () => {
     for (const p of plugins) p.playing?.(false)
+    tray?.setState(undefined)
   })
   main.win.on('closed', () => {
     main = null
+    tray?.setState(undefined)
     // a hidden cover window would keep the app running with no window
     coverCache?.shutDown()
     for (const p of plugins) p.windowClosed?.()
@@ -148,6 +150,7 @@ page.on(PlaybackChannel.savePlaying, (_, raw) => savedQueue.setPlaying(raw))
 page.on(PlaybackChannel.playing, (_, playing) => {
   for (const p of plugins) p.playing?.(playing === true)
 })
+page.on(PlaybackChannel.state, (_, raw) => tray?.setState(parsePlayState(raw)))
 page.on(PlaybackChannel.log, (_, text) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
 })
@@ -243,7 +246,7 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   })
 
   createWindow(splash)
-  tray = makeTray(showMain)
+  tray = makeTray(showMain, (c) => toPage(PlaybackChannel.control, c))
   // After the first paint: read earlier, it shows software drawing before the GPU process is up.
   main!.win.once('ready-to-show', () => console.log('GPU:', app.getGPUFeatureStatus()))
 

@@ -18,3 +18,11 @@ export function rowShift(i: number, from: number, slot: number, rowSize: number)
   if (i < from && i >= slot) return rowSize
   return 0
 }
+
+// How far to scroll the list while a row is dragged near the top or bottom
+// of the box that scrolls, faster closer to the edge. 0 elsewhere.
+export function edgeStep(y: number, top: number, bottom: number, edge = 48): number {
+  const up = y - top
+  const down = bottom - y
+  return up < edge ? -(edge - up) / 3 : down < edge ? (edge - down) / 3 : 0
+}

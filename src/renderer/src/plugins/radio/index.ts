@@ -75,6 +75,6 @@ export const radioHalf: PageHalf = {
       if (id === radio.station?.id) void radio.save()
     } else if (actionId === 'stream') {
       if (id === radio.station?.id && value !== undefined) radio.choose(Number(value))
-    } else actOnStation(id, actionId)
+    } else actOnStation(id, actionId, value)
   }
 }

@@ -285,8 +285,8 @@ export const listShortcuts: { keys: string[]; does: string }[] = [
   { keys: ['PageUp', 'PageDown'], does: 'A screen of rows up or down' },
   { keys: ['Home', 'End'], does: 'First or last row' },
   { keys: ['Enter'], does: 'Play the row' },
-  { keys: ['ArrowRight', 'ArrowLeft'], does: 'On a station: to its star and back' },
-  { keys: ['Alt+ArrowUp', 'Alt+ArrowDown'], does: 'On a queue row: move the song' },
+  { keys: ['ArrowRight', 'ArrowLeft'], does: 'On a station: to its star and menu, and back' },
+  { keys: ['Alt+ArrowUp', 'Alt+ArrowDown'], does: 'On a queue row or a saved station: move it' },
   { keys: ['Delete'], does: 'On a queue or playlist row: remove it' }
 ]
 

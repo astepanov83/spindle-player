@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dropIndex, dropSlot, rowShift } from './drag-rows'
+import { dropIndex, dropSlot, edgeStep, rowShift } from './drag-rows'
 
 const ROW = 60
 
@@ -42,5 +42,14 @@ describe('rowShift', () => {
   it('moves nothing when the row is where it was', () => {
     expect([0, 1, 2].map((i) => rowShift(i, 1, 1, ROW))).toEqual([0, 0, 0])
     expect([0, 1, 2].map((i) => rowShift(i, 1, 2, ROW))).toEqual([0, 0, 0])
+  })
+})
+
+describe('edgeStep', () => {
+  it('scrolls up near the top and down near the bottom, faster closer to the edge', () => {
+    expect(edgeStep(100 + 47, 100, 500)).toBeCloseTo(-1 / 3)
+    expect(edgeStep(100, 100, 500)).toBe(-16)
+    expect(edgeStep(500 - 24, 100, 500)).toBe(8)
+    expect(edgeStep(300, 100, 500)).toBe(0)
   })
 })

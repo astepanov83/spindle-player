@@ -1,6 +1,7 @@
-// The Radio tab as blocks (tickets 029, 062): My stations, filtered at once
-// by the search box, then Radio Browser's stations for it. A row plays its
-// station; its star saves or removes it; My stations' menu moves and removes.
+// The Radio tab as blocks (tickets 029, 062, 082): My stations, filtered at
+// once by the search box, then Radio Browser's stations for it. A row plays
+// its station; its star saves or removes it; My stations' menu moves and
+// removes, and a drag moves.
 import { itemKey } from '../../../../shared/plugins/items'
 import { stationArt, type Station } from '../../../../shared/plugins/radio/stations'
 import { fmtCount } from '../../format'
@@ -25,7 +26,7 @@ export function radioBlocks(query: string): Block[] {
       searchHint: 'Find stations with the search box'
     },
     { kind: 'text', text: 'My stations' },
-    stationRows(mine, true)
+    stationRows(mine, true, false, true)
   ]
   if (!radio.stations.length)
     blocks.push(note('No stations yet. Search for one, then press its star to keep it here.'))
@@ -49,13 +50,14 @@ export function radioBlocks(query: string): Block[] {
   return blocks
 }
 
-function stationRows(list: Station[], saved: boolean, stale = false): Block {
+function stationRows(list: Station[], saved: boolean, stale = false, reorder = false): Block {
   return rowsBlock<Station>({
     rows: 'item',
     items: list,
     key: (s) => s.id,
     row: (s) => stationRow(s, saved),
-    stale
+    stale,
+    ...(reorder ? { reorder } : {})
   })
 }
 
@@ -86,10 +88,11 @@ function logo(s: Station, saved: boolean): string | undefined {
   return !saved && s.logoUrl ? `spindle://radio-logo/${s.id}` : undefined
 }
 
-// A row's star or menu. Star on a result saves it (the playing copy if it
-// plays, with the streams main found and the stream picked); on a saved
-// station it removes it, as Remove does.
-export function actOnStation(id: string, actionId: string): void {
+// A row's star, menu or drag. Star on a result saves it (the playing copy if
+// it plays, with the streams main found and the stream picked); on a saved
+// station it removes it, as Remove does. A drag moves a station to the place
+// of the one it was dropped on (`value`, its id).
+export function actOnStation(id: string, actionId: string, value?: string): void {
   const s = radio.stations.find((x) => x.id === id)
   if (actionId === 'star') {
     if (s) void radio.remove(id)
@@ -97,7 +100,15 @@ export function actOnStation(id: string, actionId: string): void {
       const found = radio.station?.id === id ? radio.station : radioSearch.find(id)
       if (found) void radio.save(found)
     }
-  } else if (!s) return
-  else if (actionId === 'remove') void radio.remove(id)
-  else if (actionId === 'up' || actionId === 'down') void radio.move(id, actionId === 'up' ? -1 : 1)
+    return
+  }
+  if (!s) return
+  const at = radio.stations.indexOf(s)
+  if (actionId === 'remove') void radio.remove(id)
+  else if (actionId === 'up') void radio.move(id, at - 1)
+  else if (actionId === 'down') void radio.move(id, at + 1)
+  else if (actionId === 'move') {
+    const to = radio.stations.findIndex((x) => x.id === value)
+    if (to >= 0) void radio.move(id, to)
+  }
 }

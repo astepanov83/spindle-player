@@ -231,7 +231,8 @@ export interface PageRow extends RowLook {
 }
 
 // A row that plays its item (a station), marked while that item is the one
-// playing. act(the row's key, id) for its star and its menu.
+// playing. act(the row's key, id) for its star and its menu, which opens on
+// a right click and from the row's "..." button.
 export interface ItemRow extends RowLook {
   play: ItemKey
   // a star button after the row: `on` filled; `label` is its tooltip
@@ -264,6 +265,10 @@ export interface PageRowsBlock<T = unknown> extends RowsOf<T> {
 export interface ItemRowsBlock<T = unknown> extends RowsOf<T> {
   rows: 'item'
   row(item: T): ItemRow
+  // The rows can be dragged to another place, or moved with Alt+Up and
+  // Alt+Down: act(the row's key, 'move', the key of the row whose place it
+  // takes). Keys, not places: the list may be filtered (My stations).
+  reorder?: boolean
 }
 
 export type RowsBlock<T = unknown> = PageRowsBlock<T> | ItemRowsBlock<T>

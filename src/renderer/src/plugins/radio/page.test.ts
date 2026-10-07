@@ -1,5 +1,5 @@
-// The Radio tab as blocks (ticket 062): My stations and a search answer, and
-// a row's star and menu reaching the plugin.
+// The Radio tab as blocks (tickets 062, 082): My stations and a search
+// answer, and a row's star, menu and drag reaching the plugin.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultPalettes } from '../../../../shared/palette'
 import type { Station } from '../../../../shared/plugins/radio/stations'
@@ -92,6 +92,8 @@ describe('My stations', () => {
     expect(bb.menu?.map((m) => m.id)).toEqual(['up', 'down', 'remove'])
     expect(c.menu?.map((m) => m.id)).toEqual(['up', 'remove'])
     expect((b[2] as RowsBlock).key(radio.stations[1])).toBe('b')
+    // My stations can be dragged; results can't
+    expect((b[2] as RowsBlock & { reorder?: boolean }).reorder).toBe(true)
   })
 
   it('are filtered at once by the search box; up and down follow the whole list', () => {
@@ -137,6 +139,7 @@ describe('a Radio Browser answer', () => {
     expect(found[0].menu).toBeUndefined()
     expect(found[1].art).toBeUndefined()
     expect((b[4] as RowsBlock).stale).toBe(false)
+    expect('reorder' in b[4]).toBe(false)
   })
 
   it('keeps the older answer faded while a new search runs, else says it searches', () => {
@@ -191,8 +194,19 @@ describe('a row’s star and menu', () => {
     radioHalf.act!('b', 'up')
     radioHalf.act!('a', 'down')
     expect(radio.move.mock.calls).toEqual([
-      ['b', -1],
+      ['b', 0],
       ['a', 1]
+    ])
+  })
+
+  it('a drag moves a station to the place of the one it was dropped on', () => {
+    radioHalf.act!('a', 'move', 'c')
+    radioHalf.act!('c', 'move', 'a')
+    radioHalf.act!('c', 'move', 'zz')
+    radioHalf.act!('zz', 'move', 'a')
+    expect(radio.move.mock.calls).toEqual([
+      ['a', 2],
+      ['c', 0]
     ])
   })
 

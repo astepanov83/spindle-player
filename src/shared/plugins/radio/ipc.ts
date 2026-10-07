@@ -66,8 +66,8 @@ export interface RadioApi {
   remove(id: string): Promise<Station[]>
   // Undo of remove: back where it was, as it was
   restore(id: string): Promise<Station[]>
-  // one place up (-1) or down (1)
-  move(id: string, by: -1 | 1): Promise<Station[]>
+  // to place `to` in My stations (0 is the top)
+  move(id: string, to: number): Promise<Station[]>
   // the stream url the user picked for the station
   choose(id: string, url: string): Promise<Station[]>
   // the last 50 titles, oldest first

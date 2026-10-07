@@ -228,8 +228,8 @@ export class RadioPlugin implements MainPlugin {
       covers.kept()
       return list
     })
-    page.handle(RadioChannel.move, (_, id, by) =>
-      this.#on ? stations.move(id, by) : stations.list()
+    page.handle(RadioChannel.move, (_, id, to) =>
+      this.#on ? stations.move(id, to) : stations.list()
     )
     page.handle(RadioChannel.choose, (_, id, url) => {
       if (!this.#on) return stations.list()

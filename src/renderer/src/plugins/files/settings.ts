@@ -39,12 +39,11 @@ export function filesSettings(): SettingBlock[] {
     { kind: 'button', id: 'add', label: 'Add folder', disabled: locked },
     { kind: 'button', id: 'rescan', label: 'Rescan', disabled: !canRescan(s, files.loadFailed) },
     ...statusLines(s, files.loadFailed).map((text): SettingBlock => ({ kind: 'status', text })),
-    { kind: 'ai', task: artistGroupsTask },
-    ...groupsBlocks()
+    { kind: 'ai', task: artistGroupsTask, blocks: groupsBlocks() }
   ]
 }
 
-// The task's own line and button follow its switch, only while it is switched on.
+// The task's own line and button, in its box under the setup, only while it is switched on.
 function groupsBlocks(): SettingBlock[] {
   const task = ai.state?.tasks[artistGroupsTask]
   if (!task?.on) return []

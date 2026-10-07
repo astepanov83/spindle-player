@@ -1,8 +1,8 @@
-// The scan status lines for the settings sheet and the empty library.
+// The scan status lines for Settings and the empty library.
 import type { DropResult } from '../../../../shared/plugins/files/ipc'
 import type { FetchStatus, GroupsStatus, ScanStatus } from '../../../../shared/library'
 import { rootName } from './folders'
-import { pathEnds } from '../../ui/path-ends'
+import { folderParts } from '../../ui/path-ends'
 
 const n = (x: number): string => x.toLocaleString('en-US')
 const plural = (x: number, one: string, many: string): string => `${n(x)} ${x === 1 ? one : many}`
@@ -32,7 +32,7 @@ export function scanLine(s: ScanStatus): string {
   return parts.join(' · ')
 }
 
-// Every line for the settings sheet: the problem or the scan line, then notices.
+// Every line for Settings: the problem or the scan line, then notices.
 // With no library process, Rescan can't help, so it isn't offered.
 export function statusLines(s: ScanStatus, pageFailed: boolean): string[] {
   const problem = libraryProblem(s, pageFailed)
@@ -57,7 +57,7 @@ export function canRescan(s: ScanStatus, pageFailed: boolean): boolean {
   )
 }
 
-// The online cover lookup's line in the settings sheet (ticket 014).
+// The online cover lookup's line in Settings (ticket 014).
 export function fetchLine(f: FetchStatus | undefined): string | undefined {
   if (!f) return undefined
   const total = f.found + f.notFound + f.left
@@ -169,7 +169,7 @@ export class ScanWatch {
 
 // The last folder of a path, for a line too short for all of it.
 function folderName(path: string): string {
-  return pathEnds(path)[1].replace(/^[/\\]|[/\\]$/g, '') || path
+  return folderParts(path).name || path
 }
 
 // The notice after folders were dropped on the window (ticket 047).

@@ -2,6 +2,7 @@
 // "Played (N)" line or shown in full, then Now playing, then Up next. The
 // headings are lines of their own, so the queue stays one virtual list.
 import type { ItemAnswer } from '../plugins/types'
+import { movedTo } from '../ui/drag-rows'
 
 export const ROW = 60
 export const HEAD = 32
@@ -114,25 +115,23 @@ export function dropSlotAt(y: number, s: Shape): number {
   return lo
 }
 
-// Where song `i` goes when the songs `moved` (in order) go together to the
-// gap before song `slot` (queue/logic.ts moveOrder). A lookup per row, so a
-// drag in 50k songs does not build the whole order on each pointer move.
-export function movedTo(i: number, moved: readonly number[], slot: number): number {
-  const at = moved.indexOf(i)
-  if (at >= 0) return slot - below(moved, slot) + at
-  return i - below(moved, i) + (i >= slot ? moved.length : 0)
+// Songs dragged in from the library (ticket 089) go after the current song:
+// the slot nearest the pointer, but none among the played ones.
+export function insertSlotAt(y: number, s: Shape): number {
+  if (!s.count) return 0
+  return Math.max(s.current + 1, dropSlotAt(y, s))
 }
 
-// How many of `rows` (in order) are below `i`.
-function below(rows: readonly number[], i: number): number {
-  let lo = 0
-  let hi = rows.length
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1
-    if (rows[mid] < i) lo = mid + 1
-    else hi = mid
-  }
-  return lo
+// Where the line that shows the drop place goes, in pixels from the top of
+// the list: under the current song for the first slot after it (above the
+// Up next heading), else above row `slot`, or under the last row.
+export function insertLineTop(slot: number, s: Shape): number {
+  const l = layoutOf(s)
+  const m = marks(l)
+  if (!l.count) return 0
+  if (slot >= l.count) return topIn(m.lines, l)
+  if (slot <= l.current + 1) return topIn(m.now + 2, l)
+  return topIn(lineOfIn(slot, l)!, l)
 }
 
 // Where the rows and headings stand while rows are dragged: as if they

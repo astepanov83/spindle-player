@@ -21,6 +21,8 @@
   import { queue } from '../stores/queue.svelte'
   import { rowSelection } from '../stores/selection.svelte'
   import { listRows } from '../ui/selection'
+  import { dragSongs } from '../library/drag-songs'
+  import { songDrag } from '../stores/song-drag.svelte'
 
   // `wider`: the other tabs to search, under "No matches" or after the groups
   let {
@@ -69,6 +71,7 @@
   const startOf = (f: FoundGroup): number => songGroups.find((g) => g.key === f.key)?.at ?? 0
 
   function onrowclick(e: MouseEvent, f: FoundGroup, keys: ItemKey[], i: number): void {
+    if (songDrag.tookClick()) return
     if (!sel.click(startOf(f) + i, e)) play(keys, i)
   }
 
@@ -112,6 +115,8 @@
           class:selected={sel.has(key)}
           data-row
           aria-current={cur ? 'true' : undefined}
+          onpointerdown={(e) =>
+            songDrag.press(e, () => dragSongs(sel.has(key) ? sel.ids() : [key], { from }))}
           onclick={(e) => onrowclick(e, f, keys, i)}
           oncontextmenu={(e) => openSongMenu(e, sel.menu(startOf(f) + i), { from })}
         >

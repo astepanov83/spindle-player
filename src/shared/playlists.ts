@@ -147,3 +147,19 @@ export function putBack(list: Playlist[], id: string, removed: Removed[]): Playl
   })
   return changed ? out : list
 }
+
+// A drag or Alt+arrow in the playlist's table (ticket 089): `shown` is the
+// songs shown, in their new order. They take the places those songs had, so
+// songs not shown (not in the library now) stay where they were. Nothing
+// changes unless `shown` is the same songs.
+export function reorderItems(list: Playlist[], id: string, shown: ItemKey[]): Playlist[] {
+  const p = list.find((x) => x.id === id)
+  if (!p) return list
+  const moving = new Set<string>(shown)
+  const places = p.items.flatMap((key, at) => (moving.has(key) ? [at] : []))
+  if (places.length !== shown.length || moving.size !== shown.length) return list
+  if (places.every((at, k) => p.items[at] === shown[k])) return list
+  const items = [...p.items]
+  places.forEach((at, k) => (items[at] = shown[k]))
+  return list.map((x) => (x === p ? { ...p, items } : x))
+}

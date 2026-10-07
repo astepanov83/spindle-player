@@ -106,6 +106,12 @@ class LayoutStore {
   }
 
   // Q key and the slot button: Tab switches tabs, Drawer opens or closes
+  // Shows the queue, where it is a tab or a drawer.
+  openQueue(): void {
+    if (this.queueMode === 'tab') this.tabSel = 1
+    else if (this.queueMode === 'drawer') this.showQueue = true
+  }
+
   toggleQueue(): void {
     if (this.queueMode === 'tab') this.tabSel = this.tabSel ? 0 : 1
     else if (this.queueMode === 'drawer') this.showQueue = !this.showQueue

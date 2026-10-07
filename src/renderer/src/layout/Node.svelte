@@ -8,10 +8,19 @@
   import Queue from '../parts/Queue.svelte'
   import { layout } from '../stores/layout.svelte'
   import { tabStep } from '../keys'
+  import { queue } from '../stores/queue.svelte'
+  import { dropTarget, type DropTarget } from '../stores/song-drag.svelte'
   import type { BuiltNode } from './build'
 
   let { node }: { node: BuiltNode } = $props()
   const uid = $props.id()
+
+  // Songs dropped on the Queue tab go at the end (ticket 089); resting on it
+  // opens it, to drop them at a place.
+  const onQueueTab: DropTarget = {
+    drop: (d) => queue.append(d.keys, d.from, d.link),
+    rest: () => (layout.tabSel = 1)
+  }
 
   // One Tab stop; Left and Right pick the next tab, as in any tab row.
   function ontabkey(e: KeyboardEvent & { currentTarget: HTMLElement }, i: number): void {
@@ -58,7 +67,8 @@
           aria-controls="{uid}-pane{i}"
           tabindex={layout.tabSel === i ? 0 : -1}
           onclick={() => (layout.tabSel = i)}
-          onkeydown={(e) => ontabkey(e, i)}>{label}</button
+          onkeydown={(e) => ontabkey(e, i)}
+          use:dropTarget={i === 1 ? onQueueTab : undefined}>{label}</button
         >
       {/each}
     </div>

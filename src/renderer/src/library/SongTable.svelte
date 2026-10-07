@@ -17,12 +17,16 @@
   import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
+  import { dragSongs } from './drag-songs'
   import { isRemoveKey, rowAfterRemove } from '../keys'
   import { playlists } from '../stores/playlists.svelte'
   import { plays as playCounts } from '../stores/plays.svelte'
   import { lastPlayedText } from './plays'
   import { rowSelection } from '../stores/selection.svelte'
   import { listRows } from '../ui/selection'
+  import { dropTarget, songDrag, type DragSongs, type DropTarget } from '../stores/song-drag.svelte'
+  import { dropSlot, movedTo } from '../ui/drag-rows'
+  import { moveOrder, shiftOrder } from '../queue/logic'
 
   let {
     title,
@@ -36,7 +40,8 @@
     head,
     count = true,
     artist = true,
-    plays = false
+    plays = false,
+    onmove
   }: {
     title: string
     meta: string
@@ -57,6 +62,9 @@
     artist?: boolean
     // Plays and Last played columns (Classic's Songs, ticket 085)
     plays?: boolean
+    // set while the rows show a playlist in its own order: a drag or
+    // Alt+Up / Alt+Down gives the songs shown in their new order (ticket 089)
+    onmove?: (keys: ItemKey[]) => void
   } = $props()
 
   const ROW = 54
@@ -110,24 +118,79 @@
   }
 
   function onrowclick(e: MouseEvent, i: number): void {
+    // the end of a drag that started on this row
+    if (songDrag.tookClick()) return
     if (!sel.click(i, e)) play(i)
   }
 
+  // the songs a key or a drag on row `i` acts on: the selected ones when it is one of them
+  const keysFor = (i: number): ItemKey[] => (sel.has(rows[i]) ? sel.ids() : [rows[i]])
+
   // Delete in a playlist takes the row out of it, or every selected row when
   // it is one; focus goes to the row that takes the first one's place.
+  // Alt+Up / Alt+Down move them one place, in a playlist in its own order.
   function onrowkey(e: KeyboardEvent, i: number): void {
+    if (onmove && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+      e.preventDefault()
+      const at = keysFor(i).map((k) => shown.indexOf(k))
+      const order = shiftOrder(rows.length, at, e.key === 'ArrowUp' ? -1 : 1)
+      const to = order.indexOf(i)
+      if (to === i) return
+      onmove(order.map((k) => rows[k]))
+      focusRow(to)
+      return
+    }
     if (!playlistId || !isRemoveKey(e)) return
     e.preventDefault()
-    const keys = sel.has(rows[i]) ? sel.ids() : [rows[i]]
+    const keys = keysFor(i)
     const at = shown.indexOf(keys[0])
     playlists.removeItems(playlistId, keys)
+    focusRow(rowAfterRemove(at, rows.length))
+  }
+
+  function focusRow(to: number | null): void {
     tick().then(() => {
-      const to = rowAfterRemove(at, rows.length)
       const row = to === null ? null : list?.querySelector<HTMLElement>(`[data-index="${to}"]`)
       row?.focus()
       row?.scrollIntoView({ block: 'nearest' })
     })
   }
+
+  // Songs dragged from here (ticket 089) go to a playlist or the queue. In a
+  // playlist in its own order they can also go to another place in it: the
+  // rows make room where they would land.
+  const self = {}
+  const dragOf = (i: number): DragSongs =>
+    dragSongs(keysFor(i), { from: title, link, source: self })
+
+  // while own rows are over the table: them, in order, and the gap they go to
+  type Moving = { rows: number[]; slot: number }
+  let moving = $state<Moving | null>(null)
+  const listY = (y: number): number => y - (list?.getBoundingClientRect().top ?? 0)
+  function movingOf(d: DragSongs, y: number): Moving | null {
+    const at = d.keys.map((k) => shown.indexOf(k))
+    if (at.some((r) => r < 0)) return null
+    return { rows: at.sort((a, b) => a - b), slot: dropSlot(listY(y), ROW, rows.length) }
+  }
+  const zone: DropTarget | undefined = $derived(
+    onmove
+      ? {
+          takes: (d) => d.source === self,
+          over: (d, _x, y) => (moving = movingOf(d, y)),
+          leave: () => (moving = null),
+          drop: (d, _x, y) => {
+            const m = movingOf(d, y)
+            if (m) onmove(moveOrder(rows.length, m.rows, m.slot).map((k) => rows[k]))
+          },
+          scroller: () => scrollEl
+        }
+      : undefined
+  )
+  const lifted = $derived(new Set(moving?.rows))
+  // where row `i` would land: its number and place follow the drop place
+  const placeOf = (i: number): number => (moving ? movedTo(i, moving.rows, moving.slot) : i)
+  const topOf = (i: number, offset: number): number => (moving ? placeOf(i) * ROW : offset)
 </script>
 
 <div class="tblhead">
@@ -162,7 +225,9 @@
   </div>
   <div
     class="rows lines song-rows"
+    class:moving={!!moving}
     bind:this={list}
+    use:dropTarget={zone}
     style:height="{v.total}px"
     use:roving={{ rows, count: rows.length, scrollTo: (i) => v.scrollToIndex(i), select: sel }}
   >
@@ -175,17 +240,19 @@
         class:cur-row={cur}
         class:dim={s.state !== 'ok'}
         class:selected={sel.has(key)}
+        class:lifted={lifted.has(item.index)}
         data-row
         data-index={item.index}
         aria-current={cur ? 'true' : undefined}
-        style:transform="translateY({v.offset(item)}px)"
+        style:transform="translateY({topOf(item.index, v.offset(item))}px)"
+        onpointerdown={(e) => songDrag.press(e, () => dragOf(item.index))}
         onclick={(e) => onrowclick(e, item.index)}
         onkeydown={(e) => onrowkey(e, item.index)}
         oncontextmenu={(e) =>
           openSongMenu(e, sel.menu(item.index), { inPlaylist: playlistId, from: title, link })}
       >
         <span class="n"
-          >{#if cur && queues.songPlaying}<Eq />{:else}{item.index + 1}{/if}</span
+          >{#if cur && queues.songPlaying}<Eq />{:else}{placeOf(item.index) + 1}{/if}</span
         >
         {#if s.state === 'ok'}
           {@const t = s.info}
@@ -270,6 +337,16 @@
     right: 0;
     height: 54px;
     font-size: var(--text-l);
+  }
+  /* own rows dragged over the playlist: the others make room */
+  .moving .tr {
+    transition: transform 0.12s;
+  }
+  .moving .tr:hover {
+    background: none;
+  }
+  .tr.lifted {
+    visibility: hidden;
   }
   .tr > span {
     white-space: nowrap;

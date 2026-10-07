@@ -211,6 +211,28 @@ export function append(q: QueueState, keys: ItemKey[], from = '', link?: QueueLi
   return { ...q, items: [...q.items, ...keys] }
 }
 
+// Songs dropped on the queue (ticket 089): they go in at the gap before row
+// `slot`, never before the current song or among the played ones. Dropped
+// right after the current song or among the Play next songs, they join them,
+// as rows moved there do. An empty queue takes them, the first one current.
+export function insertAt(
+  q: QueueState,
+  keys: ItemKey[],
+  slot: number,
+  from = '',
+  link?: QueueLink
+): QueueState {
+  if (!keys.length) return q
+  if (!q.items.length) return filled(keys, from, link)
+  const at = Math.max(q.index + 1, Math.min(slot, q.items.length))
+  const items = [...q.items.slice(0, at), ...keys, ...q.items.slice(at)]
+  const old = nextMarks(q)
+  const joins = at === q.index + 1 || (old[at - 1] && old[at])
+  const marks = [...old.slice(0, at), ...keys.map(() => joins), ...old.slice(at)]
+  const walk = remapWalk(q.shuffle, (r) => (r >= at ? r + keys.length : r), q.index)
+  return withWalk(withNext({ ...q, items }, countNext(marks, q.index)), walk)
+}
+
 // Takes a row out. When it was the current song, the one after it takes its
 // place, or the one before when it was the last. Under shuffle that is the
 // one shuffle would play next, unless Play next songs wait.

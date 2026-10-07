@@ -71,6 +71,13 @@ class PlaylistStore {
     notice.show(r.added ? `Added ${songs(r.added)} to ${p.name}` : `Already in ${p.name}`)
   }
 
+  // A drag or Alt+Up / Alt+Down in the playlist's table (ticket 089): the
+  // songs shown, in their new order. No notice: the rows show it.
+  move(id: string, shown: ItemKey[]): void {
+    const list = ops.reorderItems(this.list, id, shown)
+    if (list !== this.list) this.#set(list)
+  }
+
   // Songs whose ids changed (see id-moves.ts); main renames its copy too.
   moveIds(plugin: PluginId, moves: IdMoves): void {
     const list = movePlaylists(this.list, plugin, moves)

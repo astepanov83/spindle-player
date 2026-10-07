@@ -16,6 +16,8 @@
   import { queue } from '../stores/queue.svelte'
   import { rowSelection } from '../stores/selection.svelte'
   import { listRows } from '../ui/selection'
+  import { dragSongs } from '../library/drag-songs'
+  import { songDrag, type DragSongs } from '../stores/song-drag.svelte'
 
   let {
     block: b,
@@ -53,7 +55,14 @@
   }
 
   function onrowclick(e: MouseEvent, key: ItemKey, at: number): void {
+    if (songDrag.tookClick()) return
     if (!sel.click(at, e)) play(key, at)
+  }
+
+  // a drag takes the selected songs when the row is one of them (ticket 089)
+  function dragOf(key: ItemKey): DragSongs {
+    const keys = sel.has(key) ? sel.ids() : [key]
+    return dragSongs(keys, { from: b.from, link: b.link })
   }
 </script>
 
@@ -104,6 +113,7 @@
             class:selected={sel.has(line.key)}
             data-row
             aria-current={cur ? 'true' : undefined}
+            onpointerdown={(e) => songDrag.press(e, () => dragOf(line.key))}
             onclick={(e) => onrowclick(e, line.key, line.at)}
             oncontextmenu={(e) =>
               openSongMenu(e, sel.menu(line.at), { from: b.from, link: b.link })}

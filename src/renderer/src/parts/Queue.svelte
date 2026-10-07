@@ -23,6 +23,8 @@
     dropSlotAt,
     firstShown,
     followsSong,
+    insertLineTop,
+    insertSlotAt,
     keepTop,
     lineAt,
     lineCount,
@@ -44,6 +46,7 @@
   import type { ItemKey } from '../../../shared/plugins/items'
   import type { ItemAnswer } from '../plugins/types'
   import { canOpen, infoOf, itemInfo, openPage } from '../plugins'
+  import { dropTarget, type DropTarget } from '../stores/song-drag.svelte'
 
   // header and close are set by the container, not by templates
   let { header = false, close = false }: { header?: boolean; close?: boolean } = $props()
@@ -329,6 +332,16 @@
     drag = null
   }
 
+  // Songs dragged in from the library (ticket 089) go in where the line
+  // shows: after the current song at the earliest.
+  let dropAt = $state<number | null>(null)
+  const intoQueue: DropTarget = {
+    over: (_d, _x, y) => (dropAt = insertSlotAt(listY(y), shape)),
+    leave: () => (dropAt = null),
+    drop: (d, _x, y) => queue.insert(d.keys, insertSlotAt(listY(y), shape), d.from, d.link),
+    scroller: () => body
+  }
+
   // A live item: its recent songs in place of the queue, with a head even in a tab.
   const onLive = $derived(queues.active === 'live')
   const liveHead = $derived(
@@ -399,7 +412,7 @@
   {#if onLive}
     <LiveHistory />
   {:else}
-    <div class="body" bind:this={body} {onscroll}>
+    <div class="body" bind:this={body} {onscroll} use:dropTarget={intoQueue}>
       {#if !queue.items.length}
         <p class="empty">
           The queue is empty. Songs you play{layout.hasLibrary ? '' : ' in Studio or Classic'} show up
@@ -476,6 +489,13 @@
             )}
           </button>
         {/each}
+        {#if dropAt !== null}
+          <div
+            class="dropline"
+            aria-hidden="true"
+            style:transform="translateY({insertLineTop(dropAt, shape)}px)"
+          ></div>
+        {/if}
         {#if drag}
           <div
             class="qrow ghost"
@@ -591,6 +611,18 @@
     font-size: var(--text-xs);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
+  }
+  /* where songs dragged in from the library go */
+  .dropline {
+    position: absolute;
+    top: -1px;
+    left: 8px;
+    right: 8px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--focus);
+    z-index: 2;
+    pointer-events: none;
   }
   /* the headings: Played (N), Now playing, Up next */
   .qline {

@@ -11,10 +11,13 @@
   import { untrack } from 'svelte'
   import { libraryOnScreen } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
-  import { library } from '../stores/library.svelte'
+  import { library, playlistsTab } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
   import { pageBlocks, playlistsEmpty, pluginTabs, typedIn } from '../plugins'
   import { tabsIn } from '../plugins/tabs'
+  import { menu } from '../stores/menu.svelte'
+  import { playlistMenu } from './song-menu'
+  import { dropTarget, type DropTarget } from '../stores/song-drag.svelte'
 
   // the tabs of the plugins that are on (ticket 059)
   const tabs = $derived(tabsIn(pluginTabs(), 'chips'))
@@ -31,6 +34,14 @@
   let scrollEl: HTMLDivElement | undefined = $state()
 
   libraryOnScreen()
+
+  // Songs dropped on the Playlists chip (ticket 089): the playlists to add
+  // them to, and New playlist, where they were dropped. A chip names no
+  // playlist, and opening the Playlists page under the drag would lose the
+  // page they came from.
+  const toPlaylists: DropTarget = {
+    drop: (d, x, y) => menu.show(x, y, playlistMenu(d.keys, { from: d.from, link: d.link }))
+  }
 
   scrollTopOnChange(
     () => scrollEl,
@@ -54,7 +65,8 @@
           <button
             class="chip"
             aria-pressed={library.tab === t.id}
-            onclick={() => library.pickTab(t.id)}>{t.label}</button
+            onclick={() => library.pickTab(t.id)}
+            use:dropTarget={t.id === playlistsTab ? toPlaylists : undefined}>{t.label}</button
           >
         {/each}
       </div>

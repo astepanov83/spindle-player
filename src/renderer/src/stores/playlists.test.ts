@@ -214,3 +214,17 @@ describe('undo of Remove from this playlist (ticket 071)', () => {
     expect(playlists.get(id)?.items).toEqual(['files:n1', 'files:n2'])
   })
 })
+
+describe('moving songs in a playlist (ticket 089)', () => {
+  it('saves the new order, keeping songs not shown where they were', () => {
+    const save = vi.mocked(window.playlistsApi.save)
+    playlists.load([{ id: 'm', name: 'Mix', items: ['files:s1', 'files:gone', 'files:s2'] }])
+    save.mockClear()
+    playlists.move('m', ['files:s2', 'files:s1'])
+    expect(playlists.get('m')?.items).toEqual(['files:s2', 'files:gone', 'files:s1'])
+    expect(save).toHaveBeenCalledTimes(1)
+    // the same order saves nothing
+    playlists.move('m', ['files:s2', 'files:s1'])
+    expect(save).toHaveBeenCalledTimes(1)
+  })
+})

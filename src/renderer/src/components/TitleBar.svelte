@@ -130,8 +130,19 @@
   }
   /* the chosen layout also gets a bar in the album's color, so a hovered
      one never looks chosen too */
-  .layouts .tbbtn.on {
-    box-shadow: inset 0 -2px 0 var(--c2);
+  .layouts .tbbtn {
+    position: relative;
+  }
+  .layouts .tbbtn.on::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    width: 14px;
+    height: 2px;
+    margin-left: -7px;
+    border-radius: 1px;
+    background: var(--c2);
   }
   .layouts {
     display: flex;

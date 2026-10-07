@@ -151,7 +151,7 @@ export const shortcuts: Shortcut[] = [
     chords: [{ action: 'queue', key: 'q' }]
   },
   {
-    does: 'Layout: Studio, Classic or Focus',
+    does: 'Switch layout: Studio, Classic or Focus',
     chords: [
       { action: 'studio', key: 'Digit1', code: true, ctrl: true, inText: true },
       { action: 'classic', key: 'Digit2', code: true, ctrl: true, inText: true },

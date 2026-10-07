@@ -299,7 +299,7 @@
   /* Classic's Songs: Plays and Last played before Time, dropped first when narrow */
   .plays .th,
   .plays .tr {
-    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 48px 84px 56px;
+    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 68px 112px 56px;
   }
   @container (max-width: 760px) {
     .plays .th,

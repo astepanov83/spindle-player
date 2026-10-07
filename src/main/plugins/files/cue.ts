@@ -1,5 +1,7 @@
 // CUE sheets: a text file that splits one disc image (or a few files) into
 // tracks. Plain functions, so they are tested without files.
+import type { ReplayGain } from '../../../shared/library'
+import { cueGainLine } from './replaygain'
 
 export interface CueTrack {
   // TRACK number, 1-based
@@ -10,6 +12,8 @@ export interface CueTrack {
   file: number
   // seconds into that file where it starts (INDEX 01, else INDEX 00)
   start: number
+  // REM REPLAYGAIN_TRACK_GAIN and _PEAK under the track
+  gain?: ReplayGain
 }
 
 export interface CueSheet {
@@ -19,6 +23,8 @@ export interface CueSheet {
   year?: number
   genre?: string
   disc?: number
+  // REM REPLAYGAIN_ALBUM_GAIN and _PEAK
+  gain?: ReplayGain
   // FILE names as written, in order
   files: string[]
   // audio tracks only, in sheet order
@@ -214,10 +220,19 @@ export function parseCue(textIn: string): CueSheet | undefined {
       }
       case 'REM': {
         const r = /^(\S+)\s*(.*)$/.exec(rest)
-        if (!r || seenTrack) break
+        if (!r) break
         const key = r[1].toUpperCase()
         const v = text(r[2])
         if (!v) break
+        // a data track's lines are neither the album's nor a track's
+        if (seenTrack && !track) break
+        const g = cueGainLine(key, v, seenTrack)
+        if (g) {
+          const into = track ?? sheet
+          into.gain = { ...into.gain, [g.field]: g.value }
+          break
+        }
+        if (seenTrack) break
         if (key === 'GENRE') sheet.genre = v
         else if (key === 'DATE') {
           const y = Number(/^(\d{4})/.exec(v)?.[1])
@@ -241,11 +256,12 @@ export function parseCue(textIn: string): CueSheet | undefined {
     const out: CueTrack = { no: t.no, file: t.file, start: t.start }
     if (t.title) out.title = t.title
     if (t.performer) out.performer = t.performer
+    if (t.gain) out.gain = t.gain
     sheet.tracks.push(out)
   }
   if (!sheet.tracks.length) return undefined
   // drop missing fields, so the index file stays small
-  for (const k of ['title', 'performer', 'year', 'genre', 'disc'] as const)
+  for (const k of ['title', 'performer', 'year', 'genre', 'disc', 'gain'] as const)
     if (sheet[k] === undefined) delete sheet[k]
   return sheet
 }

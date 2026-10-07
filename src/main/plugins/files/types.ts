@@ -1,6 +1,6 @@
 // The library index on disk, and the messages between main and the library process.
 import type { IdMoves } from '../../../shared/id-moves'
-import type { ScanStatus } from '../../../shared/library'
+import type { ReplayGain, ScanStatus } from '../../../shared/library'
 import type { ArtistChanges } from '../../../shared/plugins/files/artist-edit'
 import type { Answer, JsonRequest } from '../../../shared/ai'
 import type { CoverSource } from '../../../shared/settings'
@@ -40,6 +40,9 @@ export interface FileEntry {
   // MusicBrainz ids from the tags, for an exact cover lookup (ticket 014)
   mbReleaseGroup?: string
   mbRelease?: string
+  // ReplayGain from the tags (ticket 090); none in an index from an older
+  // reader until the next scan reads the file again
+  gain?: ReplayGain
   // set when the tags could not be read; the file is still listed by its name
   error?: string
 }
@@ -88,11 +91,13 @@ export interface LibraryIndex {
 export const indexVersion = 1
 // 2: ffprobe reads what music-metadata can't (ticket 012).
 // 3: MusicBrainz release ids are kept (ticket 014).
+// 4: ReplayGain tags are kept (ticket 090).
 // Every file an older reader read is read again once.
-export const readerVersion = 3
-// 2: a non-UTF-8 sheet may be cp1252, not only cp1251 (ticket 011). Every
-// sheet from an older reader is read again once.
-export const cueReaderVersion = 2
+export const readerVersion = 4
+// 2: a non-UTF-8 sheet may be cp1252, not only cp1251 (ticket 011).
+// 3: REM REPLAYGAIN_* lines are kept (ticket 090).
+// Every sheet from an older reader is read again once.
+export const cueReaderVersion = 3
 
 export interface WorkerStart {
   indexPath: string

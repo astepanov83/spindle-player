@@ -99,6 +99,27 @@ describe('resolveCueFile', () => {
 })
 
 describe('cueTracks', () => {
+  it('gives each track its gains from the sheet, then the image (ticket 090)', () => {
+    const img = '/m/a/img.flac'
+    const s = sheet(
+      ['img.flac'],
+      [
+        [0, 0],
+        [0, 100]
+      ]
+    )
+    s.gain = { album: -6 }
+    s.tracks[0].gain = { track: -4, trackPeak: 0.7 }
+    const ix = index([entry(img, { gain: { track: -8, trackPeak: 0.9 } })], [['/m/a/img.cue', s]])
+    expect(cueTracks(ix).items.map((i) => i.entry.gain)).toEqual([
+      { track: -4, trackPeak: 0.7, album: -6, albumPeak: 0.9 },
+      { album: -6, albumPeak: 0.9 }
+    ])
+    // and the page's songs carry them
+    const lib = buildLibrary(ix, () => true).data
+    expect(lib.tracks.map((t) => t.gain?.album)).toEqual([-6, -6])
+  })
+
   it('splits an image into tracks with starts, ends and lengths', () => {
     const img = '/m/tone/CDImage.ape'
     const ix = index(

@@ -4,6 +4,7 @@ import { basename, join } from 'path'
 import type { TrackPart } from '../../../shared/library'
 import type { CueSheet } from './cue'
 import { dirOf, isUnder } from './merge'
+import { cueTrackGain } from './replaygain'
 import { cueTrackId, shortHash } from '../../ids'
 import type { FileEntry, LibraryIndex } from './types'
 
@@ -101,7 +102,8 @@ function imageTracks(
       duration: length > 0 ? Math.round(length * 100) / 100 : 0,
       codec: image.codec,
       container: image.container,
-      cover: image.cover
+      cover: image.cover,
+      gain: cueTrackGain(sheet.gain, t.gain, image.gain, whole)
     }
     for (const k of Object.keys(entry) as (keyof FileEntry)[])
       if (entry[k] === undefined) delete entry[k]

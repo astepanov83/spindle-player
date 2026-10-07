@@ -2,6 +2,7 @@
 // Audio files, and anything that fails or would read too much of the file.
 import { spawn } from 'child_process'
 import { StringDecoder } from 'string_decoder'
+import { gainTagsOf } from './replaygain'
 import type { RawTags } from './tags'
 
 // A stuck read (a NAS gone away) must not hold a scan slot for ever.
@@ -102,7 +103,9 @@ export function probeToTags(json: unknown): RawTags | undefined {
         if (typeof v === 'string' && !tags.has(key)) tags.set(key, v)
       }
   const genre = tags.get('genre')
+  const gain = gainTagsOf(tags)
   return {
+    ...(gain && { gain }),
     common: {
       title: tags.get('title'),
       artist: tags.get('artist'),

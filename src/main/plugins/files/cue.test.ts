@@ -43,6 +43,29 @@ describe('cueTime', () => {
 })
 
 describe('parseCue', () => {
+  it('reads REM REPLAYGAIN lines for the album and each track', () => {
+    const s = parseCue(
+      crlf([
+        'REM REPLAYGAIN_ALBUM_GAIN -7.20 dB',
+        'REM REPLAYGAIN_ALBUM_PEAK 0.988800',
+        'FILE "img.flac" WAVE',
+        '  TRACK 01 AUDIO',
+        '    REM REPLAYGAIN_TRACK_GAIN -6.50 dB',
+        '    REM REPLAYGAIN_TRACK_PEAK 0.900000',
+        '    INDEX 01 00:00:00',
+        '  TRACK 02 DATA',
+        '    REM REPLAYGAIN_TRACK_GAIN -1.00 dB',
+        '  TRACK 03 AUDIO',
+        '    REM REPLAYGAIN_ALBUM_GAIN -1.00 dB',
+        '    INDEX 01 01:00:00'
+      ])
+    )!
+    expect(s.gain).toEqual({ album: -7.2, albumPeak: 0.9888 })
+    expect(s.tracks[0].gain).toEqual({ track: -6.5, trackPeak: 0.9 })
+    // a data track's line and an album line under a track count for nothing
+    expect(s.tracks[1].gain).toBeUndefined()
+  })
+
   it('reads a real EAC sheet with CRLF lines', () => {
     const s = parseCue(slowDeep)!
     expect(s.title).toBe('Slow, Deep and Hard')

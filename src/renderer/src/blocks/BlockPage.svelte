@@ -3,13 +3,15 @@
 <script lang="ts">
   import type { PluginId } from '../../../shared/plugins'
   import Empty from '../library/Empty.svelte'
-  import { typedIn } from '../plugins'
-  import type { Block, NavKind } from '../plugins/types'
+  import { actOnPage, typedIn, widerTabs } from '../plugins'
+  import type { Block, EmptyBlock, NavKind } from '../plugins/types'
   import { library } from '../stores/library.svelte'
+  import Changes from './Changes.svelte'
   import Head from './Head.svelte'
   import Nothing from './Nothing.svelte'
   import Results from './Results.svelte'
   import Rows from './Rows.svelte'
+  import SearchButtons from './SearchButtons.svelte'
   import Songs from './Songs.svelte'
   import Tiles from './Tiles.svelte'
   import Tree from './Tree.svelte'
@@ -29,6 +31,18 @@
   } = $props()
 
   const lone = $derived(blocks.length === 1 && blocks[0].kind === 'empty' ? blocks[0] : undefined)
+
+  // The other tabs that search wider, while there is text (ticket 077): in
+  // the block that says nothing was found, else at the end of the page, for
+  // a search that found little. A results page shows them itself.
+  const wider = $derived(widerTabs(tab, nav))
+  const atEnd = $derived(
+    !lone &&
+      wider.length > 0 &&
+      !blocks.some((b) => b.kind === 'results' || (b.kind === 'empty' && b.nothingFound))
+  )
+  const hasButtons = (b: EmptyBlock): boolean =>
+    !!b.action || (!!b.nothingFound && wider.length > 0)
 
   // A block keeps its view while the page changes around it (a folder that
   // gets a path bar keeps its rows and their focus); grids of round and
@@ -66,8 +80,18 @@
   })
 </script>
 
+{#snippet emptyButtons(b: EmptyBlock)}
+  {#if b.action}
+    {@const a = b.action}
+    <button class="pill" onclick={() => actOnPage(plugin, b.id, a.id)}>{a.label}</button>
+  {/if}
+  {#if b.nothingFound}<SearchButtons tabs={wider} />{/if}
+{/snippet}
+
 {#if lone?.kind === 'empty'}
-  <div class="fill"><Nothing block={lone} {plugin} /></div>
+  <div class="fill">
+    <Nothing block={lone} {plugin} wider={lone.nothingFound ? wider : []} />
+  </div>
 {:else}
   {#each blocks as b, i (keys[i])}
     {#if b.kind === 'head'}
@@ -82,15 +106,27 @@
     {:else if b.kind === 'tree'}
       <Tree block={b} {tab} />
     {:else if b.kind === 'empty'}
-      {#if b.title}<Empty title={b.title} text={b.text} />{:else}<p class="note">{b.text}</p>{/if}
+      {#if b.title}
+        {#if hasButtons(b)}
+          <Empty title={b.title} text={b.text}>{@render emptyButtons(b)}</Empty>
+        {:else}
+          <Empty title={b.title} text={b.text} />
+        {/if}
+      {:else}
+        <p class="note">{b.text}</p>
+        {#if hasButtons(b)}<div class="acts note-acts">{@render emptyButtons(b)}</div>{/if}
+      {/if}
+    {:else if b.kind === 'changes'}
+      <Changes block={b} {tab} {plugin} />
     {:else if b.kind === 'text'}
       <h3 class="part section-label" class:over-rows={overRows(i)} class:top={underHead(i)}>
         {b.text}
       </h3>
     {:else}
-      <Results block={b} {scrollEl} />
+      <Results block={b} {scrollEl} {wider} />
     {/if}
   {/each}
+  {#if atEnd}<div class="acts at-end"><SearchButtons tabs={wider} /></div>{/if}
   {#if endRoom}<div class="end"></div>{/if}
 {/if}
 
@@ -115,6 +151,17 @@
   }
   .over-rows.top {
     margin-top: 4px;
+  }
+  .acts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .note-acts {
+    padding: 6px 12px;
+  }
+  .at-end {
+    margin-top: 22px;
   }
   /* one quiet line under a list: "No stations found." */
   .note {

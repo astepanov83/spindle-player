@@ -11,7 +11,8 @@
   import { addStage } from './loop'
   import { vzLabel, vzNames } from './names'
 
-  let { cover = true }: { cover?: boolean } = $props()
+  // onclick: the bar's small stage changes the style, like the button beside it
+  let { cover = true, onclick }: { cover?: boolean; onclick?: () => void } = $props()
 
   let stage: HTMLDivElement
   let canvas: HTMLCanvasElement
@@ -44,8 +45,16 @@
   })
 </script>
 
-<!-- the bar's small stage has no cover to say what it is -->
-<div class="vstage" bind:this={stage} title={cover ? undefined : vzLabel(settings.visualizer)}>
+<!-- The bar's small stage has no cover to say what it is. Its click is for
+     the mouse only: the button beside it does the same from the keyboard. -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div
+  class="vstage"
+  class:click={!!onclick}
+  bind:this={stage}
+  title={cover ? undefined : `${vzLabel(settings.visualizer)}. Click to change.`}
+  {onclick}
+>
   <canvas bind:this={canvas}></canvas>
   {#if cover}
     <!-- the cover changes size with the style, so draw again when it settles -->
@@ -63,6 +72,9 @@
     position: relative;
     min-height: 0;
     container-type: size;
+  }
+  .click {
+    cursor: pointer;
   }
   canvas {
     position: absolute;

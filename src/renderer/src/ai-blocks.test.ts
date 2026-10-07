@@ -11,8 +11,9 @@ const info = {
 }
 
 const state = (over: Partial<AiState> = {}, on = true): AiState => ({
-  providers: [{ id: 'a', name: 'Service A' }],
+  providers: [{ id: 'a', name: 'Service A', about: 'Answers for a fee.' }],
   provider: 'a',
+  paid: false,
   tasks: { groups: { info, on, ready: false } },
   blocks: [
     { kind: 'text', id: 'key', label: 'API key', secret: true },
@@ -40,20 +41,28 @@ describe('aiBlocks', () => {
 
   it('draws the setup and what is sent while on', () => {
     const out = aiBlocks('groups', state())
-    expect(out.map((b) => b.kind)).toEqual(['switch', 'text', 'status', 'status'])
-    expect(out[3]).toEqual({ kind: 'status', text: info.sends })
+    expect(out.map((b) => b.kind)).toEqual(['switch', 'status', 'text', 'status', 'status'])
+    // the service's about line, before its own blocks
+    expect(out[1]).toEqual({ kind: 'status', text: 'Answers for a fee.' })
+    expect(out[4]).toEqual({ kind: 'status', text: info.sends })
   })
 
   it('has no service choice with one provider, and has one with two', () => {
     expect(aiBlocks('groups', state()).some((b) => b.kind === 'choice')).toBe(false)
     const two = state({
       providers: [
-        { id: 'a', name: 'Service A' },
-        { id: 'b', name: 'Service B' }
+        { id: 'a', name: 'Service A', about: '' },
+        { id: 'b', name: 'Service B', about: 'B is free.' }
       ],
       provider: 'b'
     })
     const choice = aiBlocks('groups', two).find((b) => b.kind === 'choice')
+    // the chosen one's about line comes right after the choice
+    const out = aiBlocks('groups', two)
+    expect(out[out.findIndex((b) => b.kind === 'choice') + 1]).toEqual({
+      kind: 'status',
+      text: 'B is free.'
+    })
     expect(choice).toMatchObject({
       label: 'Service',
       value: 'b',
@@ -76,8 +85,8 @@ describe('aiBlocks', () => {
       'groups',
       state({
         providers: [
-          { id: 'a', name: 'A' },
-          { id: 'b', name: 'B' }
+          { id: 'a', name: 'A', about: '' },
+          { id: 'b', name: 'B', about: '' }
         ]
       })
     )

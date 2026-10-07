@@ -9,6 +9,9 @@ export interface Provider {
   start(ctx: ProviderContext): void
   // has what it needs to ask
   ready(): boolean
+  // an ask may cost money now, e.g. the account has credit for paid models.
+  // Call changed() when this changes.
+  paid(): boolean
   // its Settings blocks, from its own state
   blocks(): SettingBlock[]
   act(id: string, actionId: string, value?: string): Promise<void>

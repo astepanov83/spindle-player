@@ -1,11 +1,13 @@
-// What Edit artist and "Use tag" send (tickets 024 and 069): tag key to the
-// names to show, or null for the tag as its own name. The page makes the
-// changes here and the library process checks them; artists-file.ts turns
-// them into links in artists.json.
+// What Edit artist and "Keep separate" send (tickets 024, 069 and 074): tag
+// key to the names to show, or null for the tag as its own name. The page
+// makes the changes here and the library process checks them;
+// artists-file.ts turns them into links in artists.json.
 import { artistKey, type Artist } from './artists'
 
-// tag key -> new names, or null to use the tag again
-export type ArtistChanges = Record<string, string[] | null>
+// tag key -> new names, null to use the tag again, or { ai } to put back the
+// AI's links to these names (Undo after "Keep separate" on an AI link)
+export type ArtistChange = string[] | null | { ai: string[] }
+export type ArtistChanges = Record<string, ArtistChange>
 
 export const maxNames = 20
 export const maxNameLength = 200
@@ -42,9 +44,10 @@ export function parseChanges(raw: unknown): ArtistChanges | undefined {
     if (!isKey(k)) return undefined
     if (v === null) out[k] = null
     else {
-      const names = cleanNames(v)
+      const ai = isObject(v)
+      const names = cleanNames(ai ? v.ai : v)
       if (!names.length) return undefined
-      out[k] = names
+      out[k] = ai ? { ai: names } : names
     }
   }
   return Object.keys(out).length ? out : undefined

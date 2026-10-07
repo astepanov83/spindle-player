@@ -95,6 +95,8 @@ class LibraryStore {
   // which library draws them (showIn); null until one is drawn
   #kind: NavKind | null = $state.raw(null)
   #history: History<Step> = $state.raw(emptyHistory())
+  // the other library's history and the place it was left at (showIn)
+  #left: Partial<Record<NavKind, { history: History<Step>; step: Step }>> = {}
   // Back, Forward or another chip shows a place seen before: it shows where
   // it was left, not the top. The scroll code takes it once (takeReturn).
   #returning = false
@@ -187,11 +189,23 @@ class LibraryStore {
   }
 
   // The library on screen: Studio's chips or Classic's sidebar. A tab the
-  // other one doesn't show gives way to its first.
+  // other one doesn't show gives way to its first. The place and search text
+  // come along; the history is the library's own, kept while the other one
+  // shows (ticket 078), since it may step through tabs this one doesn't show.
+  // Focus draws none, so a trip there changes nothing.
   showIn(kind: NavKind): void {
     if (kind === this.#kind) return
+    const was = this.#kind
+    if (was) this.#left[was] = { history: this.#history, step: this.#step() }
     this.#kind = kind
+    const back = this.#left[kind]
+    this.#history = back?.history ?? emptyHistory()
     this.#refit()
+    if (!back) return
+    // the place it was left at, when another one is shown now, is a step
+    // back, as if the move had been made here
+    const left = this.#fixStep(back.step)
+    if (!sameStep(left, this.#step())) this.#history = leave(this.#history, left)
   }
 
   #refit(): void {
@@ -294,13 +308,6 @@ class LibraryStore {
     return r
   }
 
-  // The other template shows other chips or sections: its history would
-  // step through places it doesn't show.
-  templateChanged(): void {
-    this.#history = emptyHistory()
-    this.query = ''
-  }
-
   // A chip or section is picked; `page`: Classic's playlist. Another one
   // shows the page it was left on; the one shown goes to its top (the grid,
   // the list). No search text: a query for stations is no query for albums.
@@ -350,6 +357,13 @@ class LibraryStore {
     this.go({ searchAll: group }, true)
   }
 
+  // The search text, sent to another tab that searches wider ('Search
+  // stations for "har"', ticket 077): a step that keeps the text, so Back
+  // shows the search it came from.
+  searchIn(tab: string): void {
+    this.go({ tab, searchAll: null }, true)
+  }
+
   // Studio's playlist page; null is the list
   openPlaylistPage(id: string | null): void {
     this.openPage(playlistsTab, id ? playlistPage(id) : '')
@@ -385,6 +399,18 @@ class LibraryStore {
       if (was.tab === playlistsTab) this.query = ''
     }
     this.#history = mapSteps(this.#history, (s) => ({ ...s, nav: out(s.nav) }), sameStep)
+    // the other library's are fixed for it when it shows again (showIn)
+    const off = (s: Step): Step =>
+      s.nav.pages[playlistsTab] === page
+        ? {
+            nav: { ...s.nav, pages: withPage(s.nav.pages, playlistsTab, '') },
+            query: s.nav.tab === playlistsTab ? '' : s.query
+          }
+        : s
+    for (const l of Object.values(this.#left)) {
+      l.history = mapSteps(l.history, off, sameStep)
+      l.step = off(l.step)
+    }
   }
 }
 

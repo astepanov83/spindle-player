@@ -6,7 +6,6 @@ import { templates } from '../../../shared/templates'
 import { buildLayout, partsOf, type BuiltLayout, type Slots } from '../layout/build'
 import { shownQueueMode } from '../layout/narrow'
 import { isWide } from '../layout/wide'
-import { library } from './library.svelte'
 import { settings } from './settings.svelte'
 
 class LayoutStore {
@@ -71,9 +70,10 @@ class LayoutStore {
     else this.openSettings(section)
   }
 
+  // The library keeps its place, search text and history (library.showIn).
   chooseTemplate(id: TemplateId): void {
+    if (id === settings.template) return
     settings.template = id
-    library.templateChanged()
     this.#reset()
   }
 

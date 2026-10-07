@@ -3,6 +3,9 @@ import {
   escapeTarget,
   isTyping,
   keyAction,
+  layoutChord,
+  type Chord,
+  type KeyAction,
   isRemoveKey,
   keyText,
   listShortcuts,
@@ -133,6 +136,14 @@ describe('keyAction', () => {
     expect(keyAction(press(' ', { code: 'Space' }), free)).toBe('toggle')
     expect(keyAction(press(' ', { code: 'Space', ctrlKey: true }), free)).toBe('block')
     expect(keyAction(press('v', { ctrlKey: true }), free)).toBe('none')
+  })
+  it('mutes with M, once for a held key, not while typing or with Ctrl', () => {
+    expect(keyAction(press('m'), free)).toBe('mute')
+    expect(keyAction(press('m', { repeat: true }), free)).toBe('none')
+    expect(keyAction(press('m'), { ...free, typing: true })).toBe('none')
+    expect(keyAction(press('m', { ctrlKey: true }), free)).toBe('none')
+    // on a slider or in a list too: M is not an arrow
+    expect(keyAction(press('m'), { ...free, arrows: true })).toBe('mute')
   })
   it('passes Escape on', () => expect(keyAction(press('Escape'), free)).toBe('escape'))
   it('leaves a text field its keys, but Ctrl+F and Ctrl+, still work', () => {
@@ -318,6 +329,33 @@ describe('shortcuts', () => {
     expect(keyAction(press('ArrowLeft', { altKey: true, repeat: true }), free)).toBe('none')
     expect(keyAction(press('v', { repeat: true }), free)).toBe('none')
   })
+  // by the key's place: Ctrl+2 on AZERTY gives key "é"
+  it('switches layout with Ctrl+1, Ctrl+2 and Ctrl+3, also in a text field', () => {
+    expect(keyAction(press('1', { code: 'Digit1', ctrlKey: true }), free)).toBe('studio')
+    expect(keyAction(press('é', { code: 'Digit2', ctrlKey: true }), free)).toBe('classic')
+    const typing = { ...free, typing: true }
+    expect(keyAction(press('3', { code: 'Digit3', ctrlKey: true }), typing)).toBe('focus')
+    expect(keyAction(press('2', { code: 'Digit2' }), free)).toBe('none')
+    expect(keyAction(press('2', { code: 'Digit2', ctrlKey: true, altKey: true }), free)).toBe(
+      'none'
+    )
+    expect(keyAction(press('2', { code: 'Digit2', ctrlKey: true, repeat: true }), free)).toBe(
+      'none'
+    )
+    expect(keyAction(press('1', { code: 'Numpad1', ctrlKey: true }), free)).toBe('none')
+  })
+  it('names the chord for each layout button', () => {
+    expect(layoutChord('studio')).toBe('Ctrl+1')
+    expect(layoutChord('classic')).toBe('Ctrl+2')
+    expect(layoutChord('focus')).toBe('Ctrl+3')
+  })
+  it('joins chords of one line that do different things with the same keys held', () => {
+    const c = (action: KeyAction, key: string, ctrl = false): Chord => ({ action, key, ctrl })
+    const line = (...chords: Chord[]): string[] => shortcutKeys({ chords })
+    expect(line(c('back', 'a'), c('forward', 'b'), c('back', 'c'))).toEqual(['A / B', 'C'])
+    expect(line(c('back', 'a'), c('forward', 'b', true))).toEqual(['A', 'Ctrl+B'])
+    expect(line(c('search', 'a'), c('search', 'b'))).toEqual(['A', 'B'])
+  })
   it('lists every action keyAction can give', () => {
     const listed = new Set(shortcuts.flatMap((s) => s.chords.map((c) => c.action)))
     const all = [
@@ -326,6 +364,7 @@ describe('shortcuts', () => {
       'seekForward',
       'volumeUp',
       'volumeDown',
+      'mute',
       'previous',
       'next',
       'back',
@@ -335,7 +374,10 @@ describe('shortcuts', () => {
       'keys',
       'escape',
       'visualizer',
-      'queue'
+      'queue',
+      'studio',
+      'classic',
+      'focus'
     ]
     expect([...listed].sort()).toEqual(all.sort())
   })
@@ -355,6 +397,7 @@ describe('shortcuts', () => {
       'Space',
       '← / →',
       '↑ / ↓',
+      'M',
       'Ctrl+← / Ctrl+→',
       'Ctrl+F, /',
       'Alt+← / Alt+→, Backspace',
@@ -362,7 +405,8 @@ describe('shortcuts', () => {
       '?',
       'Esc',
       'V',
-      'Q'
+      'Q',
+      'Ctrl+1 / Ctrl+2 / Ctrl+3'
     ])
     expect(keyText('Alt+ArrowUp')).toBe('Alt+↑')
     expect(keyText('PageDown')).toBe('Page Down')

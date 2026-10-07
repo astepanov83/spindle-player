@@ -1,6 +1,6 @@
 // The files plugin's page strings.
 import { describe, expect, it } from 'vitest'
-import { albumPage, artistPage, filesTabOf, folderPage, parsePage } from './pages'
+import { albumPage, artistPage, filesTabOf, fixesPage, folderPage, parsePage } from './pages'
 
 describe('files page strings', () => {
   it('read back what they were made from', () => {
@@ -14,6 +14,7 @@ describe('files page strings', () => {
     })
     const key = '/m/rock\0live'
     expect(parsePage(folderPage(key))).toEqual({ kind: 'folder', key })
+    expect(parsePage(fixesPage)).toEqual({ kind: 'fixes' })
   })
 
   it('know nothing of other pages', () => {
@@ -25,6 +26,7 @@ describe('files page strings', () => {
     expect(filesTabOf('album/a')).toBe('albums')
     expect(filesTabOf('artist/x')).toBe('artists')
     expect(filesTabOf('folder/k')).toBe('folders')
+    expect(filesTabOf(fixesPage)).toBe('artists')
     // an album under an artist is no link
     expect(filesTabOf(artistPage('x', 'a'))).toBeUndefined()
     expect(filesTabOf('')).toBeUndefined()

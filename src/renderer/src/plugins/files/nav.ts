@@ -4,7 +4,7 @@ import { crumbs, folderSearchText, shownFolder } from './folders'
 import { library } from '../../stores/library.svelte'
 import { files } from './store.svelte'
 import type { PageAddress, Tab } from '../types'
-import { artistPage, filesTabOf, folderPage, parsePage } from './pages'
+import { artistPage, filesTabOf, fixesPage, folderPage, parsePage } from './pages'
 
 const isAlbum = (id: string): boolean => !!files.findAlbum(id)
 
@@ -16,7 +16,9 @@ export function filesTabs(): Tab[] {
       label: 'Albums',
       icon: 'disc',
       search: 'Search your library',
-      searchShort: 'Search library'
+      searchShort: 'Search library',
+      // its results page finds songs, albums and artists
+      searchWide: true
     },
     { id: 'artists', label: 'Artists', icon: 'person', search: 'Search artists' },
     {
@@ -39,7 +41,7 @@ export function canOpenFiles(to: PageAddress): boolean {
   if (p?.kind === 'album') return isAlbum(p.id)
   if (p?.kind === 'artist') return !p.album && !!files.getArtist(p.key)
   if (p?.kind === 'folder') return files.folders.byKey.has(p.key)
-  return false
+  return p?.kind === 'fixes'
 }
 
 // An album or artist that is gone closes; an album under an artist shows the
@@ -58,6 +60,7 @@ export function filesPath(tab: string, page: string): string[] {
   const p = parsePage(page)
   const path: string[] = []
   if (p?.kind === 'album') path.push(`album:${p.id}`)
+  if (p?.kind === 'fixes') path.push('fixes')
   if (p?.kind === 'artist') {
     path.push(`artist:${p.key}`)
     if (p.album) path.push(`album:${p.album}`)
@@ -108,3 +111,4 @@ function showLink(page: string): void {
 
 export const showArtist = (key: string): void => showLink(artistPage(key))
 export const goToFolder = (key: string): void => showLink(folderPage(key))
+export const showFixes = (): void => showLink(fixesPage)

@@ -13,10 +13,11 @@ interface Stub {
 function setup(): { ai: Stub; calls: ReturnType<typeof aiPageCalls> } {
   const state: AiState = {
     providers: [
-      { id: 'a', name: 'A' },
-      { id: 'b', name: 'B' }
+      { id: 'a', name: 'A', about: '' },
+      { id: 'b', name: 'B', about: '' }
     ],
     provider: 'a',
+    paid: false,
     tasks: { t: { info: { id: 't', name: 'T', about: '', sends: '' }, on: false, ready: false } },
     blocks: []
   }

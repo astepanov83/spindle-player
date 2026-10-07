@@ -24,6 +24,9 @@
 
   const act = (id: string, value?: string): void => actOnPage(plugin, b.id, id, value)
 
+  // ties the name fields to their list of names
+  const uid = $props.id()
+
   // where the search box is: over the chips, or in Classic's sidebar
   const hint = $derived(
     b.searchHint ? `${b.searchHint} ${nav === 'chips' ? 'above' : 'on the left'}.` : b.hint
@@ -101,7 +104,7 @@
     {@const a = t.action}
     {#if i > 0}<span class="dot">·</span>{/if}<span>{t.text}</span>
     {#if a}
-      <button class="use" onclick={() => act(a.id, a.value)}>{a.label}</button>
+      <button class="use" aria-label={a.hint} onclick={() => act(a.id, a.value)}>{a.label}</button>
     {/if}
   {/each}
 {/snippet}
@@ -159,8 +162,9 @@
     meta={b.meta}
     count={b.count ?? ''}
     {hint}
-    sort={b.sort}
-    onsort={(id) => act('sort', id)}
+    below={b.line ? line : undefined}
+    choice={b.choice}
+    onchoose={(v) => b.choice && act(b.choice.id, v)}
   />
 {:else if b.look === 'album'}
   {@render back()}
@@ -190,6 +194,7 @@
                 aria-label="{e.label} {i + 1}"
                 maxlength={e.max}
                 bind:value={draft[i]}
+                list={e.suggest?.length ? `${uid}-names` : undefined}
                 use:focus={i === draft.length - 1}
                 {onkeydown}
               />
@@ -207,6 +212,11 @@
             ><Icon name="plus" size={14} />{e.add}</button
           >
           <div class="hint">{e.hint}</div>
+          {#if e.suggest?.length}
+            <datalist id="{uid}-names">
+              {#each e.suggest as n (n)}<option value={n}></option>{/each}
+            </datalist>
+          {/if}
         </div>
       {:else}
         <h2 class="page-title" title={b.title}>{b.title}</h2>
@@ -354,6 +364,10 @@
     border-radius: 8px;
     outline: none;
     box-shadow: none;
+  }
+  /* the names list opens as you type; its arrow would sit in the big title */
+  .name::-webkit-calendar-picker-indicator {
+    display: none !important;
   }
   .x {
     color: var(--ink-3);

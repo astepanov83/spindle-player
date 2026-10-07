@@ -9,6 +9,7 @@ import {
   addAiGroup,
   addAiSplit,
   addAsked,
+  aiFixCounts,
   aiKeys,
   aiSplits,
   artistGroupsTask,
@@ -43,7 +44,7 @@ import {
 
 // How a run ended. done: every name was asked about; asked: a request was made.
 export type JobEnd =
-  | { end: 'done'; grouped: number; asked: boolean }
+  | { end: 'done'; joined: number; split: number; asked: boolean }
   | { end: 'limit'; retryAt?: number }
   | { end: Exclude<AnswerError, 'limit' | 'too-big'> }
 
@@ -105,7 +106,7 @@ export async function groupArtists(d: JobDeps, signal: AbortSignal): Promise<Job
     d.saved()
   }
   if (end.end === 'done') {
-    if (end.asked) d.status({ state: 'done', grouped: end.grouped, at: d.now() })
+    if (end.asked) d.status({ state: 'done', joined: end.joined, split: end.split, at: d.now() })
   } else if (end.end === 'limit') d.status({ state: 'limit', at: end.retryAt })
   // failed is a real failure: one usable model is asked twice, not failed
   else if (end.end === 'network' || end.end === 'failed')
@@ -132,7 +133,7 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
   const tags = names.filter((t) => !t.manual)
   const splitChunks = chunksOf(tags, cache.split)
   if (!splitChunks.length && !chunksOf(joinNames(names, splitsNow(d)), cache.joined).length)
-    return { end: 'done', grouped: 0, asked: false }
+    return { end: 'done', joined: 0, split: 0, asked: false }
   let max: number | undefined
   try {
     max = await ai.maxInput(task, maxOutput, signal)
@@ -249,7 +250,7 @@ async function run(d: JobDeps, signal: AbortSignal): Promise<JobEnd> {
     )
     d.saved()
   }
-  return { end: 'done', grouped: grouped.size, asked: true }
+  return { end: 'done', ...aiFixCounts(artists, grouped, d.spelling), asked: true }
 }
 
 // The AI's splits step 2 asks about as parts. During a full check, a split

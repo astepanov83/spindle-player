@@ -2,12 +2,24 @@
 // an artist's picture. No DOM. Who counts as an artist is in shared/plugins/files/artists.ts.
 import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
 import type { ArtistCredit, Track } from '../../../../shared/library'
+import type { ArtistsShown } from '../../../../shared/settings'
 import { foldedName, foldQuery, sortRows, type Sort } from '../../library/views'
 import type { CoverArt } from '../types'
 
 export function filterArtists(artists: Artist[], q: string): Artist[] {
   const s = foldQuery(q)
   return s ? artists.filter((a) => foldedName(a).includes(s)) : artists
+}
+
+// artists with an album of their own, after the names in artists.json
+export const albumArtists = (artists: Artist[]): Artist[] =>
+  artists.filter((a) => a.albums.length > 0)
+
+// What the Artists grid shows (ticket 081). A search looks at every artist
+// whatever the choice, so a guest on one song can still be found.
+export function shownArtists(artists: Artist[], shown: ArtistsShown, q: string): Artist[] {
+  if (foldQuery(q)) return filterArtists(artists, q)
+  return shown === 'album' ? albumArtists(artists) : artists
 }
 
 // The artists of a song or album as links (ticket 040): one per name of a

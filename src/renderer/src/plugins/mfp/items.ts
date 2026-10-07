@@ -32,6 +32,7 @@ export function songState(id: string): ItemState {
       title: song.title,
       subtitle: song.artist,
       group: episode.title,
+      no: episode.songs.indexOf(song) + 1,
       length: song.length,
       art: mfp.art(episode.id),
       titleTo,

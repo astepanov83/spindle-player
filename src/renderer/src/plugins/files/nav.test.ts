@@ -66,6 +66,7 @@ describe('files pages', () => {
     const live = files.folders.nodes[2].key
     expect(nav.canOpenFiles(at(`folder/${live}`))).toBe(true)
     expect(nav.canOpenFiles(at('folder/nowhere'))).toBe(false)
+    expect(nav.canOpenFiles(at('name-fixes'))).toBe(true)
   })
 
   it('keep what is left after a rescan', () => {
@@ -85,6 +86,7 @@ describe('files pages', () => {
     const [m, rock, live] = files.folders.nodes.map((n) => n.key)
     expect(nav.filesPath('albums', '')).toEqual([])
     expect(nav.filesPath('albums', 'album/a')).toEqual(['album:a'])
+    expect(nav.filesPath('artists', 'name-fixes')).toEqual(['fixes'])
     expect(nav.filesPath('artists', 'album/a/artist/marinavale')).toEqual([
       'artist:marinavale',
       'album:a'

@@ -95,7 +95,8 @@ function listBlocks(query: string): Block[] {
       kind: 'empty',
       id: '',
       title: 'No matches',
-      text: 'No episode, mixer or song has that in its name.'
+      text: 'No episode, mixer or song has that in its name.',
+      nothingFound: true
     })
   return blocks
 }

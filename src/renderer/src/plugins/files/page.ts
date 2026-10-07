@@ -1,12 +1,7 @@
 // The files plugin's pages as blocks (ticket 059): Songs, Albums, Artists,
 // Folders and their pages, from the library store. The core draws them; what
 // their buttons do comes back through filesAct.
-import {
-  artistKey,
-  namesOf,
-  type Artist,
-  type ArtistTag
-} from '../../../../shared/plugins/files/artists'
+import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
 import { cleanNames, editArtist, maxNameLength } from '../../../../shared/plugins/files/artist-edit'
 import type { Album, Art } from '../../../../shared/library'
 import type { ItemKey } from '../../../../shared/plugins/items'
@@ -19,7 +14,9 @@ import {
   artistLinks,
   artistPageSongs,
   artistSongs,
-  filterArtists
+  albumArtists,
+  filterArtists,
+  shownArtists
 } from './artists'
 import {
   commonFolder,
@@ -36,7 +33,8 @@ import { libraryProblem, scanLine, settingsText, stoppedText } from './scan-text
 import { filterAlbums, nextSort, searchSongs, songRows, type SortKey } from '../../library/views'
 import { library } from '../../stores/library.svelte'
 import { plays } from '../../stores/plays.svelte'
-import { setViewSort, viewSort } from '../../stores/settings.svelte'
+import { setViewSort, settings, viewSort } from '../../stores/settings.svelte'
+import { artistsShownChoices, type ArtistsShown } from '../../../../shared/settings'
 import { playsOf } from '../../library/plays'
 import type { Plays } from '../../../../shared/plays'
 import { albumSorts, albumsView, parseAlbumSort, sortAlbums, type AlbumSort } from './album-sort'
@@ -54,7 +52,10 @@ import {
   type TilesBlock
 } from '../types'
 import { openArtist, showArtist, followArtist, goToFolder } from './nav'
-import { albumPage, artistPage, folderPage, parsePage } from './pages'
+import { albumPage, artistPage, fixesPage, folderPage, parsePage } from './pages'
+import { fixCount, keepSeparate, nameFixes, tagNote, type NameFix } from './name-fixes'
+import { ai } from '../../ai.svelte'
+import { artistGroupsTask } from '../../../../shared/plugins/files/artists-file'
 import { trackKey, trackKeys, trackOf } from './tracks'
 
 const at = (page: string): PageAddress => ({ plugin: 'files', page })
@@ -66,7 +67,7 @@ const libraryTarget = 'library'
 
 export function filesPage(tab: string, page: string, query: string): Block[] {
   if (!files.albums.length) return [noLibrary(false)]
-  if (tab === 'songs') return [songsTable(query)]
+  if (tab === 'songs') return songsPage(query)
   if (tab === 'albums') return albumsPage(page, query)
   if (tab === 'artists') return artistsPage(page, query)
   if (tab === 'folders') return foldersPage(page, query)
@@ -113,11 +114,13 @@ export function noLibrary(noPlaylists: boolean): EmptyBlock {
   return empty('No songs found', `Spindle found no songs it can play in ${where}.`)
 }
 
+// the core adds a button for each other tab that searches wider (ticket 077)
 const noMatches = (text: string): EmptyBlock => ({
   kind: 'empty',
   id: libraryTarget,
   title: 'No matches',
-  text
+  text,
+  nothingFound: true
 })
 
 const listHead = (title: string, count: string): HeadBlock => ({
@@ -131,11 +134,12 @@ const listHead = (title: string, count: string): HeadBlock => ({
 
 // Classic's Songs: every song, in the library's sort. The sort is read when
 // drawn, so a sort click doesn't build the 50k list again.
-function songsTable(query: string): Block {
-  return {
+function songsPage(query: string): Block[] {
+  const items = songRows(files.albums, (id) => files.track(id), query).map(trackKey)
+  const table: Block = {
     kind: 'songs',
     id: songsTarget,
-    items: songRows(files.albums, (id) => files.track(id), query).map(trackKey),
+    items,
     from: 'Songs',
     meta: 'Library',
     plays: true,
@@ -143,6 +147,9 @@ function songsTable(query: string): Block {
       return library.sort
     }
   }
+  return items.length || !query.trim()
+    ? [table]
+    : [table, noMatches('No song has that in its title, artist or album.')]
 }
 
 function albumsPage(page: string, query: string): Block[] {
@@ -157,7 +164,13 @@ function albumsPage(page: string, query: string): Block[] {
     {
       ...listHead('Albums', fmtCount(files.albums.length, 'album', 'albums')),
       id: albumsView,
-      sort: { label: 'Sort albums', options: albumSorts, picked: by }
+      choice: {
+        id: 'sort',
+        label: 'Sort albums',
+        value: by,
+        options: albumSorts.map((o) => ({ value: o.id, label: o.label })),
+        menu: { prefix: 'Sort:' }
+      }
     },
     albumTiles(sortedAlbums(by))
   ]
@@ -234,6 +247,9 @@ function artistTiles(artists: Artist[]): TilesBlock {
   })
 }
 
+// the Album artists / All artists choice (ticket 081)
+const artistsShownId = 'artists-shown'
+
 // While searching, the grid shows over the open page, which comes back when
 // the text is cleared.
 function artistsPage(page: string, query: string): Block[] {
@@ -246,9 +262,24 @@ function artistsPage(page: string, query: string): Block[] {
       to: at(artistPage(open.key))
     })
   if (!query.trim() && artist) return artistBlocks(artist)
-  const shown = filterArtists(files.artists, query)
+  if (!query.trim() && p?.kind === 'fixes') return fixesBlocks()
+  const shown = shownArtists(files.artists, settings.artistsShown, query)
+  const fixes = fixCount(nameFixes(files.artists))
+  const head = listHead('Artists', fmtCount(shown.length, 'artist', 'artists'))
+  if (fixes) head.line = [{ text: fmtCount(fixes, 'name fix', 'name fixes'), to: at(fixesPage) }]
+  // not while searching, which looks at everyone; not when it would change nothing
+  if (!query.trim() && albumArtists(files.artists).length < files.artists.length)
+    head.choice = {
+      id: artistsShownId,
+      label: 'Artists to show',
+      value: settings.artistsShown,
+      options: [
+        { value: 'album', label: 'Album artists' },
+        { value: 'all', label: 'All artists' }
+      ]
+    }
   return [
-    listHead('Artists', fmtCount(shown.length, 'artist', 'artists')),
+    head,
     ...(shown.length ? [] : [noMatches('No artist has that in their name.')]),
     artistTiles(shown)
   ]
@@ -373,9 +404,6 @@ const artistPlayIds = (a: Artist): ItemKey[] =>
     )
   )
 
-const tagNote = (t: ArtistTag): string =>
-  t.grouped ? ' (grouped)' : !t.names ? '' : t.names.length > 1 ? ' (split)' : ' (renamed)'
-
 // An artist: their picture and name, their albums as covers, then their
 // songs on other albums. Edit renames or splits them (ticket 024).
 function artistBlocks(a: Artist): Block[] {
@@ -427,7 +455,16 @@ function artistBlocks(a: Artist): Block[] {
       text: 'From tags:',
       items: a.tags.map((t) => ({
         text: t.name + tagNote(t),
-        ...(t.names ? { action: { id: 'use-tag', label: 'Use tag', value: t.key } } : {})
+        ...(t.names
+          ? {
+              action: {
+                id: keepTagId,
+                label: 'Keep separate',
+                value: t.key,
+                hint: `Keep ${t.name} separate`
+              }
+            }
+          : {})
       }))
     }
   if (files.editingArtist === a.key)
@@ -437,7 +474,8 @@ function artistBlocks(a: Artist): Block[] {
       max: maxNameLength,
       add: 'Add artist',
       remove: 'Remove this name',
-      hint: 'Change the name to rename this artist. To split it into several, add a name for each.',
+      hint: "Change the name to rename this artist. To split it into several, add a name for each. Type another artist's name to join them.",
+      suggest: files.artists.filter((x) => x.key !== a.key).map((x) => x.name),
       // one renames, two or more split
       ok: (names) => cleanNames(names).length > 0
     }
@@ -464,6 +502,105 @@ function artistBlocks(a: Artist): Block[] {
       }
     })
   return blocks
+}
+
+const keepTagId = 'keep-tag'
+const undoFixId = 'undo-fix'
+
+// The names a fix shows now, each opening its artist's page.
+function fixNames(f: NameFix): Piece[] {
+  return f.names.flatMap((name, i): Piece[] => {
+    const key = artistKey(name)
+    return [
+      ...(i ? [{ text: ', ' }] : []),
+      files.getArtist(key) ? { text: name, to: at(artistPage(key)) } : { text: name }
+    ]
+  })
+}
+
+function fixRows(label: string, list: NameFix[]): Block[] {
+  if (!list.length) return []
+  return [
+    { kind: 'text', text: label },
+    {
+      kind: 'changes',
+      id: fixesPage,
+      label,
+      rows: list.map((f) => ({
+        key: f.key,
+        from: f.tag,
+        to: fixNames(f),
+        action: {
+          id: undoFixId,
+          label: 'Undo',
+          value: f.key,
+          hint: `Undo ${f.tag} to ${f.names.join(', ')}`
+        }
+      }))
+    }
+  ]
+}
+
+// Name fixes (ticket 074): every tag a link in artists.json shows under
+// other names, the AI's and yours, each with Undo ("Keep separate").
+function fixesBlocks(): Block[] {
+  const f = nameFixes(files.artists)
+  const n = fixCount(f)
+  const aiOff = !ai.state?.tasks[artistGroupsTask]?.on
+  const head: HeadBlock = {
+    kind: 'head',
+    look: 'folder',
+    id: fixesPage,
+    title: 'Name fixes',
+    meta: 'Artists',
+    back: { label: 'All artists', to: at('') },
+    line: [
+      {
+        text: n
+          ? fmtCount(n, 'tag', 'tags') + ' shown under other names'
+          : 'No tag is shown under another name'
+      }
+    ]
+  }
+  const blocks: Block[] = [head]
+  // its links are kept, but not used while it is off
+  if (aiOff && !f.split.length && !f.joined.length)
+    blocks.push({
+      kind: 'empty',
+      id: fixesPage,
+      text: "Fix artist names is off in Settings, so it changes no names. Changes you make with Edit on an artist's page are listed here."
+    })
+  else if (!n)
+    blocks.push({
+      kind: 'empty',
+      id: fixesPage,
+      text: "When Fix artist names or Edit on an artist's page shows a tag under another name, it is listed here with Undo."
+    })
+  blocks.push(
+    ...fixRows('Split by AI', f.split),
+    ...fixRows('Joined by AI', f.joined),
+    ...fixRows('Changed by you', f.yours)
+  )
+  return blocks
+}
+
+// "Keep separate" on a tag, from its artist's page or the name fixes, with a
+// notice whose Undo puts the link back. `follow`: the page to show the
+// artist on again after Undo, when Keep separate moved off it.
+function keepTag(
+  t: { key: string; name: string; names?: string[]; grouped?: true },
+  follow?: string
+): void {
+  const c = keepSeparate(t)
+  if (!c) return
+  window.libraryApi.setArtists(c.keep)
+  notice.show(`${t.name} is its own artist now`, {
+    label: 'Undo',
+    run: () => {
+      window.libraryApi.setArtists(c.undo)
+      if (follow && library.page('artists') === artistPage(t.key)) followArtist(follow)
+    }
+  })
 }
 
 // The open folder by its page: a folder that is gone shows the nearest one above.
@@ -618,9 +755,12 @@ export function filesSearch(query: string): SearchGroup[] {
 export function filesAct(target: string, id: string, value?: string): void {
   if (id === 'add-folder') return void window.libraryApi.addFolder()
   if (id === 'sort' && value) return sortBy(target, value)
+  if (id === artistsShownId && artistsShownChoices.includes(value as ArtistsShown))
+    return void (settings.artistsShown = value as ArtistsShown)
   const p = parsePage(target)
   if (p?.kind === 'album' && id === showFolderId) return void showAlbumFolder(p.id)
   if (p?.kind === 'album' && id === goFolderId) return goToAlbumFolder(p.id)
+  if (p?.kind === 'fixes' && id === undoFixId) return undoFix(value)
   const a = p?.kind === 'artist' && !p.album ? files.getArtist(p.key) : undefined
   if (a) artistAct(a, id, value)
 }
@@ -645,13 +785,21 @@ function artistAct(a: Artist, id: string, value?: string): void {
     files.editingArtist = a.key
   } else if (id === 'cancel') files.editingArtist = null
   else if (id === 'save') saveNames(a, value)
-  else if (id === 'use-tag') {
+  else if (id === keepTagId) {
     const t = a.tags.find((t) => t.key === value)
     if (!t) return
-    // saved as its own name, linked by you, so the AI never links it again
-    window.libraryApi.setArtists({ [t.key]: null })
     // with no other tag, the artist becomes the tag again
-    followArtist(a.tags.length > 1 ? a.key : t.key)
+    const moves = a.tags.length < 2
+    keepTag(t, moves ? a.key : undefined)
+    followArtist(moves ? t.key : a.key)
+  }
+}
+
+// Undo on a name fix: the tag as its own name, as Keep separate does.
+function undoFix(key: string | undefined): void {
+  for (const a of files.artists) {
+    const t = a.tags.find((t) => t.key === key)
+    if (t?.names) return keepTag(t)
   }
 }
 

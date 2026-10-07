@@ -6,6 +6,8 @@ export type VisualizerStyle = 'ring' | 'spectrum' | 'wave' | 'off'
 export type ThemeChoice = 'system' | 'dark' | 'light'
 export type CoverSource = 'musicbrainz' | 'deezer' | 'itunes'
 export type CloseAction = 'ask' | 'minimize' | 'quit'
+// the Artists view: artists with an album of their own, or every artist
+export type ArtistsShown = 'album' | 'all'
 
 export interface Settings {
   template: TemplateId
@@ -25,6 +27,7 @@ export interface Settings {
   // a list view's sort, by view: { albums: 'added' } (ticket 085). The view's
   // plugin knows the values; a view left out is in its own order.
   viewSorts: Record<string, string>
+  artistsShown: ArtistsShown
 }
 
 export interface Size {
@@ -69,6 +72,7 @@ export const themeChoices: ThemeChoice[] = ['dark', 'light', 'system']
 // also the order they are tried in, after the MusicBrainz id lookup
 export const coverSources: CoverSource[] = ['musicbrainz', 'deezer', 'itunes']
 export const closeActions: CloseAction[] = ['ask', 'minimize', 'quit']
+export const artistsShownChoices: ArtistsShown[] = ['album', 'all']
 
 function pluginDefaults(): Record<PluginId, boolean> {
   return Object.fromEntries(plugins.map((p) => [p.id, p.defaultOn])) as Record<PluginId, boolean>
@@ -85,7 +89,8 @@ export function defaultSettings(): Settings {
     coverSources: { musicbrainz: true, deezer: true, itunes: true },
     closeAction: 'ask',
     plugins: pluginDefaults(),
-    viewSorts: {}
+    viewSorts: {},
+    artistsShown: 'album'
   }
 }
 
@@ -297,6 +302,7 @@ export function parseStoredSettings(
     closeAction: oneOf(r.closeAction, closeActions, base.closeAction),
     plugins: parsePlugins(r.plugins, r, base.plugins),
     viewSorts: parseViewSorts(r.viewSorts, base.viewSorts),
+    artistsShown: oneOf(r.artistsShown, artistsShownChoices, base.artistsShown),
     windowSizes,
     windowMaximized:
       r.windowMaximized === undefined
@@ -384,6 +390,8 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   )
     return false
   if (has('closeAction') && !closeActions.includes(raw.closeAction as CloseAction)) return false
+  if (has('artistsShown') && !artistsShownChoices.includes(raw.artistsShown as ArtistsShown))
+    return false
   if (
     has('coverSources') &&
     (!isObject(raw.coverSources) ||
@@ -418,6 +426,7 @@ export function pageSettings(s: StoredSettings): Settings {
     coverSources: { ...s.coverSources },
     closeAction: s.closeAction,
     plugins: { ...s.plugins },
-    viewSorts: { ...s.viewSorts }
+    viewSorts: { ...s.viewSorts },
+    artistsShown: s.artistsShown
   }
 }

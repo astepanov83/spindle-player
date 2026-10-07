@@ -12,6 +12,9 @@ import {
   statusLines
 } from './scan-text'
 import { files } from './store.svelte'
+import { nameFixes } from './name-fixes'
+import { showFixes } from './nav'
+import { layout } from '../../stores/layout.svelte'
 import { ai } from '../../ai.svelte'
 import { artistGroupsTask } from '../../../../shared/plugins/files/artists-file'
 import type { SettingBlock } from '../../../../shared/setting-blocks'
@@ -45,19 +48,33 @@ export function filesSettings(): SettingBlock[] {
 
 // The task's own line and button, in its box under the setup, only while it is switched on.
 function groupsBlocks(): SettingBlock[] {
-  const task = ai.state?.tasks[artistGroupsTask]
-  if (!task?.on) return []
+  const state = ai.state
+  const task = state?.tasks[artistGroupsTask]
+  if (!state || !task?.on) return []
+  const service = state.providers.find((p) => p.id === state.provider)?.name
   const g = files.status.groups
-  const line = groupsLine(g)
+  const line = groupsLine(g, service)
   const out: SettingBlock[] = []
   if (line) out.push({ kind: 'status', ...line })
+  // the AI's changes, to check and undo; Focus has no library to show them in
+  const fixes = nameFixes(files.artists)
+  if ((fixes.split.length || fixes.joined.length) && layout.hasLibrary)
+    out.push({ kind: 'button', id: 'ai-fixes', label: 'See the changes' })
   // asking needs the provider ready, not only the switch
   out.push({
     kind: 'button',
     id: 'ai-recheck',
     label: 'Check all names again',
-    disabled: !task.ready || g?.state === 'running'
+    disabled: !task.ready || g?.state === 'running',
+    // every name again is the one big run, so it asks first when it may cost money
+    ...(state.paid && { confirm: 'This asks about every artist again and may use credit.' })
   })
+  // a greyed button says why
+  if (!task.ready)
+    out.push({
+      kind: 'status',
+      text: service ? `Connect ${service} first.` : 'Connect a service first.'
+    })
   return out
 }
 
@@ -66,6 +83,10 @@ export function filesActSetting(id: string, actionId: string, value?: string): v
   else if (id === 'add' && actionId === 'press') window.libraryApi.addFolder()
   else if (id === 'rescan' && actionId === 'press') window.libraryApi.rescan()
   else if (id === 'ai-recheck' && actionId === 'press') window.libraryApi.aiRecheck()
+  else if (id === 'ai-fixes' && actionId === 'press') {
+    layout.closeSettings()
+    showFixes()
+  }
 }
 
 // A scan, next to the chips. With no songs yet the empty page shows it instead.

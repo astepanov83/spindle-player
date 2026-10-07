@@ -43,6 +43,7 @@ function plainProvider(id: string): Provider & {
     info: { id, name: id.toUpperCase(), about: '' },
     start: vi.fn(),
     ready: () => true,
+    paid: () => false,
     blocks: () => [{ kind: 'status', text: `${id} here` }],
     act: vi.fn(async () => {}),
     models: async () => [],
@@ -183,14 +184,26 @@ describe('AiService with the fake provider', () => {
   it('gives the state of each task and the provider list', async () => {
     const { ai } = setup()
     expect(ai.state()).toEqual({
-      providers: [{ id: 'fake', name: 'Test service' }],
+      providers: [{ id: 'fake', name: 'Test service', about: 'Canned answers, for tests.' }],
       // the saved 'openrouter' is not in this list: the first one is used
       provider: 'fake',
+      paid: false,
       tasks: { [task.id]: { info: task, on: false, ready: false } },
       blocks: [{ kind: 'text', id: 'key', label: 'Test key', secret: true, saved: false }]
     })
     ai.setTask(task.id, true)
     expect(ai.state().tasks[task.id]).toMatchObject({ on: true, ready: false })
+  })
+
+  it('says an ask may cost money only while the chosen provider is ready and paid', async () => {
+    const { ai } = setup()
+    expect(ai.state().paid).toBe(false)
+    await ai.act('fake', 'key', 'set', 'free-key')
+    expect(ai.state().paid).toBe(false)
+    await ai.act('fake', 'key', 'set', 'paid-key')
+    expect(ai.state().paid).toBe(true)
+    const p = { ...plainProvider('p'), ready: () => false, paid: () => true }
+    expect(setup({ providers: [p] }).ai.state().paid).toBe(false)
   })
 
   it('says when keys only last until quit', () => {

@@ -9,15 +9,8 @@
   import Menu from './ui/Menu.svelte'
   import Notice from './ui/Notice.svelte'
   import { engine } from './audio/engine'
-  import {
-    escapeTarget,
-    isTyping,
-    keyAction,
-    seekStep,
-    usesArrows,
-    volumeStep,
-    type KeyAction
-  } from './keys'
+  import { heard } from './audio/volume'
+  import { escapeTarget, isTyping, keyAction, seekStep, usesArrows, type KeyAction } from './keys'
   import { goBack, goForward, onSideButton } from './library/side-buttons'
   import { drawerFocus, focusColumnQueue } from './layout/queue-focus'
   import { layout } from './stores/layout.svelte'
@@ -37,6 +30,7 @@
   import { queues } from './stores/queues.svelte'
   import { queue } from './stores/queue.svelte'
   import { settings, settingsState } from './stores/settings.svelte'
+  import { sound, stepVolume, toggleMute } from './stores/sound.svelte'
   import { theme } from './stores/theme.svelte'
   import { barColors } from './visualizer/colors'
   import { setLook } from './visualizer/loop'
@@ -45,7 +39,7 @@
   const palettes = $derived(queues.art?.palette ?? defaultPalettes)
   const palette = $derived(palettes[theme.light ? 'light' : 'dark'])
 
-  $effect(() => engine.setVolume(settings.volume))
+  $effect(() => engine.setVolume(heard({ volume: settings.volume, muted: sound.muted })))
 
   // The visualizer loop runs outside Svelte; it only hears about slow changes.
   $effect(() =>
@@ -129,8 +123,8 @@
     if (act === 'toggle') queues.togglePlay()
     else if (act === 'seekBack' || act === 'seekForward')
       queues.seek(seekStep(player.pos, player.duration, act === 'seekBack' ? -1 : 1))
-    else if (act === 'volumeUp' || act === 'volumeDown')
-      settings.volume = volumeStep(settings.volume, act === 'volumeDown' ? -1 : 1)
+    else if (act === 'volumeUp' || act === 'volumeDown') stepVolume(act === 'volumeDown' ? -1 : 1)
+    else if (act === 'mute') toggleMute()
     else if (act === 'previous') void queues.prev()
     else if (act === 'next') void queues.next()
     else if (act === 'back') goBack()
@@ -141,6 +135,7 @@
     else if (act === 'escape') escape()
     else if (act === 'visualizer') layout.cycleVisualizer()
     else if (act === 'queue') layout.toggleQueue()
+    else if (act === 'studio' || act === 'classic' || act === 'focus') layout.chooseTemplate(act)
   }
 
   function escape(): void {

@@ -25,6 +25,12 @@ describe('parseChanges', () => {
     expect(parseChanges({ kino: [' Кино '], queen: null })).toEqual({ kino: ['Кино'], queen: null })
   })
 
+  it('takes AI links to put back', () => {
+    expect(parseChanges({ bjork: { ai: [' Björk '] } })).toEqual({ bjork: { ai: ['Björk'] } })
+    expect(parseChanges({ bjork: { ai: [] } })).toBeUndefined()
+    expect(parseChanges({ bjork: { you: ['Björk'] } })).toBeUndefined()
+  })
+
   it('refuses the whole message when one part is wrong', () => {
     expect(parseChanges({ kino: ['Кино'], 'Not A Key': ['X'] })).toBeUndefined()
     expect(parseChanges({ kino: [''] })).toBeUndefined()

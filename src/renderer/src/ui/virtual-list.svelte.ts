@@ -13,8 +13,9 @@ export interface VirtualListOptions {
   scrollEl: HTMLElement | null | undefined
   // the element the rows sit in, to find where it starts in the scroll box
   list: HTMLElement | undefined
-  // row height, or a first guess when rows are measured
-  size: number
+  // row height, or a first guess when rows are measured; a function for rows
+  // of known, different heights (a new function measures them again)
+  size: number | ((index: number) => number)
   // measure rows again, for rows whose height depends on the width
   remeasure?: boolean
 }
@@ -58,22 +59,23 @@ export function virtualList(opts: () => VirtualListOptions, overscan = 8): Virtu
   // Rows are measured again only when the width changed their size. Not on a
   // new count: a scan adds rows every few seconds, and the rows above the
   // screen would fall back to the guess and move what is shown.
-  let measuredAt: number | undefined
+  let measuredAt: VirtualListOptions['size'] | undefined
 
   // .pre: update the count before the rows are drawn
   $effect.pre(() => {
     const o = opts()
+    const size = o.size
     const el = o.scrollEl ?? null
     const m = margin
     untrack(() => {
       v.setOptions({
         count: o.count,
-        estimateSize: () => o.size,
+        estimateSize: typeof size === 'function' ? size : () => size,
         scrollMargin: m,
         getScrollElement: () => el
       })
-      if (o.remeasure && o.size !== measuredAt) v.measure()
-      measuredAt = o.size
+      if ((o.remeasure || typeof size === 'function') && size !== measuredAt) v.measure()
+      measuredAt = size
     })
   })
 

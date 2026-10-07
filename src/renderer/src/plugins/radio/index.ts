@@ -59,7 +59,9 @@ export const radioHalf: PageHalf = {
   },
   // stations play through `live`, never from the track queue
   play: () => undefined,
-  tabs: () => [{ id: 'radio', label: 'Radio', icon: 'radio', search: 'Search stations' }],
+  tabs: () => [
+    { id: 'radio', label: 'Radio', icon: 'radio', search: 'Search stations', searchWide: true }
+  ],
   tabOf: (page) => (page === '' ? 'radio' : undefined),
   canOpen: (to) => to.page === '',
   page: (_tab, _page, query) => radioBlocks(query),

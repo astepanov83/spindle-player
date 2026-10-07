@@ -137,7 +137,7 @@ describe('the tab search', () => {
   it('says when nothing matches', () => {
     const blocks = page.mfpPage('mfp', '', 'zzz')
     expect(kinds(blocks)).toEqual(['head', 'empty'])
-    expect(blocks[1]).toMatchObject({ title: 'No matches' })
+    expect(blocks[1]).toMatchObject({ title: 'No matches', nothingFound: true })
   })
 })
 

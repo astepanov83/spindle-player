@@ -150,9 +150,11 @@ describe('pages', () => {
     const { settings } = await import('../../stores/settings.svelte')
     const { plays } = await import('../../stores/plays.svelte')
     const blocks = page.filesPage('albums', '', '')
-    expect(head(blocks[0]).sort).toMatchObject({ label: 'Sort albums', picked: 'artist' })
-    expect(head(blocks[0]).sort?.options).toHaveLength(6)
-    page.filesAct(head(blocks[0]).id, 'sort', 'played')
+    const choice = head(blocks[0]).choice
+    expect(choice).toMatchObject({ id: 'sort', label: 'Sort albums', value: 'artist' })
+    expect(choice?.menu).toEqual({ prefix: 'Sort:' })
+    expect(choice?.options).toHaveLength(6)
+    page.filesAct(head(blocks[0]).id, choice!.id, 'played')
     expect(settings.viewSorts).toEqual({ albums: 'played' })
     // nothing played yet: library order
     const ids = (): string[] =>
@@ -276,7 +278,9 @@ describe('pages', () => {
   it('Artists: round tiles, filtered by the search, with a note for none', () => {
     const blocks = page.filesPage('artists', '', '')
     expect(tiles(blocks[1]).round).toBe(true)
-    expect(tiles(blocks[1]).items).toBe(files.artists)
+    expect(tiles(blocks[1]).items).toEqual(files.artists)
+    // everyone has an album, so there is nothing to choose
+    expect(head(blocks[0]).choice).toBeUndefined()
     const tile = tiles(blocks[1]).tile(files.getArtist('junopark'))
     expect(tile).toMatchObject({
       title: 'Juno Park',
@@ -287,6 +291,47 @@ describe('pages', () => {
     const found = page.filesPage('artists', 'artist/marinavale', 'jun')
     expect(head(found[0]).count).toBe('1 artist')
     expect(kinds(page.filesPage('artists', '', 'nobody'))).toEqual(['head', 'empty', 'tiles'])
+    // so the core offers the wider searches in it (ticket 077)
+    expect(page.filesPage('artists', '', 'nobody')[1]).toMatchObject({ nothingFound: true })
+  })
+
+  it('Artists shows album artists first, with a choice for all (ticket 081)', async () => {
+    const { settings } = await import('../../stores/settings.svelte')
+    settings.artistsShown = 'album'
+    files.load({
+      albums: [...lib().albums, album('v', ['v1'], { artist: 'Various Artists' })],
+      tracks: [...lib().tracks, track('v1', 'v', { artist: 'DJ Sol' })],
+      folders: lib().folders
+    })
+    const names = (blocks: Block[]): string[] =>
+      (tiles(blocks.at(-1)!).items as { name: string }[]).map((a) => a.name)
+    let blocks = page.filesPage('artists', '', '')
+    expect(names(blocks)).toEqual(['Juno Park', 'Marina Vale', 'Various Artists'])
+    expect(head(blocks[0]).count).toBe('3 artists')
+    expect(head(blocks[0]).choice).toEqual({
+      id: 'artists-shown',
+      label: 'Artists to show',
+      value: 'album',
+      options: [
+        { value: 'album', label: 'Album artists' },
+        { value: 'all', label: 'All artists' }
+      ]
+    })
+    page.filesAct('', 'artists-shown', 'all')
+    expect(settings.artistsShown).toBe('all')
+    blocks = page.filesPage('artists', '', '')
+    expect(names(blocks)).toEqual(['DJ Sol', 'Juno Park', 'Marina Vale', 'Various Artists'])
+    expect(head(blocks[0]).count).toBe('4 artists')
+    expect(head(blocks[0]).choice?.value).toBe('all')
+    // a wrong value changes nothing
+    page.filesAct('', 'artists-shown', 'some')
+    expect(settings.artistsShown).toBe('all')
+    // a search looks at everyone whatever the choice, and hides it
+    page.filesAct('', 'artists-shown', 'album')
+    blocks = page.filesPage('artists', '', 'sol')
+    expect(names(blocks)).toEqual(['DJ Sol'])
+    expect(head(blocks[0]).count).toBe('1 artist')
+    expect(head(blocks[0]).choice).toBeUndefined()
   })
 
   it('an artist: head with a round picture, their albums opening under them', () => {
@@ -364,6 +409,17 @@ describe('pages', () => {
       'empty',
       'rows'
     ])
+    expect(page.filesPage('folders', `folder/${rock}`, 'zzz')[2]).toMatchObject({
+      nothingFound: true
+    })
+  })
+
+  it("Classic's Songs: a search that finds nothing says so (ticket 077)", () => {
+    const blocks = page.filesPage('songs', '', 'zzz')
+    expect(kinds(blocks)).toEqual(['songs', 'empty'])
+    expect(songs(blocks[0]).items).toEqual([])
+    expect(blocks[1]).toMatchObject({ title: 'No matches', nothingFound: true })
+    expect(kinds(page.filesPage('songs', '', 'juno'))).toEqual(['songs'])
   })
 
   it("Classic's Songs: every song in the library's sort, sorted through act", () => {
@@ -394,22 +450,68 @@ describe('a grouped tag (ticket 068)', () => {
     files.load(d)
   })
 
-  it('is marked "(grouped)" under the name, with Use tag', () => {
+  it('is marked "(joined by AI)" under the name, with Keep separate named for the tag', () => {
     const [h] = page.filesPage('artists', 'artist/marinavale', '')
     expect(head(h).note).toEqual({
       text: 'From tags:',
       items: [
         { text: 'Marina Vale' },
         {
-          text: 'Marina Vail (grouped)',
-          action: { id: 'use-tag', label: 'Use tag', value: 'marinavail' }
+          text: 'Marina Vail (joined by AI)',
+          action: {
+            id: 'keep-tag',
+            label: 'Keep separate',
+            value: 'marinavail',
+            hint: 'Keep Marina Vail separate'
+          }
         }
       ]
     })
   })
 
-  it("Use tag saves the tag's own name, so the group can't take it again", () => {
-    page.filesAct('artist/marinavale', 'use-tag', 'marinavail')
+  it('Keep separate says so, and its Undo puts the AI link back', async () => {
+    page.filesAct('artist/marinavale', 'keep-tag', 'marinavail')
+    const { notice } = await import('../../stores/notice.svelte')
+    expect(notice.text).toBe('Marina Vail is its own artist now')
+    expect(notice.action?.label).toBe('Undo')
+    notice.press()
+    expect(api.setArtists.mock.calls.map((c) => c[0])).toEqual([
+      { marinavail: null },
+      { marinavail: { ai: ['Marina Vale'] } }
+    ])
+  })
+
+  it('links the Artists head to the name fixes, which list it under Joined by AI', () => {
+    const [h] = page.filesPage('artists', '', '')
+    expect(head(h).line).toEqual([{ text: '1 name fix', to: at('name-fixes') }])
+    const blocks = page.filesPage('artists', 'name-fixes', '')
+    expect(kinds(blocks)).toEqual(['head', 'text', 'changes'])
+    expect(head(blocks[0])).toMatchObject({ title: 'Name fixes', back: { to: at('') } })
+    expect(blocks[1]).toEqual({ kind: 'text', text: 'Joined by AI' })
+    expect(blocks[2]).toEqual({
+      kind: 'changes',
+      id: 'name-fixes',
+      label: 'Joined by AI',
+      rows: [
+        {
+          key: 'marinavail',
+          from: 'Marina Vail',
+          to: [{ text: 'Marina Vale', to: at('artist/marinavale') }],
+          action: {
+            id: 'undo-fix',
+            label: 'Undo',
+            value: 'marinavail',
+            hint: 'Undo Marina Vail to Marina Vale'
+          }
+        }
+      ]
+    })
+    page.filesAct('name-fixes', 'undo-fix', 'marinavail')
+    expect(api.setArtists).toHaveBeenCalledWith({ marinavail: null })
+  })
+
+  it("Keep separate saves the tag's own name, so the group can't take it again", () => {
+    page.filesAct('artist/marinavale', 'keep-tag', 'marinavail')
     const sent = api.setArtists.mock.calls[0][0] as Record<string, null>
     expect(sent).toEqual({ marinavail: null })
     // the library built from artists.json with that change, the AI on
@@ -429,5 +531,24 @@ describe('a grouped tag (ticket 068)', () => {
     expect(files.getArtist('marinavale')?.tags).toEqual([
       { key: 'marinavale', name: 'Marina Vale' }
     ])
+  })
+})
+
+describe('name fixes with none', () => {
+  beforeEach(() => files.load(lib()))
+
+  it('has no link on the Artists head, and the page says what it lists', () => {
+    expect(head(page.filesPage('artists', '', '')[0]).line).toBeUndefined()
+    const blocks = page.filesPage('artists', 'name-fixes', '')
+    expect(kinds(blocks)).toEqual(['head', 'empty'])
+    // the AI task is off in this test, so the page says so
+    expect(blocks[1]).toMatchObject({ text: expect.stringContaining('Fix artist names is off') })
+  })
+
+  it('offers the other artists to join in Edit, and says how', () => {
+    files.editingArtist = 'marinavale'
+    const e = head(page.filesPage('artists', 'artist/marinavale', '')[0]).edit
+    expect(e?.suggest).toEqual(['Juno Park'])
+    expect(e?.hint).toContain("Type another artist's name to join them.")
   })
 })

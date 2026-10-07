@@ -6,10 +6,11 @@ import { aiBlocks } from './ai-blocks'
 const info = { id: 't', name: 'Task', about: 'About', sends: 'Sends names.' }
 const state = (provider: string): AiState => ({
   providers: [
-    { id: 'a', name: 'A' },
-    { id: 'b', name: 'B' }
+    { id: 'a', name: 'A', about: '' },
+    { id: 'b', name: 'B', about: '' }
   ],
   provider,
+  paid: false,
   tasks: { t: { info, on: true, ready: false } },
   blocks: [{ kind: 'button', id: 'connect', label: 'Connect' }]
 })

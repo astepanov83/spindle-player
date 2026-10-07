@@ -95,6 +95,7 @@ Every key is decided in `src/renderer/src/keys.ts` (plain functions with tests);
 | Space | play / pause, from anywhere but a text field |
 | ← / → | seek 5 s |
 | ↑ / ↓ | volume 5% |
+| M | mute / unmute (the volume stays where it was) |
 | Ctrl+← / Ctrl+→ | previous / next song |
 | Ctrl+F, / | focus the search box and select its text |
 | Alt+← / Alt+→, Backspace | Back / Forward through the library's history, the same as the mouse side buttons and the ‹ › buttons |
@@ -103,9 +104,10 @@ Every key is decided in `src/renderer/src/keys.ts` (plain functions with tests);
 | Esc | close the menu, then Settings, then the queue drawer; in the search box: clear, then leave |
 | V | next visualizer style |
 | Q | switch to the queue tab, or open / close the drawer |
+| Ctrl+1 / Ctrl+2 / Ctrl+3 | switch to Studio, Classic or Focus, like the title bar's layout buttons |
 
-- A text field keeps its keys. Only Ctrl+F and Ctrl+, work there.
-- Ctrl+F and Ctrl+, go by the key's place, so they work on any keyboard layout.
+- A text field keeps its keys. Only Ctrl+F, Ctrl+, and Ctrl+1 to Ctrl+3 work there.
+- Ctrl+F, Ctrl+, and Ctrl+1 to Ctrl+3 go by the key's place, so they work on any keyboard layout.
 - A held arrow keeps seeking; a held Backspace or Alt+← goes back once.
 - While a menu is open, it gets every key but Esc.
 

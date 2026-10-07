@@ -11,6 +11,8 @@ const fake = vi.hoisted(() => ({
   on: {} as Partial<EngineEvents>,
   loaded: false,
   calls: [] as string[],
+  // what the engine was last told to play next ('' for nothing)
+  next: '',
   reset() {
     this.calls = []
   }
@@ -28,11 +30,15 @@ vi.mock('../audio/engine', () => ({
     },
     continueWith: (part: { start: number; end?: number }) =>
       fake.calls.push(`continue ${part.start}-${part.end ?? 'end'}`),
+    setNext: (n?: { url: string; part?: { start: number; end?: number } }) => {
+      fake.next = n ? n.url + (n.part ? ` ${n.part.start}-${n.part.end ?? 'end'}` : '') : ''
+    },
     play: () => fake.calls.push('play'),
     pause: () => fake.calls.push('pause'),
     seek: (p: number) => fake.calls.push(`seek ${p}`),
     clear: () => {
       fake.loaded = false
+      fake.next = ''
       fake.calls.push('clear')
     },
     setVolume: () => {}
@@ -1262,5 +1268,98 @@ describe('a playable that comes later (ticket 056)', () => {
     fake.reset()
     queue.refresh()
     expect(fake.calls).toEqual(['load media/a2', 'play'])
+  })
+})
+
+describe('the next song, loaded ahead (ticket 087)', () => {
+  it('is the next one in the queue, and moves on as it starts', () => {
+    // playAlbum('a', 0) in beforeEach
+    expect(fake.next).toBe('media/a1')
+    fake.on.nextStarted!()
+    expect(playing()).toBe('a1')
+    expect(fake.calls).toEqual([])
+    expect(player.pos).toBe(0)
+    expect(fake.next).toBe('media/a2')
+    expect(savePlace).toHaveBeenLastCalledWith({ index: 1, pos: 0 })
+  })
+
+  it('none at the end of the queue', () => {
+    queue.jump(2)
+    expect(fake.next).toBe('')
+  })
+
+  it('with repeat, the same song again; it starts over with no move', () => {
+    player.repeat = true
+    queue.planNext()
+    expect(fake.next).toBe('media/a0')
+    const starts = queue.starts
+    fake.on.nextStarted!()
+    expect(playing()).toBe('a0')
+    expect(queue.starts).toBe(starts)
+    expect(fake.next).toBe('media/a0')
+  })
+
+  it('with shuffle, the song picked is the one that plays, at the end too', () => {
+    setSongs(['s', 30])
+    playAlbum('s', 0)
+    player.shuffle = true
+    queue.planNext()
+    const picked = fake.next
+    expect(picked).not.toBe('media/s0')
+    // asked again (a rescan with no change): the same pick
+    queue.planNext()
+    expect(fake.next).toBe(picked)
+    // not started ahead (it was not ready): the song ends, and the pick plays
+    fake.on.ended!()
+    expect(`media/${playing()}`).toBe(picked)
+  })
+
+  it('a queue change picks again', () => {
+    queue.move(1, 2)
+    expect(fake.next).toBe('media/a2')
+    queue.playNext(k('b1'))
+    expect(fake.next).toBe('media/b1')
+    queue.remove(1)
+    expect(fake.next).toBe('media/a2')
+  })
+
+  it('a song whose plugin is off is passed over', () => {
+    setSongs(['a', 3], ['x', 1, 'off'])
+    queue.playList([...albums.a.slice(0, 1), ...albums.x, albums.a[1]], 0, '')
+    plugin.off.add('off')
+    queue.planNext()
+    expect(fake.next).toBe('media/a1')
+  })
+
+  it('none for the next track of the same disc image: it runs on in the file', () => {
+    plugin.songs.clear()
+    const img = (i: number, s: number, e?: number): ItemKey => {
+      const key = `files:t${i}` as ItemKey
+      plugin.songs.set(key, {
+        info: { title: `T${i}`, length: 10 },
+        part: { file: 'img', start: s, end: e }
+      })
+      return key
+    }
+    queue.playList([img(0, 0, 100), img(1, 100, 250)], 0, '')
+    expect(fake.next).toBe('')
+  })
+
+  it('the next song of another file after a track of an image is loaded ahead', () => {
+    plugin.songs.clear()
+    const t = 'files:t0' as ItemKey
+    plugin.songs.set(t, {
+      info: { title: 'T', length: 10 },
+      part: { file: 'img', start: 0, end: 100 }
+    })
+    const b = songs('b', 1)
+    queue.playList([t, ...b], 0, '')
+    expect(fake.next).toBe('media/b0')
+  })
+
+  it('nothing loaded: nothing next', () => {
+    queue.clear()
+    queue.clear()
+    expect(fake.next).toBe('')
   })
 })

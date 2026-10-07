@@ -43,7 +43,8 @@ const eventNames: (keyof EngineEvents)[] = [
   'seeked',
   'refused',
   'error',
-  'waiting'
+  'waiting',
+  'nextStarted'
 ]
 
 // A live item (a radio station): it never ends and its plugin drives it. The

@@ -41,6 +41,13 @@
 
   $effect(() => engine.setVolume(heard({ volume: settings.volume, muted: sound.muted })))
 
+  // Shuffle or repeat changes the song that follows, which loads ahead.
+  $effect(() => {
+    void player.shuffle
+    void player.repeat
+    untrack(() => queue.planNext())
+  })
+
   // The visualizer loop runs outside Svelte; it only hears about slow changes.
   $effect(() =>
     setLook({

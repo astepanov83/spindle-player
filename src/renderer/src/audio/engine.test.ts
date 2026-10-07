@@ -10,6 +10,7 @@ class FakeAudio extends EventTarget {
   duration = NaN
   paused = true
   ended = false
+  seeking = false
   readyState = 0
   playbackRate = 1
   error: { code: number; message: string } | null = null
@@ -57,17 +58,41 @@ class FakeAudio extends EventTarget {
 }
 
 const node = (): unknown => ({ connect: (n: unknown) => n })
+// a gain's value, and the changes set for later: [value, context time]
+class FakeParam {
+  value = 1
+  later: [number, number][] = []
+  setValueAtTime(v: number, t: number): void {
+    this.later.push([v, t])
+  }
+  cancelScheduledValues(): void {
+    this.later = []
+  }
+}
 class FakeContext {
   destination = {}
   createAnalyser = (): unknown => ({ ...(node() as object), fftSize: 0 })
-  createGain = (): unknown => ({ ...(node() as object), gain: { value: 1 } })
+  currentTime = 0
+  createGain = (): unknown => ({ ...(node() as object), gain: new FakeParam() })
   createMediaElementSource = node
   resume = (): Promise<void> => Promise.resolve()
+  // the join's worklet never loads here: the elements go straight on
+  audioWorklet = { addModule: (): Promise<void> => new Promise(() => {}) }
 }
 
-vi.stubGlobal('Audio', FakeAudio)
+// every element made, in order: the engine makes two
+const made: FakeAudio[] = []
+vi.stubGlobal(
+  'Audio',
+  class extends FakeAudio {
+    constructor() {
+      super()
+      made.push(this)
+    }
+  }
+)
 vi.stubGlobal('AudioContext', FakeContext)
-vi.stubGlobal('HTMLMediaElement', { HAVE_METADATA: 1 })
+vi.stubGlobal('HTMLMediaElement', { HAVE_METADATA: 1, HAVE_FUTURE_DATA: 3 })
 vi.stubGlobal('addEventListener', () => {})
 vi.stubGlobal('removeEventListener', () => {})
 // main's answer to the HEAD that asks whether a failed file is still there
@@ -82,6 +107,7 @@ vi.stubGlobal('fetch', async (url: string, init: { method: string; signal?: Abor
   return { status: headStatus }
 })
 
+vi.mock('./join-worklet?worker&url', () => ({ default: 'join.js' }))
 const { AudioEngine } = await import('./engine')
 
 let e: InstanceType<typeof AudioEngine>
@@ -90,6 +116,7 @@ let got: string[]
 
 beforeEach(() => {
   vi.useFakeTimers()
+  made.length = 0
   e = new AudioEngine()
   el = e.el as unknown as FakeAudio
   got = []
@@ -100,7 +127,8 @@ beforeEach(() => {
     time: (t) => got.push(`time ${t.toFixed(2)}`),
     duration: (d) => got.push(`duration ${d}`),
     ended: () => got.push('ended'),
-    error: (x) => got.push(`error ${x.code}${x.gone ? ' gone' : ''}`)
+    error: (x) => got.push(`error ${x.code}${x.gone ? ' gone' : ''}`),
+    nextStarted: () => got.push('next')
   })
 })
 
@@ -351,5 +379,197 @@ describe('a live stream', () => {
     expect(el.loads.at(-1)).toBe('spindle://media/wav?decode')
     el.meta(100)
     expect(got).toContain('duration 100')
+  })
+})
+
+describe('the next song (ticket 087)', () => {
+  // the element that is not playing
+  const other = (): FakeAudio => made.find((a) => a !== (e.el as unknown as FakeAudio))!
+
+  // A 100 s song playing, at `pos`.
+  function playSong(pos: number): void {
+    e.load('spindle://media/a', 0)
+    el.meta(100)
+    e.play()
+    el.currentTime = pos
+    got = []
+  }
+
+  // the other element has the next song's start in
+  function ready(o: FakeAudio, duration = 50): void {
+    o.meta(duration)
+    o.readyState = 4
+    o.fire('canplay')
+  }
+
+  it('loads 20 s before the end, in the other element', () => {
+    playSong(50)
+    e.setNext({ url: 'spindle://media/b' })
+    el.fire('timeupdate')
+    expect(other().loads).toEqual([])
+    el.currentTime = 80
+    el.fire('timeupdate')
+    expect(other().loads).toEqual(['spindle://media/b'])
+    expect(el.loads).toEqual(['spindle://media/a'])
+  })
+
+  it('a part of a file loads at its start', () => {
+    playSong(90)
+    e.setNext({ url: 'spindle://media/img', part: { start: 30, end: 60 } })
+    const o = other()
+    o.meta(300)
+    expect(o.currentTime).toBe(30)
+  })
+
+  it('starts it just before the end, and its times and length are the ones sent then', () => {
+    playSong(90)
+    e.setNext({ url: 'spindle://media/b' })
+    const o = other()
+    ready(o)
+    el.currentTime = 99.5
+    el.fire('timeupdate')
+    expect(o.paused).toBe(true)
+    got = []
+    // the timer reads the time again as it goes
+    el.currentTime = 99.996
+    vi.advanceTimersByTime(1000)
+    expect(o.paused).toBe(false)
+    expect(e.el).toBe(o)
+    expect(got).toEqual(['next', 'duration 50', 'time 0.00'])
+    // the last one's own events no longer go out
+    got = []
+    el.fire('ended')
+    el.fire('timeupdate')
+    expect(got).toEqual([])
+    o.currentTime = 3
+    o.fire('timeupdate')
+    expect(got).toEqual(['time 3.00'])
+  })
+
+  it('the end of the song playing starts a ready next song instead of ending', () => {
+    playSong(99)
+    e.setNext({ url: 'spindle://media/b' })
+    ready(other())
+    el.fire('ended')
+    expect(got).toEqual(['next', 'duration 50', 'time 0.00'])
+  })
+
+  it('a next song not ready at the end: the song ends as usual', () => {
+    playSong(99)
+    e.setNext({ url: 'spindle://media/b' })
+    el.currentTime = 100
+    el.fire('ended')
+    expect(got).toEqual(['ended'])
+  })
+
+  it('does not start while paused', () => {
+    playSong(99)
+    e.setNext({ url: 'spindle://media/b' })
+    ready(other())
+    e.pause()
+    el.currentTime = 99.999
+    el.fire('timeupdate')
+    vi.advanceTimersByTime(1000)
+    expect(other().paused).toBe(true)
+  })
+
+  it('loading the song already loaded ahead takes it over, with no new load', () => {
+    playSong(90)
+    e.setNext({ url: 'spindle://media/b' })
+    const o = other()
+    ready(o)
+    const a = el
+    e.load('spindle://media/b', 0)
+    expect(e.el).toBe(o)
+    expect(o.loads).toEqual(['spindle://media/b'])
+    // the last one is dropped
+    expect(a.getAttribute('src')).toBe(null)
+    expect(got).toEqual(['duration 50', 'time 0.00'])
+  })
+
+  it('another next song drops the one loaded; another part of its file is a seek', () => {
+    playSong(90)
+    e.setNext({ url: 'spindle://media/img', part: { start: 0, end: 30 } })
+    const o = other()
+    ready(o, 300)
+    e.setNext({ url: 'spindle://media/img', part: { start: 30, end: 60 } })
+    expect(o.loads).toEqual(['spindle://media/img'])
+    expect(o.currentTime).toBe(30)
+    e.setNext({ url: 'spindle://media/c' })
+    expect(o.loads.at(-1)).toBe('spindle://media/c')
+    e.setNext()
+    expect(o.getAttribute('src')).toBe(null)
+  })
+
+  it('a next song that fails to load is left for its turn, and fails then as usual', async () => {
+    playSong(90)
+    e.setNext({ url: 'spindle://media/bad' })
+    const o = other()
+    o.error = { code: 4, message: '' }
+    o.fire('error')
+    // once more through ffmpeg, as for any song
+    expect(o.loads).toEqual(['spindle://media/bad', 'spindle://media/bad?decode'])
+    o.error = { code: 4, message: '' }
+    o.fire('error')
+    await vi.runAllTimersAsync()
+    expect(got).toEqual([])
+    expect(o.getAttribute('src')).toBe(null)
+    // not loaded again while it is the same next song
+    e.setNext({ url: 'spindle://media/bad' })
+    el.fire('timeupdate')
+    expect(o.loads).toHaveLength(2)
+    got = []
+    el.currentTime = 100
+    el.fire('ended')
+    expect(got).toEqual(['ended'])
+  })
+
+  it('the last song sounds out, then its element is free for the song after', () => {
+    playSong(99)
+    e.setNext({ url: 'spindle://media/b' })
+    const first = other()
+    ready(first, 10)
+    el.fire('ended')
+    // b plays; c is next, but the old element is still sounding out
+    e.setNext({ url: 'spindle://media/c' })
+    expect(el.loads).toEqual(['spindle://media/a'])
+    vi.advanceTimersByTime(300)
+    expect(el.loads).toEqual(['spindle://media/a', 'spindle://media/c'])
+  })
+
+  it('a part of a file followed by another file: the next one starts at its end, and the file stops', () => {
+    e.load('spindle://media/img', 0, { start: 100, end: 160 })
+    el.meta(300)
+    e.play()
+    el.currentTime = 150
+    e.setNext({ url: 'spindle://media/b' })
+    const o = other()
+    ready(o)
+    const img = el
+    got = []
+    el.currentTime = 159.999
+    el.fire('timeupdate')
+    expect(got).toEqual(['time 60.00', 'next', 'duration 50', 'time 0.00'])
+    expect(e.el).toBe(o)
+    // the image would play on into its next track: its element is let go
+    vi.advanceTimersByTime(300)
+    expect(img.getAttribute('src')).toBe(null)
+  })
+
+  it('a live stream drops the next song', () => {
+    playSong(90)
+    e.setNext({ url: 'spindle://media/b' })
+    const o = other()
+    e.load('spindle://radio/x?stream=0', 0, undefined, { live: true })
+    expect(o.getAttribute('src')).toBe(null)
+  })
+
+  it('clear() drops both', () => {
+    playSong(90)
+    e.setNext({ url: 'spindle://media/b' })
+    const o = other()
+    e.clear()
+    expect(el.getAttribute('src')).toBe(null)
+    expect(o.getAttribute('src')).toBe(null)
   })
 })

@@ -95,6 +95,7 @@ Every key is decided in `src/renderer/src/keys.ts` (plain functions with tests);
 | Space | play / pause, from anywhere but a text field |
 | ← / → | seek 5 s |
 | ↑ / ↓ | volume 5% |
+| M | mute / unmute (the volume stays where it was) |
 | Ctrl+← / Ctrl+→ | previous / next song |
 | Ctrl+F, / | focus the search box and select its text |
 | Alt+← / Alt+→, Backspace | Back / Forward through the library's history, the same as the mouse side buttons and the ‹ › buttons |

@@ -7,12 +7,15 @@
     options,
     value,
     label,
-    onchange
+    onchange,
+    small = false
   }: {
     options: { value: T; label: string }[]
     value: T
     label: string
     onchange: (v: T) => void
+    // in a list's head: as wide as its words, and lower
+    small?: boolean
   } = $props()
 
   const picked = $derived(
@@ -32,7 +35,7 @@
   }
 </script>
 
-<div class="seg" role="radiogroup" aria-label={label}>
+<div class="seg" class:small role="radiogroup" aria-label={label}>
   {#each options as o, i (o.value)}
     <button
       role="radio"
@@ -61,6 +64,17 @@
     transition:
       background 0.15s,
       color 0.15s;
+  }
+  .small {
+    padding: 2px;
+    border-radius: 8px;
+  }
+  .small button {
+    flex: none;
+    font-size: var(--text-xs);
+    padding: 4px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
   }
   button:hover {
     background: var(--hover);

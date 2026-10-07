@@ -115,6 +115,14 @@ export interface HeadBlock {
   meta?: string
   // a list's count, on the right: "8 albums"
   count?: string
+  // a list's choice of what it shows, over its count: "Album artists | All
+  // artists". Picking one acts with (head id, id, the option's value).
+  choice?: {
+    id: string
+    label: string
+    value: string
+    options: { value: string; label: string }[]
+  }
   // a list's line under its title: "Reading musicforprogramming.net…"
   hint?: string
   // A line under the title that points at the search box: the core ends it

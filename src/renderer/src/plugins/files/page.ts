@@ -14,7 +14,9 @@ import {
   artistLinks,
   artistPageSongs,
   artistSongs,
-  filterArtists
+  albumArtists,
+  filterArtists,
+  shownArtists
 } from './artists'
 import {
   commonFolder,
@@ -30,6 +32,8 @@ import {
 import { libraryProblem, scanLine, settingsText, stoppedText } from './scan-text'
 import { filterAlbums, nextSort, searchSongs, songRows, type SortKey } from '../../library/views'
 import { library } from '../../stores/library.svelte'
+import { settings } from '../../stores/settings.svelte'
+import { artistsShownChoices, type ArtistsShown } from '../../../../shared/settings'
 import { files } from './store.svelte'
 import { notice } from '../../stores/notice.svelte'
 import {
@@ -212,6 +216,9 @@ function artistTiles(artists: Artist[]): TilesBlock {
   })
 }
 
+// the Album artists / All artists choice (ticket 081)
+const artistsShownId = 'artists-shown'
+
 // While searching, the grid shows over the open page, which comes back when
 // the text is cleared.
 function artistsPage(page: string, query: string): Block[] {
@@ -225,10 +232,21 @@ function artistsPage(page: string, query: string): Block[] {
     })
   if (!query.trim() && artist) return artistBlocks(artist)
   if (!query.trim() && p?.kind === 'fixes') return fixesBlocks()
-  const shown = filterArtists(files.artists, query)
+  const shown = shownArtists(files.artists, settings.artistsShown, query)
   const fixes = fixCount(nameFixes(files.artists))
   const head = listHead('Artists', fmtCount(shown.length, 'artist', 'artists'))
   if (fixes) head.line = [{ text: fmtCount(fixes, 'name fix', 'name fixes'), to: at(fixesPage) }]
+  // not while searching, which looks at everyone; not when it would change nothing
+  if (!query.trim() && albumArtists(files.artists).length < files.artists.length)
+    head.choice = {
+      id: artistsShownId,
+      label: 'Artists to show',
+      value: settings.artistsShown,
+      options: [
+        { value: 'album', label: 'Album artists' },
+        { value: 'all', label: 'All artists' }
+      ]
+    }
   return [
     head,
     ...(shown.length ? [] : [noMatches('No artist has that in their name.')]),
@@ -706,6 +724,8 @@ export function filesSearch(query: string): SearchGroup[] {
 export function filesAct(target: string, id: string, value?: string): void {
   if (id === 'add-folder') return void window.libraryApi.addFolder()
   if (id === 'sort' && value) return sortBy(target, value as SortKey)
+  if (id === artistsShownId && artistsShownChoices.includes(value as ArtistsShown))
+    return void (settings.artistsShown = value as ArtistsShown)
   const p = parsePage(target)
   if (p?.kind === 'album' && id === showFolderId) return void showAlbumFolder(p.id)
   if (p?.kind === 'album' && id === goFolderId) return goToAlbumFolder(p.id)

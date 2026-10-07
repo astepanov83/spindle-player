@@ -250,7 +250,9 @@ describe('pages', () => {
   it('Artists: round tiles, filtered by the search, with a note for none', () => {
     const blocks = page.filesPage('artists', '', '')
     expect(tiles(blocks[1]).round).toBe(true)
-    expect(tiles(blocks[1]).items).toBe(files.artists)
+    expect(tiles(blocks[1]).items).toEqual(files.artists)
+    // everyone has an album, so there is nothing to choose
+    expect(head(blocks[0]).choice).toBeUndefined()
     const tile = tiles(blocks[1]).tile(files.getArtist('junopark'))
     expect(tile).toMatchObject({
       title: 'Juno Park',
@@ -263,6 +265,45 @@ describe('pages', () => {
     expect(kinds(page.filesPage('artists', '', 'nobody'))).toEqual(['head', 'empty', 'tiles'])
     // so the core offers the wider searches in it (ticket 077)
     expect(page.filesPage('artists', '', 'nobody')[1]).toMatchObject({ nothingFound: true })
+  })
+
+  it('Artists shows album artists first, with a choice for all (ticket 081)', async () => {
+    const { settings } = await import('../../stores/settings.svelte')
+    settings.artistsShown = 'album'
+    files.load({
+      albums: [...lib().albums, album('v', ['v1'], { artist: 'Various Artists' })],
+      tracks: [...lib().tracks, track('v1', 'v', { artist: 'DJ Sol' })],
+      folders: lib().folders
+    })
+    const names = (blocks: Block[]): string[] =>
+      (tiles(blocks.at(-1)!).items as { name: string }[]).map((a) => a.name)
+    let blocks = page.filesPage('artists', '', '')
+    expect(names(blocks)).toEqual(['Juno Park', 'Marina Vale', 'Various Artists'])
+    expect(head(blocks[0]).count).toBe('3 artists')
+    expect(head(blocks[0]).choice).toEqual({
+      id: 'artists-shown',
+      label: 'Artists to show',
+      value: 'album',
+      options: [
+        { value: 'album', label: 'Album artists' },
+        { value: 'all', label: 'All artists' }
+      ]
+    })
+    page.filesAct('', 'artists-shown', 'all')
+    expect(settings.artistsShown).toBe('all')
+    blocks = page.filesPage('artists', '', '')
+    expect(names(blocks)).toEqual(['DJ Sol', 'Juno Park', 'Marina Vale', 'Various Artists'])
+    expect(head(blocks[0]).count).toBe('4 artists')
+    expect(head(blocks[0]).choice?.value).toBe('all')
+    // a wrong value changes nothing
+    page.filesAct('', 'artists-shown', 'some')
+    expect(settings.artistsShown).toBe('all')
+    // a search looks at everyone whatever the choice, and hides it
+    page.filesAct('', 'artists-shown', 'album')
+    blocks = page.filesPage('artists', '', 'sol')
+    expect(names(blocks)).toEqual(['DJ Sol'])
+    expect(head(blocks[0]).count).toBe('1 artist')
+    expect(head(blocks[0]).choice).toBeUndefined()
   })
 
   it('an artist: head with a round picture, their albums opening under them', () => {

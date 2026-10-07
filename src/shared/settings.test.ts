@@ -34,6 +34,7 @@ describe('parseStoredSettings', () => {
       coverSources: { musicbrainz: false, deezer: true, itunes: true },
       closeAction: 'minimize',
       plugins: { files: true, radio: false, mfp: true },
+      artistsShown: 'all',
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowMaximized: { studio: true, focus: false },
       windowPlace: { x: -1200, y: 40 },
@@ -131,6 +132,7 @@ describe('parseStoredSettings with a base', () => {
     coverSources: { musicbrainz: true, deezer: false, itunes: true },
     closeAction: 'quit',
     plugins: { files: true, radio: true, mfp: false },
+    artistsShown: 'all',
     windowSizes: { focus: { width: 500, height: 700 } },
     windowMaximized: { focus: true },
     windowPlace: { x: 40, y: 60 },
@@ -362,6 +364,26 @@ describe('close action setting', () => {
     expect(pageSettings(parseStoredSettings({ closeAction: 'minimize' })).closeAction).toBe(
       'minimize'
     )
+  })
+})
+
+describe('artists shown setting', () => {
+  it('shows album artists by default', () => {
+    expect(parseStoredSettings(undefined).artistsShown).toBe('album')
+  })
+
+  it('keeps a known choice and falls back on a wrong one', () => {
+    expect(parseStoredSettings({ artistsShown: 'all' }).artistsShown).toBe('all')
+    expect(parseStoredSettings({ artistsShown: 'some' }).artistsShown).toBe('album')
+  })
+
+  it('knows the field in a file', () => {
+    expect(isKnownSettingsFile({ artistsShown: 'all' })).toBe(true)
+    expect(isKnownSettingsFile({ artistsShown: true })).toBe(false)
+  })
+
+  it('gives the page the field', () => {
+    expect(pageSettings(parseStoredSettings({ artistsShown: 'all' })).artistsShown).toBe('all')
   })
 })
 

@@ -8,7 +8,9 @@ import {
   artistCovers,
   artistPageSongs,
   artistSongs,
-  filterArtists
+  albumArtists,
+  filterArtists,
+  shownArtists
 } from './artists'
 import type { Sort } from '../../library/views'
 
@@ -50,6 +52,31 @@ describe('filterArtists', () => {
     const all = [artist('Björk'), artist('Sigur Rós')]
     expect(filterArtists(all, 'bjork').map((a) => a.name)).toEqual(['Björk'])
     expect(filterArtists(all, 'RÓS').map((a) => a.name)).toEqual(['Sigur Rós'])
+  })
+})
+
+describe('shownArtists', () => {
+  // DJ Sol has only a song on a compilation, Various Artists owns it
+  const all = [
+    artist('DJ Sol', [], ['v1']),
+    artist('Marina Vale', ['a']),
+    artist('Various Artists', ['v']),
+    artist('Solo Guest', [], ['a2'])
+  ]
+  const names = (list: Artist[]): string[] => list.map((a) => a.name)
+
+  it('shows only artists with an album of their own by default', () => {
+    expect(names(shownArtists(all, 'album', ''))).toEqual(['Marina Vale', 'Various Artists'])
+    expect(albumArtists(all)).toEqual(shownArtists(all, 'album', ' '))
+  })
+
+  it('shows every artist for All artists', () => {
+    expect(shownArtists(all, 'all', '')).toBe(all)
+  })
+
+  it('searches every artist whatever the choice, so a guest can be found', () => {
+    expect(names(shownArtists(all, 'album', 'sol'))).toEqual(['DJ Sol', 'Solo Guest'])
+    expect(names(shownArtists(all, 'all', 'sol'))).toEqual(['DJ Sol', 'Solo Guest'])
   })
 })
 

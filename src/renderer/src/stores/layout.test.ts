@@ -1,25 +1,36 @@
-// The layout store: what a template change resets.
+// The layout store: what a template change resets and keeps.
 import { beforeEach, describe, expect, it } from 'vitest'
 
 const { layout } = await import('./layout.svelte')
 const { library } = await import('./library.svelte')
 const { settings } = await import('./settings.svelte')
 
-describe('choosing a template (ticket 039)', () => {
-  it('clears the search text: the other template shows another view', () => {
+// The library keeps its place, search text and history; Studio and Classic
+// swap histories in library.showIn (ticket 078).
+describe('choosing a template', () => {
+  it('keeps the search text and the history: a trip to Focus loses nothing', () => {
     settings.template = 'studio'
     library.go({ tab: 'radio' })
     library.query = 'jazz'
-    layout.chooseTemplate('classic')
-    expect(settings.template).toBe('classic')
-    expect(library.query).toBe('')
+    layout.chooseTemplate('focus')
+    layout.chooseTemplate('studio')
+    expect(settings.template).toBe('studio')
+    expect([library.tab, library.query, library.canBack]).toEqual(['radio', 'jazz', true])
   })
 
-  it('starts a new history: the old one steps through places the new template does not show', () => {
+  it('closes the drawer and goes to the first tab', () => {
     settings.template = 'studio'
-    library.go({ tab: 'artists' })
+    layout.showQueue = true
+    layout.tabSel = 1
     layout.chooseTemplate('classic')
-    expect(library.canBack).toBe(false)
+    expect([layout.showQueue, layout.tabSel]).toEqual([false, 0])
+  })
+
+  it('does nothing for the template shown', () => {
+    settings.template = 'studio'
+    layout.tabSel = 1
+    layout.chooseTemplate('studio')
+    expect(layout.tabSel).toBe(1)
   })
 })
 

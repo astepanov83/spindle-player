@@ -28,6 +28,8 @@ export interface PluginInfo {
   oldSwitch?: string
   // features of it that ask a language model (spec "AI models")
   aiTasks?: AiTaskInfo[]
+  // its songs' plays are counted in plays.json (ticket 085)
+  countsPlays?: boolean
 }
 
 // Also the order of the switches and tabs.
@@ -40,6 +42,7 @@ export const plugins: PluginInfo[] = [
     itemKind: 'track',
     offText: 'Music files are off',
     linkKinds: ['album', 'artist', 'folder'],
+    countsPlays: true,
     aiTasks: [
       {
         id: artistGroupsTask,

@@ -28,6 +28,7 @@ import { oldIds } from './plugins/old-ids'
 import type { MainPlugin, Route } from './plugins/types'
 import type { IdMoves } from '../shared/id-moves'
 import { PlaylistFile, QueueFile } from './page-files'
+import { PlaysStore } from './plays-file'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
 import { devRetryData, isDevRetry, takeLock } from './single-instance'
@@ -38,6 +39,7 @@ import { currentBackground, MainWindow } from './window'
 let store: SettingsStore
 let playlists: PlaylistFile
 let savedQueue: QueueFile
+let plays: PlaysStore
 // each plugin owns its files, requests and IPC; this file only loops over them
 let plugins: MainPlugin[] = []
 let main: MainWindow | null = null
@@ -151,6 +153,8 @@ page.on(PlaybackChannel.playing, (_, playing) => {
   for (const p of plugins) p.playing?.(playing === true)
 })
 page.on(PlaybackChannel.state, (_, raw) => tray?.setState(parsePlayState(raw)))
+page.handle(PlaybackChannel.loadPlays, () => plays.get())
+page.on(PlaybackChannel.played, (_, key) => plays.played(key))
 page.on(PlaybackChannel.log, (_, text) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
 })
@@ -178,6 +182,7 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   const splash = new Splash()
   playlists = new PlaylistFile(oldIds)
   savedQueue = new QueueFile(oldIds)
+  plays = new PlaysStore()
   const userData = app.getPath('userData')
   const log = (text: string): void => console.warn(text)
   coverCache = new CoverCache(join(userData, 'covers'), join(__dirname, '../preload/covers.js'))
@@ -224,10 +229,11 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     p.start({
       ...ctx,
       idsMoved: (moves: IdMoves) => {
-        // both, even when the first fails
+        // all of them, even when one fails
         const lists = playlists.moveIds(p.id, moves)
         const queue = savedQueue.moveIds(p.id, moves)
-        return lists && queue
+        const counts = plays.moveIds(p.id, moves)
+        return lists && queue && counts
       }
     })
   // the saved value, as the plugins have only seen the setting at start
@@ -263,6 +269,7 @@ app.on('will-quit', (e) => {
   store?.flushSync()
   playlists?.flushSync()
   savedQueue?.flushSync()
+  plays?.flushSync()
   for (const p of plugins) p.flushSync()
   const waits = plugins.flatMap((p) => p.flush?.() ?? [])
   if (!waits.length) return

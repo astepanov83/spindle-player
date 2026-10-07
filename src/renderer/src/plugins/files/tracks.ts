@@ -40,7 +40,6 @@ class TrackInfo implements ItemInfo {
   readonly title: string
   readonly subtitle: string
   readonly group: string
-  readonly no: number | undefined
   readonly length: number
   readonly #t: Track
 
@@ -49,7 +48,6 @@ class TrackInfo implements ItemInfo {
     this.title = t.title
     this.subtitle = t.artist
     this.group = t.album
-    this.no = t.no || undefined
     this.length = t.duration
   }
 

@@ -1,6 +1,5 @@
 // The queue part's rows: one flat list, played songs dimmed above the current
 // one. A click never changes where rows are, so the list stays put.
-import type { ItemAnswer } from '../plugins/types'
 import { dropSlot } from '../ui/drag-rows'
 
 export const ROW = 60
@@ -30,22 +29,4 @@ export function followsSong(now: number, scrolledAt: number): boolean {
 export function clearLabel(count: number, current: number): string {
   if (current < count - 1) return 'Clear up next'
   return count > 1 ? 'Clear played' : 'Clear queue'
-}
-
-// Rows from one album show its cover once: the others show their number in
-// its place. The current song keeps its cover (the eq bars go on it), and so
-// does a song with no number.
-export function coverKey(s: ItemAnswer | undefined): string | undefined {
-  if (s?.state !== 'ok') return undefined
-  return s.info.art?.cover || `group:${s.info.group ?? ''}`
-}
-
-export function showsCover(
-  s: ItemAnswer,
-  above: ItemAnswer | undefined,
-  current: boolean
-): boolean {
-  if (current || s.state !== 'ok' || !s.info.no) return true
-  const key = coverKey(s)
-  return key === undefined || key !== coverKey(above)
 }

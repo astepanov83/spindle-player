@@ -390,9 +390,6 @@ export interface ItemInfo {
   subtitle?: string
   // the album; the episode
   group?: string
-  // its number in the group, 1-based: the queue shows it where the row
-  // above has the same cover
-  no?: number
   // seconds; none for live
   length?: number
   art?: Art

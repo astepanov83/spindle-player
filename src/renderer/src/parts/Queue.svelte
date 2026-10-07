@@ -11,7 +11,7 @@
   import { moveOrder, shiftOrder } from '../queue/logic'
   import { movedSelection, noneSelected, numberRows } from '../ui/selection'
   import { rowSelection } from '../stores/selection.svelte'
-  import { ROW, clearLabel, followsSong, insertSlotAt, showsCover, startRow } from '../queue/rows'
+  import { ROW, clearLabel, followsSong, insertSlotAt, startRow } from '../queue/rows'
   import { dropSlot, movedTo } from '../ui/drag-rows'
   import { layout } from '../stores/layout.svelte'
   import { library } from '../stores/library.svelte'
@@ -292,9 +292,9 @@
 
 <!-- A song its plugin can't give now is greyed: off says so, loading says
      nothing yet. -->
-{#snippet words(s: ItemAnswer, eq: boolean, cover = true)}
+{#snippet words(s: ItemAnswer, eq: boolean)}
   {#if s.state === 'ok'}
-    {#if cover}<Thumb src={s.info.art?.cover} {eq} />{:else}<span class="no">{s.info.no}</span>{/if}
+    <Thumb src={s.info.art?.cover} {eq} />
     <span class="qt"
       ><span class="nm" title={s.info.title}>{s.info.title}</span><span
         class="ar"
@@ -402,11 +402,7 @@
               )
             }}
           >
-            {@render words(
-              s,
-              cur && queues.songPlaying,
-              showsCover(s, i > 0 ? itemInfo(queue.items[i - 1]) : undefined, cur)
-            )}
+            {@render words(s, cur && queues.songPlaying)}
           </button>
         {/each}
         {#if dropAt !== null}
@@ -542,14 +538,6 @@
     background: var(--focus);
     z-index: 2;
     pointer-events: none;
-  }
-  /* a track number in the cover's place, when the row above has the same cover */
-  .no {
-    width: 44px;
-    text-align: center;
-    color: var(--ink-3);
-    font-size: var(--text-s);
-    font-variant-numeric: tabular-nums;
   }
   .sum {
     display: flex;

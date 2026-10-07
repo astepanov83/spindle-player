@@ -18,6 +18,15 @@
   })
 </script>
 
+<!-- A light shade over the rest of the host says the drawer sits on top; a
+     click on it closes the drawer. Pointer only: Escape and Q do it by key. -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div
+  class="shade"
+  class:open={layout.showQueue && !fill}
+  aria-hidden="true"
+  onclick={() => (layout.showQueue = false)}
+></div>
 <div
   class="drawer"
   bind:this={el}
@@ -29,6 +38,19 @@
 </div>
 
 <style>
+  .shade {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: var(--shade);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .shade.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
   .drawer {
     position: absolute;
     top: 0;
@@ -65,7 +87,8 @@
     min-height: 0;
   }
   @media (prefers-reduced-motion: reduce) {
-    .drawer {
+    .drawer,
+    .shade {
       transition: none;
     }
   }

@@ -274,7 +274,7 @@ class TrackQueue {
   #load(key: ItemKey, p: Playable, at: number, andPlay: boolean): void {
     this.#loaded = { key, p }
     player.duration = typeof p.length === 'number' ? p.length : 0
-    engine.load(p.url, at, p.part, { gain: gainIn(p, this.#state()) })
+    engine.load(p.url, at, p.part, { gain: gainIn(p, this.#state()), rate: p.rate })
     if (andPlay) play()
     else player.playing = false
     this.planNext()
@@ -383,7 +383,7 @@ class TrackQueue {
     const send = (s: Sent | undefined): void => {
       this.#sent = s
       const q = s?.step.kind === 'play' ? s.step.state : this.#state()
-      engine.setNext(s && { url: s.p.url, part: s.p.part, gain: gainIn(s.p, q) })
+      engine.setNext(s && { url: s.p.url, part: s.p.part, gain: gainIn(s.p, q), rate: s.p.rate })
     }
     const l = this.#loaded
     if (!this.active || !l || l.key !== this.current || l.p.length === 'live')

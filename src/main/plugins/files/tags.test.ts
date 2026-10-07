@@ -68,6 +68,21 @@ describe('normalizeTags', () => {
     expect(normalizeTags({ common: { year: 12 }, format: {} }).year).toBeUndefined()
   })
 
+  it('keeps every file’s sample rate, Opus at the 48 kHz it decodes at (ticket 091)', () => {
+    const rate = (codec: string, sampleRate?: number, ext = ''): number | undefined =>
+      normalizeTags({ common: {}, format: { codec, sampleRate } }, ext).sampleRate
+    expect(rate('FLAC', 96000, 'flac')).toBe(96000)
+    expect(rate('MPEG 1 Layer 3', 44100, 'mp3')).toBe(44100)
+    expect(rate('Opus', 44100, 'opus')).toBe(48000)
+    expect(rate('FLAC', undefined, 'flac')).toBeUndefined()
+    // channels and bits stay only for files ffmpeg decodes
+    const t = normalizeTags(
+      { common: {}, format: { codec: 'FLAC', sampleRate: 48000, numberOfChannels: 2 } },
+      'flac'
+    )
+    expect(t).not.toHaveProperty('channels')
+  })
+
   it('joins the artist list when there is no single artist tag', () => {
     expect(normalizeTags({ common: { artists: ['A', ' B '] }, format: {} }).artist).toBe('A, B')
   })

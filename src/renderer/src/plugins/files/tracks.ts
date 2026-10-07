@@ -101,5 +101,6 @@ export function trackPlayable(id: string): Playable | undefined {
   if (t.part) p.part = t.part
   if (t.codec) p.codec = t.codec
   if (t.gain) p.gain = t.gain
+  if (t.rate) p.rate = t.rate
   return p
 }

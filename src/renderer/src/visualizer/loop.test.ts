@@ -9,14 +9,28 @@ const fake = vi.hoisted(() => ({
   log: [] as string[]
 }))
 
+// An analyser of a graph at `rate`; it notes the sizes it was read with.
+const analyserAt = vi.hoisted(() => (rate: number, fftSize: number) => ({
+  context: { sampleRate: rate },
+  frequencyBinCount: fftSize / 2,
+  fftSize,
+  reads: [] as string[],
+  getFloatFrequencyData(a: Float32Array) {
+    this.reads.push(`freq ${a.length}`)
+    a.fill(fake.db)
+  },
+  getFloatTimeDomainData(a: Float32Array) {
+    this.reads.push(`time ${a.length}`)
+    a.fill(fake.db > -100 ? 0.5 : 0)
+  }
+}))
+// a song at another rate brings a new graph and analyser (ticket 091)
+const graph = vi.hoisted(() => ({ analyser: analyserAt(48000, 4096) }))
+
 vi.mock('../audio/engine', () => ({
   engine: {
-    context: { sampleRate: 48000 },
-    analyser: {
-      frequencyBinCount: 2048,
-      fftSize: 4096,
-      getFloatFrequencyData: (a: Float32Array) => a.fill(fake.db),
-      getFloatTimeDomainData: (a: Float32Array) => a.fill(fake.db > -100 ? 0.5 : 0)
+    get analyser() {
+      return graph.analyser
     }
   }
 }))
@@ -329,6 +343,19 @@ describe('the frame loop', () => {
     calm.change!()
     for (let i = 0; i < 10; i++) expect(frame()).toBe(true)
     expect(meter.levels.some((v) => v > 0)).toBe(true)
+  })
+
+  it('reads a new analyser from a new graph, with its own sizes', () => {
+    shownStage()
+    setLook({ style: 'ring', colors, playing: true })
+    frame()
+    const was = graph.analyser
+    expect(was.reads).toContain('freq 2048')
+    graph.analyser = analyserAt(96000, 8192)
+    frame()
+    expect(graph.analyser.reads).toEqual(['freq 4096', 'time 8192'])
+    expect(meter.levels.some((v) => v > 0)).toBe(true)
+    graph.analyser = was
   })
 
   it('sets --bass only when it changes', () => {

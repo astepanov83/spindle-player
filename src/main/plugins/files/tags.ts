@@ -82,16 +82,23 @@ export function normalizeTags(raw: RawTags, ext = ''): Tags {
     container: cleanText(f.container),
     mbReleaseGroup: mbid(c.musicbrainz_releasegroupid),
     mbRelease: mbid(c.musicbrainz_albumid),
-    gain: replayGainOf(raw.gain)
+    gain: replayGainOf(raw.gain),
+    sampleRate: playRate(cleanText(f.codec), f.sampleRate)
   }
   if (needsDecoding(ext, out.codec)) {
-    out.sampleRate = positive(f.sampleRate)
     out.channels = positive(f.numberOfChannels)
     out.bits = positive(f.bitsPerSample)
   }
   // leave missing tags out, so the index file stays small
   for (const k of Object.keys(out) as (keyof Tags)[]) if (out[k] === undefined) delete out[k]
   return out
+}
+
+// The rate the file's sound comes out at once decoded, which the page runs
+// its audio graph at (ticket 091). Opus always decodes at 48 kHz; its header
+// gives the rate the sound had before it was encoded.
+function playRate(codec: string | undefined, rate: unknown): number | undefined {
+  return codec === 'Opus' ? 48000 : positive(rate)
 }
 
 // Formats Chromium can play, plus some it can't (ALAC in m4a, WMA, APE, WavPack,

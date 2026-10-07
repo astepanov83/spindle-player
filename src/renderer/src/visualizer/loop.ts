@@ -52,6 +52,8 @@ let raf = 0
 let busyUntil = 0
 let dpr = window.devicePixelRatio || 1
 
+// made for this analyser; a song at another rate brings a new one (ticket 091)
+let read: AnalyserNode | undefined
 let edges: Int32Array | undefined
 let freq: Float32Array<ArrayBuffer> | undefined
 let time: Float32Array<ArrayBuffer> | undefined
@@ -184,8 +186,9 @@ document.addEventListener('visibilitychange', () => {
 
 function readAnalyser(style: VisualizerStyle): void {
   const a = engine.analyser
-  if (!edges || !freq || !time) {
-    edges = bandEdges(engine.context.sampleRate, a.frequencyBinCount)
+  if (a !== read || !edges || !freq || !time) {
+    read = a
+    edges = bandEdges(a.context.sampleRate, a.frequencyBinCount)
     freq = new Float32Array(a.frequencyBinCount)
     time = new Float32Array(a.fftSize)
   }

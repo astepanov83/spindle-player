@@ -475,6 +475,9 @@ export interface Playable {
   codec?: string
   // ReplayGain from its tags, to even out loudness (ticket 090)
   gain?: ReplayGain
+  // the sample rate it decodes at, in Hz, for the audio graph (ticket 091);
+  // none when not known (a stream)
+  rate?: number
 }
 
 // A plugin's page half.

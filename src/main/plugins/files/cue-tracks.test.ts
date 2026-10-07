@@ -120,6 +120,21 @@ describe('cueTracks', () => {
     expect(lib.tracks.map((t) => t.gain?.album)).toEqual([-6, -6])
   })
 
+  it('gives each track the image’s sample rate, and the page’s songs carry it (ticket 091)', () => {
+    const img = '/m/a/img.flac'
+    const s = sheet(
+      ['img.flac'],
+      [
+        [0, 0],
+        [0, 100]
+      ]
+    )
+    const ix = index([entry(img, { sampleRate: 96000 })], [['/m/a/img.cue', s]])
+    expect(cueTracks(ix).items.map((i) => i.entry.sampleRate)).toEqual([96000, 96000])
+    const lib = buildLibrary(ix, () => true).data
+    expect(lib.tracks.map((t) => t.rate)).toEqual([96000, 96000])
+  })
+
   it('splits an image into tracks with starts, ends and lengths', () => {
     const img = '/m/tone/CDImage.ape'
     const ix = index(

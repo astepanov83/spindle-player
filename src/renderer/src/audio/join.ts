@@ -13,7 +13,15 @@
 export const quantum = 128
 // All sound goes out this many frames late, so that an end is sure, and the
 // tails below found, before the frame after it goes out. 9 ms at 44.1 kHz.
+// A start up to that late is pulled in too, so at a higher rate it is more
+// frames (lookaheadFor).
 export const lookahead = 384
+
+// The lookahead at a graph's rate: whole quanta, at least 8 ms. 384 frames
+// at 44.1 and 48 kHz, 768 at 96 kHz.
+export function lookaheadFor(rate: number): number {
+  return quantum * Math.ceil((rate * 0.008) / quantum)
+}
 // this many frames of exact silence after the last sound are the end
 const endRun = 32
 // A song at another rate than the graph's is resampled, which gives it a
@@ -22,6 +30,9 @@ const endRun = 32
 // tails of the two songs have to overlap by that much to add up to the sound
 // they were cut from. It is found from the sound itself: the overlap that
 // leaves the least of a corner in it (tailsOf), up to this many frames.
+// The graph runs at the songs' rate (ticket 091), so this is left for songs
+// whose rate is not known: an index not scanned again yet, or a plugin's
+// songs (MFP).
 const maxTails = 192
 // A song that starts with a few exact zeros looks as if it started later
 // than it did: its tails are then less than none, this much at most.
@@ -41,10 +52,16 @@ export type JoinIn = { arm: { from: number; to: number } } | { reset: number }
 // late); null when that can't be told (it started silent).
 export type JoinOut = { joined: number; skew: number; early: number | null }
 
+// Frames each input keeps at a graph's rate: a power of two, at least 0.6 s,
+// so a hold can last as long at any rate. 32768 at 44.1 and 48 kHz.
+export function ringSize(rate: number): number {
+  return 2 ** Math.ceil(Math.log2(rate * 0.6))
+}
+
 class Lane {
   readonly ring: [Float32Array, Float32Array]
   // frames from coming in to going out
-  delay = lookahead
+  delay: number
   // heard from this output frame, until that one (a held next song: from Infinity)
   from = -Infinity
   until = Infinity
@@ -53,12 +70,16 @@ class Lane {
   // a reset asked for while its last sound had still to go out
   resetLater = false
 
-  constructor(size: number) {
+  constructor(
+    size: number,
+    readonly ahead: number
+  ) {
     this.ring = [new Float32Array(size), new Float32Array(size)]
+    this.delay = ahead
   }
 
   reset(): void {
-    this.delay = lookahead
+    this.delay = this.ahead
     this.from = -Infinity
     this.until = Infinity
     this.resetLater = false
@@ -79,11 +100,11 @@ export class Joiner {
   #tails = 0
 
   // `size`: frames each input keeps, a power of two, well over the longest
-  // hold. 32768 is 0.7 s at 44.1 kHz.
-  constructor(size = 1 << 15, inputs = 2) {
+  // hold (ringSize). `ahead`: the lookahead in frames (lookaheadFor).
+  constructor(size = 1 << 15, inputs = 2, ahead = lookahead) {
     this.#size = size
     this.#mask = size - 1
-    this.#lanes = Array.from({ length: inputs }, () => new Lane(size))
+    this.#lanes = Array.from({ length: inputs }, () => new Lane(size, ahead))
   }
 
   message(m: JoinIn): void {
@@ -252,7 +273,7 @@ export class Joiner {
     const to = this.#lanes[i]
     if (!timed) to.reset()
     this.#arm = undefined
-    const skew = to.delay - lookahead
+    const skew = to.delay - to.ahead
     return { joined: i, skew, early: timed ? skew : null }
   }
 }

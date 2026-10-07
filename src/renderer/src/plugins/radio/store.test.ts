@@ -49,6 +49,7 @@ vi.mock('../../audio/engine', () => ({
     },
     seek: () => {},
     continueWith: () => {},
+    setNext: () => {},
     clear: () => {
       fake.loaded = false
       fake.paused = true

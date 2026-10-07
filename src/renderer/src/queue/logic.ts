@@ -69,6 +69,13 @@ export function onEnded(q: QueueState, repeat: boolean, o: NextOptions): EndStep
   return next === q ? { kind: 'stop' } : { kind: 'play', state: next }
 }
 
+// The queue is as it was when the next song was picked ahead (ticket 087),
+// so the pick still holds: with shuffle, the song loaded is the one that
+// plays. Any edit or move of the current song picks again.
+export function sameQueue(a: QueueState, b: QueueState): boolean {
+  return a.items === b.items && a.index === b.index && (a.next ?? 0) === (b.next ?? 0)
+}
+
 // Clicking a queue row. Play next songs after the clicked one still wait.
 export function jump(q: QueueState, index: number): QueueState {
   if (index < 0 || index >= q.items.length || index === q.index) return q

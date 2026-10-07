@@ -24,6 +24,8 @@ import {
   prune,
   queueNotice,
   removeRow,
+  sameQueue,
+  type EndStep,
   type NextOptions,
   type QueueState
 } from '../queue/logic'
@@ -38,6 +40,9 @@ const savePosEverySec = 5
 // Only songs their plugin says are gone leave the queue; off and loading ones stay.
 const notMissing = (key: ItemKey): boolean => itemInfo(key).state !== 'missing'
 const isOff = (key: ItemKey): boolean => itemInfo(key).state === 'off'
+
+// a song the engine was given to play next, and what the queue does then
+type Sent = { step: EndStep; key: ItemKey; p: Playable }
 
 class TrackQueue {
   items: ItemKey[] = $state.raw([])
@@ -109,6 +114,16 @@ class TrackQueue {
     return l && l.key === this.current ? l.p : undefined
   }
 
+  // What follows the current song, picked ahead so the engine can load it
+  // and start it as this one ends (ticket 087), with the queue and rules it
+  // was picked from. With shuffle the pick holds until it plays or the queue
+  // changes, so the song loaded is the one that plays.
+  #picked: { from: QueueState; repeat: boolean; shuffle: boolean; step: EndStep } | undefined
+  // what the engine was given to play next
+  #sent: Sent | undefined
+  // counts plans, so a playable that comes late for an older one is dropped
+  #plans = 0
+
   #wish(): void {
     this.wantsPlay = !!(this.#waitingNow ?? this.#pendingNow)?.andPlay
   }
@@ -123,6 +138,7 @@ class TrackQueue {
     },
     duration: (d) => (player.duration = d),
     ended: () => this.#ended(),
+    nextStarted: () => this.#nextStarted(),
     // follow the element, so a pause from media keys or the system shows too
     playing: () => {
       this.#fails = 0
@@ -159,6 +175,9 @@ class TrackQueue {
     this.link = s.link
     this.#next = s.next ?? 0
     if (listChanged) this.#saveList()
+    // the song plays on: what comes after it may have changed. A new current
+    // song is loaded next, and plans then.
+    if (this.#loaded?.key === this.current) this.planNext()
   }
 
   // Loads the current song at `at` seconds, and plays it if `andPlay`.
@@ -213,10 +232,13 @@ class TrackQueue {
     engine.load(p.url, at, p.part)
     if (andPlay) play()
     else player.playing = false
+    this.planNext()
   }
 
   #unload(): void {
     this.#loaded = undefined
+    this.#sent = undefined
+    this.#plans++
     player.playing = false
     player.duration = 0
     engine.clear()
@@ -255,14 +277,86 @@ class TrackQueue {
   // The new current song is the next part of the file playing (the next
   // track of a disc image): the sound goes on, with no reload and no gap.
   #carryOn(key: ItemKey, p: Playable): void {
+    this.#took(key, p)
+    engine.continueWith(p.part!)
+    this.savePos()
+    this.planNext()
+  }
+
+  // The engine started the song it was given (planNext) as the last one
+  // ended: the queue moves on to it, or the song starts again for repeat.
+  #nextStarted(): void {
+    const s = this.#sent
+    this.#sent = undefined
+    this.#picked = undefined
+    if (!s) return
+    this.#fails = 0
+    if (s.step.kind === 'play') {
+      this.#set(s.step.state)
+      this.#took(s.key, s.p)
+    }
+    this.ended = false
+    player.pos = 0
+    this.savePos()
+    this.planNext()
+  }
+
+  // A new current song that is already sounding.
+  #took(key: ItemKey, p: Playable): void {
     this.starts++
     this.#loads++
     this.#pending = undefined
     this.#loaded = { key, p }
     player.pos = 0
     player.duration = typeof p.length === 'number' ? p.length : 0
-    engine.continueWith(p.part!)
-    this.savePos()
+  }
+
+  // What follows the current song when it ends, picked once (see #picked).
+  #nextStep(): EndStep {
+    const q = this.#state()
+    const { repeat, shuffle } = player
+    const k = this.#picked
+    // a picked song whose plugin went off since is passed over now
+    const still = k?.step.kind !== 'play' || !isOff(k.step.state.items[k.step.state.index])
+    if (k && still && sameQueue(k.from, q) && k.repeat === repeat && k.shuffle === shuffle)
+      return k.step
+    let step = onEnded(q, repeat, this.#nextOptions())
+    if (step.kind === 'play') {
+      const next = this.#onward(step.state)
+      step = next ? { kind: 'play', state: next } : { kind: 'stop' }
+    }
+    this.#picked = { from: q, repeat, shuffle, step }
+    return step
+  }
+
+  // Tells the engine the song that follows, to load ahead and start as this
+  // one ends. None when the queue stops there, when it is the next part of
+  // the same file (#carryOn does that), or when it can't be played now. Also
+  // called when shuffle or repeat changes (App.svelte).
+  planNext(): void {
+    const n = ++this.#plans
+    const send = (s: Sent | undefined): void => {
+      this.#sent = s
+      engine.setNext(s && { url: s.p.url, part: s.p.part })
+    }
+    const l = this.#loaded
+    if (!this.active || !l || l.key !== this.current || l.p.length === 'live')
+      return send(undefined)
+    const step = this.#nextStep()
+    if (step.kind === 'stop') return send(undefined)
+    if (step.kind === 'replay') return send({ step, key: l.key, p: l.p })
+    const key = step.state.items[step.state.index]
+    const use = (p: Playable | undefined): void =>
+      send(p && p.length !== 'live' && !follows(l.p, p) ? { step, key, p } : undefined)
+    const p = playItem(key)
+    if (!(p instanceof Promise)) return use(p)
+    send(undefined)
+    p.then(
+      (r) => {
+        if (n === this.#plans && this.#loaded === l) use(r)
+      },
+      () => {}
+    )
   }
 
   // Replaces the queue with a list of songs and plays the clicked one.
@@ -323,6 +417,7 @@ class TrackQueue {
       // already next: it only has to count as a Play next song, for shuffle
       this.#next ||= 1
       this.savePos()
+      this.planNext()
     } else this.move(i, i < this.index ? this.index : this.index + 1)
     notice.show(queueNotice('next', [key], this.#title([key])))
   }
@@ -365,16 +460,17 @@ class TrackQueue {
     this.#move(true)
   }
 
+  // The song ended with no next song started for it (none was ready, or it
+  // is the next part of the same file): the picked one plays the usual way.
   #ended(): void {
-    const step = onEnded(this.#state(), player.repeat, this.#nextOptions())
+    const step = this.#nextStep()
+    this.#picked = undefined
     if (step.kind === 'replay') {
       engine.seek(0)
       play()
     } else if (step.kind === 'play') {
-      const next = this.#onward(step.state)
-      if (!next) return this.#stopAtEnd()
       const before = this.#loaded
-      this.#set(next)
+      this.#set(step.state)
       const key = this.current!
       const p = player.playing && before ? playItem(key) : undefined
       if (p && !(p instanceof Promise) && follows(before?.p, p)) this.#carryOn(key, p)

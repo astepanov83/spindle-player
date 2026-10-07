@@ -36,6 +36,7 @@ vi.mock('../audio/engine', () => ({
       fake.calls.push(`load ${url}${opts?.live ? ' live' : ` at ${at}`}`)
     },
     continueWith: () => {},
+    setNext: () => {},
     play: () => {
       fake.paused = false
       fake.calls.push('play')

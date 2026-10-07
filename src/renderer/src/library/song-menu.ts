@@ -16,8 +16,8 @@ export interface SongMenuOptions {
   inPlaylist?: string
   // the menu of this playlist's page: it is not offered to add to
   onPlaylist?: string
-  // the song is this row of the queue
-  queueRow?: number
+  // the songs are these rows of the queue, in the order of the keys
+  queueRows?: number[]
   // names the songs when they start an empty queue ("From ...")
   from?: string
   // what "From" opens then
@@ -32,20 +32,20 @@ export function sections(...parts: MenuEntry[][]): MenuEntry[] {
 }
 
 function queuePart(keys: ItemKey[], o: SongMenuOptions): MenuEntry[] {
-  const row = o.queueRow
-  if (row === undefined) {
+  const rows = o.queueRows
+  if (rows === undefined) {
     return [
       { label: 'Play next', run: () => queue.playNext(keys, o.from, o.link) },
       { label: 'Add to queue', run: () => queue.append(keys, o.from, o.link) }
     ]
   }
   // the queue may have changed while the menu was open
-  const same = (): boolean => row < queue.items.length && queue.items[row] === keys[0]
+  const same = (): boolean => rows.every((r, k) => queue.items[r] === keys[k])
   const entries: MenuEntry[] = [
-    { label: 'Remove from queue', run: () => same() && queue.remove(row) }
+    { label: 'Remove from queue', run: () => same() && queue.removeRows(rows) }
   ]
-  if (row !== queue.index) {
-    entries.push({ label: 'Play next', run: () => same() && queue.playRowNext(row) })
+  if (rows.some((r) => r !== queue.index)) {
+    entries.push({ label: 'Play next', run: () => same() && queue.playRowsNext(rows) })
   }
   return entries
 }

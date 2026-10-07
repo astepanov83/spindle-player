@@ -21,6 +21,8 @@
   import { playlists } from '../stores/playlists.svelte'
   import { plays as playCounts } from '../stores/plays.svelte'
   import { lastPlayedText } from './plays'
+  import { rowSelection } from '../stores/selection.svelte'
+  import { listRows } from '../ui/selection'
 
   let {
     title,
@@ -93,6 +95,13 @@
     source: itemsVersion()
   }))
 
+  // Ctrl and Shift select rows by song, so a new sort keeps them (ticket 086)
+  const shown = $derived(listRows(rows))
+  const sel = rowSelection(
+    () => shown,
+    (keys) => keys
+  )
+
   // Playing from the table makes the sorted list the queue. A greyed row
   // can't play.
   function play(i: number): void {
@@ -100,14 +109,20 @@
     queue.playList(rows, i, title, link)
   }
 
-  // Delete in a playlist takes the row out of it; focus goes to the row
-  // that takes its place.
+  function onrowclick(e: MouseEvent, i: number): void {
+    if (!sel.click(i, e)) play(i)
+  }
+
+  // Delete in a playlist takes the row out of it, or every selected row when
+  // it is one; focus goes to the row that takes the first one's place.
   function onrowkey(e: KeyboardEvent, i: number): void {
     if (!playlistId || !isRemoveKey(e)) return
     e.preventDefault()
-    playlists.removeItems(playlistId, [rows[i]])
+    const keys = sel.has(rows[i]) ? sel.ids() : [rows[i]]
+    const at = shown.indexOf(keys[0])
+    playlists.removeItems(playlistId, keys)
     tick().then(() => {
-      const to = rowAfterRemove(i, rows.length)
+      const to = rowAfterRemove(at, rows.length)
       const row = to === null ? null : list?.querySelector<HTMLElement>(`[data-index="${to}"]`)
       row?.focus()
       row?.scrollIntoView({ block: 'nearest' })
@@ -149,7 +164,7 @@
     class="rows lines song-rows"
     bind:this={list}
     style:height="{v.total}px"
-    use:roving={{ rows, count: rows.length, scrollTo: (i) => v.scrollToIndex(i) }}
+    use:roving={{ rows, count: rows.length, scrollTo: (i) => v.scrollToIndex(i), select: sel }}
   >
     {#each v.items as item (item.key)}
       {@const key = rows[item.index]}
@@ -159,13 +174,15 @@
         class="tr row"
         class:cur-row={cur}
         class:dim={s.state !== 'ok'}
+        class:selected={sel.has(key)}
         data-row
         data-index={item.index}
         aria-current={cur ? 'true' : undefined}
         style:transform="translateY({v.offset(item)}px)"
-        onclick={() => play(item.index)}
+        onclick={(e) => onrowclick(e, item.index)}
         onkeydown={(e) => onrowkey(e, item.index)}
-        oncontextmenu={(e) => openSongMenu(e, [key], { inPlaylist: playlistId, from: title, link })}
+        oncontextmenu={(e) =>
+          openSongMenu(e, sel.menu(item.index), { inPlaylist: playlistId, from: title, link })}
       >
         <span class="n"
           >{#if cur && queues.songPlaying}<Eq />{:else}{item.index + 1}{/if}</span

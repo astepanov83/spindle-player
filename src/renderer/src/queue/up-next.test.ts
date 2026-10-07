@@ -20,6 +20,7 @@ import {
   type Line,
   type Shape
 } from './up-next'
+import { moveOrder } from './logic'
 
 const lines = (s: Shape): Line[] => Array.from({ length: lineCount(s) }, (_, i) => lineAt(i, s))
 const row = (index: number): Line => ({ kind: 'row', index })
@@ -91,22 +92,48 @@ describe('dragging a row', () => {
   })
 
   it('moves the rows between and keeps the headings by the current song', () => {
-    expect([0, 1, 2, 3, 4].map((i) => movedTo(i, 3, 1))).toEqual([0, 2, 3, 1, 4])
-    expect([0, 1, 2, 3, 4].map((i) => movedTo(i, 1, 3))).toEqual([0, 3, 1, 2, 4])
+    expect([0, 1, 2, 3, 4].map((i) => movedTo(i, [3], 1))).toEqual([0, 2, 3, 1, 4])
+    expect([0, 1, 2, 3, 4].map((i) => movedTo(i, [1], 4))).toEqual([0, 3, 1, 2, 4])
     // row 3 goes right after the current song: the current song stays put
-    const after = dragTops(s, 3, 2)
+    const after = dragTops(s, [3], 2)
     expect(after.now).toBe(lineTop(2, s))
     expect(after.row(1)).toBe(lineTop(3, s))
     expect(after.next).toBe(lineTop(4, s))
     expect(after.row(3)).toBe(lineTop(5, s))
     expect(after.row(2)).toBe(lineTop(6, s))
     // the current song moved down two: two rows join the played ones above it
-    const down = dragTops(s, 1, 3)
+    const down = dragTops(s, [1], 4)
     expect(down.row(2)).toBe(HEAD + ROW)
     expect(down.row(3)).toBe(HEAD + 2 * ROW)
     expect(down.now).toBe(HEAD + 3 * ROW)
     expect(down.row(1)).toBe(2 * HEAD + 3 * ROW)
     expect(down.next).toBe(2 * HEAD + 4 * ROW)
+  })
+})
+
+describe('dragging several rows (ticket 086)', () => {
+  it('moves them as one block, as moveOrder does', () => {
+    const order = moveOrder(6, [1, 4], 3)
+    const place = order.map((_, j) => j)
+    order.forEach((old, j) => (place[old] = j))
+    expect([0, 1, 2, 3, 4, 5].map((i) => movedTo(i, [1, 4], 3))).toEqual(place)
+    expect([0, 1, 2, 3, 4, 5].map((i) => movedTo(i, [0, 5], 6))).toEqual([4, 0, 1, 2, 3, 5])
+  })
+
+  it('places the rows and headings as if dropped', () => {
+    // Played, a/0, a/1, Now playing, a/2, Up next, a/3, a/4, a/5
+    const s = { count: 6, current: 2, open: true }
+    // a/4 and a/5 go right after the current song
+    const t = dragTops(s, [4, 5], 3)
+    expect([t.now, t.next]).toEqual([lineTop(3, s), lineTop(5, s)])
+    expect([4, 5, 3].map((i) => t.row(i))).toEqual([6, 7, 8].map((l) => lineTop(l, s)))
+    // a/0 and a/4 go after a/2: the current song moves up one, with one
+    // played row left above it
+    const u = dragTops(s, [0, 4], 3)
+    expect(u.row(1)).toBe(HEAD)
+    expect([u.now, u.row(2), u.next]).toEqual([HEAD + ROW, 2 * HEAD + ROW, 2 * HEAD + 2 * ROW])
+    const below = 3 * HEAD + 2 * ROW
+    expect([0, 4, 3, 5].map((i) => u.row(i))).toEqual([0, 1, 2, 3].map((k) => below + k * ROW))
   })
 })
 

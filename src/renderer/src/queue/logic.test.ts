@@ -10,13 +10,18 @@ import {
   follows,
   insertNext,
   jump,
+  moveOrder,
   moveRow,
   onEnded,
   passOver,
   prune,
   queueNotice,
   removeRow,
+  removeRows,
+  reorder,
+  shiftOrder,
   undoRemove,
+  undoRemoveRows,
   type QueueState
 } from './logic'
 import { queueLink } from '../../../shared/saved-queue'
@@ -429,6 +434,99 @@ describe('moveRow', () => {
     expect(moveRow(qn(0, 2), 4, 2).next).toBe(3)
     expect(moveRow(qn(0, 2), 1, 4).next).toBe(1)
     expect(moveRow(qn(0, 2), 2, 1).next).toBe(2)
+  })
+})
+
+describe('several rows (ticket 086)', () => {
+  const five: ItemKey[] = ['files:a/0', 'files:a/1', 'files:a/2', 'files:a/3', 'files:a/4']
+  const names = (s: QueueState): string[] => s.items.map((k) => k.slice(-1))
+
+  it('removes rows on both sides of the current song', () => {
+    const s = removeRows(q(2, five), [0, 3])
+    expect(names(s)).toEqual(['1', '2', '4'])
+    expect(s.index).toBe(1)
+  })
+
+  it('hands a removed current song over to the next row that stays', () => {
+    const s = removeRows(q(1, five), [1, 2, 4])
+    expect(names(s)).toEqual(['0', '3'])
+    expect(s.index).toBe(1)
+    // none stays after it: the one before
+    expect(removeRows(q(3, five), [3, 4]).index).toBe(2)
+    expect(removeRows(q(0, five), [0, 1, 2, 3, 4]).items).toEqual([])
+  })
+
+  it('undoes them all at once, at their places', () => {
+    const before = qn(1, 2, five)
+    const after = removeRows(before, [0, 2, 4])
+    expect(undoRemoveRows(after, before, after, [4, 0, 2])).toEqual({
+      state: before,
+      restart: false
+    })
+    // the current song went with them: it is current again
+    const gone = removeRows(before, [1, 3])
+    expect(undoRemoveRows(gone, before, gone, [1, 3]).restart).toBe(true)
+    // one row: as undoRemove
+    const one = removeRow(before, 3)
+    expect(undoRemoveRows(one, before, one, [3])).toEqual(undoRemove(one, before, one, 3))
+  })
+
+  it('keeps the song picked since, with the removed current song back as a row', () => {
+    const before = q(1, five)
+    const after = removeRows(before, [1, 3])
+    // after it went, a/0 was picked
+    const r = undoRemoveRows({ ...after, index: 0 }, before, after, [1, 3])
+    expect(r).toEqual({ state: q(0, five), restart: false })
+  })
+
+  it('puts rows together at a gap, in their order', () => {
+    expect(moveOrder(5, [3, 1], 0)).toEqual([1, 3, 0, 2, 4])
+    expect(moveOrder(5, [0, 2], 5)).toEqual([1, 3, 4, 0, 2])
+    expect(moveOrder(5, [0, 4], 2)).toEqual([1, 0, 4, 2, 3])
+    // the gap inside the rows moved: they close up there
+    expect(moveOrder(5, [1, 2, 3], 2)).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it('shifts each run of rows one place, a run at the edge stays', () => {
+    expect(shiftOrder(5, [1, 3], -1)).toEqual([1, 0, 3, 2, 4])
+    expect(shiftOrder(5, [1, 2], 1)).toEqual([0, 3, 1, 2, 4])
+    expect(shiftOrder(5, [0, 3], -1)).toEqual([0, 1, 3, 2, 4])
+    expect(shiftOrder(5, [2, 4], 1)).toEqual([0, 1, 3, 2, 4])
+  })
+
+  it('rows moved right after the current song play next, together', () => {
+    const s = q(0, five)
+    const r = reorder(s, moveOrder(5, [3, 4], 1), [3, 4])
+    expect(names(r)).toEqual(['0', '3', '4', '1', '2'])
+    expect(r.next).toBe(2)
+    expect(r.index).toBe(0)
+    // played rows too: the current song moves up
+    const p = reorder(q(2, five), moveOrder(5, [0, 4], 3), [0, 4])
+    expect(names(p)).toEqual(['1', '2', '0', '4', '3'])
+    expect([p.index, p.next]).toEqual([1, 2])
+  })
+
+  it('rows dropped among Play next songs join them; elsewhere they do not', () => {
+    const s = qn(0, 2, [...five, 'files:a/5'])
+    const among = reorder(s, moveOrder(6, [4, 5], 2), [4, 5])
+    expect(names(among)).toEqual(['0', '1', '4', '5', '2', '3'])
+    expect(among.next).toBe(4)
+    const later = reorder(s, moveOrder(6, [1], 4), [1])
+    expect(later.next).toBe(1)
+  })
+
+  it('rows already in place keep the same list, and only count as Play next', () => {
+    const s = q(0, five)
+    const r = reorder(s, moveOrder(5, [1, 2], 1), [1, 2])
+    expect(r.items).toBe(s.items)
+    expect(r.next).toBe(2)
+    const again = reorder(r, moveOrder(5, [1, 2], 1), [1, 2])
+    expect(again).toBe(r)
+  })
+
+  it('moveRow is a move of one row', () => {
+    const s = qn(1, 1, five)
+    expect(moveRow(s, 4, 0)).toEqual(reorder(s, moveOrder(5, [4], 0), [4]))
   })
 })
 

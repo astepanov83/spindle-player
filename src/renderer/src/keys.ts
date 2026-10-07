@@ -301,22 +301,38 @@ export function rowAfterRemove(i: number, count: number): number | null {
 }
 
 // The keys inside a list (song table, queue, album page, search songs,
-// radio lists), for the list in Settings. listStep, ui/roving.ts (Enter),
-// the radio rows and the queue rows run them; a test checks listStep's.
+// radio lists), for the list in Settings. listStep, ui/roving.ts (Enter and
+// the selection keys), the radio rows and the queue rows run them; a test
+// checks listStep's.
 export const listShortcuts: { keys: string[]; does: string }[] = [
   { keys: ['ArrowUp', 'ArrowDown'], does: 'Previous or next row' },
   { keys: ['PageUp', 'PageDown'], does: 'A screen of rows up or down' },
   { keys: ['Home', 'End'], does: 'First or last row' },
   { keys: ['Enter'], does: 'Play the row' },
+  {
+    keys: ['Ctrl+click', 'Shift+click'],
+    does: 'On a song: select it too, or every song from the last one clicked'
+  },
+  {
+    keys: ['Shift+ArrowUp', 'Shift+ArrowDown'],
+    does: 'Select songs up or down (with Page Up, Page Down, Home, End too)'
+  },
+  { keys: ['Ctrl+A'], does: 'Select every song in the list' },
+  { keys: ['Escape'], does: 'Select none' },
   { keys: ['ArrowRight', 'ArrowLeft'], does: 'On a station: to its star and menu, and back' },
-  { keys: ['Alt+ArrowUp', 'Alt+ArrowDown'], does: 'On a queue row or a saved station: move it' },
-  { keys: ['Delete'], does: 'On a queue or playlist row: remove it' }
+  {
+    keys: ['Alt+ArrowUp', 'Alt+ArrowDown'],
+    does: 'On a queue row or a saved station: move it, or the selected songs'
+  },
+  { keys: ['Delete'], does: 'On a queue or playlist row: remove it, or the selected songs' }
 ]
 
-// "Alt+ArrowUp" as "Alt+↑"
+// "Alt+ArrowUp" as "Alt+↑"; "Shift+click" as it is
 export const keyText = (k: string): string => {
-  const alt = k.startsWith('Alt+')
-  return chordText({ key: alt ? k.slice(4) : k, alt })
+  const parts = k.split('+')
+  const key = parts.pop() ?? ''
+  const mods = ['Ctrl', 'Alt', 'Shift'].filter((m) => parts.includes(m))
+  return mods.map((m) => `${m}+`).join('') + chordText({ key })
 }
 
 // A group of choices (Settings' segmented buttons): arrows go round.

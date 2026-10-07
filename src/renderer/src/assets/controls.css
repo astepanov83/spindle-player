@@ -103,8 +103,8 @@ button.row:active:not(.cur-row) {
   background: var(--edge);
   pointer-events: none;
 }
-.lines > .row:is(:hover, .cur-row, :focus-visible, :has(:focus-visible))::before,
-.lines > .row:is(:hover, .cur-row, :focus-visible, :has(:focus-visible)) + .row::before {
+.lines > .row:is(:hover, .cur-row, .selected, :focus-visible, :has(:focus-visible))::before,
+.lines > .row:is(:hover, .cur-row, .selected, :focus-visible, :has(:focus-visible)) + .row::before {
   opacity: 0;
 }
 /* the line needs a box to sit in. :where keeps it weakest, so a virtual
@@ -144,6 +144,27 @@ button.row:active:not(.cur-row) {
 .cur-row:hover {
   background: color-mix(in srgb, var(--c2) 26%, var(--hover));
   box-shadow: inset 3px 0 0 var(--c2);
+}
+
+/* Rows selected with Ctrl or Shift (ticket 086): a grey fill, stronger
+   than a hover, so it reads in both themes and next to the playing row. A
+   selected playing row keeps its bar and gets a stronger tint. Selected rows
+   next to each other join into one block (no line between). */
+.row.selected,
+.row.selected:hover {
+  background: color-mix(in srgb, var(--ink) 13%, transparent);
+}
+.cur-row.selected,
+.cur-row.selected:hover {
+  background: color-mix(in srgb, var(--c2) 42%, var(--hover));
+}
+.row.selected:has(+ .row.selected) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.row.selected + .row.selected {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 /* Thin scrollbars with no arrows, in both themes. The thumb is see-through

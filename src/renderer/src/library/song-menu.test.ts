@@ -33,8 +33,8 @@ vi.mock('../stores/queue.svelte', () => ({
       fake.calls.push(`next ${ids} ${from}` + (link ? ` ${link.plugin}:${link.page}` : '')),
     append: (ids: string[], from = '', link?: { plugin: string; page: string }) =>
       fake.calls.push(`add ${ids} ${from}` + (link ? ` ${link.plugin}:${link.page}` : '')),
-    remove: (i: number) => fake.calls.push(`remove ${i}`),
-    playRowNext: (i: number) => fake.calls.push(`row next ${i}`)
+    removeRows: (rows: number[]) => fake.calls.push(`remove ${rows}`),
+    playRowsNext: (rows: number[]) => fake.calls.push(`row next ${rows}`)
   }
 }))
 // radio's page half hears main from the start
@@ -98,22 +98,35 @@ describe('songMenu', () => {
   })
 
   it('a queue row can leave the queue or move up to play next', () => {
-    const m = songMenu(['files:c'], { queueRow: 2 })
+    const m = songMenu(['files:c'], { queueRows: [2] })
     expect(labels(m).slice(0, 3)).toEqual(['Remove from queue', 'Play next', '---'])
     pick(m, 'Remove from queue')
     pick(m, 'Play next')
     expect(fake.calls).toEqual(['remove 2', 'row next 2'])
   })
 
+  it('several queue rows go or move up together', () => {
+    const m = songMenu(['files:a', 'files:c'], { queueRows: [0, 2] })
+    expect(labels(m).slice(0, 3)).toEqual(['Remove from queue', 'Play next', '---'])
+    pick(m, 'Remove from queue')
+    pick(m, 'Play next')
+    expect(fake.calls).toEqual(['remove 0,2', 'row next 0,2'])
+    // one of them moved away since: nothing happens
+    fake.calls = []
+    fake.items = ['files:a', 'files:b', 'files:x']
+    pick(m, 'Remove from queue')
+    expect(fake.calls).toEqual([])
+  })
+
   it('the current song has no Play next', () => {
-    expect(labels(songMenu(['files:b'], { queueRow: 1 })).slice(0, 2)).toEqual([
+    expect(labels(songMenu(['files:b'], { queueRows: [1] })).slice(0, 2)).toEqual([
       'Remove from queue',
       '---'
     ])
   })
 
   it('does nothing to a queue row that moved away since the menu opened', () => {
-    const m = songMenu(['files:c'], { queueRow: 2 })
+    const m = songMenu(['files:c'], { queueRows: [2] })
     fake.items = ['files:c', 'files:a', 'files:b']
     pick(m, 'Remove from queue')
     pick(m, 'Play next')
@@ -211,7 +224,7 @@ describe('Go to (ticket 040)', () => {
 
   it('a split artist gives one item per artist', () => {
     song('A, B', ['A', 'B'])
-    const m = songMenu(['files:s1'], { queueRow: 1 })
+    const m = songMenu(['files:s1'], { queueRows: [1] })
     expect(labels(m).slice(0, 6)).toEqual([
       'Remove from queue',
       '---',

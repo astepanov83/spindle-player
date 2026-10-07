@@ -6,6 +6,8 @@
 // `count`, and `scrollTo` to draw a row that is not on screen.
 // `rows` is the list shown; a new one (a sort, a search) forgets the row
 // last focused, since its number now points at another song.
+// With `select`, the list takes the selection keys (ticket 086): Shift with
+// the moving keys, Ctrl+A and Esc.
 import { tick } from 'svelte'
 import { listStep } from '../keys'
 
@@ -15,6 +17,16 @@ export interface RovingOptions {
   first?: number
   scrollTo?: (index: number) => void
   rows?: unknown
+  select?: RovingSelect
+}
+
+// Row numbers are the ones roving uses: data-index, else the place in the list.
+export interface RovingSelect {
+  // Shift moved the focus from row `from` to row `to`
+  step(from: number, to: number): void
+  all(): void
+  // Esc: false when nothing was selected, so the key goes on to close things
+  clear(): boolean
 }
 
 // Which drawn row holds the Tab stop. `drawn` are the row numbers on the page.
@@ -122,19 +134,28 @@ export function roving(
   }
 
   function onkeydown(e: KeyboardEvent): void {
-    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+    if (e.defaultPrevented || e.altKey || e.metaKey) return
     const all = rows()
     const row = rowOf(e.target, all)
     if (!row) return
+    const select = opts.select
+    if (select && selectKey(e, select)) {
+      e.preventDefault()
+      return
+    }
+    // Shift+arrows set the volume from a list that does not select
+    if (e.ctrlKey || (e.shiftKey && !select)) return
     const count = opts.count ?? all.length
     const first = Math.min(opts.first ?? 0, count)
     const page = Math.max(
       1,
       Math.floor((scrollBox(node)?.clientHeight ?? 400) / row.offsetHeight) - 1
     )
-    const to = rowStep(e.key, indexOf(row, all), first, count, page)
+    const from = indexOf(row, all)
+    const to = rowStep(e.key, from, first, count, page)
     if (to === null) return
     e.preventDefault()
+    if (e.shiftKey) select?.step(from, to)
     void focusRow(to)
   }
 
@@ -186,6 +207,16 @@ export function roving(
       window.removeEventListener('keydown', ontab, true)
     }
   }
+}
+
+// Ctrl+A and Esc. True when the key was used.
+function selectKey(e: KeyboardEvent, select: RovingSelect): boolean {
+  if (e.ctrlKey && !e.shiftKey && e.code === 'KeyA') {
+    select.all()
+    return true
+  }
+  if (e.key === 'Escape' && !e.ctrlKey && !e.shiftKey) return select.clear()
+  return false
 }
 
 function scrollBox(el: HTMLElement): HTMLElement | null {

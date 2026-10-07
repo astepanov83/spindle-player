@@ -14,6 +14,8 @@
   import type { SongsBlock } from '../plugins/types'
   import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { rowSelection } from '../stores/selection.svelte'
+  import { listRows } from '../ui/selection'
 
   let {
     block: b,
@@ -37,10 +39,21 @@
 
   const artist = $derived(b.artist ?? true)
 
+  // Ctrl and Shift select rows (ticket 086); the table has its own
+  const shown = $derived(listRows(b.items))
+  const sel = rowSelection(
+    () => shown,
+    (keys) => keys
+  )
+
   // the queue a click starts: the block's songs, or all of them while a few show
   function play(key: ItemKey, at: number): void {
     const list = b.queue ?? b.items
     queue.playList(list, b.queue ? Math.max(0, list.indexOf(key)) : at, b.from, b.link)
+  }
+
+  function onrowclick(e: MouseEvent, key: ItemKey, at: number): void {
+    if (!sel.click(at, e)) play(key, at)
   }
 </script>
 
@@ -76,7 +89,7 @@
       {/if}
     </div>
     <!-- a label row is not a [data-row], so Tab and the arrows skip it -->
-    <div class="lines song-rows" use:roving={{ rows: b.items }}>
+    <div class="lines song-rows" use:roving={{ rows: b.items, select: sel }}>
       {#each lines as line ('label' in line ? `label ${line.label}` : line.key)}
         {#if 'label' in line}
           <div class="disc section-label">{line.label}</div>
@@ -88,10 +101,12 @@
             class="srow row"
             data-song={splitKey(line.key)?.id}
             class:cur-row={cur}
+            class:selected={sel.has(line.key)}
             data-row
             aria-current={cur ? 'true' : undefined}
-            onclick={() => play(line.key, line.at)}
-            oncontextmenu={(e) => openSongMenu(e, [line.key], { from: b.from, link: b.link })}
+            onclick={(e) => onrowclick(e, line.key, line.at)}
+            oncontextmenu={(e) =>
+              openSongMenu(e, sel.menu(line.at), { from: b.from, link: b.link })}
           >
             <span class="n"
               >{#if cur && queues.songPlaying}<Eq />{:else if line.no}{line.no}{/if}</span

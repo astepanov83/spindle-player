@@ -217,6 +217,12 @@ export function removeRow(q: QueueState, i: number): QueueState {
   return withWalk(withNext({ ...q, items, index }, countNext(marks, index)), walk)
 }
 
+// Takes several rows out (ticket 086), the last first, so a current song
+// that goes hands over to the next row that stays.
+export function removeRows(q: QueueState, rows: readonly number[]): QueueState {
+  return [...new Set(rows)].sort((a, b) => b - a).reduce(removeRow, q)
+}
+
 // Undo of removeRow: `before` and `after` are the states around it, `now`
 // the queue at Undo, with the same rows as `after`. The row goes back at its
 // place. A removed current song is current again if no other song was picked
@@ -227,8 +233,26 @@ export function undoRemove(
   after: QueueState,
   at: number
 ): { state: QueueState; restart: boolean } {
+  return undoRemoveRows(now, before, after, [at])
+}
+
+// Undo of removeRows: each row back at its place, the first first.
+export function undoRemoveRows(
+  now: QueueState,
+  before: QueueState,
+  after: QueueState,
+  rows: readonly number[]
+): { state: QueueState; restart: boolean } {
+  const sorted = [...new Set(rows)].sort((a, b) => a - b)
+  if (sorted.includes(before.index) && now.index === after.index) {
+    return { state: before, restart: true }
+  }
+  return { state: sorted.reduce((s, at) => putBack(s, before, at), now), restart: false }
+}
+
+// Row `at` of `before` back at its place in `now`.
+function putBack(now: QueueState, before: QueueState, at: number): QueueState {
   const wasCurrent = at === before.index
-  if (wasCurrent && now.index === after.index) return { state: before, restart: true }
   const pos = Math.min(at, now.items.length)
   const items = [...now.items.slice(0, pos), before.items[at], ...now.items.slice(pos)]
   const marks = nextMarks(now)
@@ -241,8 +265,7 @@ export function undoRemove(
     order.splice(walk.start, 0, pos)
     walk = { ...walk, order, at: walk.at + 1 }
   }
-  const state = withWalk(withNext({ ...now, items, index }, countNext(marks, index)), walk)
-  return { state, restart: false }
+  return withWalk(withNext({ ...now, items, index }, countNext(marks, index)), walk)
 }
 
 function playedInRound(w: Walk | undefined, row: number): boolean {
@@ -255,17 +278,64 @@ function playedInRound(w: Walk | undefined, row: number): boolean {
 export function moveRow(q: QueueState, from: number, to: number): QueueState {
   const n = q.items.length
   if (from === to || from < 0 || from >= n || to < 0 || to >= n) return q
-  const order = q.items.map((_, k) => k)
-  order.splice(to, 0, order.splice(from, 1)[0])
-  const items = order.map((k) => q.items[k])
+  return reorder(q, moveOrder(n, [from], to > from ? to + 1 : to), [from])
+}
+
+// The rows in a new order: `order[j]` is the old row that goes to place j.
+// The current song stays current. A run of `moved` rows that lands right
+// after it, or among the Play next songs, becomes Play next songs.
+export function reorder(q: QueueState, order: number[], moved: readonly number[]): QueueState {
   const old = nextMarks(q)
   const marks = order.map((k) => old[k])
   const index = order.indexOf(q.index)
-  if (from !== q.index && (to === index + 1 || (marks[to - 1] && marks[to + 1]))) marks[to] = true
+  const going = new Set(moved)
+  going.delete(q.index)
+  for (let j = 0; j < order.length; j++) {
+    if (!going.has(order[j])) continue
+    let e = j
+    while (e + 1 < order.length && going.has(order[e + 1])) e++
+    if (j === index + 1 || (marks[j - 1] && marks[e + 1])) marks.fill(true, j, e + 1)
+    j = e
+  }
+  const next = countNext(marks, index)
+  // nothing moved: the same list, so nothing is saved again
+  if (order.every((k, j) => k === j)) return next === (q.next ?? 0) ? q : withNext(q, next)
+  const items = order.map((k) => q.items[k])
   const place: number[] = []
   order.forEach((k, j) => (place[k] = j))
   const walk = remapWalk(q.shuffle, (r) => place[r], index)
-  return withWalk(withNext({ ...q, items, index }, countNext(marks, index)), walk)
+  return withWalk(withNext({ ...q, items, index }, next), walk)
+}
+
+// The order with rows `rows` taken out and put back together, in their
+// order, at the gap before row `slot` (`n` for the end).
+export function moveOrder(n: number, rows: readonly number[], slot: number): number[] {
+  const going = new Set(rows)
+  const order: number[] = []
+  for (let r = 0; r < Math.min(slot, n); r++) if (!going.has(r)) order.push(r)
+  order.push(...[...going].sort((a, b) => a - b))
+  for (let r = Math.max(0, slot); r < n; r++) if (!going.has(r)) order.push(r)
+  return order
+}
+
+// Alt+Up / Alt+Down with several rows: each run of rows next to each other
+// moves one place past the row above or below it. A run at the top (or the
+// bottom) stays.
+export function shiftOrder(n: number, rows: readonly number[], dir: -1 | 1): number[] {
+  const going = new Set(rows)
+  const order = Array.from({ length: n }, (_, k) => k)
+  const runs: [number, number][] = []
+  for (let r = 0; r < n; r++) {
+    if (!going.has(r)) continue
+    const a = r
+    while (r + 1 < n && going.has(r + 1)) r++
+    runs.push([a, r])
+  }
+  for (const [a, b] of runs) {
+    if (dir < 0 && a > 0) order.splice(b, 0, order.splice(a - 1, 1)[0])
+    if (dir > 0 && b < n - 1) order.splice(a, 0, order.splice(b + 1, 1)[0])
+  }
+  return order
 }
 
 // The Clear button: only the current song is left, so what plays goes on.

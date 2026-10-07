@@ -4,7 +4,7 @@
 </script>
 
 <script lang="ts">
-  import { tick } from 'svelte'
+  import { tick, untrack } from 'svelte'
   import GoLink from '../ui/GoLink.svelte'
   import Icon from '../ui/Icon.svelte'
   import IconButton from '../ui/IconButton.svelte'
@@ -14,7 +14,9 @@
   import { virtualList } from '../ui/virtual-list.svelte'
   import { roving } from '../ui/roving'
   import { isRemoveKey, rowAfterRemove } from '../keys'
-  import { dropIndex } from '../ui/drag-rows'
+  import { moveOrder, shiftOrder } from '../queue/logic'
+  import { movedSelection, noneSelected, numberRows } from '../ui/selection'
+  import { rowSelection } from '../stores/selection.svelte'
   import {
     clearLabel,
     dragTops,
@@ -63,6 +65,33 @@
     return (i: number) => lineSize(i, s)
   })
   const v = virtualList(() => ({ count: lineCount(shape), scrollEl: body, list, size: sizeOf }))
+
+  // Ctrl and Shift select rows (ticket 086), by number: a song can be in the
+  // queue twice. Only rows shown can be selected.
+  const shownRows = $derived(numberRows(first, queue.items.length))
+  const sel = rowSelection(
+    () => shownRows,
+    (rows) => rows.map((r) => queue.items[r])
+  )
+  // A move (here, from the menu, by drag) keeps the selected rows on the
+  // same songs at their new places. Any other change (a song added, a
+  // rescan) puts other songs at those numbers: the selection goes.
+  let listSeen = queue.items
+  $effect(() => {
+    const items = queue.items
+    untrack(() => {
+      const was = listSeen
+      listSeen = items
+      if (items === was) return
+      const m = queue.lastOrder
+      if (m && m.before === was && m.after === items) sel.set(movedSelection(sel.s, m.order))
+      else sel.set(noneSelected())
+    })
+  })
+
+  function reorderRows(order: number[], moved: number[]): void {
+    if (!order.every((k, j) => k === j)) queue.reorder(order, moved)
+  }
 
   // the songs drawn; the headings are drawn apart, so a drag can move them
   const drawn = $derived(
@@ -117,11 +146,15 @@
     scrolledAt = performance.now()
   }
 
-  function playRow(index: number): void {
+  function onrowclick(e: MouseEvent, i: number): void {
     if (dragged) {
       dragged = false
       return
     }
+    if (!sel.click(i - first, e)) playRow(i)
+  }
+
+  function playRow(index: number): void {
     const was = queue.starts
     queue.jump(index)
     clicked = queue.starts !== was
@@ -174,22 +207,30 @@
     }
   })
 
-  // Alt+Up / Alt+Down move the focused row; focus goes with it. Delete
-  // takes it out; focus goes to the row that takes its place.
+  // the rows a key on row `i` acts on: the selected ones when it is one of them
+  const rowsFor = (i: number): number[] => (sel.has(i) ? sel.ids() : [i])
+
+  // Alt+Up / Alt+Down move the focused row, or the selected rows with it;
+  // focus goes with it. Delete takes them out; focus goes to the row that
+  // takes the first one's place.
   function onrowkey(e: KeyboardEvent, i: number): void {
     if (isRemoveKey(e)) {
       e.preventDefault()
-      queue.remove(i)
-      focusRow(rowAfterRemove(i, queue.items.length))
+      const rows = rowsFor(i)
+      queue.removeRows(rows)
+      focusRow(rowAfterRemove(rows[0], queue.items.length))
       return
     }
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
     e.preventDefault()
-    const to = e.key === 'ArrowUp' ? i - 1 : i + 1
-    if (to < 0 || to >= queue.items.length) return
-    queue.move(i, to)
-    // moved up past the current song: show the played ones, so focus can follow it
-    if (to < queue.index) played.open = true
+    const rows = rowsFor(i)
+    const order = shiftOrder(queue.items.length, rows, e.key === 'ArrowUp' ? -1 : 1)
+    const to = order.indexOf(i)
+    if (to === i) return
+    reorderRows(order, rows)
+    // moved up past the current song: show the played ones, so focus and
+    // the selection can follow
+    if (rows.some((r) => order.indexOf(r) < queue.index)) played.open = true
     focusRow(to)
   }
 
@@ -205,8 +246,9 @@
   // Drag to reorder. The row follows the pointer as a copy drawn over the list
   // (the row itself can leave the drawn rows while the list scrolls); the rows
   // between make room where it would land.
-  // id: the song dragged, so a queue that changed meanwhile (a rescan) drops nothing
-  type Drag = { from: number; id: string; y: number; grab: number }
+  // from: the row pressed; rows: it, or the selected rows it is one of.
+  // ids: their songs, so a queue that changed meanwhile (a rescan) drops nothing.
+  type Drag = { from: number; rows: number[]; ids: string[]; y: number; grab: number }
   let drag = $state<Drag | null>(null)
   let press: { i: number; y: number; grab: number } | null = null
   // the click that ends a drag must not play the row
@@ -218,8 +260,9 @@
   // Up next move to where they will be
   const tops = $derived.by(() => {
     if (!drag) return undefined
-    return dragTops(shape, drag.from, dropIndex(drag.from, dropSlotAt(drag.y, shape)))
+    return dragTops(shape, drag.rows, dropSlotAt(drag.y, shape))
   })
+  const lifted = $derived(new Set(drag?.rows))
 
   function listY(clientY: number): number {
     return clientY - (list?.getBoundingClientRect().top ?? 0)
@@ -237,7 +280,8 @@
     const y = listY(e.clientY)
     if (!drag) {
       if (Math.abs(y - press.y) < 5) return
-      drag = { from: press.i, id: queue.items[press.i], y, grab: press.grab }
+      const rows = rowsFor(press.i)
+      drag = { from: press.i, rows, ids: rows.map((r) => queue.items[r]), y, grab: press.grab }
       scrollTimer = window.setInterval(edgeScroll, 16)
     }
     drag.y = y
@@ -259,14 +303,16 @@
   function onpointerup(): void {
     press = null
     if (!drag) return
-    const { from, id } = drag
-    const to = dropIndex(from, dropSlotAt(drag.y, shape))
+    const { rows, ids } = drag
+    const slot = dropSlotAt(drag.y, shape)
     clearInterval(scrollTimer)
     drag = null
     dragged = true
     // no click comes when the pointer left the row it pressed
     setTimeout(() => (dragged = false))
-    if (queue.items[from] === id) queue.move(from, to)
+    if (rows.every((r, k) => queue.items[r] === ids[k])) {
+      reorderRows(moveOrder(queue.items.length, rows, slot), rows)
+    }
   }
 
   // Escape stops a drag only: in capture, so App's Escape (which closes the drawer) never sees it
@@ -368,7 +414,12 @@
           rows: queue.items,
           count: queue.items.length,
           first,
-          scrollTo: (i) => v.scrollToIndex(lineOf(i, shape) ?? 0)
+          scrollTo: (i) => v.scrollToIndex(lineOf(i, shape) ?? 0),
+          select: {
+            step: (a, b) => sel.step(a - first, b - first),
+            all: () => sel.all(),
+            clear: () => sel.clear()
+          }
         }}
       >
         {#if queue.index > 0}
@@ -400,15 +451,23 @@
             class:cur-row={cur}
             class:past={i < queue.index}
             class:dim={s.state !== 'ok'}
-            class:lifted={drag?.from === i}
+            class:selected={sel.has(i)}
+            class:lifted={lifted.has(i)}
             data-row
             data-index={i}
             aria-current={cur ? 'true' : undefined}
             style:transform="translateY({tops?.row(i) ?? row.top}px)"
-            onclick={() => playRow(i)}
+            onclick={(e) => onrowclick(e, i)}
             onpointerdown={(e) => onrowdown(e, i)}
             onkeydown={(e) => onrowkey(e, i)}
-            oncontextmenu={(e) => openSongMenu(e, [key], { queueRow: i })}
+            oncontextmenu={(e) => {
+              const rows = sel.menu(i - first)
+              openSongMenu(
+                e,
+                rows.map((r) => queue.items[r]),
+                { queueRows: rows }
+              )
+            }}
           >
             {@render words(
               s,
@@ -426,6 +485,9 @@
             style:transform="translateY({drag.y - drag.grab}px)"
           >
             {@render words(itemInfo(queue.items[drag.from]), false)}
+            {#if drag.rows.length > 1}
+              <span class="many">{drag.rows.length.toLocaleString()} songs</span>
+            {/if}
           </div>
         {/if}
       </div>
@@ -516,6 +578,19 @@
     box-shadow:
       inset 3px 0 0 var(--c2),
       0 10px 28px var(--shadow);
+  }
+  /* how many rows the drag takes along */
+  .many {
+    position: absolute;
+    top: -8px;
+    right: 8px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: var(--ink);
+    color: var(--bg);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
   /* the headings: Played (N), Now playing, Up next */
   .qline {

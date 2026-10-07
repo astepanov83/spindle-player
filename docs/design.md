@@ -119,11 +119,17 @@ Lists (song table, queue, album page, search results songs, radio stations) are 
 | Page Up / Page Down | a screen of rows |
 | Home / End | first / last row |
 | Enter | play the row |
+| Ctrl+click / Shift+click | on a song: select it too (again: take it out), or every song from the last one clicked to it. A plain click still plays |
+| Shift+↑ / Shift+↓ | select songs from the last one clicked (or the focused one) up or down; Shift with Page Up, Page Down, Home, End too |
+| Ctrl+A | select every song in the list |
+| Esc | select none; with nothing selected it goes on to close the menu, Settings or the drawer |
 | → / ← | on a station: to its star and back |
-| Alt+↑ / Alt+↓ | on a queue row: move the song |
-| Delete | on a queue row: remove the song from the queue; on a playlist row: remove it from the playlist. Focus goes to the row that takes its place. The notice offers Undo |
+| Alt+↑ / Alt+↓ | on a queue row: move the song, or every selected song with it |
+| Delete | on a queue row: remove the song from the queue; on a playlist row: remove it from the playlist. On a selected row, every selected song goes. Focus goes to the row that takes its place. The notice offers Undo |
 
-Tab into a list lands on the row last focused, else the playing song, else the first row on screen. A new sort or search forgets the row last focused, since its place now holds another song. When a scroll takes the focused row off the page (the song table and queue draw only the rows near the screen), the focus moves to the nearest row still drawn, so the arrows keep working in the list. Arrows in a list (or on the volume slider) move there, not the song; Shift+arrows seek and set the volume from anywhere.
+Tab into a list lands on the row last focused, else the playing song, else the first row on screen. A new sort or search forgets the row last focused, since its place now holds another song. When a scroll takes the focused row off the page (the song table and queue draw only the rows near the screen), the focus moves to the nearest row still drawn, so the arrows keep working in the list. Arrows in a list (or on the volume slider) move there, not the song; Shift+arrows seek and set the volume from anywhere, except that Shift+↑ / Shift+↓ select in a song list.
+
+Selected songs (ticket 086) have a grey fill (`.row.selected` in `assets/controls.css`); selected rows next to each other join into one block. A right-click on a selected row opens the menu for every selected song, in the order shown; on another row, for that row alone, and the selection goes. One list has a selection at a time (`stores/selection.svelte.ts`): selecting in another list clears the first. A song list selects by song, so a new sort keeps it; the queue selects by row, since a song can be in it twice, and keeps the selection on the same songs when rows move (drag, Alt+arrows, Play next), but drops it on any other change. In the queue, dragging a selected row takes every selected row along, as one block.
 
 Settings' segmented choices (Layout, Queue, Visualizer, Theme) are radio groups: one Tab stop each, and the arrows, Home and End pick the next choice. Its switches (plugins, Fix artist names, covers) are buttons with `role="switch"`: Enter or a click flips one, and Space plays and pauses as on any button.
 

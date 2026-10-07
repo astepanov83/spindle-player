@@ -409,6 +409,10 @@ describe('shortcuts', () => {
       'Ctrl+1 / Ctrl+2 / Ctrl+3'
     ])
     expect(keyText('Alt+ArrowUp')).toBe('Alt+↑')
+    expect(keyText('Shift+ArrowDown')).toBe('Shift+↓')
+    expect(keyText('Ctrl+A')).toBe('Ctrl+A')
+    expect(keyText('Ctrl+click')).toBe('Ctrl+click')
+    expect(keyText('Escape')).toBe('Esc')
     expect(keyText('PageDown')).toBe('Page Down')
   })
   it('lists keys that listStep takes', () => {

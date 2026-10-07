@@ -1,5 +1,10 @@
 <script lang="ts">
+  import type { TemplateId } from '../../../shared/layout'
+  import { templateIds, templates } from '../../../shared/templates'
+  import { settings } from '../stores/settings.svelte'
+  import { layout } from '../stores/layout.svelte'
   import Icon from '../ui/Icon.svelte'
+  import type { IconName } from '../ui/icons'
 
   let {
     title,
@@ -8,6 +13,17 @@
   }: { title: string; settingsOpen?: boolean; onSettings: () => void } = $props()
 
   let maximized = $state(false)
+
+  const layoutIcons: Record<TemplateId, IconName> = {
+    studio: 'layoutStudio',
+    classic: 'layoutClassic',
+    focus: 'layoutFocus'
+  }
+
+  // the picked one again would only clear the library's history
+  function pick(id: TemplateId): void {
+    if (id !== settings.template) layout.chooseTemplate(id)
+  }
 
   $effect(() => {
     window.win.isMaximized().then((m) => (maximized = m))
@@ -20,6 +36,20 @@
 <header class="titlebar">
   <span class="title">{title}</span>
   <div class="right">
+    <div class="layouts" role="group" aria-label="Layout">
+      {#each templateIds as id (id)}
+        <button
+          class="tbbtn"
+          class:on={settings.template === id}
+          aria-pressed={settings.template === id}
+          aria-label="{templates[id].name} layout"
+          title="{templates[id].name} layout"
+          onclick={() => pick(id)}
+        >
+          <Icon name={layoutIcons[id]} size={16} />
+        </button>
+      {/each}
+    </div>
     <button
       class="tbbtn"
       class:on={settingsOpen}
@@ -97,6 +127,11 @@
   }
   .tbbtn {
     width: 30px;
+  }
+  .layouts {
+    display: flex;
+    gap: 2px;
+    margin-right: 8px;
   }
   .winbtns {
     display: flex;

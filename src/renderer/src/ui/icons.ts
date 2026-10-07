@@ -38,6 +38,11 @@ export const icons = {
   maximize: 'M3 3h18v18H3zm2.8 2.8v12.4h12.4V5.8z',
   restore: 'M3 7h14v14H3zm2.8 2.8v8.4h8.4V9.8zM7 3h14v14h-4v-2.8h1.2V5.8H9.8V7H7z',
   winClose: 'M5 3l7 7 7-7 2 2-7 7 7 7-2 2-7-7-7 7-2-2 7-7-7-7z',
+  // the layouts, drawn in the title bar: Studio has the player panel on the
+  // right, Classic a sidebar and a bar along the bottom, Focus is narrow
+  layoutStudio: 'M3 5h18v14H3zm2 2v10h7V7zm9 0v10h5V7zm1 2h3v3h-3z',
+  layoutClassic: 'M3 5h18v14H3zm2 2v6h3V7zm5 0v6h9V7zm-5 8v2h14v-2z',
+  layoutFocus: 'M7 3h10v18H7zm2 2v14h6V5zm1 2h4v5h-4zm0 7h4v2h-4z',
   gear: 'M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z'
 } as const
 

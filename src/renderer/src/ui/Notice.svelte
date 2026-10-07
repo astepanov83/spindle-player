@@ -41,12 +41,32 @@
       return
     }
     const tabs = document.querySelector('[data-notice-under]')
-    const y = tabs ? tabs.getBoundingClientRect().bottom - a.top + 8 : 46
-    place = { x: a.width / 2, y, bottom: false, width: a.width }
+    if (!tabs) {
+      place = { x: a.width / 2, y: 46, bottom: false, width: a.width }
+      return
+    }
+    // in the middle of what holds the tabs: the right column in Focus's wide layout
+    const r = tabs.getBoundingClientRect()
+    const box = (tabs.parentElement ?? tabs).getBoundingClientRect()
+    place = {
+      x: box.left - a.left + box.width / 2,
+      y: r.bottom - a.top + 8,
+      bottom: false,
+      width: box.width
+    }
   }
 
   $effect(() => {
     if (notice.text) measure()
+  })
+
+  // The button went without a press (dropped, or a newer notice): focus on
+  // it would fall to the page, so it goes back too.
+  $effect(() => {
+    if (notice.action) return
+    const back = cameFrom
+    cameFrom = null
+    if (back?.isConnected && document.activeElement === document.body) back.focus()
   })
 </script>
 

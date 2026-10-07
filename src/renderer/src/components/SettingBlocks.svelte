@@ -1,8 +1,10 @@
 <!-- A plugin's blocks in Settings, one core view per kind (spec "Settings").
-     The blocks sit in the parent's column, so its gap spaces them. -->
+     The blocks sit in the parent's column, so its gap spaces them. An `ai`
+     block is a box with its own blocks drawn by this same view. -->
 <script lang="ts">
+  import { tick } from 'svelte'
   import type { PluginId } from '../../../shared/plugins'
-  import { pathEnds } from '../ui/path-ends'
+  import { folderParts } from '../ui/path-ends'
   import { actOnSetting } from '../plugins'
   import { ai, actOnAi } from '../ai.svelte'
   import { aiBlocks, aiTarget } from '../ai-blocks'
@@ -10,6 +12,8 @@
   import { optionText, shownText, textToSend, type Draft } from './setting-input'
   import Icon from '../ui/Icon.svelte'
   import Spinner from '../ui/Spinner.svelte'
+  import Switch from '../ui/Switch.svelte'
+  import SettingBlocks from './SettingBlocks.svelte'
 
   // ties each label to its box, with more than one of these on the page
   const uid = $props.id()
@@ -18,7 +22,8 @@
   type Button = Extract<SettingBlock, { kind: 'button' }>
   type Status = Extract<SettingBlock, { kind: 'status' }>
   type Part =
-    | Exclude<SettingBlock, Button | Status>
+    | Exclude<SettingBlock, Button | Status | { kind: 'ai' }>
+    | { kind: 'ai'; blocks: SettingBlock[] }
     | { kind: 'buttons'; buttons: Button[] }
     | { kind: 'statuses'; lines: Status[] }
 
@@ -27,11 +32,14 @@
   // reader hears the first line that comes.
   const parts = $derived.by(() => {
     const out: Part[] = []
-    // an `ai` block becomes its switch and setup, drawn like any other blocks
-    const flat = blocks.flatMap((b) => (b.kind === 'ai' ? aiBlocks(b.task, ai.state) : [b]))
-    for (const b of flat) {
+    for (const b of blocks) {
       const last = out[out.length - 1]
-      if (b.kind === 'button')
+      // an `ai` block becomes its switch and setup, then the plugin's own blocks
+      // for the task; none before the AI service said what it has
+      if (b.kind === 'ai') {
+        const setup = aiBlocks(b.task, ai.state)
+        if (setup.length) out.push({ kind: 'ai', blocks: [...setup, ...(b.blocks ?? [])] })
+      } else if (b.kind === 'button')
         if (last?.kind === 'buttons') last.buttons.push(b)
         else out.push({ kind: 'buttons', buttons: [b] })
       else if (b.kind === 'status')
@@ -49,7 +57,8 @@
     return parts.map((p) => `${p.kind} ${(seen[p.kind] = (seen[p.kind] ?? -1) + 1)}`)
   })
 
-  // The row that is asked to confirm its removal, one at a time.
+  // The row that is asked to confirm its removal, or the button asked to
+  // confirm its press, one at a time.
   let asking: string | null = $state(null)
 
   // the AI blocks' ids say so; they go to the AI service, not to the plugin
@@ -80,6 +89,33 @@
     act(id, 'set', text)
   }
 
+  // a list's row key has its list id first, so this can't be one
+  const buttonKey = (id: string): string => `\n${id}`
+
+  function focusNow(node: HTMLElement): void {
+    node.focus()
+  }
+
+  // back to the button once it is drawn again
+  async function stopAsking(id: string): Promise<void> {
+    asking = null
+    await tick()
+    document.getElementById(`${uid}-${id}-btn`)?.focus()
+  }
+
+  // Escape cancels the question and must not close Settings too
+  function askKey(e: KeyboardEvent, id: string): void {
+    if (e.key !== 'Escape') return
+    e.preventDefault()
+    e.stopPropagation()
+    void stopAsking(id)
+  }
+
+  function goOn(id: string): void {
+    act(id, 'press')
+    void stopAsking(id)
+  }
+
   function remove(list: string, row: string): void {
     asking = null
     act(list, 'remove', row)
@@ -87,7 +123,11 @@
 </script>
 
 {#each parts as b, i (keys[i])}
-  {#if b.kind === 'title'}
+  {#if b.kind === 'ai'}
+    <div class="aibox">
+      <SettingBlocks {plugin} blocks={b.blocks} />
+    </div>
+  {:else if b.kind === 'title'}
     <span class="section-label">{b.text}</span>
   {:else if b.kind === 'statuses'}
     <div class="lines" aria-live="polite">
@@ -105,13 +145,13 @@
           {@const key = `${b.id}\n${r.id}`}
           <li>
             {#if b.paths}
-              {@const [head, tail] = pathEnds(r.title)}
-              <!-- cut in the middle: the folder's own name stays -->
+              {@const { name, dir } = folderParts(r.title)}
+              <!-- the folder's own name first; where it is, faint, is cut first -->
               <span class="path" title={r.title}
-                ><span class="head">{head}</span><span class="tail">{tail}</span></span
+                ><span class="name">{name}</span>{#if dir}<span class="dir">{dir}</span>{/if}</span
               >
             {:else}
-              <span class="path" title={r.title}><span class="head">{r.title}</span></span>
+              <span class="path" title={r.title}><span class="name">{r.title}</span></span>
             {/if}
             <!-- while it asks, the title gets the room -->
             {#if r.note && asking !== key}<span class="miss">{r.note}</span>{/if}
@@ -141,9 +181,29 @@
   {:else if b.kind === 'buttons'}
     <div class="acts">
       {#each b.buttons as x (x.id)}
-        <button class="btn" disabled={x.disabled} onclick={() => act(x.id, 'press')}
-          >{x.label}</button
-        >
+        {#if asking === buttonKey(x.id) && x.confirm && !x.disabled}
+          <div class="ask" role="group" aria-labelledby="{uid}-{x.id}-ask">
+            <p class="hint" id="{uid}-{x.id}-ask">{x.confirm}</p>
+            <button class="sm pill" onkeydown={(e) => askKey(e, x.id)} onclick={() => goOn(x.id)}
+              >Go on</button
+            >
+            <!-- focus starts on Cancel, so a second Enter can't run it unread -->
+            <button
+              class="sm pill ghost"
+              use:focusNow
+              onkeydown={(e) => askKey(e, x.id)}
+              onclick={() => stopAsking(x.id)}>Cancel</button
+            >
+          </div>
+        {:else}
+          <button
+            class="btn"
+            id="{uid}-{x.id}-btn"
+            disabled={x.disabled}
+            onclick={() => (x.confirm ? (asking = buttonKey(x.id)) : act(x.id, 'press'))}
+            >{x.label}</button
+          >
+        {/if}
       {/each}
     </div>
   {:else if b.kind === 'text'}
@@ -205,15 +265,12 @@
     </div>
   {:else if b.kind === 'switch'}
     <div class="field">
-      <label class="check">
-        <input
-          type="checkbox"
-          checked={b.on}
-          aria-describedby={b.about ? `${uid}-${b.id}-about` : undefined}
-          onchange={(e) => act(b.id, 'set', String(e.currentTarget.checked))}
-        />
-        {b.label}
-      </label>
+      <Switch
+        label={b.label}
+        on={b.on}
+        describedby={b.about ? `${uid}-${b.id}-about` : undefined}
+        onchange={(on) => act(b.id, 'set', String(on))}
+      />
       {#if b.about}<p class="hint" id="{uid}-{b.id}-about">{b.about}</p>{/if}
     </div>
   {/if}
@@ -262,18 +319,22 @@
     flex: 1;
     min-width: 0;
     display: flex;
+    gap: 8px;
+    align-items: baseline;
     white-space: nowrap;
   }
-  .head {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .tail {
+  .name {
     flex: none;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .dir {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--text-xs);
+    color: var(--ink-3);
   }
   /* small pills, to fit the row */
   .sm {
@@ -305,7 +366,19 @@
   }
   .acts {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
+  }
+  /* the question takes the row, its buttons go under it when narrow */
+  .ask {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+  }
+  .ask .hint {
+    flex: 1 1 100%;
+    color: var(--ink);
   }
   .btn {
     font: 500 var(--text-s) var(--ui);
@@ -363,15 +436,14 @@
     font-size: var(--text-s);
     color: var(--ink);
   }
-  .check {
+  /* the task reads as a part of the plugin, with its own blocks inside */
+  .aibox {
     display: flex;
-    gap: 8px;
-    align-items: center;
-    font-size: var(--text-s);
-    cursor: pointer;
-  }
-  .check input {
-    margin: 0;
-    accent-color: var(--c2);
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px 14px;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px var(--edge);
+    background: var(--hover);
   }
 </style>

@@ -7,6 +7,7 @@ import {
   WinChannel,
   type AiApi,
   type PlaybackApi,
+  type PlayControl,
   type PlaylistsApi,
   type SettingsApi,
   type WinApi
@@ -53,6 +54,7 @@ const apis = pluginApis()
 // Asked for early too, so the first paint has the playlists and the last queue.
 const playlists = invoke(PlaylistChannel.load)
 const savedQueue = invoke(PlaybackChannel.loadQueue)
+const plays = invoke(PlaybackChannel.loadPlays)
 
 const playlistsApi: PlaylistsApi = {
   load: () => playlists,
@@ -65,7 +67,15 @@ const playbackApi: PlaybackApi = {
   savePlace: (place) => send(PlaybackChannel.savePlace, place),
   savePlaying: (playing) => send(PlaybackChannel.savePlaying, playing),
   playing: (playing) => send(PlaybackChannel.playing, playing),
-  log: (text) => send(PlaybackChannel.log, text)
+  log: (text) => send(PlaybackChannel.log, text),
+  state: (state) => send(PlaybackChannel.state, state),
+  onControl: (listener) => {
+    const handler = (_: Electron.IpcRendererEvent, control: PlayControl): void => listener(control)
+    ipcRenderer.on(PlaybackChannel.control, handler)
+    return () => ipcRenderer.off(PlaybackChannel.control, handler)
+  },
+  loadPlays: () => plays,
+  played: (key) => send(PlaybackChannel.played, key)
 }
 
 // Asked for early like the settings; a state pushed before the page listens is kept.

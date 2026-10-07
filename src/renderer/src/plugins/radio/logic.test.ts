@@ -5,6 +5,7 @@ import {
   searchRows,
   stationLine,
   stationMatches,
+  stationTags,
   cantPlayFormat,
   firstStream,
   historyEntries,
@@ -146,16 +147,16 @@ describe('streamChoices', () => {
   it('lists the highest bitrate first, with its codec', () => {
     const list = streamChoices([s('a', 128, 'mp3'), s('b', 320, 'mp3'), s('c', 64, 'aac')])
     expect(list).toEqual([
-      { index: 1, label: '320 kbps mp3', short: '320' },
-      { index: 0, label: '128 kbps mp3', short: '128' },
-      { index: 2, label: '64 kbps aac', short: '64' }
+      { index: 1, label: '320 kbps mp3', short: '320k' },
+      { index: 0, label: '128 kbps mp3', short: '128k' },
+      { index: 2, label: '64 kbps aac', short: '64k' }
     ])
   })
 
   it('puts streams of unknown bitrate last, in list order', () => {
     const list = streamChoices([s('a'), s('b', 128), s('c', undefined, 'mp3')])
     expect(list.map((c) => [c.index, c.label, c.short])).toEqual([
-      [1, '128 kbps', '128'],
+      [1, '128 kbps', '128k'],
       [0, 'Bitrate unknown', 'Stream'],
       [2, 'mp3, bitrate unknown', 'mp3']
     ])
@@ -175,9 +176,9 @@ describe('streamChoices', () => {
   it('lists the same bitrate once per codec, the better codec first', () => {
     const list = streamChoices([s('m', 128, 'mp3'), s('a', 128, 'aac'), s('x', 64, 'aac')])
     expect(list).toEqual([
-      { index: 1, label: '128 kbps aac', short: '128 aac' },
-      { index: 0, label: '128 kbps mp3', short: '128 mp3' },
-      { index: 2, label: '64 kbps aac', short: '64' }
+      { index: 1, label: '128 kbps aac', short: '128k aac' },
+      { index: 0, label: '128 kbps mp3', short: '128k mp3' },
+      { index: 2, label: '64 kbps aac', short: '64k' }
     ])
   })
 
@@ -275,5 +276,40 @@ describe('searchRows', () => {
     const st = (id: string): Station => ({ id, name: id, tags: [], streams: [] })
     const rows = searchRows([st('rb-1'), st('rb-2'), st('rb-3')], [st('metal-only'), st('rb-2')])
     expect(rows.map((s) => s.id)).toEqual(['rb-1', 'rb-3'])
+  })
+})
+
+describe('stationTags (082)', () => {
+  const st = (id: string, tags: string[]): Station => ({ id, name: id, tags, streams: [] })
+
+  it('lists the tags of My stations, the most shared first, a tie in list order', () => {
+    const mine = [st('a', ['Metal', 'rock']), st('b', ['ambient', 'metal']), st('c', ['rock'])]
+    expect(stationTags(mine, [])).toEqual(['metal', 'rock', 'ambient'])
+  })
+
+  it('takes each station’s first tag before any second one, so one station does not fill the row', () => {
+    const mine = [
+      st('a', ['1930', '1940', '1950', '1960']),
+      st('b', ['metal']),
+      st('c', ['jazz', 'swing'])
+    ]
+    expect(stationTags(mine, [], 5)).toEqual(['1930', 'metal', 'jazz', '1940', 'swing'])
+  })
+
+  it('counts a tag a station lists twice once, and drops one letter and long tags', () => {
+    const mine = [st('a', ['jazz', ' Jazz ', 'x', 'a'.repeat(31)]), st('b', ['soul', 'blues'])]
+    expect(stationTags(mine, [])).toEqual(['jazz', 'soul', 'blues'])
+  })
+
+  it('keeps the first few', () => {
+    const mine = [st('a', ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9'])]
+    expect(stationTags(mine, [])).toHaveLength(8)
+    expect(stationTags(mine, [], 2)).toEqual(['t1', 't2'])
+  })
+
+  it('takes the popular stations’ tags only when My stations have none', () => {
+    const popular = [st('p', ['news', 'talk']), st('q', ['talk'])]
+    expect(stationTags([st('a', [])], popular)).toEqual(['talk', 'news'])
+    expect(stationTags([st('a', ['metal'])], popular)).toEqual(['metal'])
   })
 })

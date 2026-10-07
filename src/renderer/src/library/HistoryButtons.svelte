@@ -4,7 +4,7 @@
   import Icon from '../ui/Icon.svelte'
   import { library } from '../stores/library.svelte'
 
-  // px: Studio's sit beside the search box, Classic's in a label row
+  // px: Classic's narrow sidebar takes smaller ones
   let { size = 34 }: { size?: number } = $props()
 </script>
 

@@ -64,8 +64,9 @@ export class OpenRouterProvider implements Provider {
   #list: ModelInfo[] = []
   #listAt = 0
   #listError: string | undefined
-  // the account has credit, so the paid models are tried first
-  #credit = false
+  // the account has credit, so the paid models are tried first;
+  // undefined until read for this account
+  #credit: boolean | undefined
   // asks in a row that said "no endpoints". The service tries 3 models at most
   // per request, so the whole list is never seen.
   #noEndpoints = 0
@@ -81,6 +82,13 @@ export class OpenRouterProvider implements Provider {
     return !!this.#ctx?.secrets.get('key')
   }
 
+  // The automatic choice uses the paid models only with credit, and a fixed
+  // free model never costs anything.
+  paid(): boolean {
+    const fixed = this.#fixed()
+    return this.ready() && this.#credit === true && (!fixed || !isFree(fixed.id))
+  }
+
   blocks(): SettingBlock[] {
     if (this.#login)
       return [
@@ -90,13 +98,13 @@ export class OpenRouterProvider implements Provider {
     if (!this.ready()) {
       const out: SettingBlock[] = [
         { kind: 'button', id: 'connect', label: 'Connect OpenRouter' },
-        { kind: 'status', text: 'Opens openrouter.ai to log in. Free, no card needed.' }
+        { kind: 'status', text: 'Opens openrouter.ai in your browser to log in.' }
       ]
       if (this.#note)
         out.push({ kind: 'status', text: this.#note.text, error: this.#note.error || undefined })
       return out
     }
-    const out: SettingBlock[] = [{ kind: 'status', text: 'Connected' }]
+    const out: SettingBlock[] = [this.#accountLine()]
     if (this.#listError)
       out.push({
         kind: 'status',
@@ -109,18 +117,16 @@ export class OpenRouterProvider implements Provider {
         text: 'Your OpenRouter privacy settings block the free models. Allow free providers at openrouter.ai, Settings, Privacy.',
         error: true
       })
-    const fixed = this.#ctx?.settings.get('model')
     out.push({
       kind: 'choice',
       id: 'model',
       label: 'Model',
-      value: fixed && this.#list.some((m) => m.id === fixed) ? fixed : auto,
+      value: this.#fixed()?.id ?? auto,
       options: [
-        { id: auto, label: 'Best model' },
+        { id: auto, label: 'Automatic (recommended)' },
         ...this.#list.map((m) => ({
           id: m.id,
-          label: isFree(m.id) ? m.name : `${m.name} (paid)`,
-          note: `${Math.round(m.context / 1000)}k context`
+          label: isFree(m.id) ? m.name : `${m.name} (uses credit)`
         }))
       ]
     })
@@ -150,9 +156,7 @@ export class OpenRouterProvider implements Provider {
 
   async models(signal: AbortSignal): Promise<ModelInfo[]> {
     const list = await this.#load(signal)
-    const fixed = this.#ctx?.settings.get('model')
-    // a fixed choice that is gone from the list is "Best model" again
-    const one = fixed && fixed !== auto ? list.find((m) => m.id === fixed) : undefined
+    const one = this.#fixed()
     // paid models wait for credit; a fixed one is asked anyway
     return one ? [one] : list.filter((m) => this.#credit || isFree(m.id))
   }
@@ -221,6 +225,33 @@ export class OpenRouterProvider implements Provider {
     this.#cancelLogin()
   }
 
+  // The model picked by hand. One that is gone from the list is automatic again.
+  #fixed(): ModelInfo | undefined {
+    const id = this.#ctx?.settings.get('model')
+    return id && id !== auto ? this.#list.find((m) => m.id === id) : undefined
+  }
+
+  // What the account lets Spindle use, so the user knows whether it may cost money.
+  #accountLine(): SettingBlock {
+    const fixed = this.#fixed()
+    if (this.#credit === undefined)
+      return this.#listError
+        ? { kind: 'status', text: 'Connected.' }
+        : { kind: 'status', text: 'Connected. Checking your account…', busy: true }
+    if (fixed && !isFree(fixed.id) && !this.#credit)
+      return {
+        kind: 'status',
+        text: "Connected. Your account has no credit, so the paid model you picked can't answer.",
+        error: true
+      }
+    if (this.paid())
+      return {
+        kind: 'status',
+        text: 'Connected. Your account has credit, so paid models may be used.'
+      }
+    return { kind: 'status', text: 'Connected. Free models only.' }
+  }
+
   #cancelLogin(): void {
     const login = this.#login
     if (!login) return
@@ -242,7 +273,7 @@ export class OpenRouterProvider implements Provider {
   // Another account may come next: its credit and privacy settings are its
   // own, so the list (read with the credit) is loaded again.
   #forgetAccount(): void {
-    this.#credit = false
+    this.#credit = undefined
     this.#listAt = -Infinity
     this.#noEndpoints = 0
   }
@@ -300,7 +331,10 @@ export class OpenRouterProvider implements Provider {
     } catch {
       signal.throwIfAborted()
     }
+    const before = this.#credit
     this.#credit = credit
+    // after a 402 nothing else tells the page
+    if (before !== credit) ctx.changed()
   }
 
   // for the model choice's list, right after start or login

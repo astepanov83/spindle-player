@@ -61,6 +61,7 @@ describe('where a link lands (ticket 040)', () => {
         title: 'A',
         artist: 'X',
         year: 0,
+        added: 0,
         palette: defaultPalettes,
         cover: '',
         coverLarge: '',

@@ -64,14 +64,14 @@ function listen(idsMoved: (moves: IdMoves) => void): void {
     }
     feed.take(m)
   })
-  // A failed scan or a folder not found shows only in the settings sheet, so
-  // the main window says so too (ticket 045).
+  // A failed scan or a folder not found shows only in Settings, so the main
+  // window says so too (ticket 045), with a button to this plugin's section.
   const scanWatch = new ScanWatch(files.status)
   window.libraryApi.onStatus((s) => {
     files.status = s
     const text = scanWatch.next(s)
     if (text && !layout.settingsOpen)
-      notice.show(text, { label: 'Open Settings', run: () => (layout.settingsOpen = true) })
+      notice.show(text, { label: 'Open Settings', run: () => layout.openSettings('files') })
   })
 }
 

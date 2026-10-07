@@ -1,15 +1,23 @@
-<!-- The volume slider. With `pop`, a narrow player bar (the bar-end container in
-     Controls) shows a button instead, which opens the
-     slider above it. Up / Down set the volume from anywhere either way. -->
+<!-- The volume: the Mute button and the slider. With `pop`, a narrow player
+     bar (the bar-end container in Controls) shows a button instead, which
+     opens both above it. Up / Down and M work from anywhere either way, and
+     the mouse wheel over any of it steps 5%. -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
+  import IconButton from '../ui/IconButton.svelte'
+  import { silent, volumeIcon } from '../audio/volume'
   import { settings } from '../stores/settings.svelte'
+  import { setVolume, sound, toggleMute, wheelVolume } from '../stores/sound.svelte'
 
   let { width = 90, pop = false }: { width?: number; pop?: boolean } = $props()
 
   let open = $state(false)
   let btn: HTMLButtonElement | undefined = $state()
   let slider: HTMLInputElement | undefined = $state()
+
+  const now = $derived({ volume: settings.volume, muted: sound.muted })
+  const icon = $derived(volumeIcon(now))
+  const said = $derived(`${settings.volume}%${sound.muted ? ', muted' : ''}`)
 
   function toggle(): void {
     open = !open
@@ -29,18 +37,32 @@
     open = false
     btn?.focus()
   }
+
+  // the value while dragging, then once more on release, which is kept for Mute at 0%
+  const oninput = (e: Event & { currentTarget: HTMLInputElement }): void =>
+    setVolume(e.currentTarget.valueAsNumber, false)
+  const onchange = (e: Event & { currentTarget: HTMLInputElement }): void =>
+    setVolume(e.currentTarget.valueAsNumber)
 </script>
 
-<div class="vol" class:can-pop={pop}>
+{#snippet mute()}
+  <IconButton {icon} label="Mute" on={silent(now)} toggle onclick={toggleMute} />
+{/snippet}
+
+<div class="vol" class:can-pop={pop} onwheel={wheelVolume}>
   <span class="slide">
-    <Icon name="vol" />
+    {@render mute()}
     <input
       type="range"
       min="0"
       max="100"
       aria-label="Volume"
+      aria-valuetext={said}
+      class:muted={sound.muted}
       style:width="{width}px"
-      bind:value={settings.volume}
+      value={settings.volume}
+      {oninput}
+      {onchange}
     />
   </span>
   {#if pop}
@@ -49,20 +71,25 @@
       <button
         class="icobtn"
         bind:this={btn}
-        aria-label="Volume {settings.volume}%"
-        title="Volume {settings.volume}%"
+        aria-label="Volume {said}"
+        title="Volume {said}"
         aria-expanded={open}
-        onclick={toggle}><Icon name="vol" /></button
+        onclick={toggle}><Icon name={icon} /></button
       >
       {#if open}
         <span class="panel">
+          {@render mute()}
           <input
             type="range"
             min="0"
             max="100"
             aria-label="Volume"
+            aria-valuetext={said}
+            class:muted={sound.muted}
             bind:this={slider}
-            bind:value={settings.volume}
+            value={settings.volume}
+            {oninput}
+            {onchange}
           />
           <span class="num">{settings.volume}</span>
         </span>
@@ -80,10 +107,14 @@
   .slide {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 2px;
   }
   input {
     accent-color: var(--ink);
+  }
+  /* muted keeps its value, shown faded */
+  input.muted {
+    opacity: 0.45;
   }
   .pop {
     display: none;
@@ -119,8 +150,8 @@
     z-index: 20;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
+    gap: 6px;
+    padding: 6px 14px 6px 6px;
     border-radius: 12px;
     background: var(--panel);
     backdrop-filter: blur(20px);

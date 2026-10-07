@@ -1,5 +1,6 @@
-// Drag to reorder a list of same-height rows (the queue). Positions are in
-// pixels from the top of the list. A slot is a gap between rows, 0..count.
+// Drag to reorder a list of same-height rows. The queue has headings between
+// its rows and moves several at once, so it works out its own slots (queue/up-next.ts).
+// Positions are in pixels from the top of the list. A slot is a gap between rows, 0..count.
 
 // The gap nearest the pointer: over the top half of a row is above it.
 export function dropSlot(y: number, rowSize: number, count: number): number {
@@ -17,4 +18,12 @@ export function rowShift(i: number, from: number, slot: number, rowSize: number)
   if (i > from && i < slot) return -rowSize
   if (i < from && i >= slot) return rowSize
   return 0
+}
+
+// How far to scroll the list while a row is dragged near the top or bottom
+// of the box that scrolls, faster closer to the edge. 0 elsewhere.
+export function edgeStep(y: number, top: number, bottom: number, edge = 48): number {
+  const up = y - top
+  const down = bottom - y
+  return up < edge ? -(edge - up) / 3 : down < edge ? (edge - down) / 3 : 0
 }

@@ -1,6 +1,8 @@
-// A path as [everything before the last folder, the last folder with its
-// slash], so a long one can be cut in the middle and still show its own name.
-export function pathEnds(path: string): [string, string] {
-  const m = /^(.*?)([/\\]?[^/\\]+[/\\]?|[/\\])$/.exec(path)
-  return m ? [m[1], m[2]] : ['', path]
+// A folder's path as its own name and the folder it is in, so a row can
+// show the name first and the rest after it, faint.
+export function folderParts(path: string): { name: string; dir: string } {
+  const m = /^(.*?)([/\\]?)([^/\\]+)[/\\]?$/.exec(path)
+  if (!m) return { name: path, dir: '' }
+  // "/music" is in "/"
+  return { name: m[3], dir: m[1] || m[2] }
 }

@@ -25,7 +25,7 @@
 </script>
 
 {#snippet drawer()}
-  {#if node.drawer}<Drawer />{/if}
+  {#if node.drawer}<Drawer fill={node.drawer === 'fill'} />{/if}
 {/snippet}
 
 {#if node.kind === 'box'}
@@ -33,8 +33,9 @@
     class="box dir-{node.dir}"
     class:look-tint={node.look === 'tint'}
     class:look-ambient={node.look === 'ambient'}
-    class:dhost={node.drawer}
+    class:dhost={!!node.drawer}
     style:flex={node.flex}
+    style:--content-max={node.contentWidth}
   >
     {#if node.look === 'ambient'}
       <div class="amb-bg" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -46,7 +47,7 @@
     {@render drawer()}
   </div>
 {:else if node.kind === 'tabs'}
-  <div class="tabsbox" class:dhost={node.drawer} style:flex={node.flex}>
+  <div class="tabsbox" class:dhost={!!node.drawer} style:flex={node.flex}>
     <!-- Focus's notice sits under it (ui/Notice.svelte) -->
     <div class="tabstrip" role="tablist" data-notice-under>
       {#each node.labels as label, i (i)}
@@ -79,13 +80,13 @@
   <div
     class="part"
     class:part-queue={p.part === 'queue'}
-    class:dhost={node.drawer}
+    class:dhost={!!node.drawer}
     style:flex={node.flex}
   >
     {#if p.part === 'library'}
       <Library nav={p.opts.nav} />
     {:else if p.part === 'nowplaying'}
-      <NowPlaying style={p.opts.style} />
+      <NowPlaying style={p.opts.style} show={p.opts.show} />
     {:else if p.part === 'controls'}
       <Controls style={p.opts.style} />
     {:else}
@@ -115,8 +116,10 @@
   .dir-col > :global(* + *) {
     border-top: 1px solid var(--edge);
   }
+  /* none on a look, nor in a box inside an ambient one (Focus's wide layout) */
   .look-tint > :global(*),
-  .look-ambient > :global(*) {
+  .look-ambient > :global(*),
+  :global(.look-ambient) .box > :global(*) {
     border: 0 !important;
   }
   .part {
@@ -131,6 +134,14 @@
   }
   .dhost {
     position: relative;
+  }
+  /* Focus's wide layout: while the words show alone above the controls, the
+     controls take as much height as the words' pane, so the two meet in the
+     middle, by the cover. The Queue tab or an open drawer gets the height back. */
+  .dir-col:global(:has(> .tabsbox > .tabpane:not([hidden]) > .part > .only-text))
+    > :global(.part:last-child),
+  .dir-col:global(:has(> .part > .only-text):not(:has(.drawer.open))) > :global(.part:last-child) {
+    flex: 1 1 0;
   }
 
   .look-tint {
@@ -219,7 +230,8 @@
   .tabstrip {
     display: flex;
     gap: 3px;
-    margin: 14px 20px 4px;
+    /* 20px from the edges, or --content-max wide in the middle */
+    margin: 14px max(20px, (100% - var(--content-max, 100%)) / 2) 4px;
     background: var(--well);
     border-radius: 10px;
     padding: 3px;

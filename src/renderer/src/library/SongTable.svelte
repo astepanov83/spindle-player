@@ -2,12 +2,12 @@
      keys; each row shows what the song's plugin says (ticket 056), greyed
      while its plugin is off or its data is not in yet. -->
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import { tick, type Snippet } from 'svelte'
   import type { ItemKey } from '../../../shared/plugins/items'
   import type { QueueLink } from '../../../shared/saved-queue'
   import Eq from '../ui/Eq.svelte'
   import Thumb from '../ui/Thumb.svelte'
-  import { fmtTime } from '../format'
+  import { fmtCount, fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
   import { roving } from '../ui/roving'
@@ -17,6 +17,12 @@
   import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from './song-menu'
+  import { isRemoveKey, rowAfterRemove } from '../keys'
+  import { playlists } from '../stores/playlists.svelte'
+  import { plays as playCounts } from '../stores/plays.svelte'
+  import { lastPlayedText } from './plays'
+  import { rowSelection } from '../stores/selection.svelte'
+  import { listRows } from '../ui/selection'
 
   let {
     title,
@@ -28,7 +34,9 @@
     playlistId,
     link,
     head,
-    count = true
+    count = true,
+    artist = true,
+    plays = false
   }: {
     title: string
     meta: string
@@ -45,19 +53,35 @@
     head?: Snippet
     // the song count on the right; off where the page's header says it already
     count?: boolean
+    // the Artist column; off where every song has the page's artist
+    artist?: boolean
+    // Plays and Last played columns (Classic's Songs, ticket 085)
+    plays?: boolean
   } = $props()
 
   const ROW = 54
-  const cols: [SortKey, string][] = [
+  const allCols: [SortKey, string][] = [
     ['t', 'Title'],
     ['a', 'Artist'],
     ['al', 'Album'],
+    ['p', 'Plays'],
+    ['lp', 'Last played'],
     ['d', 'Time']
   ]
+  const playCols: SortKey[] = ['p', 'lp']
+  // a sort by a hidden column stays, as in a narrow table
+  const cols = $derived(
+    allCols.filter(([k]) => (artist || k !== 'a') && (plays || !playCols.includes(k)))
+  )
 
   const sort = $derived(given === undefined ? library.sort : given)
   // ties keep the order given
-  const rows = $derived(sortItems(items, sort, infoOf))
+  const rows = $derived(sortItems(items, sort, infoOf, (k) => playCounts.of(k)))
+  // "today" for Last played: new with each play, not ticking past midnight
+  const now = $derived.by(() => {
+    void playCounts.all
+    return Date.now()
+  })
   let list: HTMLDivElement | undefined = $state()
 
   const v = virtualList(() => ({ count: rows.length, scrollEl, list, size: ROW }), 10)
@@ -71,11 +95,38 @@
     source: itemsVersion()
   }))
 
+  // Ctrl and Shift select rows by song, so a new sort keeps them (ticket 086)
+  const shown = $derived(listRows(rows))
+  const sel = rowSelection(
+    () => shown,
+    (keys) => keys
+  )
+
   // Playing from the table makes the sorted list the queue. A greyed row
   // can't play.
   function play(i: number): void {
     if (itemInfo(rows[i]).state !== 'ok') return
     queue.playList(rows, i, title, link)
+  }
+
+  function onrowclick(e: MouseEvent, i: number): void {
+    if (!sel.click(i, e)) play(i)
+  }
+
+  // Delete in a playlist takes the row out of it, or every selected row when
+  // it is one; focus goes to the row that takes the first one's place.
+  function onrowkey(e: KeyboardEvent, i: number): void {
+    if (!playlistId || !isRemoveKey(e)) return
+    e.preventDefault()
+    const keys = sel.has(rows[i]) ? sel.ids() : [rows[i]]
+    const at = shown.indexOf(keys[0])
+    playlists.removeItems(playlistId, keys)
+    tick().then(() => {
+      const to = rowAfterRemove(at, rows.length)
+      const row = to === null ? null : list?.querySelector<HTMLElement>(`[data-index="${to}"]`)
+      row?.focus()
+      row?.scrollIntoView({ block: 'nearest' })
+    })
   }
 </script>
 
@@ -89,17 +140,17 @@
     </div>
   {/if}
   {#if count}
-    <div class="page-meta">{rows.length} {rows.length === 1 ? 'song' : 'songs'}</div>
+    <div class="page-meta">{fmtCount(rows.length, 'song', 'songs')}</div>
   {/if}
 </div>
-<div class="tbl">
+<div class="tbl" class:noartist={!artist} class:plays>
   <!-- The rows are buttons in a list, not a table, so the heads are sort
        buttons, not column headers; each says how it sorts. -->
-  <div class="th" role="group" aria-label="Sort songs">
+  <div class="th song-head" role="group" aria-label="Sort songs">
     <span></span>
     {#each cols as [k, label] (k)}
       {@const on = sort?.k === k}
-      <span class="h-{k}" class:end={k === 'd'}>
+      <span class="h-{k}" class:end={k === 'd' || k === 'p' || k === 'lp'}>
         <button
           class:on
           aria-pressed={on}
@@ -110,10 +161,10 @@
     {/each}
   </div>
   <div
-    class="rows lines"
+    class="rows lines song-rows"
     bind:this={list}
     style:height="{v.total}px"
-    use:roving={{ rows, count: rows.length, scrollTo: (i) => v.scrollToIndex(i) }}
+    use:roving={{ rows, count: rows.length, scrollTo: (i) => v.scrollToIndex(i), select: sel }}
   >
     {#each v.items as item (item.key)}
       {@const key = rows[item.index]}
@@ -123,12 +174,15 @@
         class="tr row"
         class:cur-row={cur}
         class:dim={s.state !== 'ok'}
+        class:selected={sel.has(key)}
         data-row
         data-index={item.index}
         aria-current={cur ? 'true' : undefined}
         style:transform="translateY({v.offset(item)}px)"
-        onclick={() => play(item.index)}
-        oncontextmenu={(e) => openSongMenu(e, [key], { inPlaylist: playlistId, from: title, link })}
+        onclick={(e) => onrowclick(e, item.index)}
+        onkeydown={(e) => onrowkey(e, item.index)}
+        oncontextmenu={(e) =>
+          openSongMenu(e, sel.menu(item.index), { inPlaylist: playlistId, from: title, link })}
       >
         <span class="n"
           >{#if cur && queues.songPlaying}<Eq />{:else}{item.index + 1}{/if}</span
@@ -139,20 +193,26 @@
             <Thumb src={t.art?.cover} size={36} radius={4} />
             <span class="words">
               <span class="nm" title={t.title}>{t.title}</span>
-              <!-- shown only when the Artist column is gone -->
-              <span class="sub" title={t.subtitle}>{t.subtitle ?? ''}</span>
+              <!-- shown only when a narrow table drops the Artist column -->
+              {#if artist}<span class="sub" title={t.subtitle}>{t.subtitle ?? ''}</span>{/if}
             </span>
           </span>
-          <span class="o ar" title={t.subtitle}>{t.subtitle ?? ''}</span>
+          {#if artist}<span class="o ar" title={t.subtitle}>{t.subtitle ?? ''}</span>{/if}
           <span class="o al" title={t.group}>{t.group ?? ''}</span>
+          {#if plays}
+            {@const p = playCounts.of(key)}
+            <span class="pl">{p ? p.n.toLocaleString() : ''}</span>
+            <span class="lp">{p ? lastPlayedText(p.last, now) : ''}</span>
+          {/if}
           <span class="d">{t.length === undefined ? '' : fmtTime(t.length)}</span>
         {:else}
           <span class="tt">
             <Thumb src={undefined} size={36} radius={4} />
             <span class="words"><span class="nm">{s.state === 'off' ? s.text : ''}</span></span>
           </span>
-          <span class="o ar"></span>
+          {#if artist}<span class="o ar"></span>{/if}
           <span class="o al"></span>
+          {#if plays}<span class="pl"></span><span class="lp"></span>{/if}
           <span class="d"></span>
         {/if}
       </button>
@@ -180,15 +240,6 @@
     gap: 16px;
     align-items: center;
     padding: 0 12px;
-  }
-  /* sticks to the top of the scroll box, over its top padding */
-  .th {
-    position: sticky;
-    top: calc(-1 * var(--scroll-pad-top, 20px));
-    background: var(--bg);
-    z-index: 1;
-    height: 38px;
-    border-bottom: 1px solid var(--edge);
   }
   .th button {
     font-size: var(--text-xs);
@@ -220,17 +271,15 @@
     height: 54px;
     font-size: var(--text-l);
   }
-  /* Up keeps the focused row clear of the sticky head */
-  .tr {
-    scroll-margin-top: calc(38px + var(--scroll-pad-top, 20px));
-  }
   .tr > span {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .n,
-  .d {
+  .d,
+  .pl,
+  .lp {
     color: var(--ink-3);
     font-variant-numeric: tabular-nums;
     font-size: var(--text-m);
@@ -264,11 +313,31 @@
     margin-top: 2px;
   }
 
+  /* Classic's Songs: Plays and Last played before Time, dropped first when narrow */
+  .plays .th,
+  .plays .tr {
+    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 68px 112px 56px;
+  }
+  @container (max-width: 760px) {
+    .plays .th,
+    .plays .tr {
+      --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 56px;
+    }
+    .pl,
+    .lp,
+    .h-p,
+    .h-lp {
+      display: none;
+    }
+  }
+
   /* A narrow table drops Album, then Artist, which moves under the title.
      Sorting by a dropped column stays; its header comes back when wider. */
   @container (max-width: 520px) {
     .th,
-    .tr {
+    .tr,
+    .plays .th,
+    .plays .tr {
       --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) 56px;
     }
     .al,
@@ -278,7 +347,9 @@
   }
   @container (max-width: 380px) {
     .th,
-    .tr {
+    .tr,
+    .plays .th,
+    .plays .tr {
       --cols: 44px minmax(0, 1fr) 56px;
       gap: 12px;
     }
@@ -288,6 +359,17 @@
     }
     .sub {
       display: block;
+    }
+  }
+  /* every song has the page's artist: the title and album get its room */
+  .noartist .th,
+  .noartist .tr {
+    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) 56px;
+  }
+  @container (max-width: 520px) {
+    .noartist .th,
+    .noartist .tr {
+      --cols: 44px minmax(0, 1fr) 56px;
     }
   }
   .o {

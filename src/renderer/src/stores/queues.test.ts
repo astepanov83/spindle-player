@@ -89,6 +89,7 @@ const lib: LibraryData = {
       title: 'Al',
       artist: 'X',
       year: 0,
+      added: 0,
       palette: defaultPalettes,
       cover: '',
       coverLarge: '',

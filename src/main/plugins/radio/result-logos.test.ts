@@ -194,6 +194,54 @@ describe('ResultLogos and the newest search', () => {
   })
 })
 
+describe('ResultLogos and popular stations (082)', () => {
+  it('serves popular stations whatever was searched', async () => {
+    const load = vi.fn(async () => png)
+    const logos = new ResultLogos({ load, log: () => {} })
+    logos.popular([station('rb-p', 'https://p.example/p.png'), station('rb-q')])
+    logos.searched([station('rb-b', 'https://b.example/b.png')])
+    expect(await logos.get('rb-p')).toEqual({ data: png, type: 'image/png' })
+    expect(await logos.get('rb-b')).toEqual({ data: png, type: 'image/png' })
+    expect(await logos.get('rb-q')).toBeUndefined()
+  })
+
+  it('keeps a popular row waiting through a new search', async () => {
+    const h = held()
+    const logos = new ResultLogos({ load: h.load, log: () => {} })
+    const many = ['a', 'b', 'c', 'd'].map((x) => station(`rb-${x}`, `https://${x}.example/`))
+    logos.searched(many)
+    for (const s of many) void logos.get(s.id)
+    logos.popular([station('rb-p', 'https://p.example/p.png')])
+    const p = logos.get('rb-p')
+    await tick()
+    logos.searched([])
+    h.release('https://a.example/')
+    await tick()
+    h.release('https://p.example/p.png')
+    expect(await p).toEqual({ data: png, type: 'image/png' })
+  })
+
+  it('a newer list of popular stations takes the place of the older', async () => {
+    const load = vi.fn(async () => png)
+    const logos = new ResultLogos({ load, log: () => {} })
+    logos.popular([station('rb-p', 'https://p.example/p.png')])
+    logos.popular([station('rb-q', 'https://q.example/q.png')])
+    expect(await logos.get('rb-p')).toBeUndefined()
+    expect(await logos.get('rb-q')).toBeDefined()
+  })
+
+  it('remembers popular stations through clear, since the page asks once a run', async () => {
+    const load = vi.fn(async () => png)
+    const logos = new ResultLogos({ load, log: () => {} })
+    logos.popular([station('rb-p', 'https://p.example/p.png')])
+    await logos.get('rb-p')
+    logos.clear()
+    expect(logos.bytes).toBe(0)
+    expect(await logos.get('rb-p')).toEqual({ data: png, type: 'image/png' })
+    expect(load).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('logoType', () => {
   it('names the picture type from its first bytes', () => {
     expect(logoType(png)).toBe('image/png')

@@ -13,10 +13,7 @@
   import Icon from '../ui/Icon.svelte'
   import { actOnPage, openFrom, openPage } from '../plugins'
   import type { HeadBlock, HeadButton, NavKind } from '../plugins/types'
-  import { player } from '../stores/player.svelte'
-  import { queues } from '../stores/queues.svelte'
-  import { queue } from '../stores/queue.svelte'
-  import { playOrPause } from './play'
+  import { playPage, playState as pagePlayState } from './page-play'
 
   let {
     block: b,
@@ -26,6 +23,9 @@
   }: { block: HeadBlock; tab: string; plugin: PluginId; nav: NavKind } = $props()
 
   const act = (id: string, value?: string): void => actOnPage(plugin, b.id, id, value)
+
+  // ties the name fields to their list of names
+  const uid = $props.id()
 
   // where the search box is: over the chips, or in Classic's sidebar
   const hint = $derived(
@@ -40,26 +40,8 @@
 
   type Play = Extract<HeadButton, { play: string }>
 
-  function playState(p: Play): 'play' | 'pause' | 'resume' {
-    if (!p.pauses) return 'play'
-    const songs = p.songs()
-    return playOrPause(p.link, (k) => songs.includes(k), {
-      link: queue.link,
-      current: queue.current,
-      ended: queue.ended,
-      queuePlays: queues.active === 'track',
-      sounding: queues.wantsSound
-    })
-  }
-
-  function play(p: Play): void {
-    if (playState(p) !== 'play') return queues.togglePlay()
-    const ids = p.songs()
-    if (!ids.length) return
-    const shuffle = p.play === 'shuffle'
-    if (shuffle) player.shuffle = true
-    queue.playList(ids, shuffle ? Math.floor(Math.random() * ids.length) : 0, p.from, p.link)
-  }
+  const playState = (p: Play): 'play' | 'pause' | 'resume' =>
+    p.play === 'all' ? pagePlayState(p.link, p.songs) : 'play'
 
   // the names in the editor: one renames, two or more split
   let draft: string[] = $state([])
@@ -122,7 +104,7 @@
     {@const a = t.action}
     {#if i > 0}<span class="dot">·</span>{/if}<span>{t.text}</span>
     {#if a}
-      <button class="use" onclick={() => act(a.id, a.value)}>{a.label}</button>
+      <button class="use" aria-label={a.hint} onclick={() => act(a.id, a.value)}>{a.label}</button>
     {/if}
   {/each}
 {/snippet}
@@ -138,9 +120,10 @@
           <button
             class="pill"
             class:ghost={!btn.primary}
-            class:play={btn.pauses}
+            class:play={btn.play === 'all'}
             disabled={btn.disabled}
-            onclick={() => play(btn)}>{playState(btn) === 'pause' ? 'Pause' : btn.label}</button
+            onclick={() => playPage(btn.play, btn.songs, btn.from, btn.link)}
+            >{playState(btn) === 'pause' ? 'Pause' : btn.label}</button
           >
         {:else if 'menu' in btn && btn.menu === 'songs'}
           <button
@@ -174,23 +157,24 @@
 {/snippet}
 
 {#if b.look === 'list'}
-  <ViewHead title={b.title} meta={b.meta} count={b.count ?? ''} {hint} />
+  <ViewHead
+    title={b.title}
+    meta={b.meta}
+    count={b.count ?? ''}
+    {hint}
+    below={b.line ? line : undefined}
+    choice={b.choice}
+    onchoose={(v) => b.choice && act(b.choice.id, v)}
+  />
 {:else if b.look === 'album'}
   {@render back()}
   <div class="albhead">
     <div class="cv"><Cover src={b.art?.src} /></div>
     <div class="words">
-      <div class="page-meta">{b.meta}</div>
+      <div class="page-meta" title={b.metaHint}>{b.meta}</div>
       <h2 class="page-title clamp" title={b.title}>{b.title}</h2>
       {@render line()}
       {#if b.note}<div class="page-meta">{@render noteItems(b.note)}</div>{/if}
-      {#if b.where}
-        {@const w = b.where}
-        {@const to = w.to}
-        <div class="page-meta path" title={w.text}>
-          <GoLink go={to ? () => openPage(to) : undefined}><bdi dir="ltr">{w.text}</bdi></GoLink>
-        </div>
-      {/if}
       {@render acts()}
     </div>
   </div>
@@ -210,6 +194,7 @@
                 aria-label="{e.label} {i + 1}"
                 maxlength={e.max}
                 bind:value={draft[i]}
+                list={e.suggest?.length ? `${uid}-names` : undefined}
                 use:focus={i === draft.length - 1}
                 {onkeydown}
               />
@@ -227,6 +212,11 @@
             ><Icon name="plus" size={14} />{e.add}</button
           >
           <div class="hint">{e.hint}</div>
+          {#if e.suggest?.length}
+            <datalist id="{uid}-names">
+              {#each e.suggest as n (n)}<option value={n}></option>{/each}
+            </datalist>
+          {/if}
         </div>
       {:else}
         <h2 class="page-title" title={b.title}>{b.title}</h2>
@@ -290,16 +280,6 @@
   .words {
     flex: 1;
     min-width: 0;
-  }
-  /* the end of a long path is the part that tells albums apart; bdi keeps
-     the path itself left to right */
-  .path {
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    direction: rtl;
-    text-align: left;
   }
   @container (max-width: 560px) {
     .albhead .cv {
@@ -384,6 +364,10 @@
     border-radius: 8px;
     outline: none;
     box-shadow: none;
+  }
+  /* the names list opens as you type; its arrow would sit in the big title */
+  .name::-webkit-calendar-picker-indicator {
+    display: none !important;
   }
   .x {
     color: var(--ink-3);

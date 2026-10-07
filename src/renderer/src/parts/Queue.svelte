@@ -1,15 +1,41 @@
+<script module lang="ts">
+  // Open or folded in every queue part (tab, drawer, column), until closed again.
+  const played = $state({ open: false })
+</script>
+
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import GoLink from '../ui/GoLink.svelte'
+  import Icon from '../ui/Icon.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import LiveHistory from './LiveHistory.svelte'
-  import { fmtLength, fmtTime } from '../format'
+  import { fmtCount, fmtLength, fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { roving } from '../ui/roving'
-  import { dropIndex, dropSlot, rowShift } from '../ui/drag-rows'
+  import { isRemoveKey, rowAfterRemove } from '../keys'
+  import { moveOrder, shiftOrder } from '../queue/logic'
+  import { movedSelection, noneSelected, numberRows } from '../ui/selection'
+  import { rowSelection } from '../stores/selection.svelte'
+  import {
+    clearLabel,
+    dragTops,
+    dropSlotAt,
+    firstShown,
+    followsSong,
+    keepTop,
+    lineAt,
+    lineCount,
+    lineOf,
+    lineSize,
+    lineTop,
+    showsCover,
+    startLine,
+    type Shape
+  } from '../queue/up-next'
   import { layout } from '../stores/layout.svelte'
   import { library } from '../stores/library.svelte'
+  import { player } from '../stores/player.svelte'
   import { queues } from '../stores/queues.svelte'
   import { playlists } from '../stores/playlists.svelte'
   import { queue } from '../stores/queue.svelte'
@@ -22,18 +48,75 @@
   // header and close are set by the container, not by templates
   let { header = false, close = false }: { header?: boolean; close?: boolean } = $props()
 
-  const ROW = 60
   let body: HTMLDivElement | undefined = $state()
   let list: HTMLDivElement | undefined = $state()
 
-  const v = virtualList(() => ({ count: queue.items.length, scrollEl: body, list, size: ROW }))
+  // Played songs (folded or not), Now playing, Up next: one virtual list of
+  // lines, where the headings are lines too.
+  const shape: Shape = $derived({
+    count: queue.items.length,
+    current: queue.index,
+    open: played.open
+  })
+  const first = $derived(firstShown(shape))
+  // a new function when the lines change, so the list measures them again
+  const sizeOf = $derived.by(() => {
+    const s = shape
+    return (i: number) => lineSize(i, s)
+  })
+  const v = virtualList(() => ({ count: lineCount(shape), scrollEl: body, list, size: sizeOf }))
 
-  // Keep the current song in view when the track changes, not on other redraws
-  // or when rows move around it.
-  let seen = -1
-  const currentKey = (): number => queue.starts
+  // Ctrl and Shift select rows (ticket 086), by number: a song can be in the
+  // queue twice. Only rows shown can be selected.
+  const shownRows = $derived(numberRows(first, queue.items.length))
+  const sel = rowSelection(
+    () => shownRows,
+    (rows) => rows.map((r) => queue.items[r])
+  )
+  // A move (here, from the menu, by drag) keeps the selected rows on the
+  // same songs at their new places. Any other change (a song added, a
+  // rescan) puts other songs at those numbers: the selection goes.
+  let listSeen = queue.items
   $effect(() => {
-    const key = currentKey()
+    const items = queue.items
+    untrack(() => {
+      const was = listSeen
+      listSeen = items
+      if (items === was) return
+      const m = queue.lastOrder
+      if (m && m.before === was && m.after === items) sel.set(movedSelection(sel.s, m.order))
+      else sel.set(noneSelected())
+    })
+  })
+
+  function reorderRows(order: number[], moved: number[]): void {
+    if (!order.every((k, j) => k === j)) queue.reorder(order, moved)
+  }
+
+  // the songs drawn; the headings are drawn apart, so a drag can move them
+  const drawn = $derived(
+    v.items.flatMap((item) => {
+      const line = lineAt(item.index, shape)
+      return line.kind === 'row' ? [{ index: line.index, top: v.offset(item) }] : []
+    })
+  )
+  const rowTop = (i: number): number => lineTop(lineOf(i, shape) ?? 0, shape)
+
+  // When a song starts, Now playing goes to the top, unless the user scrolled
+  // the queue in the last few seconds: then the songs on screen stay put.
+  // Not on other redraws, or when rows move around the current song.
+  let seen = -1
+  let before: Shape | undefined
+  // a clicked row moves up to Now playing, so it is followed always
+  let clicked = false
+  let scrolledAt = -Infinity
+  // our own scrolls are not the user's
+  let scrollingAt = -Infinity
+  $effect(() => {
+    const key = queue.starts
+    const s = shape
+    const was = before
+    before = s
     // a live item showed its songs here: back on the queue, show its current song again
     if (!body) {
       seen = -1
@@ -41,19 +124,40 @@
     }
     if (key === seen) return
     seen = key
-    // one row above the current song, as in the prototype; wait for the list to get its height
-    const index = Math.max(0, untrack(() => queue.index) - 1)
-    tick().then(() => v.scrollToIndex(index))
+    const follow = !was || clicked || followsSong(performance.now(), scrolledAt)
+    clicked = false
+    // wait for the list to get its height
+    tick().then(() => {
+      if (!body || !list) return
+      scrollingAt = performance.now()
+      if (follow) v.scrollToIndex(startLine(s))
+      else body.scrollTop = keepTop(body.scrollTop - list.offsetTop, was, s) + list.offsetTop
+    })
   })
 
-  // A clicked row is already on screen, so leave the scroll where it is.
-  function playRow(index: number): void {
+  function onscroll(): void {
+    const now = performance.now()
+    if (now - scrollingAt > 500) scrolledAt = now
+  }
+
+  function togglePlayed(): void {
+    played.open = !played.open
+    // looking at the played songs: a new song does not scroll them away
+    scrolledAt = performance.now()
+  }
+
+  function onrowclick(e: MouseEvent, i: number): void {
     if (dragged) {
       dragged = false
       return
     }
+    if (!sel.click(i - first, e)) playRow(i)
+  }
+
+  function playRow(index: number): void {
+    const was = queue.starts
     queue.jump(index)
-    seen = currentKey()
+    clicked = queue.starts !== was
   }
 
   // 50k songs: itemInfo is a lookup that makes no objects
@@ -63,10 +167,24 @@
     const s = itemInfo(key)
     return s.state === 'ok' ? (s.info.length ?? 0) : 0
   }
-  const sum = $derived(
-    `${queue.items.length.toLocaleString()} ${queue.items.length === 1 ? 'song' : 'songs'}` +
-      ` · ${fmtLength(total)}`
-  )
+  const sum = $derived(`${fmtCount(queue.items.length, 'song', 'songs')} · ${fmtLength(total)}`)
+
+  // Up next: the count and the time to the end of the queue. Shuffle never
+  // gets there, so it shows only how long those songs are.
+  const after = $derived.by(() => {
+    let sec = 0
+    for (let i = queue.index + 1; i < queue.items.length; i++) sec += lengthOf(queue.items[i])
+    return sec
+  })
+  const nextMeta = $derived.by(() => {
+    const n = fmtCount(Math.max(0, queue.items.length - queue.index - 1), 'song', 'songs')
+    if (player.shuffle) return `${n} · ${fmtLength(after)}`
+    const cur = queue.current ? lengthOf(queue.current) : 0
+    return `${n} · ${fmtLength(after + Math.max(0, cur - player.pos))} left`
+  })
+  // where the headings stand, apart from during a drag
+  const nowLine = $derived((lineOf(queue.index, shape) ?? 1) - 1)
+  const hasNext = $derived(queue.index < queue.items.length - 1)
   // "From" opens a playlist, or the plugin's page (an album, artist, folder),
   // while it is still there
   const openFrom = $derived.by(() => {
@@ -89,15 +207,37 @@
     }
   })
 
-  // Alt+Up / Alt+Down move the focused row; focus goes with it.
+  // the rows a key on row `i` acts on: the selected ones when it is one of them
+  const rowsFor = (i: number): number[] => (sel.has(i) ? sel.ids() : [i])
+
+  // Alt+Up / Alt+Down move the focused row, or the selected rows with it;
+  // focus goes with it. Delete takes them out; focus goes to the row that
+  // takes the first one's place.
   function onrowkey(e: KeyboardEvent, i: number): void {
+    if (isRemoveKey(e)) {
+      e.preventDefault()
+      const rows = rowsFor(i)
+      queue.removeRows(rows)
+      focusRow(rowAfterRemove(rows[0], queue.items.length))
+      return
+    }
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
     e.preventDefault()
-    const to = e.key === 'ArrowUp' ? i - 1 : i + 1
-    if (to < 0 || to >= queue.items.length) return
-    queue.move(i, to)
+    const rows = rowsFor(i)
+    const order = shiftOrder(queue.items.length, rows, e.key === 'ArrowUp' ? -1 : 1)
+    const to = order.indexOf(i)
+    if (to === i) return
+    reorderRows(order, rows)
+    // moved up past the current song: show the played ones, so focus and
+    // the selection can follow
+    if (rows.some((r) => order.indexOf(r) < queue.index)) played.open = true
+    focusRow(to)
+  }
+
+  function focusRow(i: number | null): void {
+    if (i === null) return
     tick().then(() => {
-      const row = list?.querySelector<HTMLElement>(`[data-index="${to}"]`)
+      const row = list?.querySelector<HTMLElement>(`[data-index="${i}"]`)
       row?.focus()
       row?.scrollIntoView({ block: 'nearest' })
     })
@@ -106,8 +246,9 @@
   // Drag to reorder. The row follows the pointer as a copy drawn over the list
   // (the row itself can leave the drawn rows while the list scrolls); the rows
   // between make room where it would land.
-  // id: the song dragged, so a queue that changed meanwhile (a rescan) drops nothing
-  type Drag = { from: number; id: string; y: number; grab: number }
+  // from: the row pressed; rows: it, or the selected rows it is one of.
+  // ids: their songs, so a queue that changed meanwhile (a rescan) drops nothing.
+  type Drag = { from: number; rows: number[]; ids: string[]; y: number; grab: number }
   let drag = $state<Drag | null>(null)
   let press: { i: number; y: number; grab: number } | null = null
   // the click that ends a drag must not play the row
@@ -115,8 +256,13 @@
   let lastY = 0
   let scrollTimer = 0
 
-  const slot = $derived(drag ? dropSlot(drag.y, ROW, queue.items.length) : -1)
-  const shift = (i: number): number => (drag ? rowShift(i, drag.from, slot, ROW) : 0)
+  // as if dropped where it is: the rows between make room, Now playing and
+  // Up next move to where they will be
+  const tops = $derived.by(() => {
+    if (!drag) return undefined
+    return dragTops(shape, drag.rows, dropSlotAt(drag.y, shape))
+  })
+  const lifted = $derived(new Set(drag?.rows))
 
   function listY(clientY: number): number {
     return clientY - (list?.getBoundingClientRect().top ?? 0)
@@ -125,7 +271,7 @@
   function onrowdown(e: PointerEvent, i: number): void {
     if (e.button !== 0) return
     const y = listY(e.clientY)
-    press = { i, y, grab: y - i * ROW }
+    press = { i, y, grab: y - rowTop(i) }
   }
 
   function onpointermove(e: PointerEvent): void {
@@ -134,7 +280,8 @@
     const y = listY(e.clientY)
     if (!drag) {
       if (Math.abs(y - press.y) < 5) return
-      drag = { from: press.i, id: queue.items[press.i], y, grab: press.grab }
+      const rows = rowsFor(press.i)
+      drag = { from: press.i, rows, ids: rows.map((r) => queue.items[r]), y, grab: press.grab }
       scrollTimer = window.setInterval(edgeScroll, 16)
     }
     drag.y = y
@@ -156,14 +303,16 @@
   function onpointerup(): void {
     press = null
     if (!drag) return
-    const { from, id } = drag
-    const to = dropIndex(from, slot)
+    const { rows, ids } = drag
+    const slot = dropSlotAt(drag.y, shape)
     clearInterval(scrollTimer)
     drag = null
     dragged = true
     // no click comes when the pointer left the row it pressed
     setTimeout(() => (dragged = false))
-    if (queue.items[from] === id) queue.move(from, to)
+    if (rows.every((r, k) => queue.items[r] === ids[k])) {
+      reorderRows(moveOrder(queue.items.length, rows, slot), rows)
+    }
   }
 
   // Escape stops a drag only: in capture, so App's Escape (which closes the drawer) never sees it
@@ -192,9 +341,9 @@
 
 <!-- A song its plugin can't give now is greyed: off says so, loading says
      nothing yet. -->
-{#snippet words(s: ItemAnswer, eq: boolean)}
+{#snippet words(s: ItemAnswer, eq: boolean, cover = true)}
   {#if s.state === 'ok'}
-    <Thumb src={s.info.art?.cover} {eq} />
+    {#if cover}<Thumb src={s.info.art?.cover} {eq} />{:else}<span class="no">{s.info.no}</span>{/if}
     <span class="qt"
       ><span class="nm" title={s.info.title}>{s.info.title}</span><span
         class="ar"
@@ -243,14 +392,14 @@
       <button
         class="clear chip"
         title={queue.items.length > 1 ? 'Keep only the song playing' : 'Empty the queue'}
-        onclick={() => queue.clear()}>Clear</button
+        onclick={() => queue.clear()}>{clearLabel(shape)}</button
       >
     </div>
   {/if}
   {#if onLive}
     <LiveHistory />
   {:else}
-    <div class="body" bind:this={body}>
+    <div class="body" bind:this={body} {onscroll}>
       {#if !queue.items.length}
         <p class="empty">
           The queue is empty. Songs you play{layout.hasLibrary ? '' : ' in Studio or Classic'} show up
@@ -264,29 +413,67 @@
         use:roving={{
           rows: queue.items,
           count: queue.items.length,
-          scrollTo: (i) => v.scrollToIndex(i)
+          first,
+          scrollTo: (i) => v.scrollToIndex(lineOf(i, shape) ?? 0),
+          select: {
+            step: (a, b) => sel.step(a - first, b - first),
+            all: () => sel.all(),
+            clear: () => sel.clear()
+          }
         }}
       >
-        {#each v.items as item (item.key)}
-          {@const key = queue.items[item.index]}
+        {#if queue.index > 0}
+          <button class="qline fold" aria-expanded={played.open} onclick={togglePlayed}>
+            <span class="chev" class:open={played.open}><Icon name="forward" size={16} /></span>
+            <span class="section-label">Played ({queue.index.toLocaleString()})</span>
+          </button>
+        {/if}
+        {#if queue.items.length}
+          <div class="qline" style:transform="translateY({tops?.now ?? lineTop(nowLine, shape)}px)">
+            <span class="section-label">Now playing</span>
+          </div>
+        {/if}
+        {#if hasNext && (!tops || tops.next !== undefined)}
+          <div
+            class="qline"
+            style:transform="translateY({tops?.next ?? lineTop(nowLine + 2, shape)}px)"
+          >
+            <span class="section-label">Up next</span><span class="meta">{nextMeta}</span>
+          </div>
+        {/if}
+        {#each drawn as row (row.index)}
+          {@const i = row.index}
+          {@const key = queue.items[i]}
           {@const s = itemInfo(key)}
-          {@const cur = item.index === queue.index}
+          {@const cur = i === queue.index}
           <button
             class="qrow row"
             class:cur-row={cur}
-            class:past={item.index < queue.index}
+            class:past={i < queue.index}
             class:dim={s.state !== 'ok'}
-            class:lifted={drag?.from === item.index}
+            class:selected={sel.has(i)}
+            class:lifted={lifted.has(i)}
             data-row
-            data-index={item.index}
+            data-index={i}
             aria-current={cur ? 'true' : undefined}
-            style:transform="translateY({v.offset(item) + shift(item.index)}px)"
-            onclick={() => playRow(item.index)}
-            onpointerdown={(e) => onrowdown(e, item.index)}
-            onkeydown={(e) => onrowkey(e, item.index)}
-            oncontextmenu={(e) => openSongMenu(e, [key], { queueRow: item.index })}
+            style:transform="translateY({tops?.row(i) ?? row.top}px)"
+            onclick={(e) => onrowclick(e, i)}
+            onpointerdown={(e) => onrowdown(e, i)}
+            onkeydown={(e) => onrowkey(e, i)}
+            oncontextmenu={(e) => {
+              const rows = sel.menu(i - first)
+              openSongMenu(
+                e,
+                rows.map((r) => queue.items[r]),
+                { queueRows: rows }
+              )
+            }}
           >
-            {@render words(s, cur && queues.songPlaying)}
+            {@render words(
+              s,
+              cur && queues.songPlaying,
+              showsCover(s, i > first ? itemInfo(queue.items[i - 1]) : undefined, cur)
+            )}
           </button>
         {/each}
         {#if drag}
@@ -298,6 +485,9 @@
             style:transform="translateY({drag.y - drag.grab}px)"
           >
             {@render words(itemInfo(queue.items[drag.from]), false)}
+            {#if drag.rows.length > 1}
+              <span class="many">{drag.rows.length.toLocaleString()} songs</span>
+            {/if}
           </div>
         {/if}
       </div>
@@ -316,7 +506,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 10px 6px 20px;
+    padding: 14px max(10px, (100% - var(--content-max, 100%)) / 2 - 10px) 6px
+      max(20px, (100% - var(--content-max, 100%)) / 2);
     flex: none;
   }
   .title {
@@ -336,7 +527,8 @@
   .body {
     flex: 1;
     overflow: auto;
-    padding: 4px 8px 12px;
+    /* rows line up with --content-max (a wide Focus); the 12px is their own padding */
+    padding: 4px max(8px, (100% - var(--content-max, 100%)) / 2 - 12px) 12px;
     min-height: 0;
     position: relative;
   }
@@ -361,7 +553,8 @@
     align-items: center;
     padding: 8px 12px;
   }
-  .dragging .qrow {
+  .dragging .qrow,
+  .dragging .qline {
     transition: transform 0.12s;
     cursor: grabbing;
   }
@@ -386,12 +579,73 @@
       inset 3px 0 0 var(--c2),
       0 10px 28px var(--shadow);
   }
+  /* how many rows the drag takes along */
+  .many {
+    position: absolute;
+    top: -8px;
+    right: 8px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background: var(--ink);
+    color: var(--bg);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  /* the headings: Played (N), Now playing, Up next */
+  .qline {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px 0;
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .qline .meta {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--text-xs);
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .fold {
+    gap: 4px;
+    padding-left: 8px;
+    color: var(--ink-3);
+    border-radius: 6px;
+    text-align: left;
+  }
+  .fold:hover,
+  .fold:hover .section-label {
+    color: var(--ink);
+  }
+  .chev {
+    transition: transform 0.12s;
+  }
+  .chev.open {
+    transform: rotate(90deg);
+  }
+  /* a track number in the cover's place, when the row above has the same cover */
+  .no {
+    width: 44px;
+    text-align: center;
+    color: var(--ink-3);
+    font-size: var(--text-s);
+    font-variant-numeric: tabular-nums;
+  }
   .sum {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 0 16px 4px 20px;
+    padding: 0 max(16px, (100% - var(--content-max, 100%)) / 2) 4px
+      max(20px, (100% - var(--content-max, 100%)) / 2);
     font-size: var(--text-xs);
     color: var(--ink-3);
     flex: none;

@@ -9,7 +9,7 @@ import { pluginOn } from '../stores/settings.svelte'
 import { filesHalf } from './files'
 import { mfpHalf } from './mfp'
 import { radioHalf } from './radio'
-import { orderTabs, type ShownTab } from './tabs'
+import { orderTabs, tabsIn, widerSearches, type ShownTab } from './tabs'
 import type {
   Action,
   Block,
@@ -19,6 +19,7 @@ import type {
   ItemAnswer,
   ItemInfo,
   LivePlugin,
+  NavKind,
   PageAddress,
   PageHalf,
   Playable
@@ -252,6 +253,19 @@ export function pluginTabs(): ShownTab[] {
     on.map((p) => halves[p.id].tabs().map((t) => ({ ...t, plugin: p.id }))),
     playlists()
   )
+}
+
+// The tabs of this library that a search on `tab` that found little can go
+// to, with the search text (ticket 077).
+export function widerTabs(tab: string, nav: NavKind): ShownTab[] {
+  return widerSearches(tabsIn(pluginTabs(), nav), tab, library.query)
+}
+
+// The text searched in that tab; Radio Browser is asked at once, as on Enter.
+export function searchWider(tab: string): void {
+  library.searchIn(tab)
+  const t = pluginTabs().find((t) => t.id === tab)
+  if (t) typedIn(t.plugin, t.id, library.query, true)
 }
 
 // What the library store needs of them, to close what left (setTabs).

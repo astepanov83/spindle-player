@@ -40,6 +40,10 @@ export interface Tab {
   searchShort?: string
   // shown only there (Classic's Songs); none: in both
   only?: NavKind
+  // Its search looks past one list (Albums' results, the stations): a search
+  // that found nothing on another tab offers a button to search here, named
+  // by `search` and the text: 'Search stations for "har"' (ticket 077).
+  searchWide?: boolean
 }
 
 // A page is a list of blocks: the plugin gives the data, the core draws each
@@ -54,7 +58,9 @@ export type Block =
   | TreeBlock
   | EmptyBlock
   | TextBlock
+  | ChipsBlock
   | ResultsBlock
+  | ChangesBlock
 
 // A piece of a line: plain text, or a name that opens its page.
 export interface Piece {
@@ -63,7 +69,8 @@ export interface Piece {
 }
 
 // A button in a head: Play or Shuffle (the core plays the songs), a core menu
-// for the songs, or one the plugin acts on.
+// for the songs, or one the plugin acts on. Play plays in order and is Pause
+// while the queue plays these songs from this link; Shuffle plays shuffled.
 export type HeadButton =
   | {
       play: 'all' | 'shuffle'
@@ -74,8 +81,6 @@ export type HeadButton =
       link?: QueueLink
       // the filled one
       primary?: boolean
-      // Pause while the queue plays these songs from this link (an album's)
-      pauses?: boolean
       disabled?: boolean
     }
   | {
@@ -111,26 +116,42 @@ export interface HeadBlock {
   meta?: string
   // a list's count, on the right: "8 albums"
   count?: string
+  // a list's choice of what it shows, over its count: "Album artists | All
+  // artists". Picking one acts with (head id, id, the option's value).
+  // `menu`: a button that opens a menu headed by `label`, for a choice of
+  // many (the Albums sort): "Sort: Artist ▾", with `prefix` "Sort:".
+  choice?: {
+    id: string
+    label: string
+    value: string
+    options: { value: string; label: string }[]
+    menu?: { prefix: string }
+  }
   // a list's line under its title: "Reading musicforprogramming.net…"
   hint?: string
   // A line under the title that points at the search box: the core ends it
   // with where the box is ("above", "on the left"). In place of `hint`.
   searchHint?: string
-  // the line under the title: "Marina Vale · 9 songs · 41 min"
+  // the line under the title: "Marina Vale · 9 songs · 41 min"; a list's
+  // line under its title: a link to a page of the list ("5 name fixes")
   line?: Piece[]
   // a web page, after the line; it opens in the browser (an https address)
   link?: { label: string; url: string }
-  // where it is, under that, cut at its start: "/music/Rock/Album"
-  where?: Piece
+  // the tooltip of the line over the title: where the album is on disk
+  metaHint?: string
   // the big picture: a cover, or a round photo made from `covers` when there is none
   art?: { src: string | undefined; round?: boolean; covers?: CoverArt[] }
   // the link back over it: "All albums"
   back?: { label: string; to: PageAddress }
-  // a small line, of names with a button each: "From tags: X (renamed) [Use
-  // tag]", or only text: "Song times are guessed"
+  // a small line, of names with a button each: "From tags: X (renamed) [Keep
+  // separate]", or only text: "Song times are guessed". `hint` names the
+  // button for screen readers when the label alone is the same on each.
   note?: {
     text: string
-    items: { text: string; action?: { id: string; label: string; value: string } }[]
+    items: {
+      text: string
+      action?: { id: string; label: string; value: string; hint?: string }
+    }[]
   }
   buttons?: HeadButton[]
   // Names to edit in place of the title (an artist's rename or split). Save
@@ -144,6 +165,8 @@ export interface HeadBlock {
     add: string
     remove: string
     hint: string
+    // names offered as each field is typed in (other artists, to join one)
+    suggest?: string[]
     // whether Save is on for these names
     ok: (names: string[]) => boolean
   }
@@ -193,6 +216,10 @@ export interface SongsBlock {
   label?: string
   // the song count on the right; off where the head says it already
   count?: boolean
+  // the Artist column; off where every song has the page's artist
+  artist?: boolean
+  // the sortable table's Plays and Last played columns (ticket 085)
+  plays?: boolean
   // a column head was clicked: act(id, 'sort', its key). May be a getter, so
   // a sort click only sorts and doesn't build the page's list again.
   sort?: Sort | null
@@ -230,7 +257,8 @@ export interface PageRow extends RowLook {
 }
 
 // A row that plays its item (a station), marked while that item is the one
-// playing. act(the row's key, id) for its star and its menu.
+// playing. act(the row's key, id) for its star and its menu, which opens on
+// a right click and from the row's "..." button.
 export interface ItemRow extends RowLook {
   play: ItemKey
   // a star button after the row: `on` filled; `label` is its tooltip
@@ -263,6 +291,10 @@ export interface PageRowsBlock<T = unknown> extends RowsOf<T> {
 export interface ItemRowsBlock<T = unknown> extends RowsOf<T> {
   rows: 'item'
   row(item: T): ItemRow
+  // The rows can be dragged to another place, or moved with Alt+Up and
+  // Alt+Down: act(the row's key, 'move', the key of the row whose place it
+  // takes). Keys, not places: the list may be filtered (My stations).
+  reorder?: boolean
 }
 
 export type RowsBlock<T = unknown> = PageRowsBlock<T> | ItemRowsBlock<T>
@@ -275,22 +307,52 @@ export interface TreeBlock {
   path: { title: string; hint?: string; to: PageAddress; here?: boolean }[]
 }
 
-// Nothing to show. Alone on a page it fills it ("No music yet"), with its
-// button; among other blocks it is a short note ("No matches"), or with no
-// title one quiet line under a list ("No stations found.").
+// Nothing to show. Alone on a page it fills it ("No music yet"); among other
+// blocks it is a short note ("No matches"), or with no title one quiet line
+// under a list ("No stations found."). Each way shows its button.
 export interface EmptyBlock {
   kind: 'empty'
   // act's target for the button
   id: string
   title?: string
   text: string
+  // act(id, the action's id)
   action?: { label: string; id: string }
+  // It says the search text found nothing here: the core adds a button for
+  // each other tab that searches wider ('Search your library for "har"').
+  // Without it, those buttons go at the end of the page (ticket 077).
+  nothingFound?: boolean
+}
+
+// Changes, each with the button that undoes it: "Beyonce → Beyoncé [Undo]".
+// act(id, the action's id, its value).
+export interface ChangesBlock {
+  kind: 'changes'
+  id: string
+  // for screen readers: "Joined by AI"
+  label: string
+  rows: {
+    key: string
+    from: string
+    to: Piece[]
+    // `hint` names the button for screen readers: "Undo Beyonce to Beyoncé"
+    action: { id: string; label: string; value: string; hint: string }
+  }[]
 }
 
 // A small heading between blocks: "Albums" on an artist's page.
 export interface TextBlock {
   kind: 'text'
   text: string
+}
+
+// Words to search for, as a row of chips after a label: a click puts the
+// word in the search box and searches at once (Radio's tags, ticket 082).
+export interface ChipsBlock {
+  kind: 'chips'
+  // before the chips: "Search a tag"
+  label: string
+  words: string[]
 }
 
 // What a search found in one plugin: songs, or tiles (albums, artists). The
@@ -328,6 +390,9 @@ export interface ItemInfo {
   subtitle?: string
   // the album; the episode
   group?: string
+  // its number in the group, 1-based: the queue shows it where the row
+  // above has the same cover
+  no?: number
   // seconds; none for live
   length?: number
   art?: Art
@@ -391,7 +456,7 @@ export type Action =
       kind: 'choice'
       // the menu's heading: "Stream"
       label: string
-      // what the bar shows: "320"
+      // what the bar shows: "320k"
       short: string
       options: { id: string; label: string }[]
       // an option's id, or none

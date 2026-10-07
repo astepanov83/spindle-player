@@ -58,7 +58,7 @@ export interface StreamChoice {
   index: number
   // "320 kbps mp3", for the list
   label: string
-  // "320", for the bar's button
+  // "320k", for the bar's button
   short: string
 }
 
@@ -67,7 +67,8 @@ export interface StreamChoice {
 // only in the stream (decision 153), so those come last, in list order, as
 // "Bitrate unknown". Labels that would read the same get a number, so mirrors
 // of one stream can be told apart. The bar's short text names the codec when
-// another codec has the same bitrate ("128 aac", "128 mp3").
+// another codec has the same bitrate ("128k aac", "128k mp3"). The k says it
+// is a bitrate: a bare "320" read as nothing in particular.
 export function streamChoices(streams: Stream[]): StreamChoice[] {
   const order = streams
     .map((s, index) => ({ s, index }))
@@ -85,7 +86,7 @@ export function streamChoices(streams: Stream[]): StreamChoice[] {
     seen.set(label, n)
     if (n > 1) label += ` (${n})`
     const short = s.bitrate
-      ? [String(s.bitrate), sharedRate(s) && s.codec].filter(Boolean).join(' ')
+      ? [`${s.bitrate}k`, sharedRate(s) && s.codec].filter(Boolean).join(' ')
       : (s.codec ?? 'Stream')
     return { index, label, short }
   })
@@ -167,4 +168,36 @@ export function stationLine(s: Station): string {
 export function searchRows(results: Station[], saved: Station[]): Station[] {
   const ids = new Set(saved.map((s) => s.id))
   return results.filter((s) => !ids.has(s.id))
+}
+
+// The tags to offer as chips before a search (ticket 082): those of My
+// stations, the most shared first. A tie goes to the tag a station lists
+// earlier, so one station with twenty tags ("1930", "1940"...) does not
+// fill the row: each station's first tag comes before any second one. With
+// none, the popular stations' tags, so a new user has words to try too.
+export function stationTags(saved: Station[], popular: Station[], max = 8): string[] {
+  const own = countTags(saved)
+  return (own.length ? own : countTags(popular)).slice(0, max)
+}
+
+function countTags(list: Station[]): string[] {
+  // tag -> how many stations list it, and the earliest place one lists it
+  const seen = new Map<string, { n: number; at: number }>()
+  for (const s of list) {
+    // a station that lists a tag twice counts it once
+    const tags = new Set(
+      s.tags.map((t) => t.trim().toLowerCase()).filter((t) => t.length > 1 && t.length <= 30)
+    )
+    let at = 0
+    for (const t of tags) {
+      const x = seen.get(t)
+      if (x) {
+        x.n++
+        x.at = Math.min(x.at, at)
+      } else seen.set(t, { n: 1, at })
+      at++
+    }
+  }
+  // a Map keeps the order tags were first seen, and sort keeps ties in it
+  return [...seen].sort((a, b) => b[1].n - a[1].n || a[1].at - b[1].at).map(([t]) => t)
 }

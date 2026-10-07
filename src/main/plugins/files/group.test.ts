@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { albumFolder, buildLibrary, shortHash, unknownArtist, variousArtists } from './group'
+import {
+  addedOf,
+  albumFolder,
+  buildLibrary,
+  shortHash,
+  unknownArtist,
+  variousArtists
+} from './group'
 import { defaultPalettes, fallbackPalettes } from '../../../shared/palette'
 import { emptyIndex } from './merge'
 import type { FileEntry, LibraryIndex } from './types'
@@ -45,7 +52,23 @@ function build(
   return buildLibrary(ix, has, fetched, [], photos, resolve(f, true))
 }
 
+describe('addedOf', () => {
+  it('takes the earliest song, and the mtime of an entry from an older index', () => {
+    expect(addedOf([entry('/a', { added: 50 }), entry('/b', { added: 20 })])).toBe(20)
+    expect(addedOf([entry('/a', { added: 50, mtime: 9 }), entry('/b', { mtime: 30 })])).toBe(30)
+    expect(addedOf([])).toBe(0)
+  })
+})
+
 describe('buildLibrary', () => {
+  it('gives each album when its first song was added (085)', () => {
+    const { data } = build([
+      entry('/m/nb/1.mp3', { album: 'Night Bus', artist: 'QH', added: 300 }),
+      entry('/m/nb/2.mp3', { album: 'Night Bus', artist: 'QH', added: 100 })
+    ])
+    expect(data.albums[0].added).toBe(100)
+  })
+
   it('groups tagged tracks into albums, in disc and track order', () => {
     const { data } = build([
       entry('/m/nb/2.mp3', { album: 'Night Bus', artist: 'QH', title: 'Fog', track: 2 }),

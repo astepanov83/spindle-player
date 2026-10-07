@@ -35,6 +35,14 @@ class NoticeStore {
     a?.run()
   }
 
+  // What the button would do no longer fits (an Undo after a newer change):
+  // it goes, and the text stays its plain time.
+  drop(action: NoticeAction): void {
+    if (this.action !== action) return
+    this.action = undefined
+    this.#wait()
+  }
+
   // The pointer is on the notice: it stays until the pointer leaves.
   hold(): void {
     this.#held = true

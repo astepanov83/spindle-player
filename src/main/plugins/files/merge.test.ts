@@ -46,7 +46,7 @@ function indexOf(files: FileEntry[]): LibraryIndex {
 
 describe('parseIndex', () => {
   it('reads back what serializeIndex wrote', () => {
-    const ix = indexOf([entry('/m/a.mp3', { title: 'A', track: 2, cover: 'abc' })])
+    const ix = indexOf([entry('/m/a.mp3', { title: 'A', track: 2, cover: 'abc', added: 7 })])
     ix.images.set('/m', { path: '/m/cover.jpg', mtime: 5, size: 6, cover: 'def' })
     ix.images.set('/m/b', {
       path: '/m/b/Scans/front.jpg',

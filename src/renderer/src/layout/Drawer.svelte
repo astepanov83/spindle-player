@@ -3,6 +3,9 @@
   import Queue from '../parts/Queue.svelte'
   import { layout } from '../stores/layout.svelte'
 
+  // fill: over all of its host, not 360px at its right side
+  let { fill = false }: { fill?: boolean } = $props()
+
   let el: HTMLDivElement | undefined = $state()
 
   // Closing with focus inside makes it inert and drops the focus, so the
@@ -15,11 +18,39 @@
   })
 </script>
 
-<div class="drawer" bind:this={el} class:open={layout.showQueue} inert={!layout.showQueue}>
+<!-- A light shade over the rest of the host says the drawer sits on top; a
+     click on it closes the drawer. Pointer only: Escape and Q do it by key. -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div
+  class="shade"
+  class:open={layout.showQueue && !fill}
+  aria-hidden="true"
+  onclick={() => (layout.showQueue = false)}
+></div>
+<div
+  class="drawer"
+  bind:this={el}
+  class:open={layout.showQueue}
+  class:fill
+  inert={!layout.showQueue}
+>
   <div class="part part-queue"><Queue header close /></div>
 </div>
 
 <style>
+  .shade {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: var(--shade);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .shade.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
   .drawer {
     position: absolute;
     top: 0;
@@ -41,6 +72,9 @@
     display: flex;
     flex-direction: column;
   }
+  .drawer.fill {
+    width: 100%;
+  }
   .drawer.open {
     transform: none;
     opacity: 1;
@@ -53,7 +87,8 @@
     min-height: 0;
   }
   @media (prefers-reduced-motion: reduce) {
-    .drawer {
+    .drawer,
+    .shade {
       transition: none;
     }
   }

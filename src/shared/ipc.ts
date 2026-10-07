@@ -1,6 +1,8 @@
 import type { AiState } from './ai'
 import type { PluginChannels } from './plugins'
+import type { ItemKey } from './plugins/items'
 import type { Playlist } from './playlists'
+import type { Plays } from './plays'
 import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
 import type { Settings } from './settings'
 
@@ -65,8 +67,34 @@ export const PlaybackChannel = {
   savePlace: 'queue:save-place',
   savePlaying: 'queue:save-playing',
   playing: 'playback:playing',
-  log: 'playback:log'
+  log: 'playback:log',
+  // page to main: what the tray menu shows (ticket 088)
+  state: 'playback:state',
+  // main to page: a tray menu item was clicked
+  control: 'playback:control',
+  // play counts and when each song was last played (ticket 085)
+  loadPlays: 'plays:load',
+  played: 'plays:played'
 } as const
+
+// What plays, as the player bar shows it, for the tray menu and its tooltip.
+export interface PlayState {
+  // empty when nothing plays (the bar says "Nothing playing")
+  title: string
+  // the bar's second line up to the album: the artists, or a station's "Radio"
+  artist: string
+  // sound is wanted: the play button shows Pause (Stop for a live item)
+  playing: boolean
+  // a live item (radio): Stop in place of Pause
+  live: boolean
+  // nothing picked: Play, Previous and Next have nothing to act on
+  nothing: boolean
+  // the bar shows Next and Previous
+  next: boolean
+  previous: boolean
+}
+
+export type PlayControl = 'toggle' | 'next' | 'previous'
 
 // What the preload exposes to the page as `window.playbackApi`.
 export interface PlaybackApi {
@@ -82,6 +110,14 @@ export interface PlaybackApi {
   playing(playing: boolean): void
   // a song that would not play, written to main's log
   log(text: string): void
+  // what plays, sent when it changes
+  state(state: PlayState): void
+  // Returns a function that stops listening.
+  onControl(listener: (control: PlayControl) => void): () => void
+  // every song's plays, as they were when the page loaded
+  loadPlays(): Promise<Plays>
+  // a song was heard long enough to count as played; main adds it
+  played(key: ItemKey): void
 }
 
 export const AiChannel = {
@@ -128,6 +164,9 @@ export interface CoreChannels {
   [PlaybackChannel.savePlaying]: PlaybackApi['savePlaying']
   [PlaybackChannel.playing]: PlaybackApi['playing']
   [PlaybackChannel.log]: PlaybackApi['log']
+  [PlaybackChannel.state]: PlaybackApi['state']
+  [PlaybackChannel.loadPlays]: PlaybackApi['loadPlays']
+  [PlaybackChannel.played]: PlaybackApi['played']
   [AiChannel.load]: AiApi['load']
   [AiChannel.act]: AiApi['act']
   [AiChannel.setTask]: AiApi['setTask']

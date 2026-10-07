@@ -1,7 +1,8 @@
-<!-- "Covers" in the settings sheet: the online lookup (ticket 014). Off, nothing is sent anywhere. -->
+<!-- "Covers" in Settings, General: the online lookup (ticket 014). Off, nothing is sent anywhere. -->
 <script lang="ts">
   import { coverSources, type CoverSource } from '../../../shared/settings'
   import Spinner from '../ui/Spinner.svelte'
+  import Switch from '../ui/Switch.svelte'
   import { coverLines } from '../plugins'
   import { settings } from '../stores/settings.svelte'
 
@@ -15,23 +16,27 @@
 
 <div class="set">
   <span class="section-label">Covers</span>
-  <label class="check">
-    <input type="checkbox" bind:checked={settings.fetchCovers} />
-    Find missing covers online
-  </label>
+  <Switch
+    label="Find missing covers online"
+    on={settings.fetchCovers}
+    onchange={(on) => (settings.fetchCovers = on)}
+  />
   {#if settings.fetchCovers}
     <p class="hint">
       Sends artist and album names, and the songs radio plays, to the services below. Artist photos
       come from Deezer; radio song covers from Deezer and iTunes.
     </p>
-    <div class="sources">
+    <ul class="sources" aria-label="Cover services">
       {#each coverSources as s (s)}
-        <label class="check">
-          <input type="checkbox" bind:checked={settings.coverSources[s]} />
-          {names[s]}
-        </label>
+        <li>
+          <Switch
+            label={names[s]}
+            on={settings.coverSources[s]}
+            onchange={(on) => (settings.coverSources[s] = on)}
+          />
+        </li>
       {/each}
-    </div>
+    </ul>
     {#each lines as line, i (i)}
       <p class="hint status" aria-live="polite">
         {#if line.busy}<Spinner />{/if}
@@ -63,20 +68,17 @@
     align-self: flex-start;
     margin-top: 4px;
   }
-  .check {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    font-size: var(--text-s);
-    cursor: pointer;
-  }
-  .check input {
-    margin: 0;
-    accent-color: var(--c2);
-  }
   .sources {
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
+    list-style: none;
+    margin: 0;
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: var(--well);
+  }
+  li {
+    padding: 4px 0;
+  }
+  li + li {
+    box-shadow: 0 -1px 0 var(--edge);
   }
 </style>

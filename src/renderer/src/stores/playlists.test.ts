@@ -19,6 +19,7 @@ const { playlists } = await import('./playlists.svelte')
 const { library, playlistPage } = await import('./library.svelte')
 const { files } = await import('../plugins/files/store.svelte')
 const { navTabs } = await import('../plugins')
+const { notice } = await import('./notice.svelte')
 
 describe('removing a playlist', () => {
   it('drops its sort and keeps the others', () => {
@@ -99,6 +100,7 @@ describe('a new playlist from songs (ticket 045)', () => {
     title,
     artist: '',
     year: 0,
+    added: 0,
     trackIds,
     cover: '',
     coverLarge: '',
@@ -157,5 +159,58 @@ describe('item keys (ticket 055)', () => {
     playlists.load([{ id, name: 'Mix', items: ['files:a', 'mfp:a'] }])
     playlists.moveIds('files', { a: 'b' })
     expect(playlists.get(id)?.items).toEqual(['files:b', 'mfp:a'])
+  })
+})
+
+describe('undo of Remove from this playlist (ticket 071)', () => {
+  const song = (id: string): Track => ({
+    id,
+    title: `Song ${id}`,
+    duration: 60,
+    albumId: 'x',
+    artist: 'A',
+    album: 'X',
+    no: 1,
+    disc: 1,
+    codec: '',
+    folder: 0
+  })
+
+  it('says which song left which playlist, and Undo puts it back at its place', () => {
+    files.load({ albums: [], tracks: ['s1', 's2', 's3'].map(song), folders: [] })
+    const id = playlists.create()
+    playlists.load([{ id, name: 'Mix', items: ['files:s1', 'files:s2', 'files:s3'] }])
+    playlists.removeItems(id, ['files:s2'])
+    expect(playlists.get(id)?.items).toEqual(['files:s1', 'files:s3'])
+    expect(notice.text).toBe('Removed from Mix: "Song s2"')
+    expect(notice.action?.label).toBe('Undo')
+    notice.press()
+    expect(playlists.get(id)?.items).toEqual(['files:s1', 'files:s2', 'files:s3'])
+  })
+
+  it('counts several songs, and brings them all back', () => {
+    const id = playlists.create()
+    playlists.load([{ id, name: 'Mix', items: ['files:s1', 'files:s2', 'files:s3'] }])
+    playlists.removeItems(id, ['files:s3', 'files:s1'])
+    expect(notice.text).toBe('Removed 2 songs from Mix')
+    notice.press()
+    expect(playlists.get(id)?.items).toEqual(['files:s1', 'files:s2', 'files:s3'])
+  })
+
+  it('says nothing when the song was not in it', () => {
+    notice.hide()
+    const id = playlists.create()
+    playlists.load([{ id, name: 'Mix', items: ['files:s1'] }])
+    playlists.removeItems(id, ['files:s9'])
+    expect(notice.text).toBe('')
+  })
+
+  it('puts back a song whose id changed meanwhile by its new id', () => {
+    const id = playlists.create()
+    playlists.load([{ id, name: 'Mix', items: ['files:s1', 'files:s2'] }])
+    playlists.removeItems(id, ['files:s1'])
+    playlists.moveIds('files', { s1: 'n1', s2: 'n2' })
+    notice.press()
+    expect(playlists.get(id)?.items).toEqual(['files:n1', 'files:n2'])
   })
 })

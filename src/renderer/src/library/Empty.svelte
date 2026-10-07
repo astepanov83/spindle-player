@@ -1,8 +1,14 @@
 <script lang="ts">
-  let { title, text }: { title: string; text: string } = $props()
+  import type { Snippet } from 'svelte'
+
+  // `children`: buttons under the text ('Search your library for "har"')
+  let { title, text, children }: { title: string; text: string; children?: Snippet } = $props()
 </script>
 
-<div class="empty"><b>{title}</b>{text}</div>
+<div class="empty">
+  <b>{title}</b>{text}
+  {#if children}<div class="acts">{@render children()}</div>{/if}
+</div>
 
 <style>
   .empty {
@@ -17,5 +23,11 @@
     display: block;
     font-size: var(--title-s);
     margin-bottom: 4px;
+  }
+  .acts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
   }
 </style>

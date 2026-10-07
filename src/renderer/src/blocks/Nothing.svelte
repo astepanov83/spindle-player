@@ -2,17 +2,29 @@
 <script lang="ts">
   import type { PluginId } from '../../../shared/plugins'
   import { actOnPage } from '../plugins'
+  import type { ShownTab } from '../plugins/tabs'
   import type { EmptyBlock } from '../plugins/types'
+  import SearchButtons from './SearchButtons.svelte'
 
-  let { block: b, plugin }: { block: EmptyBlock; plugin: PluginId } = $props()
+  // `wider`: the tabs to search instead, when it says nothing was found
+  let {
+    block: b,
+    plugin,
+    wider = []
+  }: { block: EmptyBlock; plugin: PluginId; wider?: ShownTab[] } = $props()
 </script>
 
 <div class="none">
   {#if b.title}<b>{b.title}</b>{/if}
   <p>{b.text}</p>
-  {#if b.action}
-    {@const a = b.action}
-    <button class="pill" onclick={() => actOnPage(plugin, b.id, a.id)}>{a.label}</button>
+  {#if b.action || wider.length}
+    <div class="acts">
+      {#if b.action}
+        {@const a = b.action}
+        <button class="pill" onclick={() => actOnPage(plugin, b.id, a.id)}>{a.label}</button>
+      {/if}
+      <SearchButtons tabs={wider} />
+    </div>
   {/if}
 </div>
 
@@ -31,6 +43,13 @@
     font-family: var(--display);
     font-size: var(--title-m);
     letter-spacing: -0.01em;
+  }
+  .acts {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    max-width: 100%;
   }
   p {
     margin: 0 0 14px;

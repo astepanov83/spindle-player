@@ -14,6 +14,7 @@
   import VizButton from './VizButton.svelte'
   import Volume from './Volume.svelte'
   import { fmtTime } from '../format'
+  import { layout } from '../stores/layout.svelte'
   import { player } from '../stores/player.svelte'
   import { queues } from '../stores/queues.svelte'
 
@@ -55,7 +56,7 @@
       {/if}
     </div>
     <div class="br">
-      <Stage cover={false} />
+      <Stage cover={false} onclick={() => layout.cycleVisualizer()} />
       <Volume width={80} pop />
       <VizButton />
       <Slot name="player.buttons" />
@@ -106,7 +107,8 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 10px 22px 18px;
+    /* full width for the background, the controls themselves --content-max at most */
+    padding: 10px max(22px, (100% - var(--content-max, 100%)) / 2) 18px;
   }
   .times {
     display: flex;
@@ -217,6 +219,13 @@
     height: 48px;
   }
   @container bar-end (max-width: 279px) {
+    .br > :global(.vstage) {
+      display: none;
+    }
+  }
+  /* In a window under 1000px it is only a few dots wide, a row of dots with
+     no meaning; the button beside it shows the style. */
+  @media (max-width: 999px) {
     .br > :global(.vstage) {
       display: none;
     }

@@ -14,7 +14,12 @@ export const icons = {
   prev: 'M6 5h2v14H6zM20 5v14L9.5 12z',
   next: 'M16 5h2v14h-2zM4 5v14l10.5-7z',
   repeat: 'M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z',
-  vol: 'M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z',
+  // the speaker: one wave below 50%, two above, crossed out when muted or at 0%
+  volLow: 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z',
+  volHigh:
+    'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z',
+  volMute:
+    'M3 9v6h4l5 5V4L7 9H3zm11 .4L15.4 8l2.6 2.6L20.6 8 22 9.4 19.4 12l2.6 2.6-1.4 1.4-2.6-2.6-2.6 2.6-1.4-1.4 2.6-2.6z',
   viz: 'M3 13h2v7H3zm4-5h2v12H7zm4-4h2v16h-2zm4 7h2v9h-2zm4-3h2v12h-2z',
   // the same bars, crossed out, with a gap each side of the line
   vizOff:

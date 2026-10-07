@@ -62,13 +62,14 @@
 
 <div class="lib2" data-notice-host>
   <aside class="side">
-    <div class="search">
+    <div class="searchrow">
+      <HistoryButtons size={28} />
       <SearchBox
         placeholder={shown?.searchShort ?? shown?.search ?? 'Search'}
         onenter={() => shown && typedIn(shown.plugin, shown.id, library.query, true)}
       />
     </div>
-    <div class="sidehead section-label">Library <HistoryButtons size={26} /></div>
+    <div class="sidehead section-label">Library</div>
     {#each sections as t (t.id)}
       {@render item(library.tab === t.id, () => library.pickTab(t.id), t.icon, t.label)}
     {/each}
@@ -81,6 +82,8 @@
       </div>
       {#each playlists.list as p (p.id)}
         {@render item(playlist?.id === p.id, () => pickPlaylist(p.id), 'list', p.name, true)}
+      {:else}
+        <div class="none">No playlists yet</div>
       {/each}
     {/if}
     <div class="foot"><ScanLine wrap /></div>
@@ -91,7 +94,7 @@
     {:else if none}
       <div class="fill"><Nothing block={none.block} plugin={none.plugin} /></div>
     {:else if playlist}
-      <PlaylistView id={playlist.id} {scrollEl} />
+      <PlaylistView id={playlist.id} {scrollEl} nav="sidebar" />
     {:else if shown && shown.plugin !== 'core'}
       {#key shown.id}
         <BlockPage {blocks} tab={shown.id} plugin={shown.plugin} {scrollEl} nav="sidebar" />
@@ -106,8 +109,10 @@
     display: flex;
     min-height: 0;
   }
+  /* 236px: with Back and Forward beside it, the search box still shows
+     "Search stations" whole */
   .side {
-    width: 210px;
+    width: 236px;
     flex: none;
     display: flex;
     flex-direction: column;
@@ -117,8 +122,17 @@
     border-right: 1px solid var(--edge);
     overflow: auto;
   }
-  .search {
-    margin: 0 4px 10px;
+  /* Back and Forward sit left of the search box, as in Studio; they hang
+     into the padding so the box keeps as much room as it can */
+  .searchrow {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 10px -6px;
+  }
+  .searchrow > :global(.search) {
+    flex: 1;
+    min-width: 0;
   }
   /* Room for two lines is always kept, so the list never moves when a scan
      starts or ends, even scrolled to the bottom. While it runs, the line
@@ -140,9 +154,10 @@
     justify-content: space-between;
     padding: 14px 10px 6px;
   }
-  /* the arrows sit in the label's row without making it taller */
-  .sidehead > :global(.hist) {
-    margin: -6px -6px -6px 0;
+  .none {
+    padding: 2px 10px 6px;
+    font-size: var(--text-s);
+    color: var(--ink-3);
   }
   .add {
     width: 24px;

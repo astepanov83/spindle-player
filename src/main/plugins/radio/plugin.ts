@@ -228,8 +228,8 @@ export class RadioPlugin implements MainPlugin {
       covers.kept()
       return list
     })
-    page.handle(RadioChannel.move, (_, id, by) =>
-      this.#on ? stations.move(id, by) : stations.list()
+    page.handle(RadioChannel.move, (_, id, to) =>
+      this.#on ? stations.move(id, to) : stations.list()
     )
     page.handle(RadioChannel.choose, (_, id, url) => {
       if (!this.#on) return stations.list()
@@ -262,6 +262,13 @@ export class RadioPlugin implements MainPlugin {
       // the answer may come after radio went off
       if (!this.#on) return { ok: false }
       if (n === this.#searches) resultLogos.searched(found.stations)
+      return played.searched(found.stations) ? { ...found, saved: stations.list() } : found
+    })
+    page.handle(RadioChannel.popular, async () => {
+      if (!this.#on) return { ok: false }
+      const found = await radioBrowser.popular()
+      if (!found.ok || !this.#on) return { ok: false }
+      resultLogos.popular(found.stations)
       return played.searched(found.stations) ? { ...found, saved: stations.list() } : found
     })
     // always allowed: it only ends a connection

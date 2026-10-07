@@ -24,6 +24,14 @@ export interface Seen {
   mtime: number
   size: number
   key?: string
+  // when the file came on the disk, in ms; 0 where the file system doesn't say
+  born?: number
+}
+
+// When a file the index doesn't have yet was added: its birth time, which a
+// copy that keeps the old mtime (cp -p, rsync -a) still sets, else its mtime.
+export function addedAt(f: Seen): number {
+  return f.born || f.mtime
 }
 
 export interface ScanCount {
@@ -61,7 +69,13 @@ export interface ScanOptions {
   readFile(path: string, mtime: number, size: number): Promise<FileEntry>
   readCue(f: Seen): Promise<CueEntry>
   readImage(listed: ListedImage, old: FolderImage | undefined): Promise<FolderImage | undefined>
-  stat?: (path: string) => Promise<{ mtimeMs: bigint; size: bigint; dev: bigint; ino: bigint }>
+  stat?: (path: string) => Promise<{
+    mtimeMs: bigint
+    size: bigint
+    dev: bigint
+    ino: bigint
+    birthtimeMs?: bigint
+  }>
   walkFs?: WalkFs
 }
 
@@ -108,7 +122,13 @@ export async function scanFiles(o: ScanOptions): Promise<{ read: number }> {
     }
     check()
     // whole ms, as the index keeps them
-    return { path, mtime: Number(s.mtimeMs), size: Number(s.size), key: fileKey(s) }
+    return {
+      path,
+      mtime: Number(s.mtimeMs),
+      size: Number(s.size),
+      key: fileKey(s),
+      born: Number(s.birthtimeMs ?? 0)
+    }
   }
 
   const readOne = async (f: Seen): Promise<void> => {
@@ -117,6 +137,8 @@ export async function scanFiles(o: ScanOptions): Promise<{ read: number }> {
     if (toRead(f)) {
       const entry = await o.readFile(f.path, f.mtime, f.size)
       check()
+      // a file read again keeps when it was first found
+      entry.added = ix.files.get(f.path)?.added ?? addedAt(f)
       if (applyBatch(ix, [entry])) o.changed()
     }
     c.read++
@@ -130,6 +152,13 @@ export async function scanFiles(o: ScanOptions): Promise<{ read: number }> {
     if (toRead(f)) {
       c.planned++
       readLane.push(() => readOne(f))
+      return
+    }
+    // known from an index made before it kept the time added
+    const k = ix.files.get(path)
+    if (k && k.added === undefined) {
+      ix.files.set(path, { ...k, added: addedAt(f) })
+      o.changed()
     }
   }
 

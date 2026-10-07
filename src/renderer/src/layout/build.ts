@@ -17,13 +17,19 @@ export type BuiltPart = PartNode | QueuePart
 interface BuiltBase {
   // CSS flex value, or null to size by content
   flex: string | null
-  // the Drawer is placed inside this node
-  drawer: boolean
+  // the Drawer is placed inside this node: 360px at its right ('side'), or over all of it
+  drawer: false | 'side' | 'fill'
 }
 
 export type BuiltNode = BuiltBase &
   (
-    | { kind: 'box'; dir: 'row' | 'col'; look: Look | null; children: BuiltNode[] }
+    | {
+        kind: 'box'
+        dir: 'row' | 'col'
+        look: Look | null
+        contentWidth: string | null
+        children: BuiltNode[]
+      }
     | { kind: 'part'; part: BuiltPart }
     | { kind: 'tabs'; labels: [string, string]; panes: [BuiltNode, BuiltNode] }
   )
@@ -31,6 +37,8 @@ export type BuiltNode = BuiltBase &
 export interface BuiltLayout {
   root: BuiltNode
   queueMode: QueueMode
+  // built from the template's wide layout
+  wide: boolean
   slots: Slots
 }
 
@@ -48,8 +56,10 @@ function queuePart(header: boolean, close: boolean): BuiltNode {
   }
 }
 
-export function buildLayout(template: Template, queueMode: QueueMode): BuiltLayout {
+export function buildLayout(template: Template, queueMode: QueueMode, wide = false): BuiltLayout {
+  const tree = (wide && template.wide?.layout) || template.layout
   let host: BuiltNode | null = null
+  let fill = false
 
   function build(n: TemplateNode): BuiltNode | null {
     let node: BuiltNode
@@ -59,6 +69,7 @@ export function buildLayout(template: Template, queueMode: QueueMode): BuiltLayo
         kind: 'box',
         dir: 'row' in n ? 'row' : 'col',
         look: n.look ?? null,
+        contentWidth: n.contentWidth ?? null,
         children: kids.map(build).filter((c): c is BuiltNode => c !== null),
         flex: null,
         drawer: false
@@ -89,21 +100,24 @@ export function buildLayout(template: Template, queueMode: QueueMode): BuiltLayo
       node.flex = flexOf(n.queueColumn)
     }
     if (n.size) node.flex = flexOf(n.size)
-    if (n.drawerHost) host = node
+    if (n.drawerHost) {
+      host = node
+      fill = n.drawerHost === 'fill'
+    }
     return node
   }
 
-  const root = build(template.layout)
+  const root = build(tree)
   if (!root) throw new Error(`Template ${template.id} has no layout`)
   root.flex = '1 1 0'
 
   const slots: Slots = { 'player.buttons': [] }
   if (queueMode === 'drawer') {
-    ;(host ?? root).drawer = true
+    ;(host ?? root).drawer = fill ? 'fill' : 'side'
     // the drawer owns its toggle and asks for a place in the player's slot
     slots['player.buttons'].push({ act: 'queue', label: 'Show queue' })
   }
-  return { root, queueMode, slots }
+  return { root, queueMode, wide: tree !== template.layout, slots }
 }
 
 // All parts in the tree, in order. Handy for tests and checks.

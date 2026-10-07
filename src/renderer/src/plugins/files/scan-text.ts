@@ -1,8 +1,8 @@
-// The scan status lines for the settings sheet and the empty library.
+// The scan status lines for Settings and the empty library.
 import type { DropResult } from '../../../../shared/plugins/files/ipc'
 import type { FetchStatus, GroupsStatus, ScanStatus } from '../../../../shared/library'
 import { rootName } from './folders'
-import { pathEnds } from '../../ui/path-ends'
+import { folderParts } from '../../ui/path-ends'
 
 const n = (x: number): string => x.toLocaleString('en-US')
 const plural = (x: number, one: string, many: string): string => `${n(x)} ${x === 1 ? one : many}`
@@ -32,7 +32,7 @@ export function scanLine(s: ScanStatus): string {
   return parts.join(' · ')
 }
 
-// Every line for the settings sheet: the problem or the scan line, then notices.
+// Every line for Settings: the problem or the scan line, then notices.
 // With no library process, Rescan can't help, so it isn't offered.
 export function statusLines(s: ScanStatus, pageFailed: boolean): string[] {
   const problem = libraryProblem(s, pageFailed)
@@ -57,7 +57,7 @@ export function canRescan(s: ScanStatus, pageFailed: boolean): boolean {
   )
 }
 
-// The online cover lookup's line in the settings sheet (ticket 014).
+// The online cover lookup's line in Settings (ticket 014).
 export function fetchLine(f: FetchStatus | undefined): string | undefined {
   if (!f) return undefined
   const total = f.found + f.notFound + f.left
@@ -101,9 +101,11 @@ const clock = (at: number): string =>
 const sameDay = (a: number, b: number): boolean =>
   new Date(a).toDateString() === new Date(b).toDateString()
 
-// The artist groups task's line under its switch (ticket 068).
+// The artist groups task's line under its switch (ticket 068). `service`: the
+// chosen service's name, so a limit or an error says who it came from.
 export function groupsLine(
   g: GroupsStatus | undefined,
+  service = 'the service',
   now = Date.now()
 ): { text: string; busy?: true; error?: true } | undefined {
   if (!g) return undefined
@@ -113,29 +115,36 @@ export function groupsLine(
         text: `${g.step === 'split' ? 'Splitting credits' : 'Matching spellings'}: ${n(g.checked)} of ${n(g.total)}`,
         busy: true
       }
-    case 'done':
-      return { text: `Grouped ${plural(g.grouped, 'artist', 'artists')}, ${clock(g.at)}` }
+    case 'done': {
+      const parts: string[] = []
+      if (g.joined) parts.push(`joined ${plural(g.joined, 'spelling', 'spellings')}`)
+      if (g.split) parts.push(`split ${plural(g.split, 'credit', 'credits')}`)
+      const what = parts.length ? parts.join(', ') : 'no new name fixes'
+      return { text: `${cap(what)}, ${clock(g.at)}` }
+    }
     case 'limit': {
-      const when =
-        g.at === undefined
-          ? 'after the next scan'
-          : sameDay(g.at, now)
-            ? `at ${clock(g.at)}`
-            : sameDay(g.at, now + 24 * 3600_000)
-              ? 'tomorrow'
-              : `${new Date(g.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-      return { text: `Waiting for the limit. Will go on ${when}.` }
+      // a wait the same day is a rate limit; a later one is a daily limit
+      if (g.at === undefined)
+        return { text: `Reached the request limit on ${service}. Will go on after the next scan.` }
+      if (sameDay(g.at, now))
+        return { text: `${cap(service)} asked to wait. Will go on at ${clock(g.at)}.` }
+      if (sameDay(g.at, now + 24 * 3600_000))
+        return { text: `Used up today's requests on ${service}. Will go on tomorrow.` }
+      const day = new Date(g.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      return { text: `Used up the requests ${service} allows for now. Will go on ${day}.` }
     }
     case 'stopped':
       return {
         text:
           g.error === 'network'
-            ? 'Could not reach the service. Will try again after the next scan.'
-            : 'The service gave no usable answer. Will try again after the next scan.',
+            ? `Could not reach ${service}. Will try again after the next scan.`
+            : `Every model on ${service} failed or gave an answer Spindle could not read. Will try again after the next scan.`,
         error: true
       }
   }
 }
+
+const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
 
 // What the main window says when a scan ends badly (ticket 045): the scan
 // failed, or a music folder was not found. Each new status goes to `next`;
@@ -169,7 +178,7 @@ export class ScanWatch {
 
 // The last folder of a path, for a line too short for all of it.
 function folderName(path: string): string {
-  return pathEnds(path)[1].replace(/^[/\\]|[/\\]$/g, '') || path
+  return folderParts(path).name || path
 }
 
 // The notice after folders were dropped on the window (ticket 047).

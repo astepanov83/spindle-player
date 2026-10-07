@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest'
 import type { Artist } from '../../../../shared/plugins/files/artists'
 import type { Track } from '../../../../shared/library'
 import { fallbackPalettes, type ThemePalettes } from '../../../../shared/palette'
-import { artistLinks, artistCovers, artistPageSongs, artistSongs, filterArtists } from './artists'
+import {
+  allBy,
+  artistLinks,
+  artistCovers,
+  artistPageSongs,
+  artistSongs,
+  albumArtists,
+  filterArtists,
+  shownArtists
+} from './artists'
 import type { Sort } from '../../library/views'
 
 const artist = (name: string, albums: string[] = [], also: string[] = []): Artist => ({
@@ -43,6 +52,31 @@ describe('filterArtists', () => {
     const all = [artist('Björk'), artist('Sigur Rós')]
     expect(filterArtists(all, 'bjork').map((a) => a.name)).toEqual(['Björk'])
     expect(filterArtists(all, 'RÓS').map((a) => a.name)).toEqual(['Sigur Rós'])
+  })
+})
+
+describe('shownArtists', () => {
+  // DJ Sol has only a song on a compilation, Various Artists owns it
+  const all = [
+    artist('DJ Sol', [], ['v1']),
+    artist('Marina Vale', ['a']),
+    artist('Various Artists', ['v']),
+    artist('Solo Guest', [], ['a2'])
+  ]
+  const names = (list: Artist[]): string[] => list.map((a) => a.name)
+
+  it('shows only artists with an album of their own by default', () => {
+    expect(names(shownArtists(all, 'album', ''))).toEqual(['Marina Vale', 'Various Artists'])
+    expect(albumArtists(all)).toEqual(shownArtists(all, 'album', ' '))
+  })
+
+  it('shows every artist for All artists', () => {
+    expect(shownArtists(all, 'all', '')).toBe(all)
+  })
+
+  it('searches every artist whatever the choice, so a guest can be found', () => {
+    expect(names(shownArtists(all, 'album', 'sol'))).toEqual(['DJ Sol', 'Solo Guest'])
+    expect(names(shownArtists(all, 'all', 'sol'))).toEqual(['DJ Sol', 'Solo Guest'])
   })
 })
 
@@ -100,5 +134,22 @@ describe('artistLinks (ticket 040)', () => {
 
   it('gives no key to a name with no artist page', () => {
     expect(artistLinks({ artist: 'Nobody' }, has)).toEqual([{ name: 'Nobody', key: null }])
+  })
+})
+
+describe('allBy: the Artist column is left out (ticket 075)', () => {
+  it('when every song has the page artist, by name key', () => {
+    expect(allBy([{ artist: 'Marina Vale' }, { artist: 'marina  vale' }], 'Marina Vale')).toBe(true)
+  })
+
+  it('not with a guest, another artist or a split credit', () => {
+    expect(
+      allBy([{ artist: 'Marina Vale' }, { artist: 'Marina Vale feat. Kai' }], 'Marina Vale')
+    ).toBe(false)
+    // a compilation: its rows have their own artists
+    expect(allBy([{ artist: 'Kai' }, { artist: 'Juno Park' }], 'Various Artists')).toBe(false)
+    expect(
+      allBy([{ artist: 'The Ochre Band, Kai', artists: ['The Ochre Band', 'Kai'] }], 'Kai')
+    ).toBe(false)
   })
 })

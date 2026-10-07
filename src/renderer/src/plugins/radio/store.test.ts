@@ -71,11 +71,14 @@ const save = vi.fn(async (s: Station) => [...mine, s])
 const remove = vi.fn(async (id: string) => mine.filter((s) => s.id !== id))
 // main puts it back where it was
 const restore = vi.fn(async () => mine)
-// main swaps the station with its neighbour
-const move = vi.fn(async (id: string, by: -1 | 1) => {
-  const at = mine.findIndex((s) => s.id === id)
-  const next = [...mine]
-  ;[next[at], next[at + by]] = [next[at + by], next[at]]
+// main moves the station to its new place
+const move = vi.fn(async (id: string, to: number) => {
+  const next = mine.filter((s) => s.id !== id)
+  next.splice(
+    to,
+    0,
+    mine.find((s) => s.id === id)!
+  )
   return next
 })
 // what main last answered for the stream: by default, the server was not reached
@@ -845,7 +848,7 @@ describe('the bar, from what radio gives (ticket 058)', () => {
       id: 'stream',
       kind: 'choice',
       label: 'Stream',
-      short: '320',
+      short: '320k',
       options: [
         { id: '2', label: '320 kbps' },
         { id: '1', label: '128 kbps' },
@@ -865,7 +868,7 @@ describe('the bar, from what radio gives (ticket 058)', () => {
     expect(choose).toHaveBeenCalledWith('b', 'https://b/0')
     expect(loads()).toEqual(['load spindle://radio/b?stream=0 live'])
     expect(choice()?.picked).toBe('0')
-    expect(choice()?.short).toBe('64')
+    expect(choice()?.short).toBe('64k')
   })
 
   it('Save for a station from search: busy while main saves, gone once saved', async () => {
@@ -951,10 +954,24 @@ describe('My stations from the Radio view (ticket 029)', () => {
     expect(restore).toHaveBeenCalledWith('b')
   })
 
-  it('moves a station up or down', async () => {
-    await radio.move('c', -1)
-    expect(move).toHaveBeenCalledWith('c', -1)
-    expect(radio.stations.map((s) => s.id)).toEqual(['a', 'c', 'b'])
+  it('moves a station to a place, shown before main answers', async () => {
+    const job = radio.move('c', 0)
+    expect(radio.stations.map((s) => s.id)).toEqual(['c', 'a', 'b'])
+    await job
+    expect(move).toHaveBeenCalledWith('c', 0)
+    expect(radio.stations.map((s) => s.id)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('asks main nothing for a move to where it is', async () => {
+    await radio.move('a', 0)
+    expect(move).not.toHaveBeenCalled()
+  })
+
+  it('puts the list back when main could not move it', async () => {
+    move.mockRejectedValueOnce(new Error('no'))
+    await radio.move('c', 0)
+    expect(radio.stations.map((s) => s.id)).toEqual(['a', 'b', 'c'])
+    expect(log).toHaveBeenCalledWith('Radio c: radio:move failed: Error: no')
   })
 
   it('shows a notice when main could not remove it', async () => {

@@ -88,6 +88,40 @@ function setup(ix: LibraryIndex, folders: string[], more: Partial<ScanOptions> =
 }
 
 describe('scanFiles', () => {
+  it('keeps when each file was first found (085)', async () => {
+    const fresh = file('m/A/01.flac')
+    const changed = file('m/A/02.flac')
+    const older = file('m/A/03.flac')
+    const ix = emptyIndex()
+    // read before: it changed since, so it is read again
+    ix.files.set(changed, { ...known(changed, 'Old'), mtime: 1, added: 5 })
+    // from an index made before the time added was kept
+    ix.files.set(older, known(older, 'Older'))
+    let changes = 0
+    const r = setup(ix, [join(root, 'm')], {
+      // a birth time the file system gives (ext4, btrfs); tmpfs may give none
+      stat: async (p) => ({ ...(await stat(p, { bigint: true })), birthtimeMs: 1234n }),
+      changed: () => void changes++
+    })
+    await scanFiles(r.opts)
+    expect(r.reads.sort()).toEqual([fresh, changed])
+    expect(ix.files.get(fresh)?.added).toBe(1234)
+    expect(ix.files.get(changed)?.added).toBe(5)
+    expect(ix.files.get(older)?.added).toBe(1234)
+    expect(ix.files.get(older)?.title).toBe('Older')
+    expect(changes).toBeGreaterThanOrEqual(3)
+  })
+
+  it('takes the mtime as the time added when there is no birth time', async () => {
+    const a = file('m/A/01.flac')
+    const r = setup(emptyIndex(), [join(root, 'm')], {
+      stat: async (p) => ({ ...(await stat(p, { bigint: true })), birthtimeMs: 0n })
+    })
+    await scanFiles(r.opts)
+    const e = r.opts.ix.files.get(a)!
+    expect(e.added).toBe(e.mtime)
+  })
+
   it('reads new files and keeps known ones that did not change', async () => {
     const a = file('m/A/01.flac')
     const b = file('m/A/02.flac')

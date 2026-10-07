@@ -5,7 +5,7 @@ import { queueModeFor, visualizerStyles, type VisualizerStyle } from '../../../s
 import { templates } from '../../../shared/templates'
 import { buildLayout, partsOf, type BuiltLayout, type Slots } from '../layout/build'
 import { shownQueueMode } from '../layout/narrow'
-import { library } from './library.svelte'
+import { isWide } from '../layout/wide'
 import { settings } from './settings.svelte'
 
 class LayoutStore {
@@ -13,11 +13,14 @@ class LayoutStore {
   // the page's width, so a narrow window builds its Drawer from the start;
   // 0 (not known) outside a page
   width = $state(typeof window === 'undefined' ? 0 : window.innerWidth)
+  height = $state(typeof window === 'undefined' ? 0 : window.innerHeight)
   // what Settings shows and saves
   queueSetting: QueueMode = $derived(queueModeFor(this.template, settings.queue[settings.template]))
   // what is drawn: a Column is a Drawer while the window is too narrow for it
   queueMode: QueueMode = $derived(shownQueueMode(this.template, this.queueSetting, this.width))
-  built: BuiltLayout = $derived(buildLayout(this.template, this.queueMode))
+  // a wide, short window: the template's wide layout, if it has one
+  wide: boolean = $derived(isWide(this.template, this.width, this.height))
+  built: BuiltLayout = $derived(buildLayout(this.template, this.queueMode, this.wide))
   // Focus has none: links to an album or artist are plain text there (ticket 040)
   hasLibrary: boolean = $derived(partsOf(this.built.root).some((p) => p.part === 'library'))
   get slots(): Slots {
@@ -28,7 +31,14 @@ class LayoutStore {
   showQueue = $state(false)
   // 0: the first tab, 1: Queue
   tabSel = $state(0)
-  settingsOpen = $state(false)
+  // the Settings page's section while it is open, else null
+  // (components/settings-sections.ts)
+  settingsAt: string | null = $state(null)
+  // the section it opens on next, the last one shown
+  #lastSection = 'general'
+  get settingsOpen(): boolean {
+    return this.settingsAt !== null
+  }
   // the short "Spectrum" label on the stage after a style change
   vzLabel = $state(false)
   #vzTimer: ReturnType<typeof setTimeout> | undefined
@@ -38,9 +48,32 @@ class LayoutStore {
     this.tabSel = 0
   }
 
+  // what had focus before Settings opened; it gets it back on close
+  settingsOpener: HTMLElement | null = null
+
+  // `section`: where the opener knows to go, else where it was last
+  openSettings(section?: string): void {
+    if (!this.settingsOpen && typeof document !== 'undefined') {
+      const at = document.activeElement
+      this.settingsOpener = at instanceof HTMLElement && at !== document.body ? at : null
+    }
+    this.settingsAt = section ?? this.#lastSection
+  }
+
+  closeSettings(): void {
+    if (this.settingsAt !== null) this.#lastSection = this.settingsAt
+    this.settingsAt = null
+  }
+
+  toggleSettings(section?: string): void {
+    if (this.settingsOpen) this.closeSettings()
+    else this.openSettings(section)
+  }
+
+  // The library keeps its place, search text and history (library.showIn).
   chooseTemplate(id: TemplateId): void {
+    if (id === settings.template) return
     settings.template = id
-    library.templateChanged()
     this.#reset()
   }
 
@@ -51,10 +84,13 @@ class LayoutStore {
 
   // An open drawer closes when it turns back into a Column, so it does not
   // come back open on the next narrow resize. The Column shows the queue anyway.
-  resized(width: number): void {
+  // It closes on a switch to or from the wide layout too, which builds a new one.
+  resized(width: number, height: number): void {
     const was = this.queueMode
+    const wasWide = this.wide
     this.width = width
-    if (this.queueMode !== was) this.showQueue = false
+    this.height = height
+    if (this.queueMode !== was || this.wide !== wasWide) this.showQueue = false
   }
 
   chooseVisualizer(v: VisualizerStyle): void {

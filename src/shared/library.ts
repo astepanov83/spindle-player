@@ -103,6 +103,8 @@ export interface Album extends Art {
   grouped?: true
   // 0 when unknown
   year: number
+  // when its first song was added to the library, in ms (ticket 085); 0 when unknown
+  added: number
   trackIds: string[]
 }
 
@@ -144,8 +146,9 @@ export type GroupsStatus =
   // step: splitting joint credits, then matching spellings (ticket 070);
   // checked: names asked about so far in this step, of total
   | { state: 'running'; step: 'split' | 'join'; checked: number; total: number }
-  // grouped: tags given a new AI link this run, splits too; at: when it ended (ms since 1970)
-  | { state: 'done'; grouped: number; at: number }
+  // what this run changed: tags now shown under another artist's name
+  // (joined) and joint credits now split (split); at: when it ended (ms since 1970)
+  | { state: 'done'; joined: number; split: number; at: number }
   // a rate or daily limit; at: when it goes on, when known
   | { state: 'limit'; at?: number }
   // stopped this run; the next finished scan tries again

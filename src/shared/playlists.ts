@@ -115,3 +115,35 @@ export function removeItems(list: Playlist[], id: string, items: ItemKey[]): Pla
   const drop = new Set<string>(items)
   return list.map((p) => (p.id === id ? { ...p, items: p.items.filter((t) => !drop.has(t)) } : p))
 }
+
+// The songs removeItems took, each with its place, for Undo.
+export function removedAt(list: Playlist[], id: string, items: ItemKey[]): Removed[] {
+  const drop = new Set<string>(items)
+  const p = list.find((x) => x.id === id)
+  return p ? p.items.flatMap((key, at) => (drop.has(key) ? [{ key, at }] : [])) : []
+}
+
+export interface Removed {
+  key: ItemKey
+  at: number
+}
+
+// Undo of removeItems: each song back at its place (or the end, if the
+// playlist got shorter since). One that is in it again is left where it is.
+export function putBack(list: Playlist[], id: string, removed: Removed[]): Playlist[] {
+  let changed = false
+  const out = list.map((p) => {
+    if (p.id !== id) return p
+    const items = [...p.items]
+    const have = new Set(items)
+    for (const r of [...removed].sort((a, b) => a.at - b.at)) {
+      if (have.has(r.key)) continue
+      items.splice(Math.min(r.at, items.length), 0, r.key)
+      have.add(r.key)
+    }
+    if (items.length === p.items.length) return p
+    changed = true
+    return { ...p, items }
+  })
+  return changed ? out : list
+}

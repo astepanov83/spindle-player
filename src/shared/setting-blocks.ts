@@ -18,8 +18,10 @@ export type SettingBlock =
       paths?: boolean
       disabled?: boolean
     }
-  // buttons side by side when they follow each other. act: `press`
-  | { kind: 'button'; id: string; label: string; disabled?: boolean }
+  // buttons side by side when they follow each other. act: `press`.
+  // `confirm`, when there, is a question shown in place of the button first,
+  // with Go on (sends the press) and Cancel.
+  | { kind: 'button'; id: string; label: string; disabled?: boolean; confirm?: string }
   // `about`: a line of help under the label. act: `set` with 'true' or 'false'
   | { kind: 'switch'; id: string; label: string; on: boolean; about?: string }
   // One line of text. act: `set` with the text, on Enter or when the box loses
@@ -46,5 +48,7 @@ export type SettingBlock =
       disabled?: boolean
     }
   // A plugin's place for a task: the core draws the task's switch here, and
-  // while it is on, the AI setup blocks under it. Drawn from a later task on.
-  | { kind: 'ai'; task: string }
+  // while it is on, the AI setup blocks under it, then `blocks`: the task's
+  // own lines and buttons from the plugin. All in one box, so it reads as a
+  // part of the plugin.
+  | { kind: 'ai'; task: string; blocks?: SettingBlock[] }

@@ -137,7 +137,7 @@ describe('the tab search', () => {
   it('says when nothing matches', () => {
     const blocks = page.mfpPage('mfp', '', 'zzz')
     expect(kinds(blocks)).toEqual(['head', 'empty'])
-    expect(blocks[1]).toMatchObject({ title: 'No matches' })
+    expect(blocks[1]).toMatchObject({ title: 'No matches', nothingFound: true })
   })
 })
 
@@ -162,8 +162,8 @@ describe('an episode', () => {
       'Play next, add to the queue or a playlist'
     ])
     const play = head(h).buttons![0]
-    expect('play' in play && [play.pauses, play.songs(), play.link]).toEqual([
-      true,
+    expect('play' in play && [play.play, play.songs(), play.link]).toEqual([
+      'all',
       ['mfp:b0', 'mfp:b1', 'mfp:b2'],
       { plugin: 'mfp', page: 'episode/b' }
     ])

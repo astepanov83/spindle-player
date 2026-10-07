@@ -3,7 +3,8 @@
 import { stationArt, type Station } from '../../../../shared/plugins/radio/stations'
 import type { ItemState, LivePlugin, PageHalf } from '../types'
 import { stationLine, stepStation } from './logic'
-import { actOnStation, radioBlocks } from './page'
+import { actOnStation, radioBlocks, shownStation } from './page'
+import { radioPopular } from './popular.svelte'
 import { radioSearch } from './search.svelte'
 import { startRadio } from './start'
 import { radio, radioPage } from './store.svelte'
@@ -32,8 +33,8 @@ function stationState(s: Station): ItemState {
   return a
 }
 
-// My stations, the one playing, or a result the Radio tab shows
-const station = (id: string): Station | undefined => radio.find(id) ?? radioSearch.find(id)
+// My stations, the one playing, or a result or popular station the Radio tab shows
+const station = (id: string): Station | undefined => radio.find(id) ?? shownStation(id)
 
 const live: LivePlugin = {
   show: (id, h) => {
@@ -59,12 +60,19 @@ export const radioHalf: PageHalf = {
   },
   // stations play through `live`, never from the track queue
   play: () => undefined,
-  tabs: () => [{ id: 'radio', label: 'Radio', icon: 'radio', search: 'Search stations' }],
+  tabs: () => [
+    { id: 'radio', label: 'Radio', icon: 'radio', search: 'Search stations', searchWide: true }
+  ],
   tabOf: (page) => (page === '' ? 'radio' : undefined),
   canOpen: (to) => to.page === '',
   page: (_tab, _page, query) => radioBlocks(query),
-  // Radio Browser is asked 400ms after typing stops, or at once on Enter
-  typed: (_tab, query, enter) => (enter ? radioSearch.now(query) : radioSearch.want(query)),
+  // Radio Browser is asked 400ms after typing stops, or at once on Enter.
+  // Its popular stations are asked when the tab opens.
+  typed: (_tab, query, enter) => {
+    radioPopular.want()
+    if (enter) radioSearch.now(query)
+    else radioSearch.want(query)
+  },
   version: () => (radio.loaded ? 1 : 0),
   live,
   start: startRadio,
@@ -75,6 +83,6 @@ export const radioHalf: PageHalf = {
       if (id === radio.station?.id) void radio.save()
     } else if (actionId === 'stream') {
       if (id === radio.station?.id && value !== undefined) radio.choose(Number(value))
-    } else actOnStation(id, actionId)
+    } else actOnStation(id, actionId, value)
   }
 }

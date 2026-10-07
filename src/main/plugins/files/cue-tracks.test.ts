@@ -102,7 +102,7 @@ describe('cueTracks', () => {
   it('splits an image into tracks with starts, ends and lengths', () => {
     const img = '/m/tone/CDImage.ape'
     const ix = index(
-      [entry(img, { duration: 400, codec: "Monkey's Audio" })],
+      [entry(img, { duration: 400, codec: "Monkey's Audio", added: 42 })],
       [
         [
           '/m/tone/CDImage.ape.cue',
@@ -128,6 +128,8 @@ describe('cueTracks', () => {
     expect(items.map((i) => i.entry.duration)).toEqual([100.5, 149.5, 150])
     expect(items.map((i) => i.id)).toEqual([1, 2, 3].map((n) => shortHash(`${img}#${n}`)))
     expect(items[0].entry.codec).toBe("Monkey's Audio")
+    // the image's time added, for the album's
+    expect(items.map((i) => i.entry.added)).toEqual([42, 42, 42])
   })
 
   it('takes album tags from the sheet, then from the image', () => {

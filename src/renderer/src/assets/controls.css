@@ -103,8 +103,8 @@ button.row:active:not(.cur-row) {
   background: var(--edge);
   pointer-events: none;
 }
-.lines > .row:is(:hover, .cur-row, :focus-visible, :has(:focus-visible))::before,
-.lines > .row:is(:hover, .cur-row, :focus-visible, :has(:focus-visible)) + .row::before {
+.lines > .row:is(:hover, .cur-row, .selected, :focus-visible, :has(:focus-visible))::before,
+.lines > .row:is(:hover, .cur-row, .selected, :focus-visible, :has(:focus-visible)) + .row::before {
   opacity: 0;
 }
 /* the line needs a box to sit in. :where keeps it weakest, so a virtual
@@ -113,11 +113,58 @@ button.row:active:not(.cur-row) {
   position: relative;
 }
 
+/* The column heads over a song list. Every list of songs has them, sorting
+   or not (ticket 075). They stick to the top of the scroll box, over its top
+   padding; the list sets the grid so the heads line up with its rows. */
+.song-head {
+  position: sticky;
+  top: calc(-1 * var(--scroll-pad-top, 20px));
+  z-index: 1;
+  height: 38px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--edge);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.song-head > * {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Up keeps the focused row clear of the sticky heads */
+.song-rows > .row {
+  scroll-margin-top: calc(38px + var(--scroll-pad-top, 20px));
+}
+
 /* The playing song or station, in the album accent (specs/themes.md). */
 .cur-row,
 .cur-row:hover {
   background: color-mix(in srgb, var(--c2) 26%, var(--hover));
   box-shadow: inset 3px 0 0 var(--c2);
+}
+
+/* Rows selected with Ctrl or Shift (ticket 086): a grey fill, stronger
+   than a hover, so it reads in both themes and next to the playing row. A
+   selected playing row keeps its bar and gets a stronger tint. Selected rows
+   next to each other join into one block (no line between). */
+.row.selected,
+.row.selected:hover {
+  background: color-mix(in srgb, var(--ink) 13%, transparent);
+}
+.cur-row.selected,
+.cur-row.selected:hover {
+  background: color-mix(in srgb, var(--c2) 42%, var(--hover));
+}
+.row.selected:has(+ .row.selected) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.row.selected + .row.selected {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 /* Thin scrollbars with no arrows, in both themes. The thumb is see-through

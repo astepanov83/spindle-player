@@ -197,6 +197,14 @@ function artistsOf(
   return { artists, artistPhotos }
 }
 
+// The earliest of its songs: an album that gets a song later was still added
+// when it first came. An entry from an older index has its mtime.
+export function addedOf(entries: FileEntry[]): number {
+  let at = Infinity
+  for (const e of entries) at = Math.min(at, e.added ?? e.mtime)
+  return Number.isFinite(at) ? at : 0
+}
+
 // `roots` are the music folders, for the Folders view. `photos` are the
 // artist photos found online, by artist key. `names` changes the artist
 // names shown (artists.json, see resolve); albums are still grouped and
@@ -287,6 +295,7 @@ export function buildLibrary(
       title,
       ...creditOf(artist, names),
       year: yearOf(entries),
+      added: addedOf(entries),
       palette: paletteOf(ix, cover, id),
       ...(cover ? coverUrls(cover) : { cover: '', coverLarge: '' }),
       trackIds: tracks.map((t) => t.id),

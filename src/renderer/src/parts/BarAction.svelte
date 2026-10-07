@@ -1,7 +1,7 @@
 <!-- One of the item's actions on the player bar, drawn in the core's style: a
      button, or a choice that opens the app's menu with the picked option checked.
      `wide`: the bar has room for a button's word and wants a choice short
-     ("320"); the stack shows a button's icon alone and a choice whole. -->
+     ("320k"); the stack shows a button's icon alone and a choice whole. -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
   import { menu } from '../stores/menu.svelte'

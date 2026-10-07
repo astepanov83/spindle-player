@@ -165,7 +165,7 @@ describe('the artist groups job', () => {
     g.cache.joined = new Set(['a', 'b'])
     g.cache.split = new Set(['a', 'b'])
     const j = job(ai, names, g)
-    expect(await j.done).toEqual({ end: 'done', grouped: 0, asked: false })
+    expect(await j.done).toEqual({ end: 'done', joined: 0, split: 0, asked: false })
     expect(calls).toEqual([])
     expect(j.statuses).toEqual([])
   })
@@ -235,16 +235,16 @@ describe('the artist groups job', () => {
               )
         )
         const j = job(ai, plain(['Abba', 'Beatles', 'Bjork', 'Björk', 'The Beatles']))
-        expect(await j.done).toEqual({ end: 'done', grouped: 2, asked: true })
+        expect(await j.done).toEqual({ end: 'done', joined: 1, split: 0, asked: true })
         expect(calls.map((c) => c.avoid)).toEqual([undefined, ['m1'], undefined])
         expect(j.groups()).toEqual({ bjork: 'Bjork', björk: 'Bjork' })
-        expect(j.statuses.at(-1)).toEqual({ state: 'done', grouped: 2, at: 1000 })
+        expect(j.statuses.at(-1)).toEqual({ state: 'done', joined: 1, split: 0, at: 1000 })
       })
 
       it('keeps nothing when the two answers disagree, and still marks the names asked', async () => {
         const { ai } = fakeAi((c, i) => (c.avoid ? avoided : ok(i === 0 ? [[2, 1]] : [[3, 1]])))
         const j = job(ai, plain(['Bjork', 'Björk', 'Bjorky']))
-        expect(await j.done).toEqual({ end: 'done', grouped: 0, asked: true })
+        expect(await j.done).toEqual({ end: 'done', joined: 0, split: 0, asked: true })
         expect(Object.keys(j.groups()).length).toBe(0)
         expect(j.cache.joined.size).toBe(3)
       })
@@ -270,7 +270,7 @@ describe('the artist groups job', () => {
           : ok([[1, 2]], c.avoid ? 'm2' : 'm1')
       )
       const j = job(ai, list)
-      expect(await j.done).toMatchObject({ end: 'done', grouped: 3 })
+      expect(await j.done).toMatchObject({ end: 'done', joined: 2, split: 0 })
       expect(j.groups()).toEqual({ n1: 'N2', n2: 'N2', n250: 'N2' })
     })
 
@@ -307,7 +307,7 @@ describe('the artist groups job', () => {
       const names = plain(['Björk', 'Bjork', 'BJORK!'])
       names[0].manual = true
       const j = job(ai, names, g)
-      expect(await j.done).toMatchObject({ end: 'done', grouped: 1 })
+      expect(await j.done).toMatchObject({ end: 'done', joined: 1, split: 0 })
       expect(j.artists.artists).toEqual([
         {
           name: 'Björk',
@@ -344,7 +344,7 @@ describe('the artist groups job', () => {
       expect(j.saves).toHaveLength(4)
     })
 
-    it('says how far it got, and how many names it grouped', async () => {
+    it('says how far it got, and how many names it joined and split', async () => {
       const { ai } = fakeAi(both([[1, 2]]))
       const j = job(ai, plain(many(250)))
       await j.done
@@ -353,7 +353,7 @@ describe('the artist groups job', () => {
         { state: 'running', step: 'split', checked: 200, total: 250 },
         { state: 'running', step: 'join', checked: 0, total: 250 },
         { state: 'running', step: 'join', checked: 200, total: 250 },
-        { state: 'done', grouped: 2, at: 1000 }
+        { state: 'done', joined: 1, split: 0, at: 1000 }
       ])
     })
   })
@@ -398,7 +398,7 @@ describe('the artist groups job', () => {
             : parts([[3, ['Sadness', 'Forgotten']]])
       })
       const j = job(ai, credit)
-      expect(await j.done).toEqual({ end: 'done', grouped: 1, asked: true })
+      expect(await j.done).toEqual({ end: 'done', joined: 0, split: 1, asked: true })
       expect(splits.map((c) => c.avoid)).toEqual([undefined, ['m1']])
       // "sadness" is a tag already: its spelling names the artist
       expect(j.artists.artists).toEqual([
@@ -428,7 +428,7 @@ describe('the artist groups job', () => {
               ])
       })
       const j = job(ai, credit)
-      expect(await j.done).toMatchObject({ end: 'done', grouped: 0 })
+      expect(await j.done).toMatchObject({ end: 'done', joined: 0, split: 0 })
       expect(j.artists.artists).toEqual([])
       expect(j.logs).toContain(
         'Artist groups: dropped a split from m1: Forgoten: "Sadness" is not in the tag'
@@ -456,7 +456,7 @@ describe('the artist groups job', () => {
         { split: bothSplit([[3, ['Sadness', 'Forgotten']]]) }
       )
       const j = job(ai, credit)
-      expect(await j.done).toEqual({ end: 'done', grouped: 2, asked: true })
+      expect(await j.done).toEqual({ end: 'done', joined: 1, split: 1, asked: true })
       expect(calls[0].req.user.split('\nCHECK')[0]).toBe(
         'LIST\n1 Forgoten | Forgoten album\n2 Forgotten | Sadness, Forgotten album\n3 sadness | sadness album'
       )
@@ -483,7 +483,7 @@ describe('the artist groups job', () => {
       })
       const { ai } = fakeAi(both([]), { split: bothSplit([[3, ['Sadness', 'Forgotten']]]) })
       const j = job(ai, credit, g)
-      expect(await j.done).toMatchObject({ grouped: 0 })
+      expect(await j.done).toMatchObject({ joined: 0, split: 0 })
       expect(j.artists.artists).toHaveLength(1)
     })
 
@@ -578,7 +578,7 @@ describe('the artist groups job', () => {
       startFullCheck(g.artists, g.cache)
       const { ai, calls } = fakeAi(both([]))
       const j = job(ai, names(), g)
-      expect(await j.done).toEqual({ end: 'done', grouped: 0, asked: true })
+      expect(await j.done).toEqual({ end: 'done', joined: 0, split: 0, asked: true })
       expect(calls.length).toBe(2)
       expect(j.artists.artists).toEqual([
         { name: 'Кино', nameBy: 'you', tags: [{ tag: 'Kino', by: 'you' }] }
@@ -593,7 +593,7 @@ describe('the artist groups job', () => {
       startFullCheck(g.artists, g.cache)
       const { ai } = fakeAi(both([[1, 2]]))
       const j = job(ai, names(), g)
-      expect(await j.done).toEqual({ end: 'done', grouped: 1, asked: true })
+      expect(await j.done).toEqual({ end: 'done', joined: 0, split: 0, asked: true })
       expect(j.groups()).toEqual({ bjork: 'Björk', björk: 'Björk', kino: 'Кино' })
     })
 
@@ -639,7 +639,7 @@ describe('the artist groups job', () => {
     it('lets a join replace an old split no answer gave again', async () => {
       const { ai } = fakeAi(pairNames('A, B', 'A-B'))
       const j = job(ai, plain(['A, B', 'A-B']), oldSplit())
-      expect(await j.done).toEqual({ end: 'done', grouped: 2, asked: true })
+      expect(await j.done).toEqual({ end: 'done', joined: 1, split: 0, asked: true })
       expect(j.artists.artists).toEqual([
         {
           name: 'A, B',

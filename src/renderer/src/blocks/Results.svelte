@@ -2,6 +2,7 @@
      (tickets 039, 059), group after group, each cut short with "Show all".
      Songs play with every song of their group as the queue. -->
 <script lang="ts">
+  import SearchButtons from './SearchButtons.svelte'
   import Tiles from './Tiles.svelte'
   import Empty from '../library/Empty.svelte'
   import SongTable from '../library/SongTable.svelte'
@@ -10,15 +11,23 @@
   import Icon from '../ui/Icon.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import { fmtTime } from '../format'
-  import { roving } from '../ui/roving'
+  import { roving, type RovingSelect } from '../ui/roving'
   import { infoOf } from '../plugins'
+  import type { ShownTab } from '../plugins/tabs'
   import type { FoundGroup, ResultsBlock } from '../plugins/types'
   import type { ItemKey } from '../../../shared/plugins/items'
   import { library } from '../stores/library.svelte'
   import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
+  import { rowSelection } from '../stores/selection.svelte'
+  import { listRows } from '../ui/selection'
 
-  let { block: b, scrollEl }: { block: ResultsBlock; scrollEl: HTMLElement | undefined } = $props()
+  // `wider`: the other tabs to search, under "No matches" or after the groups
+  let {
+    block: b,
+    scrollEl,
+    wider = []
+  }: { block: ResultsBlock; scrollEl: HTMLElement | undefined; wider?: ShownTab[] } = $props()
 
   const TOP_SONGS = 8
   // 2, 3, 4 or 6 columns fill their rows
@@ -38,6 +47,39 @@
   function play(keys: ItemKey[], i: number): void {
     queue.playList(keys, i, from)
   }
+
+  // One selection over the songs shown in every group (ticket 086), so a
+  // Shift+click can reach into the next group. A group's rows are numbered
+  // from `at` in it.
+  const songGroups = $derived.by(() => {
+    let at = 0
+    return groups.flatMap((f) => {
+      if (!('songs' in f.group)) return []
+      const keys = f.group.songs.slice(0, TOP_SONGS)
+      const g = { key: f.key, keys, at }
+      at += keys.length
+      return [g]
+    })
+  })
+  const shown = $derived(listRows(songGroups.flatMap((g) => g.keys)))
+  const sel = rowSelection(
+    () => shown,
+    (keys) => keys
+  )
+  const startOf = (f: FoundGroup): number => songGroups.find((g) => g.key === f.key)?.at ?? 0
+
+  function onrowclick(e: MouseEvent, f: FoundGroup, keys: ItemKey[], i: number): void {
+    if (!sel.click(startOf(f) + i, e)) play(keys, i)
+  }
+
+  // the list keys of one group, in its own row numbers
+  function selectIn(f: FoundGroup, keys: ItemKey[]): RovingSelect {
+    return {
+      step: (a, b) => sel.step(startOf(f) + a, startOf(f) + b),
+      all: () => sel.only(keys.slice(0, TOP_SONGS)),
+      clear: () => sel.clear()
+    }
+  }
 </script>
 
 {#snippet more(f: FoundGroup)}
@@ -52,17 +94,26 @@
 {#snippet songList(f: FoundGroup, keys: ItemKey[])}
   <section class="songs">
     {@render more(f)}
-    <div class="lines" use:roving={{ rows: keys }}>
+    <!-- the heads every song list has (ticket 075); the rows say it all to a
+         screen reader -->
+    <div class="rhead song-head" aria-hidden="true">
+      <span>Title</span>
+      <span>Artist</span>
+      <span class="al">Album</span>
+      <span class="end">Time</span>
+    </div>
+    <div class="lines song-rows" use:roving={{ rows: keys, select: selectIn(f, keys) }}>
       {#each keys.slice(0, TOP_SONGS) as key, i (key)}
         {@const t = infoOf(key)}
         {@const cur = queues.isItem(key)}
         <button
           class="srow row"
           class:cur-row={cur}
+          class:selected={sel.has(key)}
           data-row
           aria-current={cur ? 'true' : undefined}
-          onclick={() => play(keys, i)}
-          oncontextmenu={(e) => openSongMenu(e, [key], { from })}
+          onclick={(e) => onrowclick(e, f, keys, i)}
+          oncontextmenu={(e) => openSongMenu(e, sel.menu(startOf(f) + i), { from })}
         >
           <span class="tt">
             <Thumb src={t?.art?.cover} size={36} radius={4} />
@@ -100,7 +151,11 @@
     <Tiles block={whole.group.tiles} tab={library.tab} plugin={whole.plugin} {scrollEl} />
   {/if}
 {:else if !groups.length}
-  <Empty title="No matches" text={b.empty} />
+  {#if wider.length}
+    <Empty title="No matches" text={b.empty}><SearchButtons tabs={wider} /></Empty>
+  {:else}
+    <Empty title="No matches" text={b.empty} />
+  {/if}
 {:else}
   {#each groups as f (f.key)}
     {#if 'songs' in f.group}
@@ -117,11 +172,18 @@
       </section>
     {/if}
   {/each}
+  {#if wider.length}<div class="wider"><SearchButtons tabs={wider} /></div>{/if}
 {/if}
 
 <style>
   section + section {
     margin-top: 14px;
+  }
+  .wider {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 22px;
   }
   .grouphead {
     display: flex;
@@ -159,14 +221,20 @@
     padding-bottom: 16px;
   }
   /* the song table's rows, with no number column */
+  .rhead,
   .srow {
     display: grid;
     grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 56px;
     gap: 16px;
     align-items: center;
+    padding: 0 12px;
+  }
+  .rhead .end {
+    text-align: right;
+  }
+  .srow {
     width: 100%;
     height: 54px;
-    padding: 0 12px;
     font-size: var(--text-l);
   }
   /* a narrow list drops the album; the album group is below */
@@ -174,6 +242,7 @@
     container-type: inline-size;
   }
   @container (max-width: 520px) {
+    .rhead,
     .srow {
       grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 44px;
     }

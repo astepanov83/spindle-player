@@ -16,13 +16,14 @@ export function radioPreload(): RadioApi {
     save: (station) => invoke(RadioChannel.save, station),
     remove: (id) => invoke(RadioChannel.remove, id),
     restore: (id) => invoke(RadioChannel.restore, id),
-    move: (id, by) => invoke(RadioChannel.move, id, by),
+    move: (id, to) => invoke(RadioChannel.move, id, to),
     choose: (id, url) => invoke(RadioChannel.choose, id, url),
     history: (id) => invoke(RadioChannel.history, id),
     play: (station) => invoke(RadioChannel.play, station),
     lastAnswer: (id) => invoke(RadioChannel.lastAnswer, id),
     stop: () => send(RadioChannel.stop),
     search: (q) => invoke(RadioChannel.search, q),
+    popular: () => invoke(RadioChannel.popular),
     onTitle: (listener) => {
       const handler = (_: Electron.IpcRendererEvent, title: RadioTitle): void => listener(title)
       ipcRenderer.on(RadioChannel.title, handler)

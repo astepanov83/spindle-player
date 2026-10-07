@@ -97,9 +97,9 @@ export class StationsStore {
     return this.#set(next)
   }
 
-  move(id: unknown, by: unknown): Station[] {
-    if (typeof id !== 'string' || (by !== -1 && by !== 1)) return this.#data
-    return this.#set(moveStation(this.#data, id, by))
+  move(id: unknown, to: unknown): Station[] {
+    if (typeof id !== 'string' || typeof to !== 'number') return this.#data
+    return this.#set(moveStation(this.#data, id, to))
   }
 
   choose(id: unknown, url: unknown): Station[] {

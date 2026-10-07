@@ -112,6 +112,13 @@ describe('RadioPlugin on', () => {
     expect(r.lookups).toHaveLength(1)
   })
 
+  it('asks Radio Browser for popular stations, and says when it is out of reach', async () => {
+    const r = setup()
+    r.plugin.setOn(true)
+    expect(await r.call(RadioChannel.popular)).toEqual({ ok: false })
+    expect(r.lookups).toEqual(['all.api.radio-browser.info'])
+  })
+
   it('opens a station stream', async () => {
     const r = setup()
     r.plugin.setOn(true)
@@ -134,6 +141,7 @@ describe('RadioPlugin off', () => {
     const r = setup()
     r.plugin.setOn(false)
     expect(await r.call(RadioChannel.search, 'drone')).toEqual({ ok: false })
+    expect(await r.call(RadioChannel.popular)).toEqual({ ok: false })
     expect(r.lookups).toEqual([])
     expect(r.fetched).toEqual([])
   })

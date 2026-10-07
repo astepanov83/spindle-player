@@ -74,7 +74,7 @@ describe('StationsStore', () => {
     const store = new StationsStore(path)
     store.save(st('a'))
     store.save(st('b'))
-    store.move('b', -1)
+    store.move('b', 1)
     store.choose('a', 'https://a.example/s')
     expect(store.list().map((s) => s.id)).toEqual(['metal-only', 'b', 'a'])
     store.remove('metal-only')
@@ -90,6 +90,7 @@ describe('StationsStore', () => {
     expect(store.save({ id: '../x', name: 'Bad' }).map((s) => s.id)).toEqual(['metal-only'])
     expect(store.save('junk').map((s) => s.id)).toEqual(['metal-only'])
     expect(store.move('metal-only', 5)).toHaveLength(1)
+    expect(store.move('metal-only', '0')).toHaveLength(1)
     expect(store.remove(7)).toHaveLength(1)
   })
 

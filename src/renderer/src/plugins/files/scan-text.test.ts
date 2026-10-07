@@ -321,25 +321,30 @@ describe('groupsLine', () => {
     expect(groupsLine({ state: 'done', grouped: 1, at })?.text).toBe('Grouped 1 artist, 10:42')
   })
 
-  it('says when it goes on after a limit', () => {
-    expect(groupsLine({ state: 'limit', at }, now)?.text).toBe(
-      'Waiting for the limit. Will go on at 10:42.'
+  it('says when it goes on after a limit, naming the service', () => {
+    const line = (at?: number): string | undefined =>
+      groupsLine({ state: 'limit', at }, 'OpenRouter', now)?.text
+    expect(line(at)).toBe('OpenRouter asked to wait. Will go on at 10:42.')
+    expect(line(at + 24 * 3600_000)).toBe(
+      "Used up today's requests on OpenRouter. Will go on tomorrow."
     )
-    expect(groupsLine({ state: 'limit', at: at + 24 * 3600_000 }, now)?.text).toBe(
-      'Waiting for the limit. Will go on tomorrow.'
+    expect(line(at + 3 * 24 * 3600_000)).toBe(
+      'Used up the requests OpenRouter allows for now. Will go on Oct 7.'
     )
-    expect(groupsLine({ state: 'limit' }, now)?.text).toBe(
-      'Waiting for the limit. Will go on after the next scan.'
+    expect(line()).toBe('Reached the request limit on OpenRouter. Will go on after the next scan.')
+    // no name known
+    expect(groupsLine({ state: 'limit', at }, undefined, now)?.text).toBe(
+      'The service asked to wait. Will go on at 10:42.'
     )
   })
 
-  it('says a run stopped, as an error', () => {
-    expect(groupsLine({ state: 'stopped', error: 'network' })).toEqual({
-      text: 'Could not reach the service. Will try again after the next scan.',
+  it('says a run stopped and why, as an error', () => {
+    expect(groupsLine({ state: 'stopped', error: 'network' }, 'OpenRouter')).toEqual({
+      text: 'Could not reach OpenRouter. Will try again after the next scan.',
       error: true
     })
-    expect(groupsLine({ state: 'stopped', error: 'failed' })?.text).toBe(
-      'The service gave no usable answer. Will try again after the next scan.'
+    expect(groupsLine({ state: 'stopped', error: 'failed' }, 'OpenRouter')?.text).toBe(
+      'Every model on OpenRouter failed or gave an answer Spindle could not read. Will try again after the next scan.'
     )
   })
 })

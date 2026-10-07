@@ -45,10 +45,12 @@ export function filesSettings(): SettingBlock[] {
 
 // The task's own line and button, in its box under the setup, only while it is switched on.
 function groupsBlocks(): SettingBlock[] {
-  const task = ai.state?.tasks[artistGroupsTask]
-  if (!task?.on) return []
+  const state = ai.state
+  const task = state?.tasks[artistGroupsTask]
+  if (!state || !task?.on) return []
+  const service = state.providers.find((p) => p.id === state.provider)?.name
   const g = files.status.groups
-  const line = groupsLine(g)
+  const line = groupsLine(g, service)
   const out: SettingBlock[] = []
   if (line) out.push({ kind: 'status', ...line })
   // asking needs the provider ready, not only the switch
@@ -56,8 +58,16 @@ function groupsBlocks(): SettingBlock[] {
     kind: 'button',
     id: 'ai-recheck',
     label: 'Check all names again',
-    disabled: !task.ready || g?.state === 'running'
+    disabled: !task.ready || g?.state === 'running',
+    // every name again is the one big run, so it asks first when it may cost money
+    ...(state.paid && { confirm: 'This asks about every artist again and may use credit.' })
   })
+  // a greyed button says why
+  if (!task.ready)
+    out.push({
+      kind: 'status',
+      text: service ? `Connect ${service} first.` : 'Connect a service first.'
+    })
   return out
 }
 

@@ -11,9 +11,10 @@ const own = (): SettingBlock[] => {
   return b?.kind === 'ai' ? (b.blocks ?? []) : []
 }
 
-const state = (on: boolean, ready = on): AiState => ({
-  providers: [],
+const state = (on: boolean, ready = on, paid = false): AiState => ({
+  providers: [{ id: 'p', name: 'OpenRouter', about: '' }],
   provider: 'p',
+  paid,
   tasks: {
     'artist-groups': {
       info: { id: 'artist-groups', name: 'Group', about: '', sends: '' },
@@ -62,12 +63,30 @@ describe('filesSettings and the artist groups task', () => {
     expect(filesSettings().at(-1)).toEqual({ kind: 'ai', task: 'artist-groups', blocks: [] })
   })
 
-  it('keeps the line and shows the button disabled while switched on but not ready', () => {
+  it('keeps the line, and says why the button is disabled while switched on but not ready', () => {
     files.status = { ...files.status, groups: { state: 'done', grouped: 1, at: 0 } }
     ai.state = state(true, false)
     const blocks = own()
-    expect(blocks.at(-2)).toMatchObject({ kind: 'status' })
-    expect(blocks.at(-1)).toMatchObject({ id: 'ai-recheck', disabled: true })
+    expect(blocks.at(-3)).toMatchObject({ kind: 'status' })
+    expect(blocks.at(-2)).toMatchObject({ id: 'ai-recheck', disabled: true })
+    expect(blocks.at(-1)).toEqual({ kind: 'status', text: 'Connect OpenRouter first.' })
+  })
+
+  it('asks before checking every name when an ask may cost money', () => {
+    files.status = { ...files.status, groups: { state: 'done', grouped: 1, at: 0 } }
+    ai.state = state(true, true, false)
+    expect(own().at(-1)).not.toHaveProperty('confirm')
+    ai.state = state(true, true, true)
+    expect(own().at(-1)).toMatchObject({
+      id: 'ai-recheck',
+      confirm: 'This asks about every artist again and may use credit.'
+    })
+  })
+
+  it('names the service in an error line', () => {
+    files.status = { ...files.status, groups: { state: 'stopped', error: 'network' } }
+    ai.state = state(true)
+    expect(own()[0]).toMatchObject({ text: expect.stringContaining('Could not reach OpenRouter') })
   })
 
   it('shows neither the line nor the button while switched off', () => {

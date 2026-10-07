@@ -18,8 +18,10 @@ export type SettingBlock =
       paths?: boolean
       disabled?: boolean
     }
-  // buttons side by side when they follow each other. act: `press`
-  | { kind: 'button'; id: string; label: string; disabled?: boolean }
+  // buttons side by side when they follow each other. act: `press`.
+  // `confirm`, when there, is a question shown in place of the button first,
+  // with Go on (sends the press) and Cancel.
+  | { kind: 'button'; id: string; label: string; disabled?: boolean; confirm?: string }
   // `about`: a line of help under the label. act: `set` with 'true' or 'false'
   | { kind: 'switch'; id: string; label: string; on: boolean; about?: string }
   // One line of text. act: `set` with the text, on Enter or when the box loses

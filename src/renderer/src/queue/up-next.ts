@@ -114,31 +114,45 @@ export function dropSlotAt(y: number, s: Shape): number {
   return lo
 }
 
-// Where song `i` goes when song `from` moves to `to`.
-export function movedTo(i: number, from: number, to: number): number {
-  if (i === from) return to
-  if (from < to && i > from && i <= to) return i - 1
-  if (to < from && i >= to && i < from) return i + 1
-  return i
+// Where song `i` goes when the songs `moved` (in order) go together to the
+// gap before song `slot` (queue/logic.ts moveOrder). A lookup per row, so a
+// drag in 50k songs does not build the whole order on each pointer move.
+export function movedTo(i: number, moved: readonly number[], slot: number): number {
+  const at = moved.indexOf(i)
+  if (at >= 0) return slot - below(moved, slot) + at
+  return i - below(moved, i) + (i >= slot ? moved.length : 0)
 }
 
-// Where the rows and headings stand while a row is dragged: as if it were
-// dropped, so the gap opens where it would land and Now playing and Up next
-// sit where they will be. The fold stays as it is until the drop.
+// How many of `rows` (in order) are below `i`.
+function below(rows: readonly number[], i: number): number {
+  let lo = 0
+  let hi = rows.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (rows[mid] < i) lo = mid + 1
+    else hi = mid
+  }
+  return lo
+}
+
+// Where the rows and headings stand while rows are dragged: as if they
+// were dropped at `slot`, so the gap opens where they would land and Now
+// playing and Up next sit where they will be. The fold stays as it is until
+// the drop.
 export interface DragTops {
   row(index: number): number | undefined
   now: number
   next: number | undefined
 }
 
-export function dragTops(s: Shape, from: number, to: number): DragTops {
+export function dragTops(s: Shape, moved: readonly number[], slot: number): DragTops {
   const l = layoutOf(s)
-  const current = movedTo(l.current, from, to)
+  const current = movedTo(l.current, moved, slot)
   const after: Layout = { ...l, current, first: Math.min(l.first, current) }
   const m = marks(after)
   return {
     row(index) {
-      const line = lineOfIn(movedTo(index, from, to), after)
+      const line = lineOfIn(movedTo(index, moved, slot), after)
       return line === undefined ? undefined : topIn(line, after)
     },
     now: topIn(m.now, after),

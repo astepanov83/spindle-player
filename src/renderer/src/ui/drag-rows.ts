@@ -1,5 +1,5 @@
 // Drag to reorder a list of same-height rows. The queue has headings between
-// its rows and works out its own slots (queue/up-next.ts); dropIndex is shared.
+// its rows and moves several at once, so it works out its own slots (queue/up-next.ts).
 // Positions are in pixels from the top of the list. A slot is a gap between rows, 0..count.
 
 // The gap nearest the pointer: over the top half of a row is above it.

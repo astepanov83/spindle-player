@@ -18,14 +18,16 @@ import {
   follows,
   insertNext,
   jump,
+  moveOrder,
   moveRow,
   onEnded,
   passOver,
   prune,
   queueNotice,
   removedNotice,
-  removeRow,
-  undoRemove,
+  removeRows,
+  reorder,
+  undoRemoveRows,
   type NextOptions,
   type QueueState,
   type Walk
@@ -44,7 +46,8 @@ const savePosEverySec = 5
 interface Undo {
   before: QueueState
   after: QueueState
-  at?: number
+  // the rows a Remove took; none for Clear
+  rows?: number[]
   pos: number
   play: boolean
   action: NoticeAction
@@ -345,19 +348,48 @@ class TrackQueue {
 
   // "Play next" on a queue row: it moves up to right after the current song.
   playRowNext(i: number): void {
-    if (i === this.index || i < 0 || i >= this.items.length) return
-    const key = this.items[i]
-    if (i === this.index + 1) {
-      // already next: it only has to count as a Play next song, for shuffle
-      this.#next ||= 1
-      this.savePos()
-    } else this.move(i, i < this.index ? this.index : this.index + 1)
-    notice.show(queueNotice('next', [key], this.#title([key])))
+    this.playRowsNext([i])
+  }
+
+  // "Play next" on several queue rows (ticket 086): they go right after the
+  // current song, in their order, as Play next songs. Already there, they
+  // only count as Play next songs, for shuffle.
+  playRowsNext(rows: number[]): void {
+    const go = rows.filter((r) => r !== this.index && r >= 0 && r < this.items.length)
+    if (!go.length) return
+    const keys = go.map((r) => this.items[r])
+    this.reorder(moveOrder(this.items.length, go, this.index + 1), go)
+    notice.show(queueNotice('next', keys, this.#title(keys)))
   }
 
   // Drag or Alt+Up / Alt+Down in the queue. The current song plays on.
   move(from: number, to: number): void {
-    this.#set(moveRow(this.#state(), from, to))
+    const n = this.items.length
+    if (from === to || from < 0 || from >= n || to < 0 || to >= n) return
+    this.#reordered(moveOrder(n, [from], to > from ? to + 1 : to), moveRow(this.#state(), from, to))
+  }
+
+  // Several rows moved at once (ticket 086): `order[j]` is the row that goes
+  // to place j (queue/logic.ts). The current song plays on.
+  reorder(order: number[], moved: number[]): void {
+    if (order.length !== this.items.length) return
+    const s = reorder(this.#state(), order, moved)
+    if (s.items === this.items) {
+      // already in place: only the Play next count changed
+      this.#set(s)
+      this.savePos()
+    } else this.#reordered(order, s)
+  }
+
+  // The last move, so a queue part can keep its selected rows on the same
+  // songs at their new places (ticket 086). Not state: the part reads it
+  // when the list changes.
+  lastOrder: { before: ItemKey[]; after: ItemKey[]; order: number[] } | undefined
+
+  #reordered(order: number[], s: QueueState): void {
+    const before = this.items
+    this.#set(s)
+    this.lastOrder = { before, after: this.items, order }
   }
 
   // "Remove from queue". When the current song goes, the one after it loads,
@@ -365,21 +397,31 @@ class TrackQueue {
   // been heard already.
   // Its notice offers Undo.
   remove(i: number): void {
-    const wasCurrent = i === this.index
+    this.removeRows([i])
+  }
+
+  // Several rows at once (ticket 086), with one Undo for all.
+  removeRows(rows: number[]): void {
     const q = this.#state()
-    const s = removeRow(q, i)
+    const go = [...new Set(rows)].filter((r) => r >= 0 && r < q.items.length).sort((a, b) => a - b)
+    const s = removeRows(q, go)
     if (s === q) return
-    const key = q.items[i]
+    const wasCurrent = go.includes(q.index)
     const pos = player.pos
     const wasPlaying = this.#sounding()
     // the one before is not the next song, except under shuffle, which never runs out
-    const goesOn = wasPlaying && (s.index === i || player.shuffle)
+    const after = q.items.length - 1 - q.index
+    const goesOn = wasPlaying && (go.filter((r) => r > q.index).length < after || player.shuffle)
     this.#set(s)
     if (wasCurrent) this.#start(goesOn)
-    this.#offerUndo(removedNotice(this.#title([key])), {
+    const text =
+      go.length === 1
+        ? removedNotice(this.#title([q.items[go[0]]]))
+        : `Removed ${go.length} songs from the queue`
+    this.#offerUndo(text, {
       before: q,
       after: s,
-      at: i,
+      rows: go,
       pos: wasCurrent ? pos : 0,
       play: wasCurrent && wasPlaying && !goesOn
     })
@@ -423,9 +465,9 @@ class TrackQueue {
     if (!u || this.items !== u.after.items) return
     const now = this.#state()
     const r =
-      u.at === undefined
+      u.rows === undefined
         ? { state: u.before, restart: !now.items.length }
-        : undoRemove(now, u.before, u.after, u.at)
+        : undoRemoveRows(now, u.before, u.after, u.rows)
     const andPlay = this.#sounding() || u.play
     this.#set(r.state)
     if (r.restart) this.#start(andPlay, u.pos)

@@ -294,11 +294,13 @@
      nothing yet. -->
 {#snippet words(s: ItemAnswer, eq: boolean)}
   {#if s.state === 'ok'}
-    <Thumb src={s.info.art?.cover} {eq} />
+    {@const away = s.info.unavailable}
+    <Thumb src={s.info.art?.cover} {eq} away={!!away} />
     <span class="qt"
       ><span class="nm" title={s.info.title}>{s.info.title}</span><span
         class="ar"
-        title={s.info.subtitle}>{s.info.subtitle ?? ''}</span
+        class:away
+        title={away ?? s.info.subtitle}>{away ?? s.info.subtitle ?? ''}</span
       ></span
     >
     <span class="d">{s.info.length === undefined ? '' : fmtTime(s.info.length)}</span>
@@ -590,6 +592,10 @@
     color: var(--ink-3);
     font-variant-numeric: tabular-nums;
     font-size: var(--text-s);
+  }
+  /* why it can't play, in place of the artist */
+  .ar.away {
+    color: var(--warn);
   }
   .cur-row .nm {
     font-weight: 600;

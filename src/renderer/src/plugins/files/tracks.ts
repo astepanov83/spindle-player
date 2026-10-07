@@ -2,6 +2,7 @@
 import type { Art, Track } from '../../../../shared/library'
 import { itemKey, type ItemKey } from '../../../../shared/plugins/items'
 import { artistLinks } from './artists'
+import { rootName } from './folders'
 import { files } from './store.svelte'
 import type { ItemInfo, ItemState, PageAddress, Playable } from '../types'
 
@@ -53,6 +54,11 @@ class TrackInfo implements ItemInfo {
 
   get art(): Art | undefined {
     return files.art(this.#t)
+  }
+
+  get unavailable(): string | undefined {
+    const root = files.missingRoot(this.#t)
+    return root && `Folder not found: ${rootName(root)}`
   }
 
   get groupTo(): PageAddress {

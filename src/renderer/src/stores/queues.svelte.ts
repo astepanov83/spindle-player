@@ -110,7 +110,10 @@ class Queues {
       : queue.currentInfo
   )
   title: string | undefined = $derived(this.info?.title)
-  sub: string | undefined = $derived(this.info && subLine(this.info.subtitle, this.info.group))
+  // a song that can't play says why in place of its artist and album
+  sub: string | undefined = $derived(
+    this.info && (this.info.unavailable ?? subLine(this.info.subtitle, this.info.group))
+  )
   art: Art | undefined = $derived(this.info?.art)
   // what the player bar draws for it
   bar: Bar = $derived(this.active === 'live' ? this.#liveBar() : this.#trackBar())

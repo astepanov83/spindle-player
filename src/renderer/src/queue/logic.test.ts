@@ -148,7 +148,6 @@ describe('jump', () => {
 
 describe('failNotice', () => {
   it('tells a file that is gone from a format, with the title last', () => {
-    expect(failNotice('Song', true, 'paused')).toBe('File is gone or can\'t be read: "Song"')
     expect(failNotice('Song', false, 'skipped')).toBe('Format can\'t be played, skipped: "Song"')
     expect(failNotice('Song', true, 'end')).toBe(
       'File is gone or can\'t be read, stopped at the end of the list: "Song"'

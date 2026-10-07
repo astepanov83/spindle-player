@@ -64,7 +64,7 @@ function fakeWindow(moves: IdMoves): void {
         asked.push('library')
         return {
           library: bytes({ ...library, epoch: 'e', n: 1 }),
-          status: { phase: 'idle', folders: [] },
+          status: { phase: 'idle', folders: [], missing: [] },
           moves
         }
       },

@@ -40,6 +40,8 @@
   })
 
   const artist = $derived(b.artist ?? true)
+  // in the markup this would lose its spaces next to a block
+  const dot = ' · '
 
   // Ctrl and Shift select rows (ticket 086); the table has its own
   const shown = $derived(listRows(b.items))
@@ -106,6 +108,7 @@
           {@const s = itemInfo(line.key)}
           {@const t = s.state === 'ok' ? s.info : undefined}
           {@const cur = queues.isItem(line.key)}
+          {@const away = t?.unavailable}
           <button
             class="srow row"
             data-song={splitKey(line.key)?.id}
@@ -119,10 +122,15 @@
               openSongMenu(e, sel.menu(line.at), { from: b.from, link: b.link })}
           >
             <span class="n"
-              >{#if cur && queues.songPlaying}<Eq />{:else if line.no}{line.no}{/if}</span
+              >{#if cur && queues.songPlaying}<Eq />{:else if away}<span class="away mark">!</span
+                >{:else if line.no}{line.no}{/if}</span
             >
-            <span class="nm" title={t?.title}>{t?.title ?? ''}</span>
-            {#if artist}<span class="ar" title={t?.subtitle}>{t?.subtitle ?? ''}</span>{/if}
+            <span class="nm" title={t?.title}
+              >{t?.title ?? ''}{#if away && !artist}<span class="away">{dot}{away}</span>{/if}</span
+            >
+            {#if artist}<span class="ar" class:away title={away ?? t?.subtitle}
+                >{away ?? t?.subtitle ?? ''}</span
+              >{/if}
             {#if b.starts}
               <span class="d" title={b.starts.hint}>{fmtClock(b.starts.at[line.at] ?? 0)}</span>
             {:else}
@@ -192,6 +200,14 @@
   }
   .ar {
     color: var(--ink-2);
+  }
+  /* its music folder was not found: why it can't play */
+  .away,
+  .ar.away {
+    color: var(--warn);
+  }
+  .mark {
+    font-weight: 800;
   }
   .cur-row .nm {
     font-weight: 600;

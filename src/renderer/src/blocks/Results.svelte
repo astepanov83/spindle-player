@@ -108,6 +108,7 @@
     <div class="lines song-rows" use:roving={{ rows: keys, select: selectIn(f, keys) }}>
       {#each keys.slice(0, TOP_SONGS) as key, i (key)}
         {@const t = infoOf(key)}
+        {@const away = t?.unavailable}
         {@const cur = queues.isItem(key)}
         <button
           class="srow row"
@@ -121,14 +122,14 @@
           oncontextmenu={(e) => openSongMenu(e, sel.menu(startOf(f) + i), { from })}
         >
           <span class="tt">
-            <Thumb src={t?.art?.cover} size={36} radius={4} />
+            <Thumb src={t?.art?.cover} size={36} radius={4} away={!!away} />
             <span class="nm"
               >{#if cur && queues.songPlaying}<Eq />{/if}<span title={t?.title}
                 >{t?.title ?? ''}</span
               ></span
             >
           </span>
-          <span class="o" title={t?.subtitle}>{t?.subtitle ?? ''}</span>
+          <span class="o" class:away title={away ?? t?.subtitle}>{away ?? t?.subtitle ?? ''}</span>
           <span class="o al" title={t?.group}>{t?.group ?? ''}</span>
           <span class="d">{t?.length === undefined ? '' : fmtTime(t.length)}</span>
         </button>
@@ -288,5 +289,9 @@
     font-variant-numeric: tabular-nums;
     font-size: var(--text-m);
     text-align: right;
+  }
+  /* its music folder was not found: why it can't play */
+  .o.away {
+    color: var(--warn);
   }
 </style>

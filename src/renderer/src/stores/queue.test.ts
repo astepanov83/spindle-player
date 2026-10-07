@@ -329,13 +329,13 @@ describe('a song fails', () => {
     expect(log.mock.calls[0][0]).toContain('(file gone or unreadable)')
   })
 
-  it('stays put when paused, as after a restore', () => {
+  it('stays put when paused, as after a restore, and says nothing until Play', () => {
     queue.restore({ items: ['files:a0', 'files:a1'], index: 0, from: 'Album a', pos: 12 })
     fake.reset()
     fake.on.error!(bad)
     expect(playing()).toBe('a0')
     expect(fake.calls).toEqual([])
-    expect(notice.text).toBe('Format can\'t be played: "A 0"')
+    expect(notice.text).toBe('')
   })
 
   it('stops at the end of the queue when every song fails', () => {
@@ -1199,6 +1199,89 @@ describe('songs of a plugin that is off (ticket 056)', () => {
     expect(queue.current).toBe('files:a0')
     expect(queue.ended).toBe(true)
     expect(fake.calls).toEqual(['pause', 'seek 0'])
+  })
+})
+
+describe('songs whose music folder was not found', () => {
+  // a2 and b0 are on a drive that is not mounted
+  const away = (key: ItemKey, on = true): void => {
+    const info = plugin.songs.get(key)!.info
+    if (on) info.unavailable = 'Folder not found: Music'
+    else delete info.unavailable
+  }
+  beforeEach(() => {
+    setSongs(['a', 3], ['b', 2])
+    queue.playList([...albums.a, ...albums.b], 0, 'Mix')
+    away(albums.a[2])
+    away(albums.b[0])
+    fake.reset()
+  })
+
+  it('are passed over at the end of a song and by Next', () => {
+    queue.jump(1)
+    fake.reset()
+    fake.on.ended!()
+    expect(queue.current).toBe('files:b1')
+    expect(fake.calls).toEqual(['load media/b1', 'play'])
+    queue.jump(0)
+    queue.next()
+    expect(queue.current).toBe('files:a1')
+  })
+
+  it('do nothing when clicked: the row says why', () => {
+    queue.jump(2)
+    expect(queue.current).toBe('files:a0')
+    expect(fake.calls).toEqual([])
+  })
+
+  it('a list started on one holds it: nothing loads, no notice, and Play does nothing', () => {
+    queue.playList([albums.a[2], albums.a[0]], 0, 'Mix')
+    expect(queue.current).toBe('files:a2')
+    expect(fake.calls).toEqual(['clear'])
+    expect(notice.text).toBe('')
+    fake.reset()
+    expect(queue.playWhenReady()).toBe(true)
+    expect(fake.calls).toEqual([])
+    expect(queue.current).toBe('files:a2')
+    expect(queue.wantsPlay).toBe(false)
+  })
+
+  it('a restored one stays current, and loads paused at its place once its folder is back', () => {
+    queue.restore({ items: ['files:a2', 'files:a0'], index: 0, from: 'Mix', pos: 40 })
+    expect(fake.calls).toEqual(['clear'])
+    expect(notice.text).toBe('')
+    fake.reset()
+    queue.refresh()
+    expect(fake.calls).toEqual([])
+    away(albums.a[2], false)
+    queue.refresh()
+    expect(fake.calls).toEqual(['load media/a2'])
+    expect(player.pos).toBe(40)
+    expect(player.playing).toBe(false)
+  })
+
+  it('one restored before the scan found its folder gone is unloaded and held then', () => {
+    away(albums.a[2], false)
+    queue.restore({ items: ['files:a2', 'files:a0'], index: 0, from: 'Mix', pos: 40 })
+    expect(fake.calls).toEqual(['load media/a2'])
+    fake.reset()
+    away(albums.a[2])
+    queue.refresh()
+    expect(fake.calls).toEqual(['clear'])
+    expect(queue.current).toBe('files:a2')
+    expect(player.pos).toBe(40)
+    expect(player.duration).toBe(100)
+    fake.reset()
+    queue.playWhenReady()
+    expect(fake.calls).toEqual([])
+  })
+
+  it('the queue stops at its end when only such songs are left', () => {
+    queue.playList([albums.a[0], albums.a[2], albums.b[0]], 0, 'Mix')
+    fake.reset()
+    fake.on.ended!()
+    expect(queue.current).toBe('files:a0')
+    expect(queue.ended).toBe(true)
   })
 })
 

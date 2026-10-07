@@ -39,6 +39,8 @@ class FilesStore {
   #albumIndex = new Map<string, number>()
   // the folder table main sent, which folderTree is built from
   #folderTable: Folder[] = []
+  // by folder number: the music folder it is in, as its full path
+  #rootOf: string[] = []
   folders: FolderTree = $state.raw(emptyTree())
   // name order (see shared/plugins/files/artists.ts)
   artists: Artist[] = $state.raw([])
@@ -52,7 +54,7 @@ class FilesStore {
   // bumped by every library and patch, photos alone too (see revision)
   #loads = $state(0)
 
-  status: ScanStatus = $state.raw({
+  #status: ScanStatus = $state.raw({
     folders: [],
     phase: 'idle',
     done: 0,
@@ -62,6 +64,17 @@ class FilesStore {
     failed: 0,
     missing: []
   })
+  // Main sends it often. A new list of folders not found bumps the revision,
+  // so the queue and pages see which songs can play again (or not).
+  get status(): ScanStatus {
+    return this.#status
+  }
+  set status(s: ScanStatus) {
+    const was = this.#status.missing
+    this.#status = s
+    if (s.missing.length !== was.length || s.missing.some((f, i) => f !== was[i])) this.#loads++
+  }
+
   // A library came from main this run: a song not in it is gone, not on its
   // way, unless it is `partial` (its first scan has not ended).
   loaded = $state(false)
@@ -127,6 +140,7 @@ class FilesStore {
       const kept = keepSame(this.albums, albums)
       if (kept !== this.albums) this.albums = kept
       this.#folderTable = held.folders
+      this.#rootOf = rootsOf(held.folders)
       const tracks = ids.map((id) => this.#tracks.get(id)!)
       this.folders = folderTree(held.folders, tracks, (id) => {
         const i = this.#albumIndex.get(id)
@@ -159,6 +173,15 @@ class FilesStore {
   // file again at the same URL.
   get revision(): number {
     return this.#loads
+  }
+
+  // The music folder of a song when the last scan did not find it (a drive
+  // not mounted): its songs can't play until a scan finds it again.
+  missingRoot(t: Track): string | undefined {
+    const missing = this.#status.missing
+    if (!missing.length) return undefined
+    const root = this.#rootOf[t.folder]
+    return root !== undefined && missing.includes(root) ? root : undefined
   }
 
   has(id: string): boolean {
@@ -198,6 +221,19 @@ class FilesStore {
     void this.#version
     return this.#order.get(t.id) ?? 0
   }
+}
+
+// For each folder, the full path of the music folder above it (or itself).
+// Parents come before their children in the table, but this does not count on it.
+export function rootsOf(folders: Folder[]): string[] {
+  const out: string[] = []
+  const find = (i: number): string => {
+    if (out[i] !== undefined) return out[i]
+    const f = folders[i]
+    return (out[i] = f.parent < 0 ? f.name : find(f.parent))
+  }
+  folders.forEach((_, i) => find(i))
+  return out
 }
 
 export const files = new FilesStore()

@@ -1,4 +1,5 @@
-<!-- A small cover, optionally with the eq bars or a pulsing dot (a station connecting) on top. -->
+<!-- A small cover, optionally with the eq bars, a pulsing dot (a station connecting)
+     or a "!" (a song that can't play: its music folder was not found) on top. -->
 <script lang="ts">
   import Cover from './Cover.svelte'
   import Eq from './Eq.svelte'
@@ -8,20 +9,23 @@
     size = 44,
     radius = 6,
     eq = false,
-    busy = false
+    busy = false,
+    away = false
   }: {
     src: string | undefined
     size?: number
     radius?: number
     eq?: boolean
     busy?: boolean
+    away?: boolean
   } = $props()
 </script>
 
 <span class="mini" style:width="{size}px" style:height="{size}px" style:border-radius="{radius}px">
   <Cover {src} />
   {#if eq}<span class="on-cover"><Eq /></span>
-  {:else if busy}<span class="on-cover corner"><span class="dot">●</span></span>{/if}
+  {:else if busy}<span class="on-cover corner"><span class="dot">●</span></span>
+  {:else if away}<span class="on-cover corner"><span class="away">!</span></span>{/if}
 </span>
 
 <style>
@@ -54,6 +58,18 @@
     font-size: 8px;
     line-height: 1;
     animation: pulse 0.9s ease-in-out infinite alternate;
+  }
+  .away {
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--warn);
+    color: var(--bg);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
   }
   @keyframes pulse {
     to {

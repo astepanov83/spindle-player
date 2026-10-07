@@ -401,18 +401,9 @@ export function afterFailure(failsInARow: number, queueLength: number, max = 20)
 
 // The notice for a song that won't play. The title goes last, so a long one
 // is what gets cut off, not the reason.
-export function failNotice(
-  title: string,
-  gone: boolean,
-  outcome: 'paused' | 'skipped' | 'end'
-): string {
+export function failNotice(title: string, gone: boolean, outcome: 'skipped' | 'end'): string {
   const why = gone ? "File is gone or can't be read" : "Format can't be played"
-  const then =
-    outcome === 'skipped'
-      ? ', skipped'
-      : outcome === 'end'
-        ? ', stopped at the end of the list'
-        : ''
+  const then = outcome === 'skipped' ? ', skipped' : ', stopped at the end of the list'
   return `${why}${then}: "${title}"`
 }
 

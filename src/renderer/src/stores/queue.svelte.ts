@@ -61,6 +61,13 @@ interface Undo {
 // Only songs their plugin says are gone leave the queue; off and loading ones stay.
 const notMissing = (key: ItemKey): boolean => itemInfo(key).state !== 'missing'
 const isOff = (key: ItemKey): boolean => itemInfo(key).state === 'off'
+// its music folder was not found (a drive not mounted): it can't play until it is
+const isAway = (key: ItemKey): boolean => {
+  const s = itemInfo(key)
+  return s.state === 'ok' && !!s.info.unavailable
+}
+// passed over on the way to a song that can play
+const cantPlay = (key: ItemKey): boolean => isOff(key) || isAway(key)
 
 // a song the engine was given to play next, and what the queue does then
 type Sent = { step: EndStep; key: ItemKey; p: Playable }
@@ -242,6 +249,8 @@ class TrackQueue {
     }
     if (!key || !s) return this.#unload()
     if (s.state === 'off') return andPlay ? this.#passOver(at) : this.#hold(at)
+    // the row and the player say why; nothing to try, so no notice
+    if (s.state === 'ok' && s.info.unavailable) return this.#hold(at)
     const p = playItem(key)
     if (!p) {
       // loading (or missing, until the next refresh drops it)
@@ -307,7 +316,7 @@ class TrackQueue {
   // The queue past an off current song, or none when nothing after it can play.
   #moveOff(): QueueState | undefined {
     const q = this.#state()
-    const s = passOver(q, isOff, (x) => advance(x, this.#nextOptions()))
+    const s = passOver(q, cantPlay, (x) => advance(x, this.#nextOptions()))
     return s === q ? undefined : s
   }
 
@@ -317,6 +326,9 @@ class TrackQueue {
   #hold(at: number): void {
     this.#unload()
     this.#waiting = { andPlay: false, at }
+    // the bar shows its place in it, not 0:10 of 0:00
+    const s = this.current && itemInfo(this.current)
+    player.duration = (s && s.state === 'ok' && s.info.length) || 0
   }
 
   // The new current song is the next part of the file playing (the next
@@ -362,7 +374,7 @@ class TrackQueue {
     const { repeat, shuffle } = player
     const k = this.#picked
     // a picked song whose plugin went off since is passed over now
-    const still = k?.step.kind !== 'play' || !isOff(k.step.state.items[k.step.state.index])
+    const still = k?.step.kind !== 'play' || !cantPlay(k.step.state.items[k.step.state.index])
     if (k && still && sameQueue(k.from, q) && k.repeat === repeat && k.shuffle === shuffle)
       return k.step
     let step = onEnded(q, repeat, this.#nextOptions())
@@ -426,10 +438,11 @@ class TrackQueue {
   }
 
   // Clicking a row; the current one starts again. A greyed song (its plugin
-  // is off, or its data not in yet) does nothing: it can't play now.
+  // is off, or its data not in yet) or one whose folder was not found does
+  // nothing: it can't play now, and its row says why.
   jump(index: number): void {
     const key = this.items[index]
-    if (key === undefined || itemInfo(key).state !== 'ok') return
+    if (key === undefined || itemInfo(key).state !== 'ok' || isAway(key)) return
     this.#claim()
     this.#fails = 0
     this.#set(jump(this.#state(), index))
@@ -629,11 +642,12 @@ class TrackQueue {
     } else this.#stopAtEnd()
   }
 
-  // The next song, past songs whose plugin is off. None when only such songs
-  // are left: the queue then stops at its end, as after a failed last song.
+  // The next song, past songs whose plugin is off or whose folder was not
+  // found. None when only such songs are left: the queue then stops at its
+  // end, as after a failed last song.
   #onward(next: QueueState): QueueState | undefined {
-    const s = passOver(next, isOff, (x) => advance(x, this.#nextOptions()))
-    return isOff(s.items[s.index]) ? undefined : s
+    const s = passOver(next, cantPlay, (x) => advance(x, this.#nextOptions()))
+    return cantPlay(s.items[s.index]) ? undefined : s
   }
 
   #move(andPlay: boolean): boolean {
@@ -670,6 +684,9 @@ class TrackQueue {
   playWhenReady(on?: boolean): boolean {
     const w = this.#waiting ?? this.#pending
     if (!w) return false
+    // its folder was not found: Play does nothing, and it does not start by
+    // itself later when the folder is back
+    if (this.current && isAway(this.current)) return true
     w.andPlay = on ?? !w.andPlay
     // Play on a held song whose plugin is off: the next one that can play
     const key = this.current
@@ -701,7 +718,7 @@ class TrackQueue {
       this.#fails = 0
       // songs whose plugin is off are passed over going back too
       this.#set(
-        passOver(r.state, isOff, (x) => {
+        passOver(r.state, cantPlay, (x) => {
           const b = back(x, 0, player.shuffle)
           return b.restart ? x : b.state
         })
@@ -711,7 +728,9 @@ class TrackQueue {
   }
 
   // A song that won't play (ALAC, WMA, a file that is gone...): log it, say so,
-  // and go on to the next one. When paused (a restored queue), stay on it.
+  // and go on to the next one. When paused (a restored queue), stay on it and
+  // say nothing: no one asked for sound yet, and at start the scan may still
+  // find its folder gone, which the player then says. Play tries it again.
   #failed(e: EngineError): void {
     const key = this.current
     if (!key) return
@@ -722,10 +741,7 @@ class TrackQueue {
         `error ${e.code} ${e.message}${e.gone ? ' (file gone or unreadable)' : ''}` +
         (e.first ? `; before ?decode: ${e.first}` : '')
     )
-    if (!player.playing) {
-      notice.show(failNotice(title, e.gone, 'paused'))
-      return
-    }
+    if (!player.playing) return
     this.#fails++
     if (afterFailure(this.#fails, this.items.length) === 'stop') {
       notice.show(`Could not play ${this.#fails} songs in a row. Stopped.`)
@@ -747,7 +763,11 @@ class TrackQueue {
     if (this.current !== before) return this.#start(player.playing || !!waiting?.andPlay)
     if (!this.active || !this.current) return
     const s = itemInfo(this.current).state
-    if (waiting && s === 'ok') this.#start(waiting.andPlay, waiting.at)
+    if (waiting && s === 'ok' && !isAway(this.current)) this.#start(waiting.andPlay, waiting.at)
+    // its folder was found gone after it loaded (the scan at start comes
+    // after the restore): held, so Play does nothing until the folder is back
+    else if (s === 'ok' && this.#loaded && !player.playing && isAway(this.current))
+      this.#hold(player.pos)
     else if (s === 'off' && this.#loaded) this.#start(player.playing, player.pos)
   }
 

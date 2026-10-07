@@ -17,6 +17,7 @@ import type { CoverCache } from '../../covers/cover-cache'
 import { addDropped } from './dropped'
 import { AiRequests } from './ai-messages'
 import { LibraryClient } from './library-client'
+import { MissingWatch, hasEntries } from './missing-watch'
 import { LibraryProcess } from './library-process'
 import { RestartBudget } from '../../restart'
 import libraryProcessPath from './library-worker?modulePath'
@@ -40,6 +41,10 @@ export class LibraryService {
   #playingDev: number | undefined
   // the page asked for the library once; the first scan waits for that
   #pageLoaded = false
+  // the window closed: no scans until a page asks for the library again
+  #paused = false
+  // scans again when a music folder that was not found is back
+  #watch: MissingWatch
   // Music files is on. Off: no scans, no changes to the folders or artist
   // names, no audio and no covers made from the music files. The library is
   // still read and given to the page, and the radio's song lookup goes on.
@@ -78,9 +83,17 @@ export class LibraryService {
       console.error(
         'ffmpeg or ffprobe not found (npm run fetch-ffmpeg); APE, WMA and the like will not play'
       )
+    this.#watch = new MissingWatch({
+      hasEntries,
+      scan: () => this.scan(false),
+      canScan: () => this.#on && this.#pageLoaded && !this.#paused
+    })
     this.#client = new LibraryClient({
       post: (m) => this.#post(m),
-      send: (s) => this.send(LibraryChannel.status, s),
+      send: (s) => {
+        this.send(LibraryChannel.status, s)
+        this.#watch.update(s)
+      },
       folders: () => this.store.get().folders,
       canScan: store.readable,
       idsMoved: (moves) => {
@@ -184,6 +197,7 @@ export class LibraryService {
   // The library as it is now, for the page's first paint or a reload.
   async load(): Promise<{ library: Uint8Array; status: ScanStatus; moves: IdMoves }> {
     const library = await this.#client.library()
+    this.#paused = false
     // after the reply is on its way, so the scan doesn't delay the first paint
     if (!this.#pageLoaded) {
       this.#pageLoaded = true
@@ -216,6 +230,8 @@ export class LibraryService {
   // keeps the app running with no window (the core shuts the cover cache).
   pause(): void {
     this.setPlaying(false)
+    this.#paused = true
+    this.#watch.stop()
     this.#client.stop()
   }
 

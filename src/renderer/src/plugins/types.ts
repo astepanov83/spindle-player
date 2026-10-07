@@ -402,6 +402,10 @@ export interface ItemInfo {
   // the system's media controls' artist, when it is not the subtitle (a
   // station's name, also before its first song title)
   mediaArtist?: string
+  // Why it can't play now, shown in place of the subtitle (a music folder
+  // the last scan did not find: a drive not mounted). The queue holds it and
+  // passes over it, as it does a song whose plugin is off.
+  unavailable?: string
 }
 
 export type ItemState =

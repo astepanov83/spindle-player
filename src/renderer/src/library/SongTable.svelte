@@ -256,15 +256,22 @@
         >
         {#if s.state === 'ok'}
           {@const t = s.info}
+          {@const away = t.unavailable}
           <span class="tt">
-            <Thumb src={t.art?.cover} size={36} radius={4} />
+            <Thumb src={t.art?.cover} size={36} radius={4} away={!!away} />
             <span class="words">
               <span class="nm" title={t.title}>{t.title}</span>
-              <!-- shown only when a narrow table drops the Artist column -->
-              {#if artist}<span class="sub" title={t.subtitle}>{t.subtitle ?? ''}</span>{/if}
+              <!-- shown only when a narrow table drops the Artist column; why
+                   it can't play shows always when there is no such column -->
+              {#if artist}<span class="sub" class:away title={away ?? t.subtitle}
+                  >{away ?? t.subtitle ?? ''}</span
+                >
+              {:else if away}<span class="sub away shown" title={away}>{away}</span>{/if}
             </span>
           </span>
-          {#if artist}<span class="o ar" title={t.subtitle}>{t.subtitle ?? ''}</span>{/if}
+          {#if artist}<span class="o ar" class:away title={away ?? t.subtitle}
+              >{away ?? t.subtitle ?? ''}</span
+            >{/if}
           <span class="o al" title={t.group}>{t.group ?? ''}</span>
           {#if plays}
             {@const p = playCounts.of(key)}
@@ -388,6 +395,14 @@
     color: var(--ink-2);
     font-size: var(--text-s);
     margin-top: 2px;
+  }
+  .sub.shown {
+    display: block;
+  }
+  /* its music folder was not found: why it can't play */
+  .away,
+  .ar.away {
+    color: var(--warn);
   }
 
   /* Classic's Songs: Plays and Last played before Time, dropped first when narrow */

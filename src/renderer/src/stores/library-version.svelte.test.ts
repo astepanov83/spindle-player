@@ -85,31 +85,6 @@ describe('library versions', () => {
     w.stop()
   })
 
-  it('does not redo them, or the artists, for albums with only new curves', () => {
-    const w = watchSongs()
-    const artists = files.artists
-    const before = files.revision
-    const curves = ['A'.repeat(32)]
-    files.patch(patch({ albums: [{ ...data.albums[0], loudness: curves }] }))
-    flushSync()
-    expect(w.runs()).toBe(1)
-    expect(files.artists).toBe(artists)
-    // the pictures see the curves
-    expect(files.album('a').loudness).toEqual(curves)
-    expect(files.revision).toBe(before + 1)
-    expect(files.sent).toEqual({ epoch: 'e', n: 1 })
-    w.stop()
-  })
-
-  it('redoes them when an album changed besides its curves', () => {
-    const w = watchSongs()
-    files.patch(patch({ albums: [{ ...data.albums[0], title: 'B', loudness: ['A'.repeat(32)] }] }))
-    flushSync()
-    expect(w.runs()).toBe(2)
-    expect(files.album('a').title).toBe('B')
-    w.stop()
-  })
-
   it('redoes them when songs changed', () => {
     const w = watchSongs()
     files.patch(patch({ tracks: [{ ...song('a1'), title: 'Renamed' }] }))

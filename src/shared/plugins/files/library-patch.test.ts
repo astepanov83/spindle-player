@@ -4,7 +4,6 @@ import type { ThemePalettes } from '../../palette'
 import {
   applyPatch,
   diffLibrary,
-  onlyLoudness,
   patchStep,
   same,
   type HeldLibrary,
@@ -185,29 +184,6 @@ describe('applyPatch', () => {
   function base(): LibraryData {
     return lib([album('x', ['1'])], [track('1', 'x')])
   }
-})
-
-describe('onlyLoudness', () => {
-  const x = album('x', ['1'])
-  const have = (id: string): Album | undefined => (id === 'x' ? x : undefined)
-  const curves = ['A'.repeat(32)]
-  const body = { tracks: [], goneTracks: [] }
-
-  it('is a patch with albums that only got curves', () => {
-    expect(onlyLoudness({ ...body, albums: [{ ...x, loudness: curves }] }, have)).toBe(true)
-  })
-
-  it('is not one with anything else', () => {
-    const loud = { ...x, loudness: curves }
-    expect(onlyLoudness({ ...body, albums: [{ ...loud, title: 'y' }] }, have)).toBe(false)
-    expect(onlyLoudness({ ...body, albums: [album('new', ['2'])] }, have)).toBe(false)
-    expect(onlyLoudness({ ...body, albums: [loud], tracks: [track('1', 'x')] }, have)).toBe(false)
-    expect(onlyLoudness({ ...body, albums: [loud], goneTracks: ['1'] }, have)).toBe(false)
-    expect(onlyLoudness({ ...body, albums: [loud], order: ['x'] }, have)).toBe(false)
-    expect(onlyLoudness({ ...body, albums: [loud], gonePhotos: ['a'] }, have)).toBe(false)
-    // only the first scan's end (partial goes)
-    expect(onlyLoudness({ ...body, albums: [] }, have)).toBe(false)
-  })
 })
 
 describe('patchStep', () => {

@@ -15,7 +15,6 @@ import type {
 } from '../../../../shared/library'
 import {
   applyPatch,
-  onlyLoudness,
   type HeldLibrary,
   type LibraryMessage,
   type LibraryPatch,
@@ -109,23 +108,11 @@ class FilesStore {
   // when it doesn't fit (the caller asks for the whole library then). Returns
   // whether songs left the library.
   patch(p: LibraryPatch): boolean {
-    const curves = onlyLoudness(p, (id) => {
-      const i = this.#albumIndex.get(id)
-      return i === undefined ? undefined : this.albums[i]
-    })
     const held = applyPatch(
       { albums: this.albums, folders: this.#folderTable, photos: this.photos },
       this.#tracks,
       p
     )
-    if (curves) {
-      // the same albums in the same order: only the pictures change
-      this.albums = held.albums
-      this.#loads++
-      this.partial = !!p.partial
-      this.sent = { epoch: p.epoch, n: p.n }
-      return false
-    }
     // a patch with only photos (the lookup found some) leaves the lists as they are
     const songs =
       p.tracks.length > 0 ||

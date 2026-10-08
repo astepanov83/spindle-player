@@ -3,7 +3,6 @@ import { fallbackPalettes } from '../../../shared/palette'
 import { drawArtistRings, drawArtistType, sizeOf } from './artist'
 import { inksOf } from './colors'
 import { drawArtistOf } from './draw'
-import { drawGenre } from './genre-art'
 import type { Drawing } from './drawing'
 import { hashOf } from './drawing'
 import { fakeCtx } from './test-ctx'
@@ -48,10 +47,10 @@ describe('artist pictures', () => {
     expect(sizeOf('東')).toBeGreaterThan(sizeOf('OB'))
   })
 
-  it('has a picture for each style: sound uses the rings one for now', () => {
+  it('has a picture for each style: genre and sound use the rings one for now', () => {
     expect(drawArtistOf('rings')).toBe(drawArtistRings)
     expect(drawArtistOf('type')).toBe(drawArtistType)
-    expect(drawArtistOf('genre')).toBe(drawGenre)
+    expect(drawArtistOf('genre')).toBe(drawArtistRings)
     expect(drawArtistOf('sound')).toBe(drawArtistRings)
   })
 })

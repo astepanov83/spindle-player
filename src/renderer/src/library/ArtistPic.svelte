@@ -9,19 +9,14 @@
   import { itemsVersion } from '../plugins'
   import { theme } from '../stores/theme.svelte'
 
-  let {
-    name,
-    photo,
-    covers,
-    genre
-  }: { name: string; photo: string | undefined; covers: CoverArt[]; genre?: string } = $props()
+  let { name, photo, covers }: { name: string; photo: string | undefined; covers: CoverArt[] } =
+    $props()
 
   // The name as shown, so a rename makes another picture. Colors from a real
   // cover when there is one, else from the name.
   const made = $derived({
     seed: name,
     title: name,
-    genre,
     palette: covers[0]?.palette ?? fallbackPalettes(name)
   })
 

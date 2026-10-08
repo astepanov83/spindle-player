@@ -5,7 +5,6 @@ import {
   allBy,
   artistLinks,
   artistCovers,
-  artistGenre,
   artistSongs,
   albumArtists,
   filterArtists,
@@ -134,23 +133,5 @@ describe('allBy: the Artist column is left out (ticket 075)', () => {
     expect(
       allBy([{ artist: 'The Ochre Band, Kai', artists: ['The Ochre Band', 'Kai'] }], 'Kai')
     ).toBe(false)
-  })
-})
-
-describe('artistGenre (104)', () => {
-  const genres: Record<string, string | undefined> = {
-    a: 'Jazz',
-    b: 'Folk',
-    c: 'Folk',
-    d: undefined
-  }
-  const of = (...ids: string[]): string | undefined =>
-    artistGenre(artist('X', ids), (id) => ({ genre: genres[id] }))
-
-  it('is the genre most of their albums have', () => expect(of('a', 'b', 'c')).toBe('Folk'))
-  it('goes to their first album on a tie', () => expect(of('a', 'b')).toBe('Jazz'))
-  it('is nothing with no tags, or no albums', () => {
-    expect(of('d')).toBeUndefined()
-    expect(of()).toBeUndefined()
   })
 })

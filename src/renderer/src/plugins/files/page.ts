@@ -3,7 +3,6 @@
 // their buttons do comes back through filesAct.
 import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
 import { cleanNames, editArtist, maxNameLength } from '../../../../shared/plugins/files/artist-edit'
-import { commonGenre } from '../../../../shared/genre'
 import { pictureOf, type Album, type Art } from '../../../../shared/library'
 import type { ItemKey } from '../../../../shared/plugins/items'
 import { queueLink } from '../../../../shared/saved-queue'
@@ -12,7 +11,6 @@ import { albumLabel, albumLines, albumLink } from './album'
 import {
   allBy,
   artistCovers,
-  artistGenre,
   artistLinks,
   artistSongs,
   albumArtists,
@@ -215,7 +213,6 @@ function albumArtistHeading(h: Heading, albums: readonly Album[]): ArtistHeading
     sub: fmtCount(albums.length, 'album', 'albums'),
     photo: a && files.photos[a.key]?.cover,
     covers: a ? artistCovers(a, album, songArt) : albumCovers(albums),
-    genre: commonGenre(albums),
     ...(a ? { to: at(artistPage(a.key)), link: queueLink('artist', a.key) } : {}),
     songs: () => trackKeys(albums.flatMap((al) => al.trackIds)),
     from: h.title
@@ -332,7 +329,6 @@ const artistTile = (a: Artist): Tile => ({
   subtitle: artistCount(a),
   photo: files.photos[a.key]?.cover,
   covers: artistCovers(a, album, songArt),
-  genre: artistGenre(a, album),
   to: at(artistPage(a.key)),
   playing: (item) => playsArtist(item, a.key),
   songs: () => trackKeys(artistSongs(a, album)),
@@ -393,7 +389,6 @@ function artistHeading(a: Artist): ArtistHeading {
     sub: artistCount(a),
     ...(t.photo ? { photo: t.photo } : {}),
     covers: t.covers ?? [],
-    genre: t.genre,
     to: t.to,
     songs: t.songs,
     from: t.from,
@@ -765,8 +760,7 @@ function artistHead(a: Artist): HeadBlock {
     art: {
       src: files.photos[a.key]?.coverLarge,
       round: true,
-      covers: artistCovers(a, album, songArt),
-      genre: artistGenre(a, album)
+      covers: artistCovers(a, album, songArt)
     },
     back: { label: 'All artists', to: at('') },
     looks: lookSwitch('artistPage'),

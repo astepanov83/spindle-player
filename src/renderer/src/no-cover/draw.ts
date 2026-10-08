@@ -8,26 +8,23 @@ import { inksOf } from './colors'
 import { hashOf, type Draw } from './drawing'
 import { drawRecord } from './record'
 import { drawArtistRings, drawArtistType } from './artist'
-import { drawGenre } from './genre-art'
 import { drawRings } from './rings'
 import { artistFont, drawType, titleFont } from './type'
 
-// 'sound' comes with ticket 107; until then it draws as the default.
+// 'sound' and 'genre' come with tickets 104, 106 and 107; until then they
+// draw as the default.
 const styles: Partial<Record<NoCover, Draw>> = {
   record: drawRecord,
   rings: drawRings,
-  type: drawType,
-  genre: drawGenre
+  type: drawType
 }
 export const drawOf = (style: NoCover): Draw => styles[style] ?? drawRings
 
 // An artist's version of each style (ticket 105): their initials. Record is
-// the grey record, drawn by Cover. Genre is the same drawing, in a circle.
-// Sound adds its own with 107.
+// the grey record, drawn by Cover. Genre and sound add theirs with 104 and 107.
 const artistStyles: Partial<Record<NoCover, Draw>> = {
   rings: drawArtistRings,
-  type: drawArtistType,
-  genre: drawGenre
+  type: drawArtistType
 }
 export const drawArtistOf = (style: NoCover): Draw => artistStyles[style] ?? drawArtistRings
 
@@ -61,9 +58,7 @@ export async function drawPicture(
     lengths: art.lengths ?? [],
     title,
     artist,
-    genre: art.genre,
-    small,
-    round: forArtist
+    small
   })
   return canvas.convertToBlob({ type: 'image/png' })
 }

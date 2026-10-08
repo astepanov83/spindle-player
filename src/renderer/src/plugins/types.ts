@@ -207,8 +207,6 @@ export interface Tile {
   // a round tile's photo, else its picture from these covers
   photo?: string
   covers?: CoverArt[]
-  // their albums' most common genre, for the picture made when they have no cover
-  genre?: string
   to: PageAddress
   // whether the item playing is one of its songs (marked)
   playing?: (item: ItemKey) => boolean
@@ -322,7 +320,6 @@ export interface ArtistHeading {
   sub: string
   photo?: string
   covers: CoverArt[]
-  genre?: string
   // none for a name with no page (a split credit)
   to?: PageAddress
   songs: () => ItemKey[]

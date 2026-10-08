@@ -11,7 +11,6 @@ import {
   type Track,
   type TrackPart
 } from '../../../shared/library'
-import { commonGenre } from '../../../shared/genre'
 import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../../shared/palette'
 import { checksPerArtist, lookUpArtist, type ArtistCheck, type ArtistQuery } from './artist-photo'
 import { cleanAlbum, cleanArtist } from '../../covers/clean-names'
@@ -149,7 +148,7 @@ function paletteOf(ix: LibraryIndex, cover: string | undefined, id: string): The
 const lengthOf = (duration: number): number => Math.max(0, Math.round(duration))
 
 // A song with no album and no cover is drawn from itself, in colors from its id.
-function looseArt(t: Track, genre?: string): Art {
+function looseArt(t: Track): Art {
   return {
     palette: fallbackPalettes(t.id),
     cover: '',
@@ -157,8 +156,7 @@ function looseArt(t: Track, genre?: string): Art {
     seed: t.id,
     lengths: [lengthOf(t.duration)],
     title: t.title,
-    artist: t.artist,
-    ...(genre ? { genre } : {})
+    artist: t.artist
   }
 }
 
@@ -289,7 +287,6 @@ export function buildLibrary(
         key,
         ...mbIds(entries)
       })
-    const genre = commonGenre(entries)
     const fallbackArtist = artist === variousArtists ? unknownArtist : artist
     const tracks = g.items.map(({ e, id: trackId, disc, no, fromName, part }): Track => {
       const t: Track = {
@@ -311,7 +308,7 @@ export function buildLibrary(
       if (e.cover && e.cover !== cover && hasCover(e.cover))
         t.art = { palette: paletteOf(ix, e.cover, id), ...coverUrls(e.cover) }
       // a loose song (a folder with no album tags) and no cover: a picture of its own
-      else if (!first.album && !cover) t.art = looseArt(t, e.genre)
+      else if (!first.album && !cover) t.art = looseArt(t)
       return t
     })
     albums.push({
@@ -324,7 +321,6 @@ export function buildLibrary(
       ...(cover ? coverUrls(cover) : { cover: '', coverLarge: '' }),
       seed: id,
       lengths: tracks.map((t) => lengthOf(t.duration)),
-      ...(genre ? { genre } : {}),
       trackIds: tracks.map((t) => t.id),
       tracks
     })

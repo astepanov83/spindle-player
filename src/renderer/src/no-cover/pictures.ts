@@ -6,7 +6,6 @@ import { PictureCache } from './cache'
 import type { PictureArt } from '../../../shared/library'
 import { hashOf } from './drawing'
 import { drawPicture } from './draw'
-import { familyOf } from './genre'
 import { TurnQueue } from './queue'
 
 export const buckets = [48, 128, 256, 512] as const
@@ -43,8 +42,6 @@ export function detailOf(style: NoCover, art: PictureArt, artist = false): strin
 function readOf(style: NoCover, art: PictureArt, artist: boolean): string {
   const title = art.title ?? ''
   switch (style) {
-    case 'genre':
-      return familyOf(art.genre)
     case 'type':
       return artist ? title : `${title}\0${art.artist ?? ''}`
     case 'rings':
@@ -64,7 +61,7 @@ export const pictureKey = (
   `${artist ? 'artist:' : ''}${style}${detailOf(style, art, artist)}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
 
 // A few thousand: a big library's whole Albums grid at one size. The bytes
-// cap busy pictures (genre's blurs) drawn big on a sharp screen.
+// cap pictures drawn big on a sharp screen.
 const cache = new PictureCache(
   { create: (b) => URL.createObjectURL(b), revoke: (u) => URL.revokeObjectURL(u) },
   4000,

@@ -34,9 +34,7 @@
 </script>
 
 {#snippet who(a: ArtistHeading)}
-  <span class="pic"
-    ><ArtistPic name={h.title} photo={a.photo} covers={a.covers} genre={a.genre} /></span
-  >
+  <span class="pic"><ArtistPic name={h.title} photo={a.photo} covers={a.covers} /></span>
   <span class="words">
     <span class="name" title={h.title}>{h.title}</span>
     <span class="sub">{a.sub}</span>

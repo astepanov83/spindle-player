@@ -21,11 +21,6 @@ export interface Inks {
   record: string
   // letters on the label (artists' rings picture)
   onLabel: string
-  // the palette's hue, and how much of a made palette's color it has (0 for
-  // grey): the genre drawings pick their own lightness and chroma from them
-  hue: number
-  chroma: number
-  dark: boolean
 }
 
 // Must match --field and --ink-3 in theme.css (colors.test.ts checks).
@@ -67,13 +62,6 @@ export function inksOf(palettes: ThemePalettes, theme: ThemeName): Inks {
     ink: color(inkL[theme], 0.04),
     record: recordInk[theme],
     onLabel:
-      hexToLch(main)[0] > 0.6 ? lchToHex([0.2, 0.03 * k, hue]) : lchToHex([0.97, 0.02 * k, hue]),
-    hue,
-    chroma: k,
-    dark: theme === 'dark'
+      hexToLch(main)[0] > 0.6 ? lchToHex([0.2, 0.03 * k, hue]) : lchToHex([0.97, 0.02 * k, hue])
   }
 }
-
-// A color of the palette's hue, turned `turn` degrees.
-export const tone = (inks: Inks, L: number, C: number, turn = 0): string =>
-  lchToHex([L, C * inks.chroma, (inks.hue + turn + 360) % 360])

@@ -43,8 +43,7 @@ describe('keys after a rescan', () => {
     seed: 'a',
     lengths: [200, 300],
     title: 'Blue',
-    artist: 'Joni',
-    genre: 'Folk'
+    artist: 'Joni'
   }
   const key = (style: NoCover, a: PictureArt, artist = false): string =>
     pictureKey(style, { ...a, seed: 'a' }, 'dark', 128, artist)
@@ -53,13 +52,11 @@ describe('keys after a rescan', () => {
     expect(key('rings', { ...art, lengths: [200, 300, 100] })).not.toBe(key('rings', art))
     expect(key('type', { ...art, title: 'blue' })).not.toBe(key('type', art))
     expect(key('type', { ...art, artist: 'Joni M' })).not.toBe(key('type', art))
-    expect(key('genre', { ...art, genre: 'Death Metal' })).not.toBe(key('genre', art))
     expect(key('rings', { ...art, title: 'Joni M' }, true)).not.toBe(key('rings', art, true))
   })
 
   it('stays when only what the style does not draw changes', () => {
     expect(key('rings', { ...art, title: 'Other' })).toBe(key('rings', art))
-    expect(key('genre', { ...art, genre: 'folk' })).toBe(key('genre', art))
     expect(key('record', { ...art, lengths: [1] })).toBe(key('record', art))
   })
 })

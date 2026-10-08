@@ -88,8 +88,7 @@ describe('My stations', () => {
         seed: 'a',
         lengths: [],
         title: 'Station a',
-        artist: undefined,
-        genre: 'jazz, swing'
+        artist: undefined
       },
       meta: '64-128 kbps',
       play: 'radio:a',

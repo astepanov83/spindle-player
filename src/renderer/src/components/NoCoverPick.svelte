@@ -8,17 +8,15 @@
   import { radioStep } from '../keys'
   import { settings } from '../stores/settings.svelte'
 
-  // 'sound' shows once ticket 107 draws it
+  // 'sound' and 'genre' show once tickets 104 and 107 draw them
   const shown: { value: NoCover; label: string }[] = [
     { value: 'rings', label: 'Track rings' },
     { value: 'type', label: 'Title' },
-    { value: 'genre', label: 'Genre' },
     { value: 'record', label: 'Plain record' }
   ]
   const hints: Partial<Record<NoCover, string>> = {
     rings: 'A record with one ring per song, as wide as the song is long, in colors of its own.',
     type: 'The title and artist, set on a color of their own.',
-    genre: 'A drawing for the genre tag, in colors of its own. Albums of one genre look alike.',
     record: 'The same grey record for every album.'
   }
   const sample: PictureArt = {
@@ -26,8 +24,7 @@
     palette: fallbackPalettes('settings-sample'),
     lengths: [312, 428, 265, 503, 377],
     title: 'Blue Hours',
-    artist: 'Marina Vale',
-    genre: 'Jazz'
+    artist: 'Marina Vale'
   }
 
   const picked = $derived(

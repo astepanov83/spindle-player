@@ -40,8 +40,7 @@ class MfpStore {
         seed: e.id,
         lengths: e.songs.map((s) => Math.round(s.length)),
         title: e.title,
-        artist: e.artist,
-        genre: 'Rock'
+        artist: e.artist
       }
       this.#art.set(
         e.id,

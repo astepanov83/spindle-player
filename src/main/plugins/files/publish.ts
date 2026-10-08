@@ -54,37 +54,3 @@ export class PublishTimer {
     this.#cost = this.#last - t0
   }
 }
-
-// The gap between two sends for loudness curves alone (ticket 106): 1 ms per
-// song, from 1s to 30s. The first read of a big library finishes an album
-// every second or so for hours, and each send groups the whole library again.
-export function loudGapMs(tracks: number): number {
-  return Math.min(30000, Math.max(1000, tracks))
-}
-
-export interface PaceDeps {
-  run(): void
-  gapMs(): number
-  now(): number
-  setTimer(f: () => void, ms: number): () => void
-}
-
-// Runs at most once per gap: at once after a quiet spell, else when the gap
-// since the last run is over. Asks in between are folded into that run.
-export class PaceTimer {
-  #cancel: (() => void) | undefined
-  #last = -Infinity
-
-  constructor(readonly deps: PaceDeps) {}
-
-  soon(): void {
-    if (this.#cancel) return
-    const d = this.deps
-    const wait = Math.max(0, this.#last + d.gapMs() - d.now())
-    this.#cancel = d.setTimer(() => {
-      this.#cancel = undefined
-      this.#last = d.now()
-      d.run()
-    }, wait)
-  }
-}

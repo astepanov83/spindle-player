@@ -91,6 +91,7 @@
   <div class="list">
     <div
       class="shead song-head"
+      data-sticky-top
       aria-hidden="true"
       style:grid-template-columns={songCols(!!second, !!b.starts)}
     >

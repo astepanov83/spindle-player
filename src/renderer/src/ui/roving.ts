@@ -10,6 +10,7 @@
 // the moving keys, Ctrl+A and Esc.
 import { tick } from 'svelte'
 import { listStep } from '../keys'
+import { coveredTop } from './sticky-top'
 
 export interface RovingOptions {
   count?: number
@@ -94,12 +95,15 @@ export function roving(
     mark()
   }
 
-  // Tab into a scrolled list lands on the first row on screen, not one above it.
+  // Tab into a scrolled list lands on the first row on screen, not one above
+  // it or under the parts stuck at the top.
   function ontab(e: KeyboardEvent): void {
     if (e.key !== 'Tab' || active !== null || node.contains(document.activeElement)) return
     const all = rows()
-    const box = scrollBox(node)?.getBoundingClientRect()
-    const first = box && all.find((r) => r.getBoundingClientRect().top >= box.top - 1)
+    const el = scrollBox(node)
+    // not a row under the stuck column heads or held heading
+    const top = el ? el.getBoundingClientRect().top + coveredTop(el) : undefined
+    const first = top !== undefined && all.find((r) => r.getBoundingClientRect().top >= top - 1)
     shown = first ? indexOf(first, all) : null
     mark()
   }

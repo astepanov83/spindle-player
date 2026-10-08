@@ -99,7 +99,7 @@
     {@render more(f)}
     <!-- the heads every song list has (ticket 075); the rows say it all to a
          screen reader -->
-    <div class="rhead song-head" aria-hidden="true">
+    <div class="rhead song-head" data-sticky-top aria-hidden="true">
       <span>Title</span>
       <span>Artist</span>
       <span class="al">Album</span>

@@ -41,6 +41,10 @@ const tops = {
 }
 const heights = { grid: 100, list: 30 }
 
+// the list's column heads stuck at the box's top, when the test asks
+let heads = false
+const stuckHeads = { getBoundingClientRect: () => ({ top: 0, bottom: 38 }) }
+
 describe('a new look of the view (ticket 095)', () => {
   let frames: (() => void)[] = []
   let look: 'grid' | 'list' = 'grid'
@@ -70,7 +74,9 @@ describe('a new look of the view (ticket 095)', () => {
               .map((_, i) => i)
               .filter(drawn)
               .map(item)
-          : [],
+          : q === '[data-sticky-top]' && heads && look === 'list'
+            ? [stuckHeads]
+            : [],
       querySelector: (q: string) => {
         const i = ids.findIndex((id) => q === `[data-item="album/${id}"]`)
         return i >= 0 && drawn(i) ? item(i) : null
@@ -104,6 +110,8 @@ describe('a new look of the view (ticket 095)', () => {
     vi.stubGlobal('requestAnimationFrame', (f: () => void) => frames.push(f))
     vi.stubGlobal('cancelAnimationFrame', () => {})
     vi.stubGlobal('CSS', { escape: (s: string) => s })
+    vi.stubGlobal('getComputedStyle', () => ({ paddingTop: '0px', top: '0px' }))
+    heads = false
     files.load(lib)
     look = 'grid'
     setViewLook('albums', 'grid')
@@ -127,14 +135,20 @@ describe('a new look of the view (ticket 095)', () => {
   })
 
   it('keeps the first item on screen where it was', async () => {
-    // a8 and a9's row (y 600) is the first on screen, 10px above the box's top
-    box!.scrollTop = 610
+    // the head shows: a0 and a1's row (y 200) is the first on screen, 50px down
+    box!.scrollTop = 150
     await switchTo('list')
-    // a8's list row is at 440: 10px above the top again
-    expect(box!.scrollTop).toBe(450)
+    // a0's list row is at 200: 50px down again
+    expect(box!.scrollTop).toBe(150)
+    // a8 and a9's row (y 600) is the first on screen, at the top
+    await switchTo('grid')
+    box!.scrollTop = 600
+    await switchTo('list')
+    // a8's list row is at 440
+    expect(box!.scrollTop).toBe(440)
   })
 
-  it('shows the item at the top when its new row would be more than half out of view', async () => {
+  it('shows the item in full at the top when it was partly above it', async () => {
     // a8's 100px tile is 50px above the top; its 30px list row would be out of view
     box!.scrollTop = 650
     await switchTo('list')
@@ -147,6 +161,24 @@ describe('a new look of the view (ticket 095)', () => {
   it('stays at the top when it was there', async () => {
     await switchTo('list')
     expect(box!.scrollTop).toBe(0)
+  })
+
+  it('puts the item under the parts stuck at the top of the new look, in full', async () => {
+    heads = true
+    // a8 is 10px above the top in the grid; in the list it would be under the 38px heads
+    box!.scrollTop = 610
+    await switchTo('list')
+    // a8's list row (440) lands just under the heads
+    expect(box!.scrollTop).toBe(402)
+    // more than half out of view: at the top, which is under the heads too
+    await switchTo('grid')
+    box!.scrollTop = 650
+    await switchTo('list')
+    expect(box!.scrollTop).toBe(402)
+    // back to the grid: a7, under the heads, is not the first on screen, so
+    // a8 stays first, 38px down as in the list
+    await switchTo('grid')
+    expect(box!.scrollTop).toBe(562)
   })
 
   it('asks the list for an item it has not drawn yet', async () => {

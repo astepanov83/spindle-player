@@ -215,7 +215,7 @@
 <div class="tbl" class:noartist={!artist} class:plays>
   <!-- The rows are buttons in a list, not a table, so the heads are sort
        buttons, not column headers; each says how it sorts. -->
-  <div class="th song-head" role="group" aria-label="Sort songs">
+  <div class="th song-head" data-sticky-top role="group" aria-label="Sort songs">
     <span></span>
     {#each cols as [k, label] (k)}
       {@const on = sort?.k === k}

@@ -3,6 +3,7 @@
 import { tick, untrack } from 'svelte'
 import { ScrollPlaces, type View } from './scroll-places'
 import { findItem } from './item-finder'
+import { coveredTop } from './sticky-top'
 import { pageLook, pagePath } from '../plugins'
 import { library } from '../stores/library.svelte'
 
@@ -46,9 +47,11 @@ const rows = (el: HTMLElement, grid?: string): NodeListOf<HTMLElement> =>
 function placeOf(el: HTMLElement, look: string | undefined): Place {
   const boxTop = el.getBoundingClientRect().top
   const place: Place = { top: el.scrollTop, ...(look ? { look } : {}) }
+  // an item hidden under the column heads or held heading is not on screen
+  const clear = boxTop + coveredTop(el)
   for (const r of el.querySelectorAll<HTMLElement>('[data-item]')) {
     const b = r.getBoundingClientRect()
-    if (b.bottom <= boxTop) continue
+    if (b.bottom <= clear) continue
     place.item = { key: r.dataset.item!, y: b.top - boxTop }
     break
   }
@@ -135,11 +138,12 @@ function scrollWhenDrawn(el: HTMLElement, place: Place): () => void {
     if (item) {
       const r = el.querySelector<HTMLElement>(`[data-item="${CSS.escape(item.key)}"]`)
       if (r) {
-        // A tall tile half above the top would leave a 60px list row out of
-        // view, and switching back would keep another item: show at least half.
         const b = r.getBoundingClientRect()
-        const hidden = place.relooked && item.y < -(b.bottom - b.top) / 2
-        return b.top - box.top - (hidden ? 0 : item.y)
+        if (!place.relooked) return b.top - box.top - item.y
+        // In full and never under the new look's column heads or held
+        // heading: a tile half above the top would leave a 60px list row out
+        // of view, and switching back would keep another item.
+        return b.top - box.top - Math.max(item.y, coveredTop(el))
       }
       // not drawn: where its list says its row is
       const at = findItem(item.key)

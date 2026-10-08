@@ -170,7 +170,12 @@
   {/if}
   <div class="list" class:round={b.round} bind:clientWidth={width}>
     <!-- for the eye only: they don't sort, and the rows say it all -->
-    <div class="heads song-head" aria-hidden="true" style:grid-template-columns={template}>
+    <div
+      class="heads song-head"
+      data-sticky-top
+      aria-hidden="true"
+      style:grid-template-columns={template}
+    >
       <span></span>
       <span>{b.title}</span>
       {#each shown as c (c.head)}<span class="num">{c.head}</span>{/each}
@@ -193,6 +198,7 @@
         {#if r && 'head' in r}
           <div
             class="stuck"
+            data-sticky-top
             aria-hidden="true"
             style:height="{headSize}px"
             style:transform="translateY({stuck.shift}px)"

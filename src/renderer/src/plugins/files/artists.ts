@@ -59,24 +59,23 @@ export const artistGenre = (
 // All the songs of an artist as one ring for the sound picture (ticket 107):
 // their albums' songs, then their songs on other albums. No loudness at all
 // (nothing read yet) gives none, so the picture is rings until some is in; a
-// song not read yet has flat bars.
+// song not read yet has flat bars. An album or song a scan just removed
+// (the artist not built again yet) is left out.
 export function artistSound(
   a: Artist,
-  album: (id: string) => SoundSource,
-  track: (id: string) => { albumId: string; duration: number; art?: SoundSource }
+  album: (id: string) => SoundSource | undefined,
+  track: (id: string) => { albumId: string; duration: number; art?: SoundSource } | undefined
 ): SoundArt {
-  return soundOf(
-    a.albums.map(album),
-    a.also.map((id) => {
-      const t = track(id)
-      const al = album(t.albumId)
-      const own = t.art?.loudness?.[0]
-      return {
-        length: Math.round(t.duration),
-        loudness: own ?? al.loudness?.[al.trackIds?.indexOf(id) ?? -1]
-      }
-    })
-  )
+  const albums = a.albums.map(album).filter((al) => al !== undefined)
+  const songs = a.also.flatMap((id) => {
+    const t = track(id)
+    if (!t) return []
+    const al = album(t.albumId)
+    const own = t.art?.loudness?.[0]
+    const i = al?.trackIds?.indexOf(id) ?? -1
+    return [{ length: Math.round(t.duration), loudness: own ?? al?.loudness?.[i] }]
+  })
+  return soundOf(albums, songs)
 }
 
 export interface SoundSource {
@@ -85,23 +84,29 @@ export interface SoundSource {
   trackIds?: string[]
 }
 
-// Albums' songs, then single songs, as one list of lengths and curves.
+// Albums' songs, then single songs, as one list of lengths and curves. It
+// has loudness once any of them is read, or could not be read (''): so
+// songs that all failed give flat bars, not rings for ever.
 export function soundOf(
   albums: readonly SoundSource[],
   songs: readonly { length: number; loudness?: string }[] = []
 ): SoundArt {
   const lengths: number[] = []
   const loudness: string[] = []
-  for (const al of albums)
-    (al.lengths ?? []).forEach((l, i) => {
+  let read = false
+  for (const al of albums) {
+    if (al.loudness) read = true
+    ;(al.lengths ?? []).forEach((l, i) => {
       lengths.push(l)
       loudness.push(al.loudness?.[i] ?? '')
     })
+  }
   for (const s of songs) {
+    if (s.loudness !== undefined) read = true
     lengths.push(s.length)
     loudness.push(s.loudness ?? '')
   }
-  return { lengths, ...(loudness.some(Boolean) ? { loudness } : {}) }
+  return { lengths, ...(read ? { loudness } : {}) }
 }
 
 // Up to 4 different covers for the picture made from covers: their albums

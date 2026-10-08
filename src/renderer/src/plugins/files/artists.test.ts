@@ -200,4 +200,28 @@ describe('artistSound', () => {
     expect(out.lengths).toEqual([100, 10, 20])
     expect(out.loudness).toEqual(['a'.repeat(32), 'b'.repeat(32), 'd'.repeat(32)])
   })
+
+  it('leaves out an album or song a scan just removed', () => {
+    const albums: Record<string, { lengths: number[]; trackIds: string[] }> = {
+      own: { lengths: [100], trackIds: ['t1'] }
+    }
+    const tracks: Record<string, { albumId: string; duration: number }> = {
+      t2: { albumId: 'gone', duration: 30 }
+    }
+    const out = artistSound(
+      { key: 'k', name: 'K', albums: ['own', 'gone'], also: ['t2', 't9'] } as never,
+      (id) => albums[id],
+      (id) => tracks[id]
+    )
+    expect(out).toEqual({ lengths: [100, 30] })
+  })
+
+  it('has flat bars, not rings, once all their songs failed to read', () => {
+    const out = artistSound(
+      { key: 'k', name: 'K', albums: ['own'], also: ['t2'] } as never,
+      () => ({ lengths: [100], loudness: [''], trackIds: ['t1'] }),
+      () => ({ albumId: 'x', duration: 30, art: { loudness: [''] } })
+    )
+    expect(out).toEqual({ lengths: [100, 30], loudness: ['', ''] })
+  })
 })

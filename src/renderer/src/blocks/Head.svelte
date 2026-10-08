@@ -153,18 +153,6 @@
           >
         {/if}
       {/each}
-      {#if b.looks}
-        {@const l = b.looks}
-        <span class="looks">
-          <Seg
-            small
-            label={l.label}
-            options={l.options}
-            value={l.value}
-            onchange={(v) => act(l.id, v)}
-          />
-        </span>
-      {/if}
     {/if}
   </div>
 {/snippet}
@@ -193,7 +181,23 @@
     </div>
   </div>
 {:else if b.look === 'artist'}
-  {@render back()}
+  <!-- the look switch at the back line's right end, in one place at every
+       width; not while the names are edited (ticket 095) -->
+  <div class="backline">
+    {@render back()}
+    {#if b.looks && !b.edit}
+      {@const l = b.looks}
+      <span class="looks">
+        <Seg
+          small
+          label={l.label}
+          options={l.options}
+          value={l.value}
+          onchange={(v) => act(l.id, v)}
+        />
+      </span>
+    {/if}
+  </div>
   <div class="arthead">
     <div class="pic"><ArtistPic photo={b.art?.src} covers={b.art?.covers ?? []} /></div>
     <div class="about">
@@ -273,10 +277,14 @@
     gap: 8px;
     margin-top: 16px;
   }
-  /* an artist page's look switch, at the right of its buttons (ticket 095) */
+  .backline {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
   .looks {
     margin-left: auto;
-    align-self: center;
+    margin-top: 4px;
   }
 
   /* An album's page. The cover stays beside the title at any width, so the

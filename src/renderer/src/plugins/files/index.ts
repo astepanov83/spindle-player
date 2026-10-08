@@ -1,7 +1,7 @@
 // The music files plugin's page half, over its store (store.svelte.ts).
 import { files } from './store.svelte'
 import type { PageHalf } from '../types'
-import { canOpenFiles, filesPath, filesTabs, keepFiles } from './nav'
+import { canOpenFiles, filesLook, filesPath, filesTabs, keepFiles } from './nav'
 import { filesAct, filesEmptyPlaylists, filesPage, filesSearch } from './page'
 import { filesDrop } from './drop'
 import { startFiles } from './start'
@@ -20,6 +20,7 @@ export const filesHalf: PageHalf = {
   canOpen: canOpenFiles,
   keep: keepFiles,
   path: filesPath,
+  look: filesLook,
   page: filesPage,
   search: filesSearch,
   emptyPlaylists: filesEmptyPlaylists,

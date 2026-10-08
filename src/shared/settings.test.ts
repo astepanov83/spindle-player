@@ -36,6 +36,7 @@ describe('parseStoredSettings', () => {
       plugins: { files: true, radio: false, mfp: true },
       viewSorts: { albums: 'added' },
       artistsShown: 'all',
+      viewLooks: { albums: 'list', artists: 'shelves', artistPage: 'column' },
       loudness: 'song',
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowMaximized: { studio: true, focus: false },
@@ -136,6 +137,7 @@ describe('parseStoredSettings with a base', () => {
     plugins: { files: true, radio: true, mfp: false },
     viewSorts: { albums: 'added' },
     artistsShown: 'all',
+    viewLooks: { albums: 'list', artists: 'list', artistPage: 'albums' },
     loudness: 'off',
     windowSizes: { focus: { width: 500, height: 700 } },
     windowMaximized: { focus: true },
@@ -408,6 +410,54 @@ describe('artists shown setting', () => {
 
   it('gives the page the field', () => {
     expect(pageSettings(parseStoredSettings({ artistsShown: 'all' })).artistsShown).toBe('all')
+  })
+})
+
+describe('view looks setting (ticket 095)', () => {
+  it('is grid, grid and sections by default, also for an old file without it', () => {
+    const want = { albums: 'grid', artists: 'grid', artistPage: 'sections' }
+    expect(parseStoredSettings(undefined).viewLooks).toEqual(want)
+    expect(parseStoredSettings({ theme: 'dark' }).viewLooks).toEqual(want)
+    expect(parseStoredSettings({ viewLooks: 'list' }).viewLooks).toEqual(want)
+  })
+
+  it('keeps each known look and falls back on a wrong one alone', () => {
+    expect(
+      parseStoredSettings({
+        viewLooks: { albums: 'list', artists: 'shelves', artistPage: 'column' }
+      }).viewLooks
+    ).toEqual({ albums: 'list', artists: 'shelves', artistPage: 'column' })
+    // shelves is an Artists look only; a view left out keeps its default
+    expect(
+      parseStoredSettings({ viewLooks: { albums: 'shelves', artists: 'list', other: 'x' } })
+        .viewLooks
+    ).toEqual({ albums: 'grid', artists: 'list', artistPage: 'sections' })
+  })
+
+  it('keeps the current look of a bad field from the page', () => {
+    const base = parseStoredSettings({ viewLooks: { albums: 'list' } })
+    expect(parseStoredSettings({ viewLooks: { albums: 7 } }, base).viewLooks.albums).toBe('list')
+  })
+
+  it('knows the field in a file', () => {
+    expect(isKnownSettingsFile({ viewLooks: { artists: 'shelves' } })).toBe(true)
+    for (const viewLooks of [
+      'grid',
+      [],
+      { albums: 'shelves' },
+      { artistPage: 'grid' },
+      { songs: 'grid' },
+      { albums: 1 }
+    ])
+      expect(isKnownSettingsFile({ viewLooks })).toBe(false)
+  })
+
+  it('gives the page the field, as a copy', () => {
+    const stored = parseStoredSettings({ viewLooks: { artistPage: 'albums' } })
+    const page = pageSettings(stored)
+    expect(page.viewLooks).toEqual({ albums: 'grid', artists: 'grid', artistPage: 'albums' })
+    page.viewLooks.albums = 'list'
+    expect(stored.viewLooks.albums).toBe('grid')
   })
 })
 

@@ -293,6 +293,13 @@ export function pagePath(tab: string): string[] {
   return library.searchAll && library.query.trim() ? [...out, `all:${library.searchAll}`] : out
 }
 
+// How the open page of a tab is drawn, when its view has a choice of looks.
+export function pageLook(tab: string): string | undefined {
+  const t = pluginTabs().find((t) => t.id === tab)
+  if (!t || t.plugin === 'core') return undefined
+  return halves[t.plugin].look?.(tab, library.page(tab))
+}
+
 // Changes whenever an answer of itemInfo may have changed: a plugin turned on
 // or off, or new data in one.
 export function itemsVersion(): string {

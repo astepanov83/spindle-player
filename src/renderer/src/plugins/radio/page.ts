@@ -26,7 +26,6 @@ export function radioBlocks(query: string): Block[] {
       look: 'list',
       id: '',
       title: 'Radio',
-      meta: 'Internet radio',
       count: fmtCount(radio.stations.length, 'station', 'stations'),
       searchHint: 'Find stations with the search box'
     },

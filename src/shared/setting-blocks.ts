@@ -39,6 +39,8 @@ export type SettingBlock =
       disabled?: boolean
     }
   // A dropdown. act: `set` with the option's id. `note` shows after the label.
+  // `segments`: every option in view as segments, for a few short ones;
+  // `about`: a line under it, for the option picked.
   | {
       kind: 'choice'
       id: string
@@ -46,6 +48,8 @@ export type SettingBlock =
       value: string
       options: { id: string; label: string; note?: string }[]
       disabled?: boolean
+      segments?: boolean
+      about?: string
     }
   // A plugin's place for a task: the core draws the task's switch here, and
   // while it is on, the AI setup blocks under it, then `blocks`: the task's

@@ -38,6 +38,16 @@ export const icons = {
   plus: 'M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z',
   more: 'M5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
   list: 'M3 5h14v2H3zm0 6h14v2H3zm0 6h10v2H3zm16-4v6.5a2.5 2.5 0 1 1-2-2.45V11h4v2z',
+  // a library view's looks (ticket 095): covers in a grid, rows of covers on
+  // shelves, rows of names; an artist page in parts, albums beside their
+  // songs, the artist in a column on the left
+  lookGrid: 'M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z',
+  lookShelves:
+    'M3 3h9v2H3zm0 3h5v5H3zm6.5 0h5v5h-5zM16 6h5v5h-5zM3 13h9v2H3zm0 3h5v5H3zm6.5 0h5v5h-5zm6.5 0h5v5h-5z',
+  lookList: 'M3 5h3v3H3zm5 0h13v3H8zm-5 5.5h3v3H3zm5 0h13v3H8zM3 16h3v3H3zm5 0h13v3H8z',
+  lookSections: 'M3 3h18v5H3zm0 8h5v4H3zm6.5 0h5v4h-5zm6.5 0h5v4h-5zM3 17h5v4H3zm6.5 0h5v4h-5z',
+  lookAlbums: 'M3 3h7v7H3zm9 0h9v2h-9zm0 4h9v2h-9zM3 14h7v7H3zm9 0h9v2h-9zm0 4h9v2h-9z',
+  lookColumn: 'M3 3h6v18H3zm8 0h10v3H11zm0 5h10v3H11zm0 5h10v3H11zm0 5h10v3H11z',
   // the window buttons: thin lines, drawn at 12px
   minimize: 'M3 10.6h18v2.8H3z',
   maximize: 'M3 3h18v18H3zm2.8 2.8v12.4h12.4V5.8z',

@@ -2,14 +2,20 @@
 // Forward and another chip return to where the view was left (see scroll-places.ts).
 import { tick, untrack } from 'svelte'
 import { ScrollPlaces, type View } from './scroll-places'
-import { pagePath } from '../plugins'
+import { findItem } from './item-finder'
+import { pageLook, pagePath } from '../plugins'
 import { library } from '../stores/library.svelte'
 
 // The open view, as a path for ScrollPlaces: the tab, then where its page
 // is under it (the page's plugin says).
 export function libraryView(): View {
   const tab = library.tab
-  return { path: [tab, ...pagePath(tab)], query: library.query.trim() }
+  const look = pageLook(tab)
+  return {
+    path: [tab, ...pagePath(tab)],
+    query: library.query.trim(),
+    ...(look ? { look } : {})
+  }
 }
 
 // Where a view was left: its scrollTop, and the first grid row on screen
@@ -21,6 +27,11 @@ interface Place {
   row?: { grid: string; index: string; y: number }
   // a song row (data-song) to show in the middle, when it is drawn (ticket 040)
   song?: string
+  // The look the view was drawn in, and its first item on screen (data-item)
+  // with its offset from the box's top. Another look has other rows, so it
+  // starts at that item (ticket 095).
+  look?: string
+  item?: { key: string; y: number }
 }
 
 // Grid rows carry data-index inside a data-grid, "square" or "round"
@@ -30,13 +41,20 @@ interface Place {
 const rows = (el: HTMLElement, grid?: string): NodeListOf<HTMLElement> =>
   el.querySelectorAll<HTMLElement>(grid ? `[data-grid="${grid}"] > [data-index]` : '[data-index]')
 
-function placeOf(el: HTMLElement): Place {
+function placeOf(el: HTMLElement, look: string | undefined): Place {
   const boxTop = el.getBoundingClientRect().top
+  const place: Place = { top: el.scrollTop, ...(look ? { look } : {}) }
+  for (const r of el.querySelectorAll<HTMLElement>('[data-item]')) {
+    const b = r.getBoundingClientRect()
+    if (b.bottom <= boxTop) continue
+    place.item = { key: r.dataset.item!, y: b.top - boxTop }
+    break
+  }
   for (const r of rows(el)) {
     const b = r.getBoundingClientRect()
     if (b.bottom > boxTop)
       return {
-        top: el.scrollTop,
+        ...place,
         row: {
           grid: r.closest<HTMLElement>('[data-grid]')?.dataset.grid ?? '',
           index: r.dataset.index!,
@@ -44,7 +62,14 @@ function placeOf(el: HTMLElement): Place {
         }
       }
   }
-  return { top: el.scrollTop }
+  return place
+}
+
+// A place left in another look: only its first item carries over. At the
+// top it stays at the top, with the head in view.
+function inLook(p: Place, look: string | undefined): Place {
+  if (p.look === look) return p
+  return p.item && p.top > 0 ? { top: p.top, item: p.item } : { top: 0 }
 }
 
 // Call during component setup: `view` reads whatever picks the view.
@@ -61,15 +86,19 @@ export function scrollTopOnChange(box: () => HTMLElement | undefined, view: () =
     // read here so a landing waits for the box to be drawn
     const el = box()
     untrack(() => {
-      const moved = places.move(last, el ? placeOf(el) : { top: 0 }, to, library.takeReturn())
+      const here = el ? placeOf(el, last?.look) : { top: 0 }
+      const moved = places.move(last, here, to, library.takeReturn())
+      // the same view in another look (its switch, or Settings)
+      const relooked = moved === undefined && !!last && last.look !== to.look
       last = to
       if (!el) return
       let place: Place
       if (landing) {
         library.landing = null
         place = landing.song ? { top: 0, song: landing.song } : { top: 0 }
-      } else if (moved === undefined) return
-      else place = moved === 'top' ? { top: 0 } : moved
+      } else if (relooked) place = inLook(here, to.look)
+      else if (moved === undefined) return
+      else place = moved === 'top' ? { top: 0 } : inLook(moved, to.look)
       stop?.()
       stop = scrollWhenDrawn(el, place)
     })
@@ -98,6 +127,15 @@ function scrollWhenDrawn(el: HTMLElement, place: Place): () => void {
     if (song) {
       const b = song.getBoundingClientRect()
       return b.top - box.top - (box.height - b.height) / 2
+    }
+    // in the same look the grid row puts it back, as before
+    const item = place.row ? undefined : place.item
+    if (item) {
+      const r = el.querySelector<HTMLElement>(`[data-item="${CSS.escape(item.key)}"]`)
+      if (r) return r.getBoundingClientRect().top - box.top - item.y
+      // not drawn: where its list says its row is
+      const at = findItem(item.key)
+      if (at !== undefined) return at - el.scrollTop - item.y
     }
     const want = place.row
     const r = want && [...rows(el, want.grid)].find((r) => r.dataset.index === want.index)

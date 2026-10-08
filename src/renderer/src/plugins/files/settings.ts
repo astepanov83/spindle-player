@@ -18,6 +18,8 @@ import { layout } from '../../stores/layout.svelte'
 import { ai } from '../../ai.svelte'
 import { artistGroupsTask } from '../../../../shared/plugins/files/artists-file'
 import type { SettingBlock } from '../../../../shared/setting-blocks'
+import { lookViews, type LookView } from '../../../../shared/settings'
+import { lookViewNames, looks, setViewLook, viewLook } from './looks'
 
 export function filesSettings(): SettingBlock[] {
   const s = files.status
@@ -42,7 +44,30 @@ export function filesSettings(): SettingBlock[] {
     { kind: 'button', id: 'add', label: 'Add folder', disabled: locked },
     { kind: 'button', id: 'rescan', label: 'Rescan', disabled: !canRescan(s, files.loadFailed) },
     ...statusLines(s, files.loadFailed).map((text): SettingBlock => ({ kind: 'status', text })),
+    ...lookBlocks(),
     { kind: 'ai', task: artistGroupsTask, blocks: groupsBlocks() }
+  ]
+}
+
+const lookPrefix = 'look-'
+
+// The same choices as the switch in each view's title row (ticket 095).
+function lookBlocks(): SettingBlock[] {
+  return [
+    { kind: 'title', text: 'Looks' },
+    ...lookViews.map((view): SettingBlock => {
+      const info = looks[view] as Record<string, { label: string; about: string }>
+      const now = viewLook(view)
+      return {
+        kind: 'choice',
+        id: lookPrefix + view,
+        label: lookViewNames[view],
+        value: now,
+        options: Object.entries(info).map(([id, l]) => ({ id, label: l.label })),
+        segments: true,
+        about: info[now].about
+      }
+    })
   ]
 }
 
@@ -79,7 +104,9 @@ function groupsBlocks(): SettingBlock[] {
 }
 
 export function filesActSetting(id: string, actionId: string, value?: string): void {
-  if (id === 'folders' && actionId === 'remove' && value) window.libraryApi.removeFolder(value)
+  const view = id.startsWith(lookPrefix) ? (id.slice(lookPrefix.length) as LookView) : undefined
+  if (view && lookViews.includes(view) && actionId === 'set') setViewLook(view, value)
+  else if (id === 'folders' && actionId === 'remove' && value) window.libraryApi.removeFolder(value)
   else if (id === 'add' && actionId === 'press') window.libraryApi.addFolder()
   else if (id === 'rescan' && actionId === 'press') window.libraryApi.rescan()
   else if (id === 'ai-recheck' && actionId === 'press') window.libraryApi.aiRecheck()

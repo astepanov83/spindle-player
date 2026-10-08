@@ -27,6 +27,8 @@ export interface VirtualList {
   offset(item: VirtualItem): number
   measure(node: Element): void
   scrollToIndex(index: number): void
+  // where a row starts in the scroll box's content (guessed until drawn)
+  startOf(index: number): number | undefined
 }
 
 // Call during component setup. `opts` is read inside an effect, so it tracks state.
@@ -92,6 +94,7 @@ export function virtualList(opts: () => VirtualListOptions, overscan = 8): Virtu
     },
     offset: (item) => item.start - v.options.scrollMargin,
     measure: (node) => v.measureElement(node),
-    scrollToIndex: (index) => v.scrollToIndex(index, { align: 'start' })
+    scrollToIndex: (index) => v.scrollToIndex(index, { align: 'start' }),
+    startOf: (index) => v.measurementsCache[index]?.start
   }
 }

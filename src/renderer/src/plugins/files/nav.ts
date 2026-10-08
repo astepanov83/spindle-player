@@ -5,6 +5,7 @@ import { library } from '../../stores/library.svelte'
 import { files } from './store.svelte'
 import type { PageAddress, Tab } from '../types'
 import { artistPage, filesTabOf, fixesPage, folderPage, parsePage } from './pages'
+import { viewLook } from '../../stores/settings.svelte'
 
 const isAlbum = (id: string): boolean => !!files.findAlbum(id)
 
@@ -75,6 +76,20 @@ export function filesPath(tab: string, page: string): string[] {
   // filter in place and stay the same view.
   if (library.query.trim() && (tab === 'albums' || tab === 'artists')) path.push('search')
   return path
+}
+
+// How the open view is drawn (ticket 095), as page.ts draws it: none for an
+// album's page, the name fixes or the search results, which have one look.
+export function filesLook(tab: string, page: string): string | undefined {
+  const p = parsePage(page)
+  const searching = !!library.query.trim()
+  if (tab === 'albums')
+    return searching || (p?.kind === 'album' && isAlbum(p.id)) ? undefined : viewLook('albums')
+  if (tab !== 'artists') return undefined
+  if (searching) return viewLook('artists')
+  if (p?.kind === 'artist' && p.album && isAlbum(p.album)) return undefined
+  if (p?.kind === 'artist' && files.getArtist(p.key)) return viewLook('artistPage')
+  return p?.kind === 'fixes' ? undefined : viewLook('artists')
 }
 
 // null goes back to the grid

@@ -8,6 +8,9 @@
 export interface View {
   path: string[]
   query: string
+  // how it is drawn, when it has a choice of looks (ticket 095); not part of
+  // the path: another look is the same view
+  look?: string
 }
 
 const keyOf = (v: View): string => JSON.stringify(v.path)

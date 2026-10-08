@@ -52,7 +52,6 @@ function listBlocks(query: string): Block[] {
     look: 'list',
     id: '',
     title: 'Music For Programming',
-    meta: 'Online',
     count: fmtCount(mfp.episodes.length, 'episode', 'episodes'),
     // Settings has the "updated" line
     ...(status?.running || status?.error ? { hint: mfpLine(status, Date.now()) } : {})

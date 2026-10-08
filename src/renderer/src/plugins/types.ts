@@ -112,12 +112,12 @@ export interface HeadBlock {
   // act's target for its buttons
   id: string
   title: string
-  // the line over the title: "Library", "Album · 2003"
+  // the line over the title: "Album · 2003". A list's title row has none.
   meta?: string
-  // a list's count, on the right: "8 albums"
+  // a list's count, after its title: "8 albums" (it shows the number)
   count?: string
-  // a list's choice of what it shows, over its count: "Album artists | All
-  // artists". Picking one acts with (head id, id, the option's value).
+  // a list's choice of what it shows, at the right of its title row: "Album
+  // artists | All artists". Picking one acts with (head id, id, the option's value).
   // `menu`: a button that opens a menu headed by `label`, for a choice of
   // many (the Albums sort): "Sort: Artist ▾", with `prefix` "Sort:".
   choice?: {
@@ -126,6 +126,15 @@ export interface HeadBlock {
     value: string
     options: { value: string; label: string }[]
     menu?: { prefix: string }
+  }
+  // How the view is drawn (ticket 095): icon segments beside `choice` on a
+  // list's title row, or at the right of an artist page's buttons. Picking
+  // one acts with (head id, id, the look). Not a step in Back / Forward.
+  looks?: {
+    id: string
+    label: string
+    value: string
+    options: { value: string; label: string; icon: IconName }[]
   }
   // a list's line under its title: "Reading musicforprogramming.net…"
   hint?: string
@@ -211,7 +220,8 @@ export interface SongsBlock {
   // names the songs when they start the queue, and the title shown with `meta`
   from: string
   link?: QueueLink
-  // the table's title: `meta` over `from`; else `label`, a small heading
+  // the table's title: `meta` over `from`, or `from` alone on a list's
+  // one-line title row when `meta` is ''; else `label`, a small heading
   meta?: string
   label?: string
   // the song count on the right; off where the head says it already
@@ -499,6 +509,9 @@ export interface PageHalf {
   // The page's place under its tab, top first, for the scroll places: a
   // move up this path shows where the view was left (ticket 042).
   path?(tab: string, page: string): string[]
+  // How the page is drawn, when its view has a choice of looks (ticket 095).
+  // A new look keeps the first item on screen in view, not the old place.
+  look?(tab: string, page: string): string | undefined
   // a page of one of its tabs, with the search box's text
   page(tab: string, page: string, query: string): Block[]
   // The search box's text while one of its tabs shows: when the tab opens,

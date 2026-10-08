@@ -74,7 +74,6 @@ describe('My stations', () => {
       look: 'list',
       id: '',
       title: 'Radio',
-      meta: 'Internet radio',
       count: '3 stations',
       searchHint: 'Find stations with the search box'
     })

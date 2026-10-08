@@ -10,6 +10,7 @@
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
   import { keepPlace } from '../ui/keep-place.svelte'
+  import { addFinder } from '../ui/item-finder'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { actOnPage, itemsVersion, openFrom } from '../plugins'
   import type { Tile, TilesBlock } from '../plugins/types'
@@ -58,6 +59,14 @@
     key: (x: unknown) => b.key(x),
     source: itemsVersion()
   }))
+
+  // so another look of the view can start at a tile not drawn (ticket 095)
+  $effect(() =>
+    addFinder((key) => {
+      const i = items.findIndex((x) => b.key(x) === key)
+      return i < 0 ? undefined : v.startOf(Math.floor(i / cols))
+    })
+  )
 
   function measure(node: HTMLDivElement): void {
     v.measure(node)
@@ -118,6 +127,7 @@
         <div
           class="card"
           class:round={b.round}
+          data-item={b.key(x)}
           role="group"
           onpointerdown={(e) => press(e, t)}
           oncontextmenu={(e) => openMenu(e, x, t)}

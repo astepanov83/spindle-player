@@ -1,7 +1,13 @@
 // Main loads the settings file. main.ts fills this in before the app mounts,
 // and App.svelte sends every change back.
 import type { PluginId } from '../../../shared/plugins'
-import { defaultSettings, type Settings } from '../../../shared/settings'
+import {
+  defaultSettings,
+  isViewLook,
+  type LookView,
+  type Settings,
+  type ViewLooks
+} from '../../../shared/settings'
 
 export const settings: Settings = $state(defaultSettings())
 
@@ -25,4 +31,16 @@ export function viewSort(view: string): string | undefined {
 
 export function setViewSort(view: string, sort: string): void {
   settings.viewSorts = { ...settings.viewSorts, [view]: sort }
+}
+
+// How a library view is drawn now (ticket 095). The page builders branch on
+// it; a look not built yet draws as the view's first one.
+export function viewLook<V extends LookView>(view: V): ViewLooks[V] {
+  return settings.viewLooks[view]
+}
+
+// From the title row's switch or Settings; a value the view doesn't have changes nothing.
+export function setViewLook(view: LookView, look: unknown): void {
+  if (!isViewLook(view, look) || settings.viewLooks[view] === look) return
+  settings.viewLooks = { ...settings.viewLooks, [view]: look }
 }

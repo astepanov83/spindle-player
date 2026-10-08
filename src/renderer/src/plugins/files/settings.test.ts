@@ -138,3 +138,52 @@ describe('filesSettings and the artist groups task', () => {
     expect(own()).toEqual([])
   })
 })
+
+describe('the looks in Settings (ticket 095)', () => {
+  const looks = (): SettingBlock[] => {
+    const blocks = filesSettings()
+    const at = blocks.findIndex((b) => b.kind === 'title' && b.text === 'Looks')
+    return blocks.slice(at + 1, at + 4)
+  }
+
+  it('lists each view with its looks as segments, and a line for the one picked', () => {
+    const [albums, artists, artistPage] = looks()
+    expect(albums).toMatchObject({
+      kind: 'choice',
+      id: 'look-albums',
+      label: 'Albums',
+      value: 'grid',
+      options: [
+        { id: 'grid', label: 'Grid' },
+        { id: 'list', label: 'List' }
+      ],
+      segments: true
+    })
+    expect(artists).toMatchObject({ label: 'Artists', value: 'grid' })
+    expect(artists.kind === 'choice' && artists.options.map((o) => o.label)).toEqual([
+      'Grid',
+      'Shelves',
+      'List'
+    ])
+    expect(artistPage).toMatchObject({ label: 'Artist page', value: 'sections' })
+    expect(artistPage.kind === 'choice' && artistPage.about).toMatch(/Albums, Singles and EPs/)
+  })
+
+  it('changes the same setting as the switch in the title row', async () => {
+    const { settings } = await import('../../stores/settings.svelte')
+    filesActSetting('look-artists', 'set', 'shelves')
+    expect(settings.viewLooks.artists).toBe('shelves')
+    const artists = looks()[1]
+    expect(artists).toMatchObject({ value: 'shelves' })
+    expect(artists.kind === 'choice' && artists.about).toMatch(/scrolls sideways/)
+    // a look that view doesn't have, or another action, changes nothing
+    filesActSetting('look-artists', 'set', 'column')
+    filesActSetting('look-artists', 'press')
+    filesActSetting('look-songs', 'set', 'grid')
+    expect(settings.viewLooks).toEqual({
+      albums: 'grid',
+      artists: 'shelves',
+      artistPage: 'sections'
+    })
+  })
+})

@@ -11,6 +11,7 @@
   import Cover from '../ui/Cover.svelte'
   import GoLink from '../ui/GoLink.svelte'
   import Icon from '../ui/Icon.svelte'
+  import Seg from '../ui/Seg.svelte'
   import { actOnPage, openFrom, openPage } from '../plugins'
   import type { HeadBlock, HeadButton, NavKind } from '../plugins/types'
   import { playPage, playState as pagePlayState } from './page-play'
@@ -152,6 +153,18 @@
           >
         {/if}
       {/each}
+      {#if b.looks}
+        {@const l = b.looks}
+        <span class="looks">
+          <Seg
+            small
+            label={l.label}
+            options={l.options}
+            value={l.value}
+            onchange={(v) => act(l.id, v)}
+          />
+        </span>
+      {/if}
     {/if}
   </div>
 {/snippet}
@@ -159,12 +172,13 @@
 {#if b.look === 'list'}
   <ViewHead
     title={b.title}
-    meta={b.meta}
     count={b.count ?? ''}
     {hint}
     below={b.line ? line : undefined}
     choice={b.choice}
     onchoose={(v) => b.choice && act(b.choice.id, v)}
+    looks={b.looks}
+    onlook={(v) => b.looks && act(b.looks.id, v)}
   />
 {:else if b.look === 'album'}
   {@render back()}
@@ -258,6 +272,11 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 16px;
+  }
+  /* an artist page's look switch, at the right of its buttons (ticket 095) */
+  .looks {
+    margin-left: auto;
+    align-self: center;
   }
 
   /* An album's page. The cover stays beside the title at any width, so the

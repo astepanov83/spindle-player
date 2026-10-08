@@ -82,6 +82,28 @@ describe('files pages', () => {
     expect(nav.keepFiles('albums', 'radio/x')).toBe('')
   })
 
+  it('say how the page shown is drawn, for the scroll places (ticket 095)', async () => {
+    const { setViewLook } = await import('../../stores/settings.svelte')
+    setViewLook('albums', 'list')
+    setViewLook('artistPage', 'albums')
+    expect(nav.filesLook('albums', '')).toBe('list')
+    // a page gone shows the grid
+    expect(nav.filesLook('albums', 'album/gone')).toBe('list')
+    expect(nav.filesLook('artists', '')).toBe('grid')
+    expect(nav.filesLook('artists', 'artist/marinavale')).toBe('albums')
+    expect(nav.filesLook('artists', 'artist/nobody')).toBe('grid')
+    // one look only: an album, the name fixes, songs and folders
+    expect(nav.filesLook('albums', 'album/a')).toBeUndefined()
+    expect(nav.filesLook('artists', 'album/a/artist/marinavale')).toBeUndefined()
+    expect(nav.filesLook('artists', 'name-fixes')).toBeUndefined()
+    expect(nav.filesLook('folders', '')).toBeUndefined()
+    expect(nav.filesLook('songs', '')).toBeUndefined()
+    // the search results have one look; the filtered artists are drawn as the grid
+    library.query = 'x'
+    expect(nav.filesLook('albums', '')).toBeUndefined()
+    expect(nav.filesLook('artists', 'artist/marinavale')).toBe('grid')
+  })
+
   it('give each page its place under the tab, for the scroll places', () => {
     const [m, rock, live] = files.folders.nodes.map((n) => n.key)
     expect(nav.filesPath('albums', '')).toEqual([])

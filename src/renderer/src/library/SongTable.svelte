@@ -6,6 +6,7 @@
   import type { ItemKey } from '../../../shared/plugins/items'
   import type { QueueLink } from '../../../shared/saved-queue'
   import Eq from '../ui/Eq.svelte'
+  import ViewHead from './ViewHead.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import { fmtCount, fmtTime } from '../format'
   import { virtualList } from '../ui/virtual-list.svelte'
@@ -193,19 +194,24 @@
   const topOf = (i: number, offset: number): number => (moving ? placeOf(i) * ROW : offset)
 </script>
 
-<div class="tblhead">
-  {#if head}
-    {@render head()}
-  {:else}
-    <div>
-      <div class="page-meta">{meta}</div>
-      <h2 class="page-title">{title}</h2>
-    </div>
-  {/if}
-  {#if count}
-    <div class="page-meta">{fmtCount(rows.length, 'song', 'songs')}</div>
-  {/if}
-</div>
+{#if !head && !meta}
+  <!-- a list view's one-line title row, as Albums' (Classic's Songs) -->
+  <ViewHead {title} count={count ? fmtCount(rows.length, 'song', 'songs') : ''} />
+{:else}
+  <div class="tblhead">
+    {#if head}
+      {@render head()}
+    {:else}
+      <div>
+        <div class="page-meta">{meta}</div>
+        <h2 class="page-title">{title}</h2>
+      </div>
+    {/if}
+    {#if count}
+      <div class="page-meta">{fmtCount(rows.length, 'song', 'songs')}</div>
+    {/if}
+  </div>
+{/if}
 <div class="tbl" class:noartist={!artist} class:plays>
   <!-- The rows are buttons in a list, not a table, so the heads are sort
        buttons, not column headers; each says how it sorts. -->

@@ -1,7 +1,10 @@
 <!-- Segmented buttons: one of a few choices, a radio group for the keyboard.
-     One Tab stop; the arrows pick the next choice. -->
+     One Tab stop; the arrows pick the next choice. A choice with an icon
+     shows only the icon, its label as the tooltip. -->
 <script lang="ts" generics="T extends string">
   import { radioStep } from '../keys'
+  import Icon from './Icon.svelte'
+  import type { IconName } from './icons'
 
   let {
     options,
@@ -10,7 +13,7 @@
     onchange,
     small = false
   }: {
-    options: { value: T; label: string }[]
+    options: { value: T; label: string; icon?: IconName }[]
     value: T
     label: string
     onchange: (v: T) => void
@@ -42,7 +45,11 @@
       aria-checked={o.value === value}
       tabindex={i === picked ? 0 : -1}
       onclick={() => onchange(o.value)}
-      onkeydown={(e) => onkeydown(e, i)}>{o.label}</button
+      class:icon={!!o.icon}
+      aria-label={o.icon ? o.label : undefined}
+      title={o.icon ? o.label : undefined}
+      onkeydown={(e) => onkeydown(e, i)}
+      >{#if o.icon}<Icon name={o.icon} size={16} />{:else}{o.label}{/if}</button
     >
   {/each}
 </div>
@@ -75,6 +82,9 @@
     padding: 4px 10px;
     border-radius: 6px;
     white-space: nowrap;
+  }
+  .small button.icon {
+    padding: 3px 6px;
   }
   button:hover {
     background: var(--hover);

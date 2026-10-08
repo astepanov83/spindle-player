@@ -66,7 +66,6 @@ describe('the episode list', () => {
     expect(head(blocks[0])).toMatchObject({
       look: 'list',
       title: 'Music For Programming',
-      meta: 'Online',
       count: '2 episodes'
     })
     expect(head(blocks[0]).hint).toBeUndefined()

@@ -13,6 +13,7 @@
   import Icon from '../ui/Icon.svelte'
   import Spinner from '../ui/Spinner.svelte'
   import Switch from '../ui/Switch.svelte'
+  import Seg from '../ui/Seg.svelte'
   import SettingBlocks from './SettingBlocks.svelte'
 
   // ties each label to its box, with more than one of these on the page
@@ -246,6 +247,17 @@
           onblur={() => (b.secret ? sendSecret(b.id) : send(b.id, b.value ?? ''))}
         />
       {/if}
+    </div>
+  {:else if b.kind === 'choice' && b.segments}
+    <div class="field">
+      <span class="label">{b.label}</span>
+      <Seg
+        label={b.label}
+        options={b.options.map((o) => ({ value: o.id, label: o.label }))}
+        value={b.value}
+        onchange={(v) => act(b.id, 'set', v)}
+      />
+      {#if b.about}<p class="hint">{b.about}</p>{/if}
     </div>
   {:else if b.kind === 'choice'}
     {@const box = `${uid}-${b.id}`}

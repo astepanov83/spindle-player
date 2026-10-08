@@ -445,10 +445,21 @@ describe('settings blocks (ticket 060)', () => {
     vi.stubGlobal('window', { ...window, libraryApi: api })
   })
 
-  it('give the music folders, Add folder, Rescan, the scan line and the AI task', () => {
+  it('give the music folders, Add folder, Rescan, the scan line, the looks and the AI task', () => {
     files.status = { ...files.status, folders: ['/m', '/gone'], missing: ['/gone'] }
     const blocks = p.settingBlocks('files')
-    expect(blocks.map((b) => b.kind)).toEqual(['title', 'list', 'button', 'button', 'status', 'ai'])
+    expect(blocks.map((b) => b.kind)).toEqual([
+      'title',
+      'list',
+      'button',
+      'button',
+      'status',
+      'title',
+      'choice',
+      'choice',
+      'choice',
+      'ai'
+    ])
     expect(blocks[1]).toMatchObject({
       kind: 'list',
       rows: [

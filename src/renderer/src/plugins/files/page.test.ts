@@ -135,9 +135,10 @@ describe('pages', () => {
     expect(head(blocks[0])).toMatchObject({
       look: 'list',
       title: 'Albums',
-      meta: 'Library',
       count: '2 albums'
     })
+    // the one-line title row has no "Library" over it (ticket 095)
+    expect(head(blocks[0]).meta).toBeUndefined()
     const t = tiles(blocks[1])
     expect(t.items).toBe(files.albums)
     const tile = t.tile(files.albums[0])
@@ -334,6 +335,46 @@ describe('pages', () => {
     expect(head(blocks[0]).choice).toBeUndefined()
   })
 
+  it('a look switch on the heads of Albums, Artists and an artist page, kept in settings (095)', async () => {
+    const { settings } = await import('../../stores/settings.svelte')
+    const icons = (h: HeadBlock): string[] => h.looks?.options.map((o) => o.icon) ?? []
+    const albums = head(page.filesPage('albums', '', '')[0])
+    expect(albums.looks).toMatchObject({ id: 'look', label: 'Albums look', value: 'grid' })
+    expect(albums.looks?.options.map((o) => o.label)).toEqual(['Grid', 'List'])
+    expect(icons(albums)).toEqual(['lookGrid', 'lookList'])
+    // beside the sort, which stays
+    expect(albums.choice?.id).toBe('sort')
+    page.filesAct(albums.id, 'look', 'list')
+    expect(settings.viewLooks).toEqual({ albums: 'list', artists: 'grid', artistPage: 'sections' })
+    expect(head(page.filesPage('albums', '', '')[0]).looks?.value).toBe('list')
+
+    const artists = head(page.filesPage('artists', '', '')[0])
+    expect(artists.looks?.value).toBe('grid')
+    expect(icons(artists)).toEqual(['lookGrid', 'lookShelves', 'lookList'])
+    page.filesAct(artists.id, 'look', 'shelves')
+    expect(settings.viewLooks.artists).toBe('shelves')
+    // the filtered grid keeps the switch: it is the same view
+    expect(head(page.filesPage('artists', '', 'juno')[0]).looks?.value).toBe('shelves')
+
+    const artist = head(page.filesPage('artists', 'artist/marinavale', '')[0])
+    expect(artist.looks?.options.map((o) => o.value)).toEqual(['sections', 'albums', 'column'])
+    page.filesAct(artist.id, 'look', 'column')
+    expect(settings.viewLooks.artistPage).toBe('column')
+
+    // a look another view has, or none, changes nothing
+    page.filesAct(albums.id, 'look', 'shelves')
+    page.filesAct(artist.id, 'look', 'grid')
+    page.filesAct(albums.id, 'look')
+    expect(settings.viewLooks).toEqual({ albums: 'list', artists: 'shelves', artistPage: 'column' })
+    // an album's page has no looks, under an artist or not
+    expect(head(page.filesPage('albums', 'album/a', '')[0]).looks).toBeUndefined()
+    expect(
+      head(page.filesPage('artists', 'album/a/artist/marinavale', '')[0]).looks
+    ).toBeUndefined()
+    page.filesAct('album/a/artist/marinavale', 'look', 'sections')
+    expect(settings.viewLooks.artistPage).toBe('column')
+  })
+
   it('an artist: head with a round picture, their albums opening under them', () => {
     const blocks = page.filesPage('artists', 'artist/marinavale', '')
     expect(kinds(blocks)).toEqual(['head', 'text', 'tiles'])
@@ -426,7 +467,7 @@ describe('pages', () => {
     const [s] = page.filesPage('songs', '', '')
     expect(songs(s)).toMatchObject({
       items: ['files:a1', 'files:a2', 'files:a3', 'files:b1'],
-      meta: 'Library',
+      meta: '',
       sort: library.sort
     })
     page.filesAct(songs(s).id, 'sort', 't')

@@ -1,101 +1,187 @@
-<!-- The title over a list view (Albums, Artists, Playlists, Radio), in the
-     look of the song table's: every view in both templates has one. A choice
-     sits over the count: a few options as segments, more (a sort) as a
-     button that opens a menu. -->
+<!-- The title row over a list view (Albums, Artists, Songs, Playlists,
+     Radio), on one line: the title, its count, then at the right the look
+     switch (icon segments) and a choice: a few options as segments, more (a
+     sort) as a button that opens a menu. Where they don't fit beside the
+     title (Studio's narrowest library), both go into one menu button
+     (ticket 095). -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import Seg from '../ui/Seg.svelte'
-  import { menu } from '../stores/menu.svelte'
+  import type { IconName } from '../ui/icons'
+  import { menu, type MenuEntry } from '../stores/menu.svelte'
+
+  interface Choice {
+    label: string
+    value: string
+    options: { value: string; label: string }[]
+  }
 
   let {
     title,
-    meta = 'Library',
     count,
     hint,
     below,
     choice,
-    onchoose
+    onchoose,
+    looks,
+    onlook
   }: {
     title: string
-    meta?: string
-    // "8 albums", on the right
+    // "8 albums": the row shows the number
     count: string
     // a line under the title
     hint?: string
     // a line of links under the title, in place of `hint`
     below?: Snippet
-    // what the list shows ("Album artists | All artists") or how it sorts,
-    // over the count it changes; `menu`: a button with a menu, for many options
-    choice?: {
-      label: string
-      value: string
-      options: { value: string; label: string }[]
-      menu?: { prefix: string }
-    }
+    // what the list shows ("Album artists | All artists") or how it sorts;
+    // `menu`: a button with a menu, for many options
+    choice?: Choice & { menu?: { prefix: string } }
     onchoose?: (value: string) => void
+    // how the view is drawn: an icon per look
+    looks?: Choice & { options: { value: string; label: string; icon: IconName }[] }
+    onlook?: (value: string) => void
   } = $props()
 
+  const number = $derived(count.split(' ')[0])
+
+  // The widths the switch and the choice need, measured also while they are
+  // hidden, so the row knows when they fit again.
+  let rowW = $state(0)
+  let leadW = $state(0)
+  let sideW = $state(0)
+  const fits = $derived(!looks || leadW + 10 + sideW <= rowW)
   const picked = $derived(choice?.options.find((o) => o.value === choice.value)?.label ?? '')
 
-  function open(e: MouseEvent): void {
-    if (!choice) return
-    menu.showFor(e, [
-      { heading: choice.label },
-      ...choice.options.map((o) => ({
-        label: o.label,
-        checked: o.value === choice.value,
-        run: () => onchoose?.(o.value)
-      }))
-    ])
+  const entries = (c: Choice, run: (v: string) => void): MenuEntry[] => [
+    { heading: c.label },
+    ...c.options.map((o) => ({
+      label: o.label,
+      checked: o.value === c.value,
+      run: () => run(o.value)
+    }))
+  ]
+
+  // the sort's menu; in a narrow row, the looks too
+  function open(e: MouseEvent, withLooks: boolean): void {
+    const out: MenuEntry[] = choice ? entries(choice, (v) => onchoose?.(v)) : []
+    if (withLooks && looks) {
+      if (out.length) out.push('line')
+      out.push(...entries(looks, (v) => onlook?.(v)))
+    }
+    menu.showFor(e, out)
   }
 </script>
 
+{#snippet menuButton(withLooks: boolean)}
+  <!-- a narrow row with no choice names the look -->
+  {@const label = choice?.label ?? looks?.label ?? ''}
+  {@const now = choice
+    ? picked
+    : (looks?.options.find((o) => o.value === looks.value)?.label ?? '')}
+  <button
+    class="pick chip"
+    aria-haspopup="menu"
+    aria-label="{label}: {now}"
+    title={label}
+    onclick={(e) => open(e, withLooks)}
+    >{#if choice?.menu}<span class="prefix">{choice.menu.prefix}</span>
+    {/if}{now}<span class="arrow">▾</span></button
+  >
+{/snippet}
+
 <div class="vhead">
-  <div>
-    <div class="page-meta">{meta}</div>
-    <h2 class="page-title">{title}</h2>
-    {#if below}{@render below()}{:else if hint}<div class="page-meta">{hint}</div>{/if}
-  </div>
-  <div class="side">
-    {#if choice?.menu}
-      <button
-        class="pick chip"
-        aria-haspopup="menu"
-        aria-label="{choice.label}: {picked}"
-        title={choice.label}
-        onclick={open}
-        ><span class="prefix">{choice.menu.prefix}</span>
-        {picked}<span class="arrow">▾</span></button
-      >
-    {:else if choice}
-      <Seg
-        small
-        label={choice.label}
-        options={choice.options}
-        value={choice.value}
-        onchange={(v) => onchoose?.(v)}
-      />
+  <div class="titlerow" bind:clientWidth={rowW}>
+    <div class="lead" class:fixed={!!looks} bind:clientWidth={leadW}>
+      <h2 class="page-title" {title}>{title}</h2>
+      <span class="n" aria-hidden="true" title={count}>{number}</span>
+      <span class="sr">{count}</span>
+    </div>
+    {#if looks || choice}
+      <div class="side" class:out={!fits} bind:clientWidth={sideW}>
+        {#if looks}
+          <Seg
+            small
+            label={looks.label}
+            options={looks.options}
+            value={looks.value}
+            onchange={(v) => onlook?.(v)}
+          />
+        {/if}
+        {#if choice?.menu}
+          {@render menuButton(false)}
+        {:else if choice}
+          <Seg
+            small
+            label={choice.label}
+            options={choice.options}
+            value={choice.value}
+            onchange={(v) => onchoose?.(v)}
+          />
+        {/if}
+      </div>
     {/if}
-    <div class="page-meta count">{count}</div>
+    {#if !fits}
+      <div class="side">{@render menuButton(true)}</div>
+    {/if}
   </div>
+  {#if below}{@render below()}{:else if hint}<div class="page-meta">{hint}</div>{/if}
 </div>
 
 <style>
   .vhead {
+    padding: 6px 0 16px;
+  }
+  .titlerow {
+    position: relative;
     display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 12px;
-    padding-bottom: 16px;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .lead {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+  }
+  /* its whole width, to know whether the switch fits beside it */
+  .lead.fixed {
+    flex: none;
+  }
+  .lead .page-title {
+    margin: 0 0 6px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .n {
+    flex: none;
+    font-size: var(--title-s);
+    font-weight: 600;
+    color: var(--ink-3);
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .side {
+    flex: none;
+    margin-left: auto;
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    align-items: center;
     gap: 10px;
   }
-  .count {
-    white-space: nowrap;
+  /* not shown, but measured */
+  .out {
+    position: absolute;
+    left: 0;
+    top: 0;
+    visibility: hidden;
   }
   .pick {
     display: inline-flex;

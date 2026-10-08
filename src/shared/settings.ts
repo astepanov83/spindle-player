@@ -11,6 +11,13 @@ export type ArtistsShown = 'album' | 'all'
 // Even out loudness with ReplayGain (ticket 090): off, each song by its own
 // gain, or by its album's gain while the album plays in order
 export type Loudness = 'off' | 'song' | 'album'
+// How each library view is drawn (ticket 095), picked in its title row
+export interface ViewLooks {
+  albums: 'grid' | 'list'
+  artists: 'grid' | 'shelves' | 'list'
+  artistPage: 'sections' | 'albums' | 'column'
+}
+export type LookView = keyof ViewLooks
 
 export interface Settings {
   template: TemplateId
@@ -31,6 +38,7 @@ export interface Settings {
   // plugin knows the values; a view left out is in its own order.
   viewSorts: Record<string, string>
   artistsShown: ArtistsShown
+  viewLooks: ViewLooks
   loudness: Loudness
 }
 
@@ -78,6 +86,16 @@ export const coverSources: CoverSource[] = ['musicbrainz', 'deezer', 'itunes']
 export const closeActions: CloseAction[] = ['ask', 'minimize', 'quit']
 export const artistsShownChoices: ArtistsShown[] = ['album', 'all']
 export const loudnessChoices: Loudness[] = ['off', 'song', 'album']
+// each view's looks, the default first
+export const viewLookChoices: { [V in LookView]: ViewLooks[V][] } = {
+  albums: ['grid', 'list'],
+  artists: ['grid', 'shelves', 'list'],
+  artistPage: ['sections', 'albums', 'column']
+}
+export const lookViews = Object.keys(viewLookChoices) as LookView[]
+
+export const isViewLook = <V extends LookView>(view: V, v: unknown): v is ViewLooks[V] =>
+  (viewLookChoices[view] as unknown[]).includes(v)
 
 function pluginDefaults(): Record<PluginId, boolean> {
   return Object.fromEntries(plugins.map((p) => [p.id, p.defaultOn])) as Record<PluginId, boolean>
@@ -96,6 +114,7 @@ export function defaultSettings(): Settings {
     plugins: pluginDefaults(),
     viewSorts: {},
     artistsShown: 'album',
+    viewLooks: { albums: 'grid', artists: 'grid', artistPage: 'sections' },
     loudness: 'album'
   }
 }
@@ -207,6 +226,16 @@ function parseViewSorts(v: unknown, base: Record<string, string>): Record<string
   return out
 }
 
+// Each view on its own: a look this version doesn't have keeps the base's.
+function parseViewLooks(v: unknown, base: ViewLooks): ViewLooks {
+  const r = isObject(v) ? v : {}
+  return {
+    albums: isViewLook('albums', r.albums) ? r.albums : base.albums,
+    artists: isViewLook('artists', r.artists) ? r.artists : base.artists,
+    artistPage: isViewLook('artistPage', r.artistPage) ? r.artistPage : base.artistPage
+  }
+}
+
 // Absolute on Linux and macOS, or with a drive letter on Windows.
 function isAbsolutePath(p: string): boolean {
   return p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\')
@@ -309,6 +338,7 @@ export function parseStoredSettings(
     plugins: parsePlugins(r.plugins, r, base.plugins),
     viewSorts: parseViewSorts(r.viewSorts, base.viewSorts),
     artistsShown: oneOf(r.artistsShown, artistsShownChoices, base.artistsShown),
+    viewLooks: parseViewLooks(r.viewLooks, base.viewLooks),
     loudness: oneOf(r.loudness, loudnessChoices, base.loudness),
     windowSizes,
     windowMaximized:
@@ -399,6 +429,14 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('closeAction') && !closeActions.includes(raw.closeAction as CloseAction)) return false
   if (has('artistsShown') && !artistsShownChoices.includes(raw.artistsShown as ArtistsShown))
     return false
+  if (
+    has('viewLooks') &&
+    (!isObject(raw.viewLooks) ||
+      Object.entries(raw.viewLooks).some(
+        ([k, v]) => !lookViews.includes(k as LookView) || !isViewLook(k as LookView, v)
+      ))
+  )
+    return false
   if (has('loudness') && !loudnessChoices.includes(raw.loudness as Loudness)) return false
   if (
     has('coverSources') &&
@@ -436,6 +474,7 @@ export function pageSettings(s: StoredSettings): Settings {
     plugins: { ...s.plugins },
     viewSorts: { ...s.viewSorts },
     artistsShown: s.artistsShown,
+    viewLooks: { ...s.viewLooks },
     loudness: s.loudness
   }
 }

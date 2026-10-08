@@ -39,6 +39,7 @@ import { playsOf } from '../../library/plays'
 import type { Plays } from '../../../../shared/plays'
 import { albumSorts, albumsView, parseAlbumSort, sortAlbums, type AlbumSort } from './album-sort'
 import { files } from './store.svelte'
+import { lookId, lookSwitch, setViewLook } from './looks'
 import { notice } from '../../stores/notice.svelte'
 import {
   rowsBlock,
@@ -123,12 +124,11 @@ const noMatches = (text: string): EmptyBlock => ({
   nothingFound: true
 })
 
-const listHead = (title: string, count: string): HeadBlock => ({
+const listHead = (id: string, title: string, count: string): HeadBlock => ({
   kind: 'head',
   look: 'list',
-  id: '',
+  id,
   title,
-  meta: 'Library',
   count
 })
 
@@ -141,7 +141,8 @@ function songsPage(query: string): Block[] {
     id: songsTarget,
     items,
     from: 'Songs',
-    meta: 'Library',
+    // the one-line title row of every list view
+    meta: '',
     plays: true,
     get sort() {
       return library.sort
@@ -162,8 +163,8 @@ function albumsPage(page: string, query: string): Block[] {
   const by = parseAlbumSort(viewSort(albumsView))
   return [
     {
-      ...listHead('Albums', fmtCount(files.albums.length, 'album', 'albums')),
-      id: albumsView,
+      ...listHead(albumsView, 'Albums', fmtCount(files.albums.length, 'album', 'albums')),
+      looks: lookSwitch('albums'),
       choice: {
         id: 'sort',
         label: 'Sort albums',
@@ -249,6 +250,8 @@ function artistTiles(artists: Artist[]): TilesBlock {
 
 // the Album artists / All artists choice (ticket 081)
 const artistsShownId = 'artists-shown'
+// the Artists head's act target
+const artistsView = 'artists'
 
 // While searching, the grid shows over the open page, which comes back when
 // the text is cleared.
@@ -265,7 +268,8 @@ function artistsPage(page: string, query: string): Block[] {
   if (!query.trim() && p?.kind === 'fixes') return fixesBlocks()
   const shown = shownArtists(files.artists, settings.artistsShown, query)
   const fixes = fixCount(nameFixes(files.artists))
-  const head = listHead('Artists', fmtCount(shown.length, 'artist', 'artists'))
+  const head = listHead(artistsView, 'Artists', fmtCount(shown.length, 'artist', 'artists'))
+  head.looks = lookSwitch('artists')
   if (fixes) head.line = [{ text: fmtCount(fixes, 'name fix', 'name fixes'), to: at(fixesPage) }]
   // not while searching, which looks at everyone; not when it would change nothing
   if (!query.trim() && albumArtists(files.artists).length < files.artists.length)
@@ -425,6 +429,7 @@ function artistBlocks(a: Artist): Block[] {
       covers: artistCovers(a, album, songArt)
     },
     back: { label: 'All artists', to: at('') },
+    looks: lookSwitch('artistPage'),
     line: [
       {
         text: [
@@ -755,6 +760,7 @@ export function filesSearch(query: string): SearchGroup[] {
 export function filesAct(target: string, id: string, value?: string): void {
   if (id === 'add-folder') return void window.libraryApi.addFolder()
   if (id === 'sort' && value) return sortBy(target, value)
+  if (id === lookId) return setLook(target, value)
   if (id === artistsShownId && artistsShownChoices.includes(value as ArtistsShown))
     return void (settings.artistsShown = value as ArtistsShown)
   const p = parsePage(target)
@@ -763,6 +769,14 @@ export function filesAct(target: string, id: string, value?: string): void {
   if (p?.kind === 'fixes' && id === undoFixId) return undoFix(value)
   const a = p?.kind === 'artist' && !p.album ? files.getArtist(p.key) : undefined
   if (a) artistAct(a, id, value)
+}
+
+// A look picked in a head's switch (ticket 095). Not a step: like a sort.
+function setLook(target: string, look: string | undefined): void {
+  const p = parsePage(target)
+  if (target === albumsView) setViewLook('albums', look)
+  else if (target === artistsView) setViewLook('artists', look)
+  else if (p?.kind === 'artist' && !p.album) setViewLook('artistPage', look)
 }
 
 function sortBy(target: string, k: string): void {

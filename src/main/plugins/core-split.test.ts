@@ -65,6 +65,7 @@ const coreTests = [
   'src/renderer/src/stores/queues.test.ts',
   'src/renderer/src/stores/queue.test.ts',
   'src/renderer/src/ui/scroll-landing.svelte.test.ts',
+  'src/renderer/src/ui/scroll-look.svelte.test.ts',
   'src/renderer/src/ui/scroll-top.svelte.test.ts',
   'src/shared/id-moves.test.ts',
   'src/shared/playlists.test.ts',

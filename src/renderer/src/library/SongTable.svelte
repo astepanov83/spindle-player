@@ -264,7 +264,7 @@
           {@const t = s.info}
           {@const away = t.unavailable}
           <span class="tt">
-            <Thumb src={t.art?.cover} size={36} radius={4} away={!!away} />
+            <Thumb src={t.art?.cover} art={t.art} size={36} radius={4} away={!!away} />
             <span class="words">
               <span class="nm" title={t.title}>{t.title}</span>
               <!-- shown only when a narrow table drops the Artist column; why

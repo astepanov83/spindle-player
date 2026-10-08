@@ -224,7 +224,7 @@
 
 <!-- What an item row shows, in the row and in the copy that follows a drag. -->
 {#snippet look(r: ItemRow, cur: boolean)}
-  <Thumb src={r.art} size={44} radius={6} eq={cur && sounds} busy={cur && busy} />
+  <Thumb src={r.art} art={r.made} size={44} radius={6} eq={cur && sounds} busy={cur && busy} />
   <span class="nm">
     <span class="t"><span>{r.title}</span></span>
     {#if r.subtitle}<span class="where" title={r.subtitle}>{r.subtitle}</span>{/if}
@@ -312,7 +312,7 @@
         onclick={() => openFrom(tab, r.to, b.filtered)}
         oncontextmenu={(e) => openSongMenu(e, r.songs(), { from: r.from, link: r.link })}
       >
-        <Thumb src={r.art} size={40} radius={6} />
+        <Thumb src={r.art} art={r.made} size={40} radius={6} />
         <span class="nm">
           <span class="t"
             >{#if playing(r)}<Eq paused={!player.playing} />{/if}<span title={r.title}

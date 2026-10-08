@@ -122,7 +122,7 @@
           oncontextmenu={(e) => openSongMenu(e, sel.menu(startOf(f) + i), { from })}
         >
           <span class="tt">
-            <Thumb src={t?.art?.cover} size={36} radius={4} away={!!away} />
+            <Thumb src={t?.art?.cover} art={t?.art} size={36} radius={4} away={!!away} />
             <span class="nm"
               >{#if cur && queues.songPlaying}<Eq />{/if}<span title={t?.title}
                 >{t?.title ?? ''}</span

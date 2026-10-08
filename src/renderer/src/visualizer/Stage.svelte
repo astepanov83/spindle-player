@@ -59,7 +59,7 @@
   {#if cover}
     <!-- the cover changes size with the style, so draw again when it settles -->
     <div class="cover" bind:this={coverEl} ontransitionend={() => handle?.moved()}>
-      <div class="img"><Cover src={queues.art?.coverLarge} /></div>
+      <div class="img"><Cover src={queues.art?.coverLarge} art={queues.art} /></div>
     </div>
   {/if}
   <div class="vz-label" class:show={layout.vzLabel}>

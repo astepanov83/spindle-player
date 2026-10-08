@@ -11,5 +11,5 @@ export function dragSongs(
   o: { from?: string; link?: QueueLink; source?: object } = {}
 ): DragSongs {
   const t = infoOf(keys[0])
-  return { keys, ...o, title: t?.title ?? '', sub: t?.subtitle, cover: t?.art?.cover }
+  return { keys, ...o, title: t?.title ?? '', sub: t?.subtitle, art: t?.art }
 }

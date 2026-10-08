@@ -59,6 +59,7 @@
       onclick={unlessDragged(() => openFrom(tab, t.to))}
       >{#if round}<ArtistPic photo={t.photo} covers={t.covers ?? []} />{:else}<Cover
           src={t.art?.cover}
+          art={t.art}
           tint={t.art?.palette[theme.light ? 'light' : 'dark'][0]}
           lazy={false}
         />{/if}</button

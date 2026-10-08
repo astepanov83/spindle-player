@@ -3,6 +3,7 @@
 // playlist. Pointer events, as the queue's own drag: the page takes HTML5
 // drops for files from the system (main.ts), and the drag must go on when
 // the list it started in goes away (the drawer opening over it).
+import type { Art } from '../../../shared/library'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
 import { edgeStep } from '../ui/drag-rows'
@@ -15,7 +16,7 @@ export interface DragSongs {
   // what the copy under the pointer shows
   title: string
   sub?: string
-  cover?: string
+  art?: Art
   // the list it started in: a playlist's table takes only its own rows
   source?: object
 }

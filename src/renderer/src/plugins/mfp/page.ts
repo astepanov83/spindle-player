@@ -1,6 +1,7 @@
 // The MFP tab's pages as blocks (ticket 061): the episodes, newest first, and
 // an episode with its songs at their guessed times. The search box filters
 // the list in place; a song match shows under its episode.
+import { pictureOf } from '../../../../shared/library'
 import type { Episode, EpisodeSong } from '../../../../shared/plugins/mfp/mfp'
 import type { ItemKey } from '../../../../shared/plugins/items'
 import { queueLink, type QueueLink } from '../../../../shared/saved-queue'
@@ -108,6 +109,7 @@ function episodeRows(list: Episode[]): Block {
     row: (e) => ({
       title: e.title,
       art: mfp.art(e.id)?.cover,
+      made: mfp.art(e.id),
       details: [e.year ? String(e.year) : '', fmtCount(e.songs.length, 'song', 'songs')],
       meta: fmtLength(e.length),
       to: at(episodePage(e.id)),
@@ -139,6 +141,7 @@ function episodeBlocks(e: Episode, query: string): Block[] {
   const id = episodePage(e.id)
   const items = keysOf(e)
   const link = linkOf(e)
+  const art = mfp.art(e.id)
   const s = foldQuery(query)
   // the search box filters the songs in place
   const shown = s ? e.songs.filter((song) => songText(song).includes(s)) : e.songs
@@ -148,7 +151,7 @@ function episodeBlocks(e: Episode, query: string): Block[] {
     id,
     title: e.title,
     meta: 'Music For Programming',
-    art: { src: mfp.art(e.id)?.coverLarge },
+    art: { ...(art && pictureOf(art)), src: art?.coverLarge },
     back: { label: 'All episodes', to: at('') },
     line: [
       {

@@ -129,7 +129,12 @@
 {#snippet art(al: AlbumSongs)}
   <!-- the title opens it too, and is the one a screen reader needs -->
   <button class="cv" tabindex="-1" aria-hidden="true" onclick={open(al)}
-    ><Cover src={al.art?.coverLarge || al.art?.cover} tint={tint(al)} lazy={false} /></button
+    ><Cover
+      src={al.art?.coverLarge || al.art?.cover}
+      art={al.art}
+      tint={tint(al)}
+      lazy={false}
+    /></button
   >
 {/snippet}
 

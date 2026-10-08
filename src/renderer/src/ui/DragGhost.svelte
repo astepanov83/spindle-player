@@ -27,7 +27,7 @@
     style:transform="translate({Math.max(4, left)}px, {Math.max(4, top)}px)"
     style:width="{W}px"
   >
-    <Thumb src={d.cover} size={36} radius={4} />
+    <Thumb src={d.art?.cover} art={d.art} size={36} radius={4} />
     <span class="words">
       <span class="nm">{d.title}</span>
       {#if d.sub}<span class="sub">{d.sub}</span>{/if}

@@ -1,12 +1,23 @@
-<!-- An album cover that fills its box, or a grey record when there is none. -->
+<!-- An album cover that fills its box. With none, a picture made from the item
+     in the style Settings picks (ticket 103), or the grey record. -->
 <script lang="ts">
+  import type { NoCover } from '../../../shared/settings'
+  import type { PictureArt } from '../../../shared/library'
+  import { bucketOf, cachedPicture, loadPicture, pictureKey } from '../no-cover/pictures'
+  import { settings } from '../stores/settings.svelte'
+  import { theme } from '../stores/theme.svelte'
+
   let {
     src,
+    art,
     tint,
     lazy = true,
-    onfail
+    onfail,
+    style
   }: {
     src: string | undefined
+    // what a picture is made from when there is no cover (or it fails)
+    art?: PictureArt
     // shown while the picture loads (a CSS background): the album's color
     // turns into its cover, which a fast scroll shows much less than grey does
     tint?: string
@@ -15,6 +26,8 @@
     lazy?: boolean
     // the picture could not be loaded; the plain tile shows meanwhile
     onfail?: () => void
+    // in place of the setting's (Settings' previews)
+    style?: NoCover
   } = $props()
 
   // a cover the cache lost shows the plain tile, not a broken image
@@ -22,6 +35,33 @@
   // A plain tile until the picture is in, so a station's logo from the web
   // doesn't show as a blank gap first. Taken away after, for logos with holes.
   let loaded = $state('')
+
+  const showCover = $derived(!!src && failed !== src)
+  const drawn = $derived(style ?? settings.noCover)
+  const seed = $derived(art?.seed)
+  const made = $derived(!showCover && drawn !== 'record' && !!seed)
+  // the box's width picks the size the picture is drawn at
+  let width = $state(0)
+  const themeName = $derived(theme.light ? 'light' : 'dark')
+  const key = $derived(
+    made && seed && width ? pictureKey(drawn, seed, themeName, bucketOf(width)) : ''
+  )
+  // the last drawing that came in; a cached one shows at once
+  let drawnPic = $state({ key: '', url: '' })
+  const pic = $derived(
+    key && drawnPic.key === key ? drawnPic.url : key ? (cachedPicture(key) ?? '') : ''
+  )
+  const ground = $derived(tint ?? art?.palette?.[themeName][0])
+
+  $effect(() => {
+    if (!key || pic || !seed) return
+    const k = key
+    let live = true
+    void loadPicture(k, drawn, { ...art, seed }, themeName, bucketOf(width)).then((url) => {
+      if (live && url) drawnPic = { key: k, url }
+    })
+    return () => (live = false)
+  })
 </script>
 
 {#if src && failed !== src}
@@ -40,6 +80,11 @@
       onfail?.()
     }}
   />
+{:else if made}
+  <!-- the item's color while its picture is drawn -->
+  <span class="cover made" style:background={pic ? undefined : ground} bind:clientWidth={width}
+    >{#if pic}<img class="cover" src={pic} alt="" decoding="async" draggable="false" />{/if}</span
+  >
 {:else}
   <span class="cover none">
     <!-- the record from build/icon.svg, in the theme's inks -->
@@ -60,7 +105,8 @@
     height: 100%;
     object-fit: cover;
   }
-  .wait {
+  .wait,
+  .made {
     background: var(--field);
   }
   .none {

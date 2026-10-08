@@ -83,6 +83,13 @@ describe('My stations', () => {
       title: 'Station a',
       subtitle: 'jazz, swing · us',
       art: `spindle://cover/small/${hash}`,
+      made: {
+        palette: radio.stations[0].logo!.palette,
+        seed: 'a',
+        lengths: [],
+        title: 'Station a',
+        artist: undefined
+      },
       meta: '64-128 kbps',
       play: 'radio:a',
       star: { on: true, label: 'Remove from My stations' },
@@ -93,6 +100,8 @@ describe('My stations', () => {
     })
     expect(bb.subtitle).toBe('drone')
     expect(bb.art).toBeUndefined()
+    // no logo: a picture made from the station (103)
+    expect(bb.made).toMatchObject({ seed: 'b', title: bb.title })
     expect(bb.menu?.map((m) => m.id)).toEqual(['up', 'down', 'remove'])
     expect(c.menu?.map((m) => m.id)).toEqual(['up', 'remove'])
     expect((b[2] as RowsBlock).key(radio.stations[1])).toBe('b')

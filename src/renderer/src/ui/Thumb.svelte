@@ -1,11 +1,13 @@
 <!-- A small cover, optionally with the eq bars, a pulsing dot (a station connecting)
      or a "!" (a song that can't play: its music folder was not found) on top. -->
 <script lang="ts">
+  import type { PictureArt } from '../../../shared/library'
   import Cover from './Cover.svelte'
   import Eq from './Eq.svelte'
 
   let {
     src,
+    art,
     size = 44,
     radius = 6,
     eq = false,
@@ -13,6 +15,8 @@
     away = false
   }: {
     src: string | undefined
+    // what a picture is made from when there is no cover
+    art?: PictureArt
     size?: number
     radius?: number
     eq?: boolean
@@ -22,7 +26,7 @@
 </script>
 
 <span class="mini" style:width="{size}px" style:height="{size}px" style:border-radius="{radius}px">
-  <Cover {src} />
+  <Cover {src} {art} />
   {#if eq}<span class="on-cover"><Eq /></span>
   {:else if busy}<span class="on-cover corner"><span class="dot">●</span></span>
   {:else if away}<span class="on-cover corner"><span class="away">!</span></span>{/if}

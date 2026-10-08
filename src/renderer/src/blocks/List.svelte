@@ -260,6 +260,7 @@
             <span class="pic"
               >{#if b.round}<ArtistPic photo={r.photo} covers={r.covers ?? []} />{:else}<Cover
                   src={r.art?.cover}
+                  art={r.art}
                   tint={r.art?.palette[theme.light ? 'light' : 'dark'][0]}
                   lazy={false}
                 />{/if}<button

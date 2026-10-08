@@ -26,7 +26,7 @@
 {#if style === 'bar'}
   <div class="ctl bar">
     <div class="bl">
-      <div class="minicv"><Cover src={queues.art?.cover} /></div>
+      <div class="minicv"><Cover src={queues.art?.cover} art={queues.art} /></div>
       <div class="meta">
         {#if !queues.nothingPlaying}
           <!-- cut sooner when a button shows next to it: the tooltip has it whole -->

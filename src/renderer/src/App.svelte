@@ -97,7 +97,9 @@
   $effect(() => window.playbackApi.playing(player.playing))
 
   setupMediaSession()
-  $effect(() => showInMediaSession(queues.media, queues.art))
+  $effect(() =>
+    showInMediaSession(queues.media, queues.art, settings.noCover, theme.light ? 'light' : 'dark')
+  )
   $effect(() => showSeekInMediaSession(queues.active))
   $effect(() => showStateInMediaSession())
   $effect(() => showPositionInMediaSession(player.pos, player.duration))

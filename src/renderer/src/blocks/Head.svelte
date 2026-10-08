@@ -189,7 +189,7 @@
 {:else if b.look === 'album'}
   {@render back()}
   <div class="albhead">
-    <div class="cv"><Cover src={b.art?.src} /></div>
+    <div class="cv"><Cover src={b.art?.src} art={b.art} /></div>
     <div class="words">
       <div class="page-meta" title={b.metaHint}>{b.meta}</div>
       <h2 class="page-title clamp" title={b.title}>{b.title}</h2>

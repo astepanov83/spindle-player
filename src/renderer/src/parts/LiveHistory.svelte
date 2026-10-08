@@ -30,8 +30,8 @@
   // setting off, rows keep their width for the text
   const thumbs = $derived(rows.some((r) => r.cover))
   // a song with no cover (a jingle, a miss) shows the item's own picture (a
-  // station's logo), or the record
-  const logo = $derived(infoOf(queues.live.current ?? undefined)?.art?.cover)
+  // station's logo), or one made from it
+  const itemArt = $derived(infoOf(queues.live.current ?? undefined)?.art)
 </script>
 
 <div class="body">
@@ -47,7 +47,7 @@
     <div class="rrow" class:cur-row={r.now} class:thumbs>
       <span class="t">{r.time}</span>
       {#if thumbs}
-        <Thumb src={r.cover || logo} size={40} />
+        <Thumb src={r.cover || itemArt?.cover} art={itemArt} size={40} />
       {/if}
       <span class="qt">
         <span class="nm" title={r.title}>{r.title}</span>

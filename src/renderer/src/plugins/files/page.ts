@@ -3,7 +3,7 @@
 // their buttons do comes back through filesAct.
 import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
 import { cleanNames, editArtist, maxNameLength } from '../../../../shared/plugins/files/artist-edit'
-import type { Album, Art } from '../../../../shared/library'
+import { pictureOf, type Album, type Art } from '../../../../shared/library'
 import type { ItemKey } from '../../../../shared/plugins/items'
 import { queueLink } from '../../../../shared/saved-queue'
 import { fmtCount, fmtLength } from '../../format'
@@ -552,7 +552,7 @@ function albumBlocks(
     // the path is wanted now and then, not on every visit: a tooltip, and
     // the menu goes there
     ...(where ? { metaHint: folderPath(where.parts) } : {}),
-    art: { src: al.coverLarge },
+    art: { ...pictureOf(al), src: al.coverLarge },
     back,
     line: [
       ...names,

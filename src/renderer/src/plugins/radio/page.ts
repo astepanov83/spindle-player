@@ -5,6 +5,7 @@
 // removes, and a drag moves.
 import { itemKey } from '../../../../shared/plugins/items'
 import { stationArt, type Station } from '../../../../shared/plugins/radio/stations'
+import { pictureOf } from '../../../../shared/library'
 import { fmtCount } from '../../format'
 import { rowsBlock, type Block, type ItemRow } from '../types'
 import { bitrateLine, searchRows, stationLine, stationMatches, stationTags } from './logic'
@@ -94,6 +95,7 @@ function stationRow(s: Station, saved: boolean): ItemRow {
     title: s.name,
     ...(line ? { subtitle: line } : {}),
     art: logo(s, saved),
+    made: pictureOf(stationArt(s)),
     meta: bitrateLine(s),
     play: itemKey('radio', s.id),
     star: saved

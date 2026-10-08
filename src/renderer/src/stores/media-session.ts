@@ -3,6 +3,8 @@
 // itself; with them, the queue that plays decides, and Next and Previous work
 // too. On a live item they ask its plugin (radio: My stations).
 import type { Art } from '../../../shared/library'
+import type { NoCover } from '../../../shared/settings'
+import type { ThemeName } from '../../../shared/theme'
 import { CoverBlob, fetchBlob } from './cover-blob'
 import { paletteTile, tileKey } from './cover-tile'
 import { queues, type Active, type MediaText } from './queues.svelte'
@@ -38,9 +40,14 @@ const covers = new CoverBlob({
 let shown = 0
 
 // The text goes at once; the picture follows when it is fetched or drawn.
-// A song with no cover gets a tile in its colors: with no picture,
-// Chromium would keep showing the last one it had.
-export function showInMediaSession(text: MediaText | undefined, art: Art | undefined): void {
+// A song with no cover gets the picture the app made for it, in `style` and
+// `theme`: with no picture, Chromium would keep showing the last one it had.
+export function showInMediaSession(
+  text: MediaText | undefined,
+  art: Art | undefined,
+  style: NoCover,
+  theme: ThemeName
+): void {
   const ms = navigator.mediaSession
   if (!ms) return
   const n = ++shown
@@ -51,10 +58,9 @@ export function showInMediaSession(text: MediaText | undefined, art: Art | undef
   ms.metadata = new MediaMetadata(text)
   if (!art) return
   const url = art.coverLarge
-  const tile = art.palette.dark
   const image = url
     ? covers.load(url, () => fetchBlob(url))
-    : covers.load(tileKey(tile), () => paletteTile(tile))
+    : covers.load(tileKey(art, style, theme), () => paletteTile(art, style, theme))
   void image.then((pic) => {
     if (pic && n === shown) ms.metadata = new MediaMetadata({ ...text, artwork: [pic] })
   })

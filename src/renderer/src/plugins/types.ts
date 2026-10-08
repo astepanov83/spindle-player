@@ -1,7 +1,7 @@
 // What the core asks a plugin's page half about its items. See
 // work/specs/plugins.md, "Items". Plain data: the core draws it.
 import type { IdMoves } from '../../../shared/id-moves'
-import type { Art, ReplayGain } from '../../../shared/library'
+import type { Art, PictureArt, ReplayGain } from '../../../shared/library'
 import type { PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
@@ -162,8 +162,9 @@ export interface HeadBlock {
   link?: { label: string; url: string }
   // the tooltip of the line over the title: where the album is on disk
   metaHint?: string
-  // the big picture: a cover, or a round photo made from `covers` when there is none
-  art?: { src: string | undefined; round?: boolean; covers?: CoverArt[] }
+  // the big picture: a cover, or a round photo made from `covers` when there
+  // is none; else a picture made from the item (ticket 103)
+  art?: { src: string | undefined; round?: boolean; covers?: CoverArt[] } & PictureArt
   // the link back over it: "All albums"
   back?: { label: string; to: PageAddress }
   // a small line, of names with a button each: "From tags: X (renamed) [Keep
@@ -373,6 +374,8 @@ interface RowLook {
   // under the title (a music folder's path), and its tooltip
   subtitle?: string
   art?: string
+  // what a picture is made from when there is no `art` (ticket 103)
+  made?: PictureArt
   // on the right: "12 songs"
   meta?: string
   // more on the right, a column each before `meta`: "2026", "22 songs"

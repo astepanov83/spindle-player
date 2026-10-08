@@ -35,7 +35,8 @@ const listFiles = [
 const notPlugins = [
   { file: 'src/renderer/src/keys.ts', text: 'radio', why: 'an <input type="radio">' },
   { file: 'src/renderer/src/keys.test.ts', text: 'radio', why: 'an <input type="radio">' },
-  { file: 'src/renderer/src/ui/Seg.svelte', text: 'radio', why: 'ARIA role' }
+  { file: 'src/renderer/src/ui/Seg.svelte', text: 'radio', why: 'ARIA role' },
+  { file: 'src/renderer/src/components/NoCoverPick.svelte', text: 'radio', why: 'ARIA role' }
 ]
 
 // Core tests that may name plugins and import their folders: they wire the

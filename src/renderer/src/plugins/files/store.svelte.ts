@@ -85,8 +85,6 @@ class FilesStore {
 
   // Folders show songs in folder order until a column is clicked, like playlists.
   folderSort: Sort | null = $state(null)
-  // "Also on" shows in library order until a column is clicked, like playlists.
-  artistSort: Sort | null = $state(null)
   // the artist whose names are being edited (ticket 024)
   editingArtist: string | null = $state(null)
   // which library main sent last, so a patch is only put on the one it was made from
@@ -162,10 +160,6 @@ class FilesStore {
   getArtist(key: string): Artist | undefined {
     const i = this.#artistIndex.get(key)
     return i === undefined ? undefined : this.artists[i]
-  }
-
-  sortArtist(k: SortKey): void {
-    this.artistSort = nextPlaylistSort(this.artistSort, k)
   }
 
   // Bumped by every library the page gets, whole or a patch. A picture that

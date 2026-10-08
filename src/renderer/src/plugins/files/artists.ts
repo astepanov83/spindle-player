@@ -1,9 +1,9 @@
 // The Artists view (ticket 021): search, what Play plays and the covers for
 // an artist's picture. No DOM. Who counts as an artist is in shared/plugins/files/artists.ts.
 import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
-import type { ArtistCredit, Track } from '../../../../shared/library'
+import type { ArtistCredit } from '../../../../shared/library'
 import type { ArtistsShown } from '../../../../shared/settings'
-import { foldedName, foldQuery, sortRows, type Sort } from '../../library/views'
+import { foldedName, foldQuery } from '../../library/views'
 import type { CoverArt } from '../types'
 
 export function filterArtists(artists: Artist[], q: string): Artist[] {
@@ -46,19 +46,6 @@ export function allBy(songs: ArtistCredit[], name: string): boolean {
 // Their albums in order, then their songs on other albums.
 export function artistSongs(a: Artist, album: (id: string) => { trackIds: string[] }): string[] {
   return [...a.albums.flatMap((id) => album(id).trackIds), ...a.also]
-}
-
-// What Play plays on the artist page: what it shows. Their albums in order,
-// then the "Also on" songs in the table's sort.
-export function artistPageSongs(
-  a: Artist,
-  album: (id: string) => { trackIds: string[] },
-  track: (id: string) => Track,
-  sort: Sort | null,
-  order: (t: Track) => number
-): string[] {
-  const also = sortRows(a.also.map(track), sort, order).map((t) => t.id)
-  return [...a.albums.flatMap((id) => album(id).trackIds), ...also]
 }
 
 // Up to 4 different covers for the picture made from covers: their albums

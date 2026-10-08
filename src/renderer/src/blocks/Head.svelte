@@ -20,8 +20,20 @@
     block: b,
     tab,
     plugin,
-    nav
-  }: { block: HeadBlock; tab: string; plugin: PluginId; nav: NavKind } = $props()
+    nav,
+    part,
+    column = false
+  }: {
+    block: HeadBlock
+    tab: string
+    plugin: PluginId
+    nav: NavKind
+    // An artist's back line or the rest, for the column look, which draws
+    // the back line across the page (ticket 101). None: both.
+    part?: 'back' | 'body'
+    // the picture over the words, in the column
+    column?: boolean
+  } = $props()
 
   const act = (id: string, value?: string): void => actOnPage(plugin, b.id, id, value)
 
@@ -189,67 +201,71 @@
 {:else if b.look === 'artist'}
   <!-- the look switch at the back line's right end, in one place at every
        width; not while the names are edited (ticket 095) -->
-  <div class="backline">
-    {@render back()}
-    {#if b.looks && !b.edit}
-      {@const l = b.looks}
-      <span class="looks">
-        <Seg
-          small
-          label={l.label}
-          options={l.options}
-          value={l.value}
-          onchange={(v) => act(l.id, v)}
-        />
-      </span>
-    {/if}
-  </div>
-  <div class="arthead">
-    <div class="pic"><ArtistPic photo={b.art?.src} covers={b.art?.covers ?? []} /></div>
-    <div class="about">
-      <div class="page-meta">{b.meta}</div>
-      {#if b.edit}
-        {@const e = b.edit}
-        <div class="names">
-          {#each draft.map((_, i) => i) as i (i)}
-            <div class="name-row">
-              <input
-                class="page-title name"
-                aria-label="{e.label} {i + 1}"
-                maxlength={e.max}
-                bind:value={draft[i]}
-                list={e.suggest?.length ? `${uid}-names` : undefined}
-                use:focus={i === draft.length - 1}
-                {onkeydown}
-              />
-              {#if draft.length > 1}
-                <button
-                  class="x"
-                  aria-label={e.remove}
-                  onclick={() => (draft = draft.filter((_, j) => j !== i))}
-                  ><Icon name="close" size={14} /></button
-                >
-              {/if}
-            </div>
-          {/each}
-          <button class="add" onclick={() => (draft = [...draft, ''])}
-            ><Icon name="plus" size={14} />{e.add}</button
-          >
-          <div class="hint">{e.hint}</div>
-          {#if e.suggest?.length}
-            <datalist id="{uid}-names">
-              {#each e.suggest as n (n)}<option value={n}></option>{/each}
-            </datalist>
-          {/if}
-        </div>
-      {:else}
-        <h2 class="page-title" title={b.title}>{b.title}</h2>
+  {#if part !== 'body'}
+    <div class="backline">
+      {@render back()}
+      {#if b.looks && !b.edit}
+        {@const l = b.looks}
+        <span class="looks">
+          <Seg
+            small
+            label={l.label}
+            options={l.options}
+            value={l.value}
+            onchange={(v) => act(l.id, v)}
+          />
+        </span>
       {/if}
-      {#if b.note}<div class="tags">{@render noteItems(b.note)}</div>{/if}
-      {@render line()}
-      {@render acts()}
     </div>
-  </div>
+  {/if}
+  {#if part !== 'back'}
+    <div class="arthead" class:column>
+      <div class="pic"><ArtistPic photo={b.art?.src} covers={b.art?.covers ?? []} /></div>
+      <div class="about">
+        <div class="page-meta">{b.meta}</div>
+        {#if b.edit}
+          {@const e = b.edit}
+          <div class="names">
+            {#each draft.map((_, i) => i) as i (i)}
+              <div class="name-row">
+                <input
+                  class="page-title name"
+                  aria-label="{e.label} {i + 1}"
+                  maxlength={e.max}
+                  bind:value={draft[i]}
+                  list={e.suggest?.length ? `${uid}-names` : undefined}
+                  use:focus={i === draft.length - 1}
+                  {onkeydown}
+                />
+                {#if draft.length > 1}
+                  <button
+                    class="x"
+                    aria-label={e.remove}
+                    onclick={() => (draft = draft.filter((_, j) => j !== i))}
+                    ><Icon name="close" size={14} /></button
+                  >
+                {/if}
+              </div>
+            {/each}
+            <button class="add" onclick={() => (draft = [...draft, ''])}
+              ><Icon name="plus" size={14} />{e.add}</button
+            >
+            <div class="hint">{e.hint}</div>
+            {#if e.suggest?.length}
+              <datalist id="{uid}-names">
+                {#each e.suggest as n (n)}<option value={n}></option>{/each}
+              </datalist>
+            {/if}
+          </div>
+        {:else}
+          <h2 class="page-title" title={b.title}>{b.title}</h2>
+        {/if}
+        {#if b.note}<div class="tags">{@render noteItems(b.note)}</div>{/if}
+        {@render line()}
+        {@render acts()}
+      </div>
+    </div>
+  {/if}
 {:else}
   <div class="foldhead">
     <div class="page-meta">{b.meta}</div>
@@ -437,6 +453,41 @@
     color: var(--ink-3);
     margin: 2px 0 4px;
   }
+  /* The column look (ticket 101): the picture over the words, a long name
+     on as many lines as it takes, the buttons and the name fields as wide
+     as the column. */
+  .arthead.column {
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: 18px;
+  }
+  .column .pic {
+    width: 200px;
+  }
+  .column .about {
+    flex: none;
+  }
+  .column .page-title {
+    font-size: var(--title-l);
+  }
+  /* 4 lines at most, as an album's title is 2, so the buttons stay in view;
+     the whole name is in the tooltip */
+  .column h2.page-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .column .name-row {
+    width: 100%;
+  }
+  .column .acts {
+    gap: 6px;
+  }
+
   .use {
     font-size: var(--text-s);
     color: var(--ink-2);

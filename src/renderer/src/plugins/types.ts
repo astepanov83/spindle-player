@@ -57,6 +57,7 @@ export type Block =
   | ListBlock
   | ShelvesBlock
   | AlbumSongsBlock
+  | ColumnBlock
   | SongsBlock
   | RowsBlock
   | TreeBlock
@@ -65,6 +66,15 @@ export type Block =
   | ChipsBlock
   | ResultsBlock
   | ChangesBlock
+
+// The column look of an artist's page (ticket 101): the head's back line
+// across the page, the artist in a column on the left that stays in view,
+// and `blocks` on the right. On a narrow page the column goes back on top.
+export interface ColumnBlock {
+  kind: 'column'
+  head: HeadBlock
+  blocks: Block[]
+}
 
 // A piece of a line: plain text, or a name that opens its page.
 export interface Piece {

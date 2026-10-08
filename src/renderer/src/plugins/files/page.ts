@@ -12,7 +12,6 @@ import {
   allBy,
   artistCovers,
   artistLinks,
-  artistPageSongs,
   artistSongs,
   albumArtists,
   filterArtists,
@@ -30,14 +29,7 @@ import {
   type FolderTree
 } from './folders'
 import { libraryProblem, scanLine, settingsText, stoppedText } from './scan-text'
-import {
-  filterAlbums,
-  nextSort,
-  searchSongs,
-  songRows,
-  type Sort,
-  type SortKey
-} from '../../library/views'
+import { filterAlbums, nextSort, searchSongs, songRows, type SortKey } from '../../library/views'
 import { library } from '../../stores/library.svelte'
 import { plays } from '../../stores/plays.svelte'
 import { setViewSort, settings, viewSort } from '../../stores/settings.svelte'
@@ -273,11 +265,11 @@ function albumTiles(
 }
 
 // Albums as rows (ticket 097): the artist under the title, a link to their
-// page, then Year, Songs, Length. On an artist's page no artist line: the
-// year is a column.
+// page, then Year, Songs, Length. On an artist's page no artist line, but
+// for the albums of `others` they appear on.
 function albumRows(
   albums: Album[],
-  under?: { artist: string },
+  under?: { artist: string; others?: boolean },
   groups?: TileGroups<Album>
 ): ListBlock {
   return listBlock<Album>({
@@ -295,9 +287,10 @@ function albumRows(
       const year = al.year ? String(al.year) : ''
       const n = al.trackIds.length
       const length = fmtLength(al.trackIds.reduce((s, id) => s + files.track(id).duration, 0))
+      const own = under && !under.others
       // a split credit ("A, B") has no page
-      const who = under ? undefined : files.getArtist(artistKey(al.artist))
-      const sub = under ? undefined : al.artist
+      const who = own ? undefined : files.getArtist(artistKey(al.artist))
+      const sub = own ? undefined : al.artist
       return {
         ...albumTile(al, under),
         subtitle: sub,
@@ -612,51 +605,13 @@ function albumList(al: Album): Pick<AlbumSongs, 'items' | 'numbers' | 'groups' |
   return { items: trackKeys(al.trackIds), numbers, groups, artist: !allBy(tracks, al.artist) }
 }
 
-// Their albums in order, then their songs on other albums: as the "Also
-// on" table sorts them, or in library order on a page without it.
-const artistPlayIds = (a: Artist, sort: Sort | null): ItemKey[] =>
-  trackKeys(
-    artistPageSongs(
-      a,
-      album,
-      (id) => files.track(id),
-      sort,
-      (t) => files.order(t)
-    )
-  )
-
 // An artist: their head, then their page in the look picked (ticket 099).
 // Edit renames or splits them (ticket 024).
 function artistBlocks(a: Artist): Block[] {
   const look = viewLook('artistPage')
   if (look === 'sections') return artistSections(a)
   if (look === 'albums') return artistAlbums(a)
-  // the column look draws the old page until ticket 101
-  const albums = a.albums.map(album)
-  const also = trackKeys(a.also)
-  const blocks: Block[] = [artistHead(a, () => artistPlayIds(a, files.artistSort))]
-  if (albums.length)
-    blocks.push({ kind: 'text', text: 'Albums' }, albumTiles(albums, { artist: a.key }))
-  if (also.length)
-    blocks.push({
-      kind: 'songs',
-      id: artistPage(a.key),
-      items: also,
-      from: a.name,
-      link: queueLink('artist', a.key),
-      // with no albums above, "Also on" would head nothing, and the head
-      // already counts the songs
-      ...(albums.length ? { label: 'Also on' } : {}),
-      count: albums.length > 0,
-      artist: !allBy(
-        a.also.map((t) => files.track(t)),
-        a.name
-      ),
-      get sort() {
-        return files.artistSort
-      }
-    })
-  return blocks
+  return artistColumn(a)
 }
 
 // The sections look: their most played songs, then their releases in parts
@@ -664,7 +619,7 @@ function artistBlocks(a: Artist): Block[] {
 function artistSections(a: Artist): Block[] {
   const parts = artistPartsOf(a)
   return [
-    artistHead(a, () => artistPlayIds(a, null)),
+    artistHead(a),
     ...topSongsBlocks(a),
     ...partBlocks('Albums', partTiles(a, parts.albums)),
     ...partBlocks('Singles and EPs', partTiles(a, parts.singles)),
@@ -687,9 +642,28 @@ function artistAlbums(a: Artist): Block[] {
     link: queueLink('artist', a.key)
   }
   return [
-    artistHead(a, () => artistPlayIds(a, null)),
+    artistHead(a),
     ...(songs.parts.length ? [songs] : []),
     ...partBlocks('Appears on', partTiles(a, parts.appearsOn, true))
+  ]
+}
+
+// The column look (ticket 101): the artist in a column on the left, their
+// Top songs and their releases as rows on the right, newest first.
+function artistColumn(a: Artist): Block[] {
+  const parts = artistPartsOf(a)
+  const under = { artist: a.key }
+  return [
+    {
+      kind: 'column',
+      head: artistHead(a),
+      blocks: [
+        ...topSongsBlocks(a),
+        ...partBlocks('Albums', albumRows(parts.albums, under)),
+        ...partBlocks('Singles and EPs', albumRows(parts.singles, under)),
+        ...partBlocks('Appears on', albumRows(parts.appearsOn, { ...under, others: true }))
+      ]
+    }
   ]
 }
 
@@ -752,10 +726,12 @@ function topSongsBlocks(a: Artist): Block[] {
 // An artist's head: their picture, name and counts, Play, Shuffle, Add to
 // playlist, Edit and the song menu, the tags they come from, the names
 // editor while editing.
-function artistHead(a: Artist, playIds: () => ItemKey[]): HeadBlock {
+function artistHead(a: Artist): HeadBlock {
   const albums = a.albums.length
   const songs = artistSongs(a, album)
   const link = queueLink('artist', a.key)
+  // their albums in library order, then their songs on other albums
+  const playIds = (): ItemKey[] => trackKeys(artistSongs(a, album))
   const head: HeadBlock = {
     kind: 'head',
     look: 'artist',
@@ -1101,7 +1077,6 @@ function sortBy(target: string, k: string): void {
   if (target === albumsView) setViewSort(albumsView, parseAlbumSort(k))
   else if (target === songsTarget) library.sort = nextSort(library.sort, k as SortKey)
   else if (target === foldersTarget || p?.kind === 'folder') files.sortFolder(k as SortKey)
-  else if (p?.kind === 'artist') files.sortArtist(k as SortKey)
 }
 
 function artistAct(a: Artist, id: string, value?: string): void {

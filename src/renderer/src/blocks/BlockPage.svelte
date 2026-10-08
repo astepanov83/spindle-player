@@ -2,23 +2,12 @@
      its kind. Only the plugin's data differs from page to page. -->
 <script lang="ts">
   import type { PluginId } from '../../../shared/plugins'
-  import Empty from '../library/Empty.svelte'
-  import { actOnPage, typedIn, widerTabs } from '../plugins'
-  import type { Block, EmptyBlock, NavKind } from '../plugins/types'
+  import { typedIn, widerTabs } from '../plugins'
+  import type { Block, NavKind } from '../plugins/types'
   import { library } from '../stores/library.svelte'
-  import AlbumSongs from './AlbumSongs.svelte'
-  import Changes from './Changes.svelte'
-  import Chips from './Chips.svelte'
-  import Head from './Head.svelte'
-  import List from './List.svelte'
+  import Blocks from './Blocks.svelte'
   import Nothing from './Nothing.svelte'
-  import Results from './Results.svelte'
-  import Rows from './Rows.svelte'
-  import Shelves from './Shelves.svelte'
   import SearchButtons from './SearchButtons.svelte'
-  import Songs from './Songs.svelte'
-  import Tiles from './Tiles.svelte'
-  import Tree from './Tree.svelte'
 
   let {
     blocks,
@@ -45,33 +34,7 @@
       wider.length > 0 &&
       !blocks.some((b) => b.kind === 'results' || (b.kind === 'empty' && b.nothingFound))
   )
-  const hasButtons = (b: EmptyBlock): boolean =>
-    !!b.action || (!!b.nothingFound && wider.length > 0)
 
-  // A block keeps its view while the page changes around it (a folder that
-  // gets a path bar keeps its rows and their focus); grids of round and
-  // square tiles are different lists.
-  const keys = $derived.by(() => {
-    const seen: Record<string, number> = {}
-    return blocks.map((b) => {
-      const kind = (b.kind === 'tiles' || b.kind === 'list') && b.round ? `round ${b.kind}` : b.kind
-      const n = (seen[kind] = (seen[kind] ?? -1) + 1)
-      return `${kind} ${n}`
-    })
-  })
-
-  // a gap between a list of rows and the songs under it
-  const gapBefore = (i: number): boolean => {
-    const above = blocks[i - 1]
-    return above?.kind === 'rows' && above.items.length > 0
-  }
-  // a heading over rows, or over the line that says why there are none,
-  // lines up with their text
-  const overRows = (i: number): boolean => {
-    const below = blocks[i + 1]
-    return below?.kind === 'rows' || (below?.kind === 'empty' && !below.title)
-  }
-  const underHead = (i: number): boolean => blocks[i - 1]?.kind === 'head'
   // room under a page that ends in rows or a quiet line, as the Radio tab had
   const endRoom = $derived.by(() => {
     const last = blocks[blocks.length - 1]
@@ -84,66 +47,12 @@
   })
 </script>
 
-{#snippet emptyButtons(b: EmptyBlock)}
-  {#if b.action}
-    {@const a = b.action}
-    <button class="pill" onclick={() => actOnPage(plugin, b.id, a.id)}>{a.label}</button>
-  {/if}
-  {#if b.nothingFound}<SearchButtons tabs={wider} />{/if}
-{/snippet}
-
 {#if lone?.kind === 'empty'}
   <div class="fill">
     <Nothing block={lone} {plugin} wider={lone.nothingFound ? wider : []} />
   </div>
 {:else}
-  {#each blocks as b, i (keys[i])}
-    {#if b.kind === 'head'}
-      <Head block={b} {tab} {plugin} {nav} />
-    {:else if b.kind === 'tiles'}
-      <Tiles block={b} {tab} {plugin} {scrollEl} />
-    {:else if b.kind === 'list'}
-      <List block={b} {tab} {plugin} {scrollEl} />
-    {:else if b.kind === 'shelves'}
-      <Shelves block={b} {tab} {plugin} {scrollEl} />
-    {:else if b.kind === 'albumSongs'}
-      <AlbumSongs block={b} {tab} {plugin} {scrollEl} />
-    {:else if b.kind === 'songs'}
-      {#if gapBefore(i)}<div class="gap"></div>{/if}
-      <Songs block={b} {plugin} {scrollEl} />
-    {:else if b.kind === 'rows'}
-      <Rows block={b} {tab} {plugin} {scrollEl} />
-    {:else if b.kind === 'tree'}
-      <Tree block={b} {tab} />
-    {:else if b.kind === 'empty'}
-      {#if b.title}
-        {#if hasButtons(b)}
-          <Empty title={b.title} text={b.text}>{@render emptyButtons(b)}</Empty>
-        {:else}
-          <Empty title={b.title} text={b.text} />
-        {/if}
-      {:else}
-        <p class="note">{b.text}</p>
-        {#if hasButtons(b)}<div class="acts note-acts">{@render emptyButtons(b)}</div>{/if}
-      {/if}
-    {:else if b.kind === 'changes'}
-      <Changes block={b} {tab} {plugin} />
-    {:else if b.kind === 'text'}
-      <h3
-        class="part section-label"
-        class:over-rows={overRows(i)}
-        class:top={underHead(i)}
-        class:gap-above={b.part && !underHead(i)}
-        class:after-tiles={blocks[i - 1]?.kind === 'tiles'}
-      >
-        {b.text}
-      </h3>
-    {:else if b.kind === 'chips'}
-      <Chips block={b} {tab} {plugin} />
-    {:else}
-      <Results block={b} {scrollEl} {wider} />
-    {/if}
-  {/each}
+  <Blocks {blocks} {tab} {plugin} {scrollEl} {nav} {wider} />
   {#if atEnd}<div class="acts at-end"><SearchButtons tabs={wider} /></div>{/if}
   {#if endRoom}<div class="end"></div>{/if}
 {/if}
@@ -154,48 +63,16 @@
     display: flex;
     flex-direction: column;
   }
-  .gap {
-    height: 22px;
-  }
   .end {
     height: 12px;
     flex-shrink: 0;
-  }
-  .part {
-    margin: 0 0 14px;
-  }
-  /* a part of an artist's page (ticket 099) */
-  .gap-above {
-    margin-top: 30px;
-  }
-  /* the grid's last row ends in its 20px row gap */
-  .gap-above.after-tiles {
-    margin-top: 10px;
-  }
-  .over-rows {
-    margin: 14px 12px 6px;
-  }
-  .over-rows.top {
-    margin-top: 4px;
   }
   .acts {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
   }
-  .note-acts {
-    padding: 6px 12px;
-  }
   .at-end {
     margin-top: 22px;
-  }
-  /* one quiet line under a list: "No stations found." */
-  .note {
-    color: var(--ink-3);
-    font-size: var(--text-m);
-    line-height: 1.6;
-    padding: 6px 12px;
-    margin: 0;
-    max-width: 52ch;
   }
 </style>

@@ -13,6 +13,7 @@ import {
 import type {
   AlbumSongsBlock,
   Block,
+  ColumnBlock,
   HeadBlock,
   ListBlock,
   PageRow,
@@ -460,12 +461,9 @@ describe('pages', () => {
     // a compilation, and an album with a guest
     expect(songs(page.filesPage('albums', 'album/v', '')[1]).artist).toBe(true)
     expect(songs(page.filesPage('albums', 'album/g', '')[1]).artist).toBe(true)
-    // Kai has only a song on the compilation: their page's table leaves out
-    // the Artist column, the guest credit is its own artist. The "Also on"
-    // table is in the column look until ticket 101.
-    page.filesAct('artist/kai', 'look', 'column')
+    // the guest credit is its own artist: Kai appears only on the compilation
     const kai = page.filesPage('artists', 'artist/kai', '')
-    expect(songs(kai.at(-1)!)).toMatchObject({ items: ['files:v1'], artist: false })
+    expect(tiles(kai.at(-1)!).items).toEqual([files.album('v')])
   })
 
   it('an album that is gone shows the grid', () => {
@@ -674,8 +672,6 @@ describe('pages', () => {
     expect(songs(s).sort).toEqual({ k: 't', dir: 1 })
     page.filesAct('folders', 'sort', 'd')
     expect(files.folderSort).toEqual({ k: 'd', dir: 1 })
-    page.filesAct('artist/junopark', 'sort', 'al')
-    expect(files.artistSort).toEqual({ k: 'al', dir: 1 })
   })
 })
 
@@ -817,11 +813,80 @@ describe('artist page: sections (ticket 099)', () => {
     expect(songs(ownList).marked).toBeUndefined()
   })
 
-  it('the column look still draws the albums and the "Also on" table', () => {
-    page.filesAct('artist/amberfields', 'look', 'column')
-    const blocks = page.filesPage('artists', 'artist/amberfields', '')
-    expect(kinds(blocks)).toEqual(['head', 'text', 'tiles', 'songs'])
-    expect(songs(blocks[3])).toMatchObject({ label: 'Also on', items: ['files:v2'] })
+  describe('the column look (ticket 101)', () => {
+    beforeEach(() => page.filesAct('artist/amberfields', 'look', 'column'))
+    const column = (blocks: Block[]): ColumnBlock => blocks[0] as ColumnBlock
+    const rows = (b: Block): ListBlock => b as ListBlock
+    const rowTitles = (b: Block): string[] => (rows(b).items as Album[]).map((al) => al.title)
+
+    it('the artist in the column, their parts as album rows on the right, newest first', () => {
+      const blocks = page.filesPage('artists', 'artist/amberfields', '')
+      expect(kinds(blocks)).toEqual(['column'])
+      const c = column(blocks)
+      // the same head as the other looks, with the switch on its back line
+      expect(c.head).toMatchObject({ look: 'artist', title: 'Amber Fields' })
+      expect(c.head.back).toEqual({ label: 'All artists', to: at('') })
+      expect(c.head.looks?.value).toBe('column')
+      expect(kinds(c.blocks)).toEqual(['text', 'list', 'text', 'list', 'text', 'list'])
+      expect(texts(c.blocks)).toEqual(['Albums', 'Singles and EPs', 'Appears on'])
+      expect(c.blocks.every((b) => b.kind !== 'text' || b.part)).toBe(true)
+      expect(rowTitles(c.blocks[1])).toEqual(['Northern Lines', 'First Light'])
+      expect(rowTitles(c.blocks[3])).toEqual(['Small Hours EP', 'Rain Days'])
+      expect(rowTitles(c.blocks[5])).toEqual(['Summer'])
+      // plain rows: no headings, no A-Z strip
+      expect(c.blocks.some((b) => b.kind === 'list' && b.groups)).toBe(false)
+      expect(rows(c.blocks[1]).cols.map((col) => col.head)).toEqual(['Year', 'Songs', 'Length'])
+    })
+
+    it('their own albums: the year as a column and no artist line; Appears on names the album artist', () => {
+      const c = column(page.filesPage('artists', 'artist/amberfields', '')).blocks
+      const north = rows(c[1]).row(files.album('north'))
+      expect(north).toMatchObject({
+        title: 'Northern Lines',
+        cols: ['2009', '7', '14 min'],
+        to: at('album/north/artist/amberfields')
+      })
+      expect(north.subtitle).toBeUndefined()
+      expect(north.label).toBe('Northern Lines, 2009, 7 songs, 14 min')
+      // as in the Albums list: the album artist, a link to their page
+      expect(rows(c[5]).row(files.album('v'))).toMatchObject({
+        subtitle: 'Various Artists',
+        subTo: at('artist/variousartists'),
+        cols: ['2010', '3', '6 min'],
+        to: at('album/v/artist/amberfields')
+      })
+      // the same keys as the other looks, so a look switch keeps its place
+      expect(rows(c[5]).key(files.album('v'))).toBe('album/v')
+    })
+
+    it('Top songs first, once their songs were played', async () => {
+      const { plays } = await import('../../stores/plays.svelte')
+      plays.load({ 'files:n1': { n: 3, last: 1 }, 'files:v2': { n: 1, last: 2 } })
+      const c = column(page.filesPage('artists', 'artist/amberfields', '')).blocks
+      expect(texts(c)).toEqual(['Top songs', 'Albums', 'Singles and EPs', 'Appears on'])
+      expect(songs(c[1])).toMatchObject({ items: ['files:n1', 'files:v2'], album: true })
+    })
+
+    it('Play plays as in the other looks: their albums in library order, then the rest', () => {
+      const play = column(page.filesPage('artists', 'artist/amberfields', '')).head.buttons?.[0]
+      expect(play && 'play' in play && play.songs()).toEqual(
+        trackKeysOf(['first', 'rain', 'north', 'small'], 'v2')
+      )
+    })
+
+    it('Edit puts the names editor in the column', () => {
+      page.filesAct('artist/amberfields', 'edit')
+      expect(column(page.filesPage('artists', 'artist/amberfields', '')).head.edit?.names).toEqual([
+        'Amber Fields'
+      ])
+      page.filesAct('artist/amberfields', 'cancel')
+    })
+
+    it('with only songs on another album: Appears on alone, the album artist named', () => {
+      const c = column(page.filesPage('artists', 'artist/kai', '')).blocks
+      expect(texts(c)).toEqual(['Appears on'])
+      expect(rows(c[1]).row(files.album('v')).subtitle).toBe('Various Artists')
+    })
   })
 })
 

@@ -82,8 +82,6 @@ export interface MainPlugin {
   flush?(): Promise<void> | undefined
   // the "Find missing covers online" setting changed (in list order)
   coverSettingChanged?(): void
-  // the picture style for things with no cover changed
-  noCoverChanged?(): void
   windowOpened?(): void
   windowClosed?(): void
   // the player started or stopped playing

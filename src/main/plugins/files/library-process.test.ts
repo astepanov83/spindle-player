@@ -26,9 +26,7 @@ const start: WorkerStart = {
   aiEnabled: {},
   userAgent: 'Spindle/test',
   keepCovers: [],
-  on: true,
-  loudnessPath: '/u/loudness.json',
-  sound: false
+  on: true
 }
 
 function setup(): {

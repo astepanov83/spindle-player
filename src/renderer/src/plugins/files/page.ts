@@ -4,7 +4,7 @@
 import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
 import { cleanNames, editArtist, maxNameLength } from '../../../../shared/plugins/files/artist-edit'
 import { commonGenre } from '../../../../shared/genre'
-import { pictureOf, type Album, type Art, type Track } from '../../../../shared/library'
+import { pictureOf, type Album, type Art } from '../../../../shared/library'
 import type { ItemKey } from '../../../../shared/plugins/items'
 import { queueLink } from '../../../../shared/saved-queue'
 import { fmtCount, fmtLength } from '../../format'
@@ -218,7 +218,7 @@ function albumArtistHeading(h: Heading, albums: readonly Album[]): ArtistHeading
     photo: a && files.photos[a.key]?.cover,
     covers: a ? artistCovers(a, album, songArt) : albumCovers(albums),
     genre: commonGenre(albums),
-    sound: () => (a ? artistSound(a, findAlbum, findTrack) : soundOf(albums)),
+    sound: () => (a ? artistSound(a, album, (id) => files.track(id)) : soundOf(albums)),
     ...(a ? { to: at(artistPage(a.key)), link: queueLink('artist', a.key) } : {}),
     songs: () => trackKeys(albums.flatMap((al) => al.trackIds)),
     from: h.title
@@ -315,9 +315,6 @@ function albumRows(
 }
 
 const album = (id: string): Album => files.album(id)
-// for what may be read after a scan removed it
-const findAlbum = (id: string): Album | undefined => files.findAlbum(id)
-const findTrack = (id: string): Track | undefined => files.find(id)
 const songArt = (id: string): Art => files.art(files.track(id))
 
 // the artists of the song playing (not while radio plays): its album's and its own
@@ -339,7 +336,7 @@ const artistTile = (a: Artist): Tile => ({
   photo: files.photos[a.key]?.cover,
   covers: artistCovers(a, album, songArt),
   genre: artistGenre(a, album),
-  sound: () => artistSound(a, findAlbum, findTrack),
+  sound: () => artistSound(a, album, (id) => files.track(id)),
   to: at(artistPage(a.key)),
   playing: (item) => playsArtist(item, a.key),
   songs: () => trackKeys(artistSongs(a, album)),
@@ -775,7 +772,7 @@ function artistHead(a: Artist): HeadBlock {
       round: true,
       covers: artistCovers(a, album, songArt),
       genre: artistGenre(a, album),
-      ...artistSound(a, findAlbum, findTrack)
+      ...artistSound(a, album, (id) => files.track(id))
     },
     back: { label: 'All artists', to: at('') },
     looks: lookSwitch('artistPage'),

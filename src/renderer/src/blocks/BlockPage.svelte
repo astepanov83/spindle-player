@@ -6,6 +6,7 @@
   import { actOnPage, typedIn, widerTabs } from '../plugins'
   import type { Block, EmptyBlock, NavKind } from '../plugins/types'
   import { library } from '../stores/library.svelte'
+  import AlbumSongs from './AlbumSongs.svelte'
   import Changes from './Changes.svelte'
   import Chips from './Chips.svelte'
   import Head from './Head.svelte'
@@ -105,6 +106,8 @@
       <List block={b} {tab} {plugin} {scrollEl} />
     {:else if b.kind === 'shelves'}
       <Shelves block={b} {tab} {plugin} {scrollEl} />
+    {:else if b.kind === 'albumSongs'}
+      <AlbumSongs block={b} {tab} {plugin} {scrollEl} />
     {:else if b.kind === 'songs'}
       {#if gapBefore(i)}<div class="gap"></div>{/if}
       <Songs block={b} {plugin} {scrollEl} />

@@ -50,6 +50,8 @@ import { lookId, lookSwitch, setViewLook, viewLook } from './looks'
 import { notice } from '../../stores/notice.svelte'
 import {
   listBlock,
+  type AlbumSongs,
+  type AlbumSongsBlock,
   rowsBlock,
   shelvesBlock,
   tilesBlock,
@@ -517,7 +519,7 @@ function albumBlocks(
 ): Block[] {
   const id = albumPage(al.id)
   const tracks = al.trackIds.map((t) => files.track(t))
-  const items = trackKeys(al.trackIds)
+  const { items, numbers, groups, artist } = albumList(al)
   const marked = theirs && trackKeys(theirs.ids)
   const link = albumLink(al)
   const length = tracks.reduce((s, t) => s + t.duration, 0)
@@ -529,12 +531,6 @@ function albumBlocks(
       key ? { text: name, to: at(artistPage(key)) } : { text: name }
     ]
   )
-  const numbers: number[] = []
-  const groups: { at: number; label: string }[] = []
-  for (const line of albumLines(tracks)) {
-    if ('disc' in line) groups.push({ at: numbers.length, label: `Disc ${line.disc}` })
-    else numbers.push(line.no)
-  }
   const head: HeadBlock = {
     kind: 'head',
     look: 'album',
@@ -597,10 +593,23 @@ function albumBlocks(
       link,
       numbers,
       groups,
-      artist: !allBy(tracks, al.artist),
+      artist,
       ...(marked ? { marked } : {})
     }
   ]
+}
+
+// An album's songs as its page lists them: numbers, "Disc 2" labels, and
+// the Artist column when a song has another artist.
+function albumList(al: Album): Pick<AlbumSongs, 'items' | 'numbers' | 'groups' | 'artist'> {
+  const tracks = al.trackIds.map((t) => files.track(t))
+  const numbers: number[] = []
+  const groups: { at: number; label: string }[] = []
+  for (const line of albumLines(tracks)) {
+    if ('disc' in line) groups.push({ at: numbers.length, label: `Disc ${line.disc}` })
+    else numbers.push(line.no)
+  }
+  return { items: trackKeys(al.trackIds), numbers, groups, artist: !allBy(tracks, al.artist) }
 }
 
 // Their albums in order, then their songs on other albums: as the "Also
@@ -619,7 +628,10 @@ const artistPlayIds = (a: Artist, sort: Sort | null): ItemKey[] =>
 // An artist: their head, then their page in the look picked (ticket 099).
 // Edit renames or splits them (ticket 024).
 function artistBlocks(a: Artist): Block[] {
-  if (viewLook('artistPage') === 'sections') return artistSections(a)
+  const look = viewLook('artistPage')
+  if (look === 'sections') return artistSections(a)
+  if (look === 'albums') return artistAlbums(a)
+  // the column look draws the old page until ticket 101
   const albums = a.albums.map(album)
   const also = trackKeys(a.also)
   const blocks: Block[] = [artistHead(a, () => artistPlayIds(a, files.artistSort))]
@@ -658,6 +670,44 @@ function artistSections(a: Artist): Block[] {
     ...partBlocks('Singles and EPs', partTiles(a, parts.singles)),
     ...partBlocks('Appears on', partTiles(a, parts.appearsOn, true))
   ]
+}
+
+// The albums look (ticket 100): their albums, then their singles and EPs,
+// each with its songs, then the albums of others they appear on as covers.
+// No Top songs: every song is on the page.
+function artistAlbums(a: Artist): Block[] {
+  const parts = artistPartsOf(a)
+  const songs: AlbumSongsBlock = {
+    kind: 'albumSongs',
+    parts: [
+      { title: 'Albums', albums: parts.albums.map((al) => albumSongs(a, al)) },
+      { title: 'Singles and EPs', albums: parts.singles.map((al) => albumSongs(a, al)) }
+    ].filter((p) => p.albums.length),
+    from: a.name,
+    link: queueLink('artist', a.key)
+  }
+  return [
+    artistHead(a, () => artistPlayIds(a, null)),
+    ...(songs.parts.length ? [songs] : []),
+    ...partBlocks('Appears on', partTiles(a, parts.appearsOn, true))
+  ]
+}
+
+// An album with its songs on the artist's page, opening under the artist.
+function albumSongs(a: Artist, al: Album): AlbumSongs {
+  const length = al.trackIds.reduce((s, id) => s + files.track(id).duration, 0)
+  return {
+    ...albumTile(al, { artist: a.key }),
+    key: albumPage(al.id),
+    meta: [
+      al.year ? String(al.year) : '',
+      fmtCount(al.trackIds.length, 'song', 'songs'),
+      fmtLength(length)
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    ...albumList(al)
+  }
 }
 
 // Their releases in parts, newest first: albums, singles and EPs, and the

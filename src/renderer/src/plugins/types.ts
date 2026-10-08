@@ -56,6 +56,7 @@ export type Block =
   | TilesBlock
   | ListBlock
   | ShelvesBlock
+  | AlbumSongsBlock
   | SongsBlock
   | RowsBlock
   | TreeBlock
@@ -273,6 +274,33 @@ export interface ShelvesBlock<T = unknown> {
   shelf(item: T): Tile[]
   // the A-Z strip's letters, for the items in their order; none while searching
   letters?: Grouping<T>
+}
+
+// The albums look of an artist's page (ticket 100): each album's cover
+// beside its head and its songs, in parts under small headings. The songs of
+// every album are one list for the keys and for selecting. Only the rows near
+// the view are drawn.
+export interface AlbumSongsBlock {
+  kind: 'albumSongs'
+  parts: { title: string; albums: AlbumSongs[] }[]
+  // "From" for songs taken from more than one album (a menu, a drag)
+  from: string
+  link?: QueueLink
+}
+
+// One album of it: its tile (title, cover, where it opens, its songs for
+// Play, the menu and a drag), then its list as on the album page.
+export interface AlbumSongs extends Tile {
+  // the same as its tile's in the other looks, so a look switch keeps it
+  key: string
+  // "2019 · 12 songs · 48 min"
+  meta: string
+  items: ItemKey[]
+  // each song's number (0: none), and "Disc 2" before a song
+  numbers: number[]
+  groups: { at: number; label: string }[]
+  // the Artist column; off where every song has the album's artist
+  artist: boolean
 }
 
 // An artist over their albums: picture, name, count, play; the name opens

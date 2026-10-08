@@ -4,20 +4,19 @@
      and leave out the Artist column when every song has the page's artist. -->
 <script lang="ts">
   import type { PluginId } from '../../../shared/plugins'
-  import { splitKey, type ItemKey } from '../../../shared/plugins/items'
+  import type { ItemKey } from '../../../shared/plugins/items'
   import SongTable from '../library/SongTable.svelte'
   import { openSongMenu } from '../library/song-menu'
-  import { fmtClock, fmtTime } from '../format'
-  import Eq from '../ui/Eq.svelte'
+  import { fmtClock } from '../format'
   import { roving } from '../ui/roving'
-  import { actOnPage, itemInfo } from '../plugins'
+  import { actOnPage } from '../plugins'
   import type { SongsBlock } from '../plugins/types'
-  import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
   import { rowSelection } from '../stores/selection.svelte'
   import { listRows } from '../ui/selection'
   import { dragSongs } from '../library/drag-songs'
   import { songDrag, type DragSongs } from '../stores/song-drag.svelte'
+  import SongRow, { songCols } from './SongRow.svelte'
 
   let {
     block: b,
@@ -43,8 +42,6 @@
   // the second column: the Artist, or on an artist's top songs the Album
   const second = $derived(b.album ? 'Album' : artist ? 'Artist' : undefined)
   const marked = $derived(b.marked && new Set(b.marked))
-  // in the markup this would lose its spaces next to a block
-  const dot = ' · '
 
   // Ctrl and Shift select rows (ticket 086); the table has its own
   const shown = $derived(listRows(b.items))
@@ -91,8 +88,12 @@
   />
 {:else}
   <!-- the rows say it all to a screen reader; the heads are for the eye -->
-  <div class="list" class:noartist={!second} class:starts={!!b.starts}>
-    <div class="shead song-head" aria-hidden="true">
+  <div class="list">
+    <div
+      class="shead song-head"
+      aria-hidden="true"
+      style:grid-template-columns={songCols(!!second, !!b.starts)}
+    >
       <span></span>
       <span>Title</span>
       {#if second}<span>{second}</span>{/if}
@@ -108,41 +109,21 @@
         {#if 'label' in line}
           <div class="disc section-label">{line.label}</div>
         {:else}
-          {@const s = itemInfo(line.key)}
-          {@const t = s.state === 'ok' ? s.info : undefined}
-          {@const cur = queues.isItem(line.key)}
-          {@const away = t?.unavailable}
-          <button
-            class="srow row"
-            data-song={splitKey(line.key)?.id}
-            class:cur-row={cur}
-            class:selected={sel.has(line.key)}
-            class:other={marked && !marked.has(line.key)}
-            data-row
-            aria-current={cur ? 'true' : undefined}
+          <SongRow
+            key={line.key}
+            no={line.no}
+            {second}
+            start={b.starts && {
+              text: fmtClock(b.starts.at[line.at] ?? 0),
+              hint: b.starts.hint
+            }}
+            selected={sel.has(line.key)}
+            other={!!marked && !marked.has(line.key)}
             onpointerdown={(e) => songDrag.press(e, () => dragOf(line.key))}
             onclick={(e) => onrowclick(e, line.key, line.at)}
             oncontextmenu={(e) =>
               openSongMenu(e, sel.menu(line.at), { from: b.from, link: b.link })}
-          >
-            <span class="n"
-              >{#if cur && queues.songPlaying}<Eq />{:else if away}<span class="away mark">!</span
-                >{:else if line.no}{line.no}{/if}</span
-            >
-            <span class="nm" title={t?.title}
-              >{t?.title ?? ''}{#if away && !second}<span class="away">{dot}{away}</span>{/if}</span
-            >
-            {#if b.album}<span class="ar" class:away title={away ?? t?.group}
-                >{away ?? t?.group ?? ''}</span
-              >{:else if artist}<span class="ar" class:away title={away ?? t?.subtitle}
-                >{away ?? t?.subtitle ?? ''}</span
-              >{/if}
-            {#if b.starts}
-              <span class="d" title={b.starts.hint}>{fmtClock(b.starts.at[line.at] ?? 0)}</span>
-            {:else}
-              <span class="d">{t?.length === undefined ? '' : fmtTime(t.length)}</span>
-            {/if}
-          </button>
+          />
         {/if}
       {/each}
     </div>
@@ -154,27 +135,10 @@
   .label {
     margin: 0;
   }
-  .list {
-    --cols: 32px minmax(0, 2fr) minmax(0, 1.3fr) 56px;
-  }
-  .list.noartist {
-    --cols: 32px minmax(0, 1fr) 56px;
-  }
-  /* a guessed start can pass an hour: "1:02:40" */
-  .list.starts {
-    --cols: 32px minmax(0, 2fr) minmax(0, 1.3fr) 64px;
-  }
-  .list.starts.noartist {
-    --cols: 32px minmax(0, 1fr) 64px;
-  }
-  .shead,
-  .srow {
+  .shead {
     display: grid;
-    grid-template-columns: var(--cols);
     gap: 16px;
     align-items: center;
-  }
-  .shead {
     padding: 0 14px;
     margin-bottom: 4px;
   }
@@ -186,47 +150,5 @@
   }
   .disc:first-child {
     padding-top: 6px;
-  }
-  .srow {
-    width: 100%;
-    padding: 14px;
-    font-size: var(--text-l);
-    min-height: 54px;
-  }
-  .n,
-  .d {
-    color: var(--ink-3);
-    font-variant-numeric: tabular-nums;
-    font-size: var(--text-m);
-    text-align: right;
-  }
-  .n {
-    display: flex;
-    justify-content: flex-end;
-  }
-  .ar {
-    color: var(--ink-2);
-  }
-  /* its music folder was not found: why it can't play */
-  .away,
-  .ar.away {
-    color: var(--warn);
-  }
-  .mark {
-    font-weight: 800;
-  }
-  .cur-row .nm {
-    font-weight: 600;
-  }
-  /* another artist's song on an album opened under one (ticket 099): the
-     row's fill stays, its words go as dim as a played queue row */
-  .other > span {
-    opacity: var(--past);
-  }
-  .nm,
-  .ar {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 </style>

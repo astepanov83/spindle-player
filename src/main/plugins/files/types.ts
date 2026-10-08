@@ -132,6 +132,11 @@ export interface WorkerStart {
   keepCovers: string[]
   // Music files is on (see 'set-on')
   on: boolean
+  // the bundled ffmpeg, for the loudness curves; none if missing
+  ffmpeg?: string
+  // the loudness curves (ticket 106), read while the sound style is chosen
+  loudnessPath: string
+  sound: boolean
 }
 
 // What main needs to serve a file: its path, and for a file ffmpeg decodes,
@@ -203,6 +208,11 @@ export type WorkerIn =
   // artist-ai-cache.json.
   // Song cover lookups for the radio go on.
   | { type: 'set-on'; on: boolean }
+  // The sound style for pictures with no cover was chosen (on) or left. On:
+  // the loudness curves are read and sent with the albums (ticket 106).
+  | { type: 'sound'; on: boolean }
+  // the page opened a song's file: the loudness reads wait a few seconds
+  | { type: 'song-start' }
 
 // the library process to main
 export type WorkerOut =

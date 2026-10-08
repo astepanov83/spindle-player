@@ -80,6 +80,10 @@ export interface MadeArt {
   // the genre tag as written; the genre style picks a drawing family from it
   // (ticket 104). An album's is the one most of its tracks have.
   genre?: string
+  // Each track's loudness over time (ticket 106): 32 values 0-1 per track,
+  // in the order of `lengths`; [] for a track that could not be read. Sent
+  // only while the sound style is chosen, once every track is read.
+  loudness?: number[][]
 }
 
 // What a made picture is drawn from where a plugin has no palette for the
@@ -93,7 +97,8 @@ export const pictureOf = (a: PictureArt): PictureArt => ({
   lengths: a.lengths,
   title: a.title,
   artist: a.artist,
-  genre: a.genre
+  genre: a.genre,
+  loudness: a.loudness
 })
 
 // A cover and the colors picked from it. An Album is one too.
@@ -225,4 +230,7 @@ export interface ScanStatus {
   fetch?: FetchStatus
   // missing while the task is off and before it first runs
   groups?: GroupsStatus
+  // The loudness curves (ticket 106): songs read (or that could not be
+  // read) of all songs. Missing while the sound style is not chosen.
+  loudness?: { done: number; total: number }
 }

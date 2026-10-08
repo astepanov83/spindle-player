@@ -10,6 +10,7 @@ import {
   statSync,
   writeFileSync
 } from 'fs'
+import { execFileSync } from 'child_process'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -52,7 +53,8 @@ function start(
   on: boolean,
   keepCovers: string[] = [],
   aiOn: Record<string, boolean> = {},
-  aiEnabled: Record<string, boolean> = aiOn
+  aiEnabled: Record<string, boolean> = aiOn,
+  more: Partial<WorkerStart> = {}
 ): void {
   const s: WorkerStart = {
     indexPath: join(dir, 'library.json'),
@@ -68,7 +70,10 @@ function start(
     aiEnabled,
     userAgent: 'test',
     keepCovers,
-    on
+    on,
+    loudnessPath: join(dir, 'loudness.json'),
+    sound: false,
+    ...more
   }
   send({ type: 'start', start: s })
 }
@@ -840,6 +845,90 @@ describe('the library process', () => {
         expect(existsSync(oldOverrides())).toBe(false)
         expect(readFileSync(v1(oldOverrides()), 'utf8')).toBe(users)
       })
+    })
+  })
+
+  const ffmpeg = join(__dirname, '../../../../resources/ffmpeg/ffmpeg')
+  describe.skipIf(!existsSync(ffmpeg))('loudness curves (ticket 106)', () => {
+    type Sent = { albums?: { loudness?: number[][] }[] }
+    const curves = (): number[][][] =>
+      heard.flatMap((m) =>
+        m.type === 'library'
+          ? ((JSON.parse(new TextDecoder().decode(m.bytes)) as Sent).albums ?? []).flatMap((a) =>
+              a.loudness ? [a.loudness] : []
+            )
+          : []
+      )
+    const counts = (): unknown =>
+      heard.findLast((m) => m.type === 'status')?.type === 'status'
+        ? (heard.findLast((m) => m.type === 'status') as { status: { loudness?: unknown } }).status
+            .loudness
+        : undefined
+    const loudness = (): { files: Record<string, { curves?: string[] }> } =>
+      JSON.parse(readFileSync(join(dir, 'loudness.json'), 'utf8'))
+
+    beforeEach(() => {
+      // a real song next to a.mp3, which is not audio
+      execFileSync(ffmpeg, [
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'sine=frequency=440:duration=2',
+        join(music, 'b.wav')
+      ])
+    })
+
+    it('reads each file once the scan ended and sends the album with its curves', async () => {
+      start(true, [], {}, {}, { ffmpeg, sound: true })
+      scan(1)
+      await until(() => curves().length > 0)
+      const [album] = curves()
+      // a.mp3 could not be decoded: an empty curve
+      expect(album.map((c) => c.length).sort()).toEqual([0, 32])
+      await until(() => (counts() as { done: number } | undefined)?.done === 2)
+      expect(counts()).toEqual({ done: 2, total: 2 })
+      send({ type: 'flush' })
+      const files = loudness().files
+      expect(files[join(music, 'b.wav')].curves).toHaveLength(1)
+      expect(files[join(music, 'a.mp3')].curves).toBeUndefined()
+    })
+
+    it('reads nothing until the sound style is chosen', async () => {
+      start(true, [], {}, {}, { ffmpeg, sound: false })
+      scan(1)
+      await until(() => scanned(1))
+      await settle()
+      expect(curves()).toEqual([])
+      expect(counts()).toBeUndefined()
+      send({ type: 'sound', on: true })
+      await until(() => curves().length > 0)
+      expect(curves()).toHaveLength(1)
+      // left again: the albums lose their curves and the counts go
+      send({ type: 'sound', on: false })
+      await settle(50)
+      expect(counts()).toBeUndefined()
+      send({ type: 'flush' })
+    })
+
+    it('a file read before is not read again', async () => {
+      start(true, [], {}, {}, { ffmpeg, sound: true })
+      scan(1)
+      await until(() => curves().length > 0)
+      send({ type: 'flush' })
+      const before = readFileSync(join(dir, 'loudness.json'), 'utf8')
+      await boot()
+      start(true, [], {}, {}, { ffmpeg, sound: true })
+      send({ type: 'get-library', req: 1 })
+      await until(() => heard.some((m) => m.type === 'reply' && m.req === 1))
+      const m = heard.find((m) => m.type === 'reply' && m.req === 1) as { data: Uint8Array }
+      const lib = JSON.parse(new TextDecoder().decode(m.data)) as Sent
+      // the curves come with the first library, before any scan
+      expect(lib.albums?.[0].loudness).toHaveLength(2)
+      expect(counts()).toEqual({ done: 2, total: 2 })
+      send({ type: 'flush' })
+      expect(readFileSync(join(dir, 'loudness.json'), 'utf8')).toBe(before)
     })
   })
 })

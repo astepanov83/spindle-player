@@ -10,7 +10,7 @@ import type { ScanStatus } from '../../../shared/library'
 import { parseChanges } from '../../../shared/plugins/files/artist-edit'
 import { artistGroupsTask } from '../../../shared/plugins/files/artists-file'
 import type { AiClient } from '../../../shared/ai'
-import type { CoverSource } from '../../../shared/settings'
+import type { CoverSource, NoCover } from '../../../shared/settings'
 import { ffmpegTool } from '../../ffmpeg-path'
 import type { SettingsStore } from '../../settings-store'
 import type { CoverCache } from '../../covers/cover-cache'
@@ -39,6 +39,8 @@ export class LibraryService {
   #playing = false
   // device of the last audio file the page opened
   #playingDev: number | undefined
+  // when 'song-start' was last sent; a song's file is opened several times
+  #songStart = 0
   // the page asked for the library once; the first scan waits for that
   #pageLoaded = false
   // the window closed: no scans until a page asks for the library again
@@ -125,7 +127,10 @@ export class LibraryService {
         aiEnabled: this.#aiEnabled,
         userAgent: this.userAgent,
         keepCovers: this.keepCovers(),
-        on: this.#on
+        on: this.#on,
+        ffmpeg: this.ffmpeg,
+        loudnessPath: join(this.dir, 'loudness.json'),
+        sound: this.store.live().noCover === 'sound'
       }),
       // a library process that dies is started again a few times, then left dead
       new RestartBudget(3, 60000),
@@ -243,8 +248,14 @@ export class LibraryService {
     this.#sendPlaying()
   }
 
-  // The page opened an audio file on this device (st_dev).
+  // The page opened an audio file on this device (st_dev): a song starts, or
+  // seeks. The loudness reads wait a few seconds (ticket 106).
   mediaOpened(dev: number): void {
+    const now = Date.now()
+    if (now - this.#songStart > 1000) {
+      this.#songStart = now
+      this.#post({ type: 'song-start' })
+    }
     if (dev === this.#playingDev) return
     this.#playingDev = dev
     if (this.#playing) this.#sendPlaying()
@@ -262,6 +273,11 @@ export class LibraryService {
   // The online cover lookup setting changed.
   setFetch(on: boolean, sources: Record<CoverSource, boolean>): void {
     this.#post({ type: 'fetch-covers', on, sources })
+  }
+
+  // The picture style for things with no cover changed (ticket 106).
+  setNoCover(style: NoCover): void {
+    this.#post({ type: 'sound', on: style === 'sound' })
   }
 
   resume(): void {

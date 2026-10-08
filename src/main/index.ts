@@ -139,6 +139,7 @@ page.on(SettingsChannel.save, (_, raw, toFile) => {
     // in list order: the song lookup has the new setting before another plugin asks it
     for (const p of plugins) p.coverSettingChanged?.()
   }
+  if (next.noCover !== before.noCover) for (const p of plugins) p.noCoverChanged?.()
   for (const p of plugins)
     if (next.plugins[p.id] !== before.plugins[p.id]) p.setOn(next.plugins[p.id])
 })

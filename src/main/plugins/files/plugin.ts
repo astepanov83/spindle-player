@@ -84,6 +84,10 @@ export class FilesPlugin implements MainPlugin {
     this.library.setFetch(fetchCovers, coverSources)
   }
 
+  noCoverChanged(): void {
+    this.library.setNoCover(this.library.store.live().noCover)
+  }
+
   windowOpened(): void {
     this.#library?.resume()
   }

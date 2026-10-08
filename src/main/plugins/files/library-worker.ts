@@ -86,6 +86,20 @@ import {
 } from './fetched-store'
 import { listSources, pruneSources, readSource, saveSource } from './fetched-files'
 import {
+  addLoudness,
+  isFresh,
+  loudCounts,
+  loudPlan,
+  parseLoudness,
+  pruneLoudness,
+  serializeLoudness,
+  type LoudFile,
+  type LoudPlan,
+  type LoudStore
+} from './loudness'
+import { LoudQueue } from './loudness-queue'
+import { readLoudness } from './loudness-read'
+import {
   cueReaderVersion,
   readerVersion,
   type CueEntry,
@@ -322,6 +336,150 @@ async function startFetcher(s: WorkerStart): Promise<void> {
   })
   const opt = fetchSetting ?? s.fetch
   setFetch(opt.on, opt.sources)
+}
+
+// --- loudness curves for the sound picture (ticket 106) ---
+
+// the sound style is chosen: the curves are read and sent with the albums
+let sound = false
+let loud: LoudStore = new Map()
+// none when the file could not be read: it may still be fine, so it is never replaced
+let loudWriter: JsonFileWriter<unknown> | undefined
+// the files to read, from the last build while sound is on
+let plan: LoudPlan | undefined
+// files before this place in plan.files are read
+let planDone = 0
+const loudValues = new WeakMap<Uint8Array, number[]>()
+// the app window is closed: nothing is read until one opens
+let windowGone = false
+// a change not handed to the writer yet
+let loudUnsaved = false
+let loudSave: ReturnType<typeof setTimeout> | undefined
+
+function loadLoudness(s: WorkerStart): void {
+  const r = readJsonFile(s.loudnessPath)
+  if (r.kind === 'broken' || r.kind === 'unreadable')
+    log(`Loudness file is ${r.kind}: ${s.loudnessPath}`)
+  loud = parseLoudness(r.kind === 'ok' ? r.value : undefined)
+  if (r.kind !== 'unreadable')
+    loudWriter = new JsonFileWriter<unknown>(
+      s.loudnessPath,
+      0,
+      (e) => log(`Could not save ${s.loudnessPath}: ${e}`),
+      0
+    )
+}
+
+// A file read every second or so would put off a debounced write for ever,
+// so it is written at most every saveMs. Nothing is written while off.
+function saveLoudness(): void {
+  loudUnsaved = true
+  if (loudSave || !on) return
+  loudSave = setTimeout(() => {
+    loudSave = undefined
+    if (!on || !loudUnsaved) return
+    loudUnsaved = false
+    loudWriter?.schedule(serializeLoudness(loud))
+  }, saveMs)
+}
+
+function flushLoudness(): void {
+  clearTimeout(loudSave)
+  loudSave = undefined
+  if (on && loudUnsaved) {
+    loudUnsaved = false
+    loudWriter?.schedule(serializeLoudness(loud))
+  }
+  loudWriter?.flushSync()
+}
+
+function nextLoud(running: ReadonlySet<string>): LoudFile | undefined {
+  const files = plan?.files ?? []
+  for (let i = planDone; i < files.length; i++) {
+    const f = files[i]
+    const fresh = isFresh(loud.get(f.path), f)
+    if (fresh && i === planDone) planDone++
+    if (!fresh && !running.has(f.path)) return f
+  }
+  return undefined
+}
+
+function loudDone(f: LoudFile, o: { kind: 'ok'; curves: Uint8Array[] } | { kind: 'bad' }): void {
+  // the file changed or went while it was read
+  const e = ix.files.get(f.path)
+  if (!e || e.size !== f.size || e.mtime !== f.mtime) return
+  loud.set(f.path, {
+    size: f.size,
+    mtime: f.mtime,
+    cuts: f.key,
+    ...(o.kind === 'ok' ? { curves: o.curves } : {})
+  })
+  if (o.kind === 'bad') log(`Loudness: could not decode ${f.path}`)
+  saveLoudness()
+  loudStatusSoon()
+  if (loudRun) {
+    loudRun.files++
+    loudRun.songs += f.cuts.length
+    const c = plan && loudCounts(plan, loud)
+    if (c && c.done === c.total) {
+      const s = ((performance.now() - loudRun.t0) / 1000).toFixed(1)
+      log(`Loudness: read ${loudRun.files} files (${loudRun.songs} songs) in ${s} s`)
+      loudRun = undefined
+    }
+  }
+  dirty = true
+  publisher.soon()
+}
+
+// when the reads began, for the log line once all are read
+let loudRun: { t0: number; files: number; songs: number } | undefined
+
+// The counts go to the page at most once a second.
+let loudStatusTimer: ReturnType<typeof setTimeout> | undefined
+function loudStatusSoon(): void {
+  loudStatusTimer ??= setTimeout(() => {
+    loudStatusTimer = undefined
+    if (sound && plan) setStatus({ loudness: loudCounts(plan, loud) })
+  }, 1000)
+}
+
+// After the scan and the cover jobs, while the sound style is chosen.
+const loudQueue = new LoudQueue({
+  next: nextLoud,
+  read: (f, signal) => {
+    loudRun ??= { t0: performance.now(), files: 0, songs: 0 }
+    return readLoudness(start.ffmpeg!, f.path, f.duration, f.cuts, signal)
+  },
+  done: loudDone,
+  canRun: () =>
+    !!plan &&
+    sound &&
+    on &&
+    !closing &&
+    !windowGone &&
+    !!start.ffmpeg &&
+    !chain.busy &&
+    sent.size === 0,
+  playing: () => playing,
+  now: () => performance.now(),
+  setTimer: (f, ms) => {
+    const t = setTimeout(f, ms)
+    return () => clearTimeout(t)
+  }
+})
+
+function setSound(next: boolean): void {
+  if (next === sound) return
+  sound = next
+  if (!sound) {
+    loudQueue.stop()
+    plan = undefined
+  }
+  // the albums get their curves, or lose them
+  dirty = true
+  publisher.now()
+  if (!sound) setStatus({ loudness: undefined })
+  loudQueue.kick()
 }
 
 // --- who is who: artists.json (ticket 069) ---
@@ -580,7 +738,21 @@ function build(): void {
   spellings = tagSpellings(built.data.albums, (id) => track.get(id))
   let failed = 0
   for (const e of ix.files.values()) if (e.error) failed++
-  setStatus({ tracks: built.data.tracks.length, albums: built.data.albums.length, failed })
+  if (sound) {
+    plan = loudPlan(
+      built.data,
+      (id) => built.paths.get(id),
+      (p) => ix.files.get(p)
+    )
+    planDone = 0
+    addLoudness(built.data, plan, loud, loudValues)
+  }
+  setStatus({
+    tracks: built.data.tracks.length,
+    albums: built.data.albums.length,
+    failed,
+    ...(plan && sound ? { loudness: loudCounts(plan, loud) } : {})
+  })
   fetcher?.setQueries(built.queries, built.artists)
 }
 
@@ -905,6 +1077,8 @@ function setOn(next: boolean): void {
     chain.stop()
     fetcher?.hold()
     stopGroupsJob()
+    loudQueue.stop()
+    flushLoudness()
     saveIndex()
     writer?.flushSync()
     fetchedWriter?.flushSync()
@@ -917,6 +1091,7 @@ function setOn(next: boolean): void {
     fetchedChangedOff = false
     saveFetched()
   }
+  if (on && loudUnsaved) saveLoudness()
   if (on) {
     clearTimeout(offPrune)
     offPrune = undefined
@@ -1059,6 +1234,8 @@ async function scan(
     const used = usedKeys(credits)
     if (prune(artists, used)) saveArtists()
     if (pruneCache(aiCache, cacheKeys(artists, used))) saveCache()
+    // moved and changed files; a moved one is read again under its new path
+    if (pruneLoudness(loud, (p) => ix.files.get(p))) saveLoudness()
     if (convertLater) {
       convertLater = false
       if (convertOldFiles(start, false, false, true)) publisher.now()
@@ -1090,6 +1267,7 @@ function scanThenGroups(folders: string[], retryFailed: boolean, id: number): vo
     })
     .then(() => {
       if (ended) startGroupsJob()
+      loudQueue.kick()
     })
 }
 
@@ -1125,6 +1303,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       keptCovers = m.start.keepCovers
       keptEdits++
       on = m.start.on
+      sound = m.start.sound
       aiOn = m.start.aiOn
       aiEnabled = m.start.aiEnabled
       ai.setOn(aiOn, aiEnabled)
@@ -1141,6 +1320,8 @@ port.on('message', (e: Electron.MessageEvent) => {
       if (!on) break
       // it goes on after this scan, from the keys already asked
       stopGroupsJob()
+      // the scan gets the disk; what was being read is read again after it
+      loudQueue.stop()
       // a manual Rescan looks up every miss again
       if (m.retryFailed) {
         const albums = dropNotFound(fetched)
@@ -1163,6 +1344,12 @@ port.on('message', (e: Electron.MessageEvent) => {
     case 'set-on':
       setOn(m.on)
       break
+    case 'sound':
+      void ready.then(() => setSound(m.on))
+      break
+    case 'song-start':
+      loudQueue.hold()
+      break
     case 'set-artists':
       void ready.then(() => setArtists(m.changes))
       break
@@ -1179,16 +1366,21 @@ port.on('message', (e: Electron.MessageEvent) => {
       // a new window: go on unless a scan runs (it releases when done) or none
       // has ended yet (the lookup waits for the first)
       if (on && pruned && !chain.busy && !closing) fetcher?.release()
+      windowGone = false
+      loudQueue.kick()
       break
     case 'playing':
       playing = m.playing
       playingDev = m.dev
       setPace()
+      loudQueue.kick()
       break
     case 'stop':
       chain.stop()
       fetcher?.hold()
       stopSongLookups()
+      windowGone = true
+      loudQueue.stop()
       break
     case 'cover-done':
       sent.delete(m.hash)
@@ -1215,6 +1407,7 @@ port.on('message', (e: Electron.MessageEvent) => {
         markChanged()
       }
       wakeCoverWaiters()
+      loudQueue.kick()
       break
     case 'find-track':
       ready.then(
@@ -1238,6 +1431,8 @@ port.on('message', (e: Electron.MessageEvent) => {
       artistsWriter?.flushSync()
       cacheWriter?.flushSync()
       stopGroupsJob()
+      loudQueue.stop()
+      flushLoudness()
       closing = true
       clearTimeout(offPrune)
       chain.close()
@@ -1268,7 +1463,9 @@ port.on('message', (e: Electron.MessageEvent) => {
 // covers and may be at it now (a restart), so only old ones go there.
 async function removeStrayTemp(): Promise<void> {
   const dir = dirname(start.indexPath)
-  const names = [start.indexPath, start.artistsPath, start.aiCachePath].map((p) => basename(p))
+  const names = [start.indexPath, start.artistsPath, start.aiCachePath, start.loudnessPath].map(
+    (p) => basename(p)
+  )
   try {
     for (const n of await readdir(dir))
       if (names.some((f) => n.startsWith(f + '.')) && n.endsWith('.tmp'))
@@ -1290,6 +1487,7 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   await loadCached()
   const { had: hadArtists, unusable } = loadArtists(s)
   await startFetcher(s)
+  loadLoudness(s)
   const r = readJsonFile(start.indexPath)
   // the index is only a cache of the music files, so it is made again either way
   if (r.kind === 'broken' || r.kind === 'unreadable')

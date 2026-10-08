@@ -13,6 +13,7 @@
   import Nothing from './Nothing.svelte'
   import Results from './Results.svelte'
   import Rows from './Rows.svelte'
+  import Shelves from './Shelves.svelte'
   import SearchButtons from './SearchButtons.svelte'
   import Songs from './Songs.svelte'
   import Tiles from './Tiles.svelte'
@@ -102,6 +103,8 @@
       <Tiles block={b} {tab} {plugin} {scrollEl} />
     {:else if b.kind === 'list'}
       <List block={b} {tab} {plugin} {scrollEl} />
+    {:else if b.kind === 'shelves'}
+      <Shelves block={b} {tab} {plugin} {scrollEl} />
     {:else if b.kind === 'songs'}
       {#if gapBefore(i)}<div class="gap"></div>{/if}
       <Songs block={b} {plugin} {scrollEl} />

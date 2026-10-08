@@ -16,6 +16,7 @@ import type {
   ListBlock,
   PageRow,
   RowsBlock,
+  ShelvesBlock,
   SongsBlock,
   TilesBlock
 } from '../types'
@@ -290,9 +291,68 @@ describe('pages', () => {
     expect(r.strip?.map((c) => c.cover)).toEqual(['c-c', 'c-a'])
     // filtered by a search: no headings, as the grid
     expect((page.filesPage('artists', '', 'juno').at(-1) as ListBlock).groups).toBeUndefined()
-    // shelves is not built yet: the grid
+  })
+
+  it('Artists as shelves: a heading and their albums newest first, opening under them (098)', async () => {
+    const { settings } = await import('../../stores/settings.svelte')
+    settings.artistsShown = 'all'
+    files.load({
+      ...lib(),
+      albums: [
+        album('a', ['a1', 'a2', 'a3', 's1']),
+        lib().albums[1],
+        album('c', ['c1', 's2', 's3'], { year: 2010 }),
+        album('d', ['d1'], { year: 0 })
+      ],
+      tracks: [
+        ...lib().tracks,
+        track('c1', 'c'),
+        track('d1', 'd'),
+        // DJ Sol has no albums of their own, only songs on two of Marina's
+        track('s1', 'a', { artist: 'DJ Sol' }),
+        track('s2', 'c', { artist: 'DJ Sol' }),
+        track('s3', 'c', { artist: 'DJ Sol' })
+      ]
+    })
     page.filesAct('artists', 'look', 'shelves')
-    expect(kinds(page.filesPage('artists', '', ''))).toEqual(['head', 'tiles'])
+    const blocks = page.filesPage('artists', '', '')
+    expect(kinds(blocks)).toEqual(['head', 'shelves'])
+    const s = blocks[1] as ShelvesBlock
+    const marina = files.getArtist('marinavale')!
+    expect(s.key(marina)).toBe('artist/marinavale')
+    expect(s.title(marina)).toBe('Marina Vale')
+    expect(s.letters?.heading(marina)).toMatchObject({ title: 'M', letter: 'M' })
+    const h = s.head(marina)
+    expect(h).toMatchObject({
+      sub: '3 albums',
+      to: at('artist/marinavale'),
+      from: 'Marina Vale',
+      link: { plugin: 'files', page: 'artist/marinavale' }
+    })
+    expect(h.songs()).toHaveLength(8)
+    // newest first, no year last; the year under each, opening under the artist
+    const shelf = s.shelf(marina)
+    expect(shelf.map((t) => [t.title, t.subtitle])).toEqual([
+      ['Album c', '2010'],
+      ['Album a', '2003'],
+      ['Album d', '']
+    ])
+    expect(shelf[0].to).toEqual(at('album/c/artist/marinavale'))
+    expect(shelf[0].songs()).toEqual(['files:c1', 'files:s2', 'files:s3'])
+    expect(shelf[0].playing?.('files:s2')).toBe(true)
+    // no albums of their own: the albums they are on, with the album artist
+    const sol = files.getArtist('djsol')!
+    expect(s.head(sol).sub).toBe('3 songs')
+    expect(s.shelf(sol).map((t) => [t.title, t.subtitle])).toEqual([
+      ['Album c', 'Marina Vale'],
+      ['Album a', 'Marina Vale']
+    ])
+    expect(s.shelf(sol)[1].to).toEqual(at('album/a/artist/djsol'))
+    // filtered by a search: plain shelves, no letters
+    const found = page.filesPage('artists', '', 'sol').at(-1) as ShelvesBlock
+    expect(found.kind).toBe('shelves')
+    expect(found.items).toEqual([sol])
+    expect(found.letters).toBeUndefined()
   })
 
   it('Classic Songs: the table has Plays and Last played (085)', () => {

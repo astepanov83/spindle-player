@@ -44,6 +44,7 @@ import { notice } from '../../stores/notice.svelte'
 import {
   listBlock,
   rowsBlock,
+  shelvesBlock,
   tilesBlock,
   type Block,
   type EmptyBlock,
@@ -54,11 +55,12 @@ import {
   type ArtistHeading,
   type CoverArt,
   type SearchGroup,
+  type ShelvesBlock,
   type Tile,
   type TileGroups,
   type TilesBlock
 } from '../types'
-import { albumGrouping, artistGrouping, type Heading } from '../../library/groups'
+import { albumGrouping, artistGrouping, type Grouping, type Heading } from '../../library/groups'
 import { openArtist, showArtist, followArtist, goToFolder } from './nav'
 import { albumPage, artistPage, fixesPage, folderPage, parsePage } from './pages'
 import { fixCount, keepSeparate, nameFixes, tagNote, type NameFix } from './name-fixes'
@@ -372,6 +374,40 @@ function artistRows(artists: Artist[], groups?: TileGroups<Artist>): ListBlock {
   })
 }
 
+// An artist's heading over their shelf: their picture, count and play, as
+// their tile.
+function artistHeading(a: Artist): ArtistHeading {
+  const t = artistTile(a)
+  return {
+    sub: artistCount(a),
+    ...(t.photo ? { photo: t.photo } : {}),
+    covers: t.covers ?? [],
+    to: t.to,
+    songs: t.songs,
+    from: t.from,
+    ...(t.link ? { link: t.link } : {})
+  }
+}
+
+// Artists as shelves (ticket 098): each one's albums newest first, opening
+// under them. An artist with no albums of their own has the albums they
+// are on, with the album artist under each title.
+function artistShelves(artists: Artist[], letters?: Grouping<Artist>): ShelvesBlock {
+  return shelvesBlock<Artist>({
+    items: artists,
+    ...(letters ? { letters } : {}),
+    key: (a) => artistPage(a.key),
+    title: (a) => a.name,
+    head: artistHeading,
+    shelf: (a) => {
+      const under = { artist: a.key }
+      if (a.albums.length) return newest(a.albums.map(album)).map((al) => albumTile(al, under))
+      const on = [...new Set(a.also.map((id) => files.track(id).albumId))].map(album)
+      return newest(on).map((al) => ({ ...albumTile(al, under), subtitle: al.artist }))
+    }
+  })
+}
+
 // the Album artists / All artists choice (ticket 081)
 const artistsShownId = 'artists-shown'
 // the Artists head's act target
@@ -408,13 +444,16 @@ function artistsPage(page: string, query: string): Block[] {
     }
   // letters over the whole list; a search's few names need none
   const groups = query.trim() ? undefined : { grouping: artistGrouping, strip: true }
+  const look = viewLook('artists')
   return [
     head,
     ...(shown.length ? [] : [noMatches('No artist has that in their name.')]),
-    viewLook('artists') === 'list'
+    look === 'list'
       ? artistRows(shown, groups)
-      : // smaller than the search results' artists, so more fit in a row
-        { ...artistTiles(shown, groups), small: true }
+      : look === 'shelves'
+        ? artistShelves(shown, groups?.grouping)
+        : // smaller than the search results' artists, so more fit in a row
+          { ...artistTiles(shown, groups), small: true }
   ]
 }
 

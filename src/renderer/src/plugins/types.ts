@@ -55,6 +55,7 @@ export type Block =
   | HeadBlock
   | TilesBlock
   | ListBlock
+  | ShelvesBlock
   | SongsBlock
   | RowsBlock
   | TreeBlock
@@ -256,6 +257,21 @@ export interface ListRow extends Tile {
   label: string
 }
 
+// The shelves look of Artists (ticket 098): each artist's heading over
+// their albums in one line that scrolls sideways. Only the shelves on screen
+// are drawn, and in each only the tiles near the view.
+export interface ShelvesBlock<T = unknown> {
+  kind: 'shelves'
+  items: readonly T[]
+  key(item: T): string
+  title(item: T): string
+  head(item: T): ArtistHeading
+  // its albums as tiles, asked when the shelf is drawn
+  shelf(item: T): Tile[]
+  // the A-Z strip's letters, for the items in their order; none while searching
+  letters?: Grouping<T>
+}
+
 // An artist over their albums: picture, name, count, play; the name opens
 // their page.
 export interface ArtistHeading {
@@ -451,6 +467,8 @@ export const tilesBlock = <T>(b: Omit<TilesBlock<T>, 'kind'>): TilesBlock =>
   ({ kind: 'tiles', ...b }) as TilesBlock
 export const listBlock = <T>(b: Omit<ListBlock<T>, 'kind'>): ListBlock =>
   ({ kind: 'list', ...b }) as ListBlock
+export const shelvesBlock = <T>(b: Omit<ShelvesBlock<T>, 'kind'>): ShelvesBlock =>
+  ({ kind: 'shelves', ...b }) as ShelvesBlock
 export const rowsBlock = <T>(
   b: Omit<PageRowsBlock<T>, 'kind'> | Omit<ItemRowsBlock<T>, 'kind'>
 ): RowsBlock => ({ kind: 'rows', ...b }) as RowsBlock

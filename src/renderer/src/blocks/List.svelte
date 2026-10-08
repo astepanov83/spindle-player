@@ -258,7 +258,11 @@
               onkeydown={(e) => onmainkey(e, r)}
             ></button>
             <span class="pic"
-              >{#if b.round}<ArtistPic photo={r.photo} covers={r.covers ?? []} />{:else}<Cover
+              >{#if b.round}<ArtistPic
+                  name={r.title}
+                  photo={r.photo}
+                  covers={r.covers ?? []}
+                />{:else}<Cover
                   src={r.art?.cover}
                   art={r.art}
                   tint={r.art?.palette[theme.light ? 'light' : 'dark'][0]}

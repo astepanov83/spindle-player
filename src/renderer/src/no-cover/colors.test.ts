@@ -42,4 +42,13 @@ describe('made picture colors', () => {
     )
     expect(hexToLch(inksOf(p, 'light').ink)[0]).toBeLessThan(hexToLch(inksOf(p, 'light').ground)[0])
   })
+
+  it('puts readable letters on any label color', () => {
+    for (const seed of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'])
+      for (const theme of ['dark', 'light'] as const) {
+        const inks = inksOf(fallbackPalettes(seed), theme)
+        const gap = Math.abs(hexToLch(inks.onLabel)[0] - hexToLch(inks.label)[0])
+        expect(gap).toBeGreaterThan(0.3)
+      }
+  })
 })

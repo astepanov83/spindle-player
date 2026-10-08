@@ -1,14 +1,24 @@
 <!-- An artist's round picture: their photo when one was found online, else
-     made from their covers (4 of them in a square, or the first), else the
-     grey record. -->
+     made from their covers (4 of them in a square, or the first), else a
+     picture made from their name in the style Settings picks (ticket 105). -->
 <script lang="ts">
   import Cover from '../ui/Cover.svelte'
   import { mosaicUrl } from '../../../shared/library'
+  import { fallbackPalettes } from '../../../shared/palette'
   import type { CoverArt } from '../plugins/types'
   import { itemsVersion } from '../plugins'
   import { theme } from '../stores/theme.svelte'
 
-  let { photo, covers }: { photo: string | undefined; covers: CoverArt[] } = $props()
+  let { name, photo, covers }: { name: string; photo: string | undefined; covers: CoverArt[] } =
+    $props()
+
+  // The name as shown, so a rename makes another picture. Colors from a real
+  // cover when there is one, else from the name.
+  const made = $derived({
+    seed: name,
+    title: name,
+    palette: covers[0]?.palette ?? fallbackPalettes(name)
+  })
 
   // The 4 covers as one picture main makes, so a tile loads 1 image, not 4.
   const four = $derived(covers.length >= 4 ? covers.slice(0, 4) : undefined)
@@ -44,7 +54,13 @@
       {#each four as c (c.cover)}<Cover src={c.cover} tint={tone(c)} lazy={false} />{/each}
     </span>
   {:else}
-    <Cover src={covers[0]?.cover} tint={covers[0] && tone(covers[0])} lazy={false} />
+    <Cover
+      src={covers[0]?.cover}
+      art={made}
+      artist
+      tint={covers[0] && tone(covers[0])}
+      lazy={false}
+    />
   {/if}
 </span>
 

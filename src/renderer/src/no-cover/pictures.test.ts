@@ -26,8 +26,10 @@ describe('size buckets', () => {
       pictureKey('rings', { ...art, seed: 'b' }, 'dark', 128),
       // a logo came with new colors for the same seed
       pictureKey('rings', { ...art, palette: fallbackPalettes('logo') }, 'dark', 128),
-      pictureKey('rings', { seed: 'a' }, 'dark', 128)
+      pictureKey('rings', { seed: 'a' }, 'dark', 128),
+      // an artist named like an album seed
+      pictureKey('rings', art, 'dark', 128, true)
     ])
-    expect(keys.size).toBe(7)
+    expect(keys.size).toBe(8)
   })
 })

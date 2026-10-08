@@ -57,7 +57,7 @@
       tabindex={stop}
       aria-label="Open {t.title}"
       onclick={unlessDragged(() => openFrom(tab, t.to))}
-      >{#if round}<ArtistPic photo={t.photo} covers={t.covers ?? []} />{:else}<Cover
+      >{#if round}<ArtistPic name={t.title} photo={t.photo} covers={t.covers ?? []} />{:else}<Cover
           src={t.art?.cover}
           art={t.art}
           tint={t.art?.palette[theme.light ? 'light' : 'dark'][0]}

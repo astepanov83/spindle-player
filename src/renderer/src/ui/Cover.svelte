@@ -19,7 +19,8 @@
     tint,
     lazy = true,
     onfail,
-    style
+    style,
+    artist = false
   }: {
     src: string | undefined
     // what a picture is made from when there is no cover (or it fails)
@@ -34,6 +35,8 @@
     onfail?: () => void
     // in place of the setting's (Settings' previews)
     style?: NoCover
+    // an artist's round picture: initials, not a title (ticket 105)
+    artist?: boolean
   } = $props()
 
   // a cover the cache lost shows the plain tile, not a broken image
@@ -50,7 +53,9 @@
   let width = $state(0)
   const themeName = $derived(theme.light ? 'light' : 'dark')
   const key = $derived(
-    made && seed && width ? pictureKey(drawn, { ...art, seed }, themeName, bucketOf(width)) : ''
+    made && seed && width
+      ? pictureKey(drawn, { ...art, seed }, themeName, bucketOf(width), artist)
+      : ''
   )
   // the last drawing that came in; a cached one shows at once
   let drawnPic = $state({ key: '', url: '' })
@@ -67,7 +72,7 @@
     if (pic) return release
     const k = key
     let live = true
-    void loadPicture(k, drawn, { ...art, seed }, themeName, bucketOf(width)).then((url) => {
+    void loadPicture(k, drawn, { ...art, seed }, themeName, bucketOf(width), artist).then((url) => {
       if (live && url) drawnPic = { key: k, url }
     })
     return () => {

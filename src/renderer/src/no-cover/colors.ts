@@ -19,6 +19,8 @@ export interface Inks {
   ink: string
   // today's grey record: --ink-3
   record: string
+  // letters on the label (artists' rings picture)
+  onLabel: string
 }
 
 // Must match --field and --ink-3 in theme.css (colors.test.ts checks).
@@ -58,6 +60,8 @@ export function inksOf(palettes: ThemePalettes, theme: ThemeName): Inks {
     pattern: color(t.patternL, t.patternC, accentHue),
     ground: color(t.groundL, t.groundC),
     ink: color(inkL[theme], 0.04),
-    record: recordInk[theme]
+    record: recordInk[theme],
+    onLabel:
+      hexToLch(main)[0] > 0.6 ? lchToHex([0.2, 0.03 * k, hue]) : lchToHex([0.97, 0.02 * k, hue])
   }
 }

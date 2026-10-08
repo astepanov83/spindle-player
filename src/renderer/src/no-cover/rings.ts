@@ -39,11 +39,12 @@ export const patternOf = (hash: number): Pattern => patterns[(hash >>> 9) % patt
 // in degrees
 export const angleOf = (hash: number): number => (hash >>> 13) % 180
 
-function drawPattern(x: Ctx, pattern: Pattern, angle: number): void {
-  const R = labelR
+// `R`: how far from the middle it reaches; `scale` makes its marks bigger.
+export function drawPattern(x: Ctx, pattern: Pattern, angle: number, R = labelR, scale = 1): void {
   x.save()
   x.translate(50, 50)
   x.rotate((angle * Math.PI) / 180)
+  x.scale(scale, scale)
   x.beginPath()
   if (pattern === 'dots') {
     for (let row = 0, y = -R; y <= R; row++, y += 5)

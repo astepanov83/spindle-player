@@ -33,8 +33,10 @@ export const pictureKey = (
   style: NoCover,
   art: PictureArt & { seed: string },
   theme: ThemeName,
-  bucket: Bucket
-): string => `${style}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
+  bucket: Bucket,
+  artist = false
+): string =>
+  `${artist ? 'artist:' : ''}${style}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
 
 // a few thousand: a big library's whole Albums grid at one size
 const cache = new PictureCache(
@@ -66,11 +68,12 @@ export function loadPicture(
   style: NoCover,
   art: PictureArt & { seed: string },
   theme: ThemeName,
-  bucket: Bucket
+  bucket: Bucket,
+  artist = false
 ): Promise<string | undefined> {
   return cache.load(key, () =>
     queue.run(
-      () => drawPicture(style, art, theme, pixelsOf(bucket), bucket === 48),
+      () => drawPicture(style, art, theme, pixelsOf(bucket), bucket === 48, artist),
       () => cache.held(key)
     )
   )

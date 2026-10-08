@@ -20,11 +20,13 @@
     heading: Heading
     artist: ArtistHeading | undefined
     tab: string
-    // off in a list, which is one Tab stop
-    tabbable?: boolean
+    // off in a list, which is one Tab stop; 'name': only the name is (the
+    // shelf holding the Tab stop)
+    tabbable?: boolean | 'name'
   } = $props()
 
   const tabindex = $derived(tabbable ? undefined : -1)
+  const playTab = $derived(tabbable === true ? undefined : -1)
 
   function openMenu(e: MouseEvent, a: ArtistHeading): void {
     menu.showFor(e, songMenu(a.songs(), { from: a.from, link: a.link }))
@@ -44,13 +46,15 @@
   <div class="head artist" role="group" aria-label={h.title} oncontextmenu={(e) => openMenu(e, a)}>
     {#if a.to}
       {@const to = a.to}
-      <button class="who" {tabindex} onclick={() => openFrom(tab, to)}>{@render who(a)}</button>
+      <button class="who" data-name {tabindex} onclick={() => openFrom(tab, to)}
+        >{@render who(a)}</button
+      >
     {:else}
       <div class="who">{@render who(a)}</div>
     {/if}
     <button
       class="play"
-      {tabindex}
+      tabindex={playTab}
       aria-label="Play {h.title}"
       onclick={() => queue.playList(a.songs(), 0, a.from, a.link)}
     >

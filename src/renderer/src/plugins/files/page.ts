@@ -399,13 +399,26 @@ function artistShelves(artists: Artist[], letters?: Grouping<Artist>): ShelvesBl
     key: (a) => artistPage(a.key),
     title: (a) => a.name,
     head: artistHeading,
-    shelf: (a) => {
-      const under = { artist: a.key }
-      if (a.albums.length) return newest(a.albums.map(album)).map((al) => albumTile(al, under))
-      const on = [...new Set(a.also.map((id) => files.track(id).albumId))].map(album)
-      return newest(on).map((al) => ({ ...albumTile(al, under), subtitle: al.artist }))
-    }
+    shelf: shelfOf
   })
+}
+
+// Each artist's shelf, made once: a shelf is asked on every draw and arrow
+// key, and a big artist's albums take a sort. The store makes new artists
+// when the songs change, so a kept shelf is never out of date.
+const shelves = new WeakMap<Artist, Tile[]>()
+
+function shelfOf(a: Artist): Tile[] {
+  let tiles = shelves.get(a)
+  if (tiles) return tiles
+  const under = { artist: a.key }
+  if (a.albums.length) tiles = newest(a.albums.map(album)).map((al) => albumTile(al, under))
+  else {
+    const on = [...new Set(a.also.map((id) => files.track(id).albumId))].map(album)
+    tiles = newest(on).map((al) => ({ ...albumTile(al, under), subtitle: al.artist }))
+  }
+  shelves.set(a, tiles)
+  return tiles
 }
 
 // the Album artists / All artists choice (ticket 081)

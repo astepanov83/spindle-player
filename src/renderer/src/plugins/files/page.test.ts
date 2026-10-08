@@ -353,6 +353,14 @@ describe('pages', () => {
     expect(found.kind).toBe('shelves')
     expect(found.items).toEqual([sol])
     expect(found.letters).toBeUndefined()
+    // made once per artist, again when the library changes
+    expect(s.shelf(marina)).toBe(shelf)
+    files.load(lib())
+    const again = (page.filesPage('artists', '', '')[1] as ShelvesBlock).shelf(
+      files.getArtist('marinavale')!
+    )
+    expect(again).not.toBe(shelf)
+    expect(again.map((t) => t.title)).toEqual(['Album a'])
   })
 
   it('Classic Songs: the table has Plays and Last played (085)', () => {

@@ -10,6 +10,7 @@
   import { groupRuns } from '../library/groups'
   import { shelfLeft, shelfMove, type ShelfSpot } from '../library/shelf-rows'
   import { addFinder } from '../ui/item-finder'
+  import { nearestRow } from '../ui/roving'
   import { keepPlace } from '../ui/keep-place.svelte'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { itemsVersion } from '../plugins'
@@ -103,7 +104,7 @@
   // the heading's name, or the album's cover button
   const stopEl = (row: HTMLElement, at: number): HTMLElement | null =>
     at < 0
-      ? row.querySelector<HTMLElement>('.headbox button')
+      ? row.querySelector<HTMLElement>('.headbox [data-name], .headbox button')
       : row.querySelector<HTMLElement>(`[data-at="${at}"] [data-stop]`)
 
   const nextFrame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()))
@@ -151,7 +152,7 @@
     const x = items[s.shelf]
     // Space on a cover or the artist's name plays it, or pauses and resumes
     // it while it plays, as a page's Play. Enter opens (the button's click).
-    if (e.code === 'Space' && t.matches('[data-stop], .headbox button:first-of-type')) {
+    if (e.code === 'Space' && t.matches('[data-stop], [data-name]')) {
       e.preventDefault()
       if (e.repeat) return
       const p = s.at < 0 ? b.head(x) : b.shelf(x)[s.at]
@@ -164,11 +165,35 @@
     void focusSpot(to)
   }
 
+  // the element with focus, to notice when a scroll takes its shelf away
+  let focused: { el: HTMLElement; shelf: number } | null = null
+
   // a click or Tab into a shelf moves the Tab stop there
   function onfocusin(e: FocusEvent): void {
-    const s = spotOf(e.target as HTMLElement)
-    if (s) active = { key: b.key(items[s.shelf]), at: s.at }
+    const t = e.target as HTMLElement
+    const s = spotOf(t)
+    if (!s) return
+    active = { key: b.key(items[s.shelf]), at: s.at }
+    focused = { el: t, shelf: s.shelf }
   }
+
+  // A focused shelf that a scroll took off the page hands the focus to the
+  // nearest shelf drawn, at its heading, so the next arrow still moves in
+  // the shelves (as roving does for the list).
+  $effect(() => {
+    const drawn = v.items.map((x) => x.index)
+    const f = focused
+    if (!f || f.el.isConnected) return
+    focused = null
+    const at = document.activeElement
+    if (at && at !== document.body) return
+    const to = nearestRow(drawn, f.shelf)
+    const row = to === undefined ? null : shelfEl(to)
+    const el = row && stopEl(row, -1)
+    if (!el || to === undefined) return
+    active = { key: b.key(items[to]), at: -1 }
+    el.focus({ preventScroll: true })
+  })
 </script>
 
 <div class="wrap">

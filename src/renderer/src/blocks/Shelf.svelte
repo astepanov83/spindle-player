@@ -6,16 +6,10 @@
   import type { PluginId } from '../../../shared/plugins'
   import type { Heading } from '../library/groups'
   import { shelfPad, shelfStep, shelfWindow } from '../library/shelf-rows'
-  import Cover from '../ui/Cover.svelte'
-  import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
-  import { openFrom } from '../plugins'
   import type { ArtistHeading, Tile } from '../plugins/types'
-  import { player } from '../stores/player.svelte'
-  import { queue } from '../stores/queue.svelte'
-  import { theme } from '../stores/theme.svelte'
+  import TileCard from './TileCard.svelte'
   import TileHeading from './TileHeading.svelte'
-  import { tileMenu, tilePlaying, tilePress, unlessDragged } from './tile-acts'
 
   let {
     heading,
@@ -74,49 +68,16 @@
 </script>
 
 <div class="headbox">
-  <TileHeading {heading} {artist} {tab} tabbable={headStop} />
+  <TileHeading {heading} {artist} {tab} tabbable={headStop ? 'name' : false} />
 </div>
 <div class="shelfbox">
   <div class="shelf" bind:this={scroller} bind:clientWidth={width} use:place {onscroll}>
     <div class="track" style:width="{track}px">
       {#each tiles.slice(win.start, win.end) as t, k (win.start + k)}
         {@const j = win.start + k}
-        <div
-          class="card"
-          role="group"
-          data-at={j}
-          style:transform="translateX({shelfPad + j * shelfStep}px)"
-          onpointerdown={(e) => tilePress(e, t)}
-          oncontextmenu={(e) => tileMenu(e, plugin, t.to.page, t)}
-        >
-          <div class="wrap">
-            <button
-              class="pic"
-              data-stop
-              tabindex={stop === j ? 0 : -1}
-              aria-label="Open {t.title}"
-              onclick={unlessDragged(() => openFrom(tab, t.to))}
-              ><Cover
-                src={t.art?.cover}
-                tint={t.art?.palette[theme.light ? 'light' : 'dark'][0]}
-                lazy={false}
-              /></button
-            >
-            <button
-              class="qp"
-              tabindex="-1"
-              aria-label="Play {t.title}"
-              onclick={unlessDragged(() => queue.playList(t.songs(), 0, t.from, t.link))}
-            >
-              <Icon name="play" size={16} />
-            </button>
-          </div>
-          <div class="t">
-            {#if tilePlaying(t)}<Eq paused={!player.playing} />{/if}<span title={t.title}
-              >{t.title}</span
-            >
-          </div>
-          <div class="a" title={t.subtitle}>{t.subtitle ?? ''}</div>
+        <!-- room above for the lift on hover -->
+        <div class="slot" data-at={j} style:transform="translateX({shelfPad + j * shelfStep}px)">
+          <TileCard tile={t} key={t.to.page} {tab} {plugin} small stop={stop === j ? 0 : -1} />
         </div>
       {/each}
     </div>
@@ -142,9 +103,9 @@
     position: relative;
   }
   /* Its own wheel is Shift + wheel and the touchpad; a plain wheel goes on
-     to the page, since the shelf has nothing to scroll up or down. */
-  /* reaches past the page's edge by the room around the tiles, so they
-     line up with the heading */
+     to the page, since the shelf has nothing to scroll up or down. It
+     reaches past the page's edge by the room around the tiles, so they line
+     up with the heading. */
   .shelf {
     margin: 0 -4px;
     overflow-x: auto;
@@ -156,89 +117,11 @@
     position: relative;
     height: 100%;
   }
-  /* room above for the lift on hover */
-  .card {
+  .slot {
     position: absolute;
     top: 4px;
     left: 0;
     width: 132px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .wrap {
-    position: relative;
-  }
-  .pic {
-    display: block;
-    width: 132px;
-    height: 132px;
-    position: relative;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 8px 20px -10px var(--shadow);
-    transition: transform 0.2s;
-  }
-  .card:hover .pic {
-    transform: translateY(-3px);
-  }
-  .qp {
-    position: absolute;
-    right: 6px;
-    bottom: 6px;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--ink);
-    color: var(--bg);
-    display: grid;
-    place-items: center;
-    opacity: 0;
-    transform: translateY(6px);
-    transition: 0.2s;
-    box-shadow: 0 6px 14px var(--shadow);
-  }
-  .card:hover .qp,
-  .card:focus-within .qp {
-    opacity: 1;
-    transform: none;
-  }
-  .card .qp:hover {
-    transform: scale(1.06);
-  }
-  /* A set line height, as the grid's: a Japanese fallback font would make
-     its line taller. Two title lines at most, then cut; the whole one in
-     the tooltip. The shelf has room for two. */
-  .t,
-  .a {
-    line-height: 1.3;
-  }
-  .t {
-    font-size: var(--text-m);
-    font-weight: 600;
-    display: flex;
-    gap: 6px;
-    align-items: flex-start;
-    min-width: 0;
-  }
-  .t span {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-  }
-  .t :global(.eq) {
-    margin-top: 3px;
-  }
-  .a {
-    font-size: var(--text-s);
-    color: var(--ink-2);
-    margin-top: -5px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   /* over the covers' middle, at the shelf's ends */
   .more {
@@ -266,12 +149,5 @@
   }
   .more:hover {
     background: var(--field);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .card:hover .pic,
-    .qp,
-    .card .qp:hover {
-      transform: none;
-    }
   }
 </style>

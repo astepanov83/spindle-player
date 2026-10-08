@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { filesActSetting, filesSettings } from './settings'
+import { filesActSetting, filesSettings, filesSoundLine } from './settings'
 import { files } from './store.svelte'
 import { ai } from '../../ai.svelte'
 import { library } from '../../stores/library.svelte'
@@ -185,5 +185,17 @@ describe('the looks in Settings (ticket 095)', () => {
       artists: 'shelves',
       artistPage: 'sections'
     })
+  })
+})
+
+describe('filesSoundLine', () => {
+  it('counts the songs read while it runs, and says nothing before or after', () => {
+    const rest = { ...files.status, loudness: undefined }
+    files.status = rest
+    expect(filesSoundLine()).toBeUndefined()
+    files.status = { ...rest, loudness: { done: 1240, total: 8000 } }
+    expect(filesSoundLine()).toBe('Reading 1,240 of 8,000 songs')
+    files.status = { ...rest, loudness: { done: 8000, total: 8000 } }
+    expect(filesSoundLine()).toBeUndefined()
   })
 })

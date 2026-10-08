@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fallbackPalettes } from '../../../shared/palette'
+import { styleFor } from './draw'
 import { bucketOf, pictureKey, pixelsOf } from './pictures'
 
 describe('size buckets', () => {
@@ -31,5 +32,33 @@ describe('size buckets', () => {
       pictureKey('rings', art, 'dark', 128, true)
     ])
     expect(keys.size).toBe(8)
+  })
+})
+
+describe('sound picture keys', () => {
+  const art = { seed: 'a', lengths: [200, 300] }
+
+  it('is the rings key until the loudness is in, then changes with it', () => {
+    const rings = pictureKey('rings', art, 'dark', 128)
+    expect(pictureKey('sound', art, 'dark', 128)).toBe(rings)
+    const loud = pictureKey(
+      'sound',
+      { ...art, loudness: ['A'.repeat(32), 'B'.repeat(32)] },
+      'dark',
+      128
+    )
+    expect(loud).not.toBe(rings)
+    expect(
+      pictureKey('sound', { ...art, loudness: ['A'.repeat(32), 'C'.repeat(32)] }, 'dark', 128)
+    ).not.toBe(loud)
+    expect(
+      pictureKey('sound', { ...art, loudness: ['A'.repeat(32), 'B'.repeat(32)] }, 'dark', 128)
+    ).toBe(loud)
+  })
+
+  it('draws a station, or tracks that cannot be read, as flat bars', () => {
+    expect(styleFor('sound', { seed: 's' })).toBe('sound')
+    expect(styleFor('sound', { ...art, loudness: ['', ''] })).toBe('sound')
+    expect(styleFor('type', art)).toBe('type')
   })
 })

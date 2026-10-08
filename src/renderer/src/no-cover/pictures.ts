@@ -4,7 +4,8 @@ import type { NoCover } from '../../../shared/settings'
 import type { ThemeName } from '../../../shared/theme'
 import { PictureCache } from './cache'
 import type { PictureArt } from '../../../shared/library'
-import { drawPicture } from './draw'
+import { hashOf } from './drawing'
+import { drawPicture, styleFor } from './draw'
 import { familyOf } from './genre'
 import { TurnQueue } from './queue'
 
@@ -30,14 +31,25 @@ export function pixelsOf(bucket: Bucket, dpr = globalThis.devicePixelRatio ?? 1)
 export const colorsOf = (art: PictureArt, theme: ThemeName): string =>
   art.palette ? art.palette[theme].slice(0, 2).join('') : ''
 
-export const pictureKey = (
-  style: NoCover,
+// What of the item changes its picture besides the seed and colors: the
+// genre's family, and for sound the loudness, so the picture is drawn again
+// when it comes in (and rings meanwhile, under the key of rings).
+export function detailOf(style: NoCover, art: PictureArt): string {
+  if (style === 'genre') return ':' + familyOf(art.genre)
+  if (style === 'sound') return ':' + hashOf((art.loudness ?? []).join(',')).toString(36)
+  return ''
+}
+
+export function pictureKey(
+  asked: NoCover,
   art: PictureArt & { seed: string },
   theme: ThemeName,
   bucket: Bucket,
   artist = false
-): string =>
-  `${artist ? 'artist:' : ''}${style}${style === 'genre' ? ':' + familyOf(art.genre) : ''}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
+): string {
+  const style = styleFor(asked, art)
+  return `${artist ? 'artist:' : ''}${style}${detailOf(style, art)}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
+}
 
 // a few thousand: a big library's whole Albums grid at one size
 const cache = new PictureCache(

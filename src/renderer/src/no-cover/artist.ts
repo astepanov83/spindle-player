@@ -8,14 +8,20 @@ import { titleFont } from './type'
 // A mark of one sign (Japanese) can be bigger than a pair.
 export const sizeOf = (text: string): number => ([...text].length > 1 ? 40 : 52)
 
-function drawInitials(x: Ctx, name: string, color: string): void {
+// `size`, `y` and `spacing` are for a small mark in the sound picture's middle.
+export function drawInitials(
+  x: Ctx,
+  name: string,
+  color: string,
+  at: { size?: number; y?: number; spacing?: number } = {}
+): void {
   const text = initials(name)
   x.fillStyle = color
-  x.font = titleFont(sizeOf(text))
-  x.letterSpacing = '-1.2px'
+  x.font = titleFont(at.size ?? sizeOf(text))
+  x.letterSpacing = `${at.spacing ?? -1.2}px`
   x.textAlign = 'center'
   x.textBaseline = 'middle'
-  x.fillText(text, 50, 52)
+  x.fillText(text, 50, at.y ?? 52)
 }
 
 // The label of the rings picture: its color and faint pattern behind.

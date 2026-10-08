@@ -122,6 +122,14 @@ export function filesStatusLine(): string | undefined {
   return s.phase !== 'idle' && files.albums.length ? scanLine(s) : undefined
 }
 
+// The loudness reading for the sound pictures, while it runs.
+export function filesSoundLine(): string | undefined {
+  const r = files.status.loudness
+  return r && r.done < r.total
+    ? `Reading ${r.done.toLocaleString()} of ${r.total.toLocaleString()} songs`
+    : undefined
+}
+
 // The album cover and artist photo lookup, under "Find missing covers online".
 export function filesCoverLines(): { text: string; busy: boolean }[] {
   const f = files.status.fetch

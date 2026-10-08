@@ -263,6 +263,7 @@
                   photo={r.photo}
                   covers={r.covers ?? []}
                   genre={r.genre}
+                  sound={r.sound}
                 />{:else}<Cover
                   src={r.art?.cover}
                   art={r.art}

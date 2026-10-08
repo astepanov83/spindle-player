@@ -9,6 +9,8 @@ export interface Drawing {
   // from the seed: the same item always gets the same details
   hash: number
   lengths: number[]
+  // each track's loudness over time, as the library sends it (MadeArt)
+  loudness?: string[]
   title: string
   artist: string
   // the genre tag as written, for the genre style

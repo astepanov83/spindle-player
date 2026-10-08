@@ -7,6 +7,8 @@ import {
   artistCovers,
   artistGenre,
   artistSongs,
+  artistSound,
+  soundOf,
   albumArtists,
   filterArtists,
   shownArtists
@@ -152,5 +154,50 @@ describe('artistGenre (104)', () => {
   it('is nothing with no tags, or no albums', () => {
     expect(of('d')).toBeUndefined()
     expect(of()).toBeUndefined()
+  })
+})
+
+describe('soundOf', () => {
+  it('puts albums, then single songs, in one list', () => {
+    const a = { lengths: [100, 200], loudness: ['x'.repeat(32), ''] }
+    const out = soundOf(
+      [a, { lengths: [50], loudness: ['y'.repeat(32)] }],
+      [{ length: 70, loudness: 'z'.repeat(32) }, { length: 80 }]
+    )
+    expect(out.lengths).toEqual([100, 200, 50, 70, 80])
+    expect(out.loudness).toEqual(['x'.repeat(32), '', 'y'.repeat(32), 'z'.repeat(32), ''])
+  })
+
+  it('has no loudness while nothing is read, so the picture stays rings', () => {
+    expect(soundOf([{ lengths: [100, 200] }], [{ length: 30 }])).toEqual({
+      lengths: [100, 200, 30]
+    })
+  })
+})
+
+describe('artistSound', () => {
+  it('reads a song on another album from its own art, else from its album', () => {
+    const albums: Record<string, { lengths: number[]; loudness?: string[]; trackIds: string[] }> = {
+      own: { lengths: [100], loudness: ['a'.repeat(32)], trackIds: ['t1'] },
+      other: {
+        lengths: [10, 20],
+        loudness: ['b'.repeat(32), 'c'.repeat(32)],
+        trackIds: ['t2', 't3']
+      }
+    }
+    const tracks: Record<
+      string,
+      { albumId: string; duration: number; art?: { loudness: string[] } }
+    > = {
+      t2: { albumId: 'other', duration: 10.4 },
+      t3: { albumId: 'other', duration: 20, art: { loudness: ['d'.repeat(32)] } }
+    }
+    const out = artistSound(
+      { key: 'k', name: 'K', albums: ['own'], also: ['t2', 't3'] } as never,
+      (id) => albums[id],
+      (id) => tracks[id]
+    )
+    expect(out.lengths).toEqual([100, 10, 20])
+    expect(out.loudness).toEqual(['a'.repeat(32), 'b'.repeat(32), 'd'.repeat(32)])
   })
 })

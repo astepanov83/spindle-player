@@ -3,18 +3,26 @@
      picture made from their name in the style Settings picks (ticket 105). -->
 <script lang="ts">
   import Cover from '../ui/Cover.svelte'
-  import { mosaicUrl } from '../../../shared/library'
+  import { mosaicUrl, type SoundArt } from '../../../shared/library'
   import { fallbackPalettes } from '../../../shared/palette'
   import type { CoverArt } from '../plugins/types'
   import { itemsVersion } from '../plugins'
+  import { settings } from '../stores/settings.svelte'
   import { theme } from '../stores/theme.svelte'
 
   let {
     name,
     photo,
     covers,
-    genre
-  }: { name: string; photo: string | undefined; covers: CoverArt[]; genre?: string } = $props()
+    genre,
+    sound
+  }: {
+    name: string
+    photo: string | undefined
+    covers: CoverArt[]
+    genre?: string
+    sound?: () => SoundArt
+  } = $props()
 
   // The name as shown, so a rename makes another picture. Colors from a real
   // cover when there is one, else from the name.
@@ -22,6 +30,7 @@
     seed: name,
     title: name,
     genre,
+    ...(settings.noCover === 'sound' ? sound?.() : undefined),
     palette: covers[0]?.palette ?? fallbackPalettes(name)
   })
 

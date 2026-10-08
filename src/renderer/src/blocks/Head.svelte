@@ -226,6 +226,7 @@
           photo={b.art?.src}
           covers={b.art?.covers ?? []}
           genre={b.art?.genre}
+          sound={() => ({ lengths: b.art?.lengths, loudness: b.art?.loudness })}
         />
       </div>
       <div class="about">

@@ -35,7 +35,13 @@
 
 {#snippet who(a: ArtistHeading)}
   <span class="pic"
-    ><ArtistPic name={h.title} photo={a.photo} covers={a.covers} genre={a.genre} /></span
+    ><ArtistPic
+      name={h.title}
+      photo={a.photo}
+      covers={a.covers}
+      genre={a.genre}
+      sound={a.sound}
+    /></span
   >
   <span class="words">
     <span class="name" title={h.title}>{h.title}</span>

@@ -6,7 +6,13 @@ import { filesAct, filesEmptyPlaylists, filesPage, filesSearch } from './page'
 import { filesDrop } from './drop'
 import { startFiles } from './start'
 import { filesTabOf } from './pages'
-import { filesActSetting, filesCoverLines, filesSettings, filesStatusLine } from './settings'
+import {
+  filesActSetting,
+  filesCoverLines,
+  filesSettings,
+  filesSoundLine,
+  filesStatusLine
+} from './settings'
 import { trackPlayable, trackState } from './tracks'
 
 // before the first library, or the first scan of an empty index, a song is on its way, not gone
@@ -30,6 +36,7 @@ export const filesHalf: PageHalf = {
   version: () => files.revision,
   statusLine: filesStatusLine,
   coverLines: filesCoverLines,
+  soundLine: filesSoundLine,
   drop: filesDrop,
   start: startFiles
 }

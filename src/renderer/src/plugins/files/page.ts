@@ -13,6 +13,8 @@ import {
   allBy,
   artistCovers,
   artistGenre,
+  artistSound,
+  soundOf,
   artistLinks,
   artistSongs,
   albumArtists,
@@ -216,6 +218,7 @@ function albumArtistHeading(h: Heading, albums: readonly Album[]): ArtistHeading
     photo: a && files.photos[a.key]?.cover,
     covers: a ? artistCovers(a, album, songArt) : albumCovers(albums),
     genre: commonGenre(albums),
+    sound: () => (a ? artistSound(a, album, (id) => files.track(id)) : soundOf(albums)),
     ...(a ? { to: at(artistPage(a.key)), link: queueLink('artist', a.key) } : {}),
     songs: () => trackKeys(albums.flatMap((al) => al.trackIds)),
     from: h.title
@@ -333,6 +336,7 @@ const artistTile = (a: Artist): Tile => ({
   photo: files.photos[a.key]?.cover,
   covers: artistCovers(a, album, songArt),
   genre: artistGenre(a, album),
+  sound: () => artistSound(a, album, (id) => files.track(id)),
   to: at(artistPage(a.key)),
   playing: (item) => playsArtist(item, a.key),
   songs: () => trackKeys(artistSongs(a, album)),
@@ -394,6 +398,7 @@ function artistHeading(a: Artist): ArtistHeading {
     ...(t.photo ? { photo: t.photo } : {}),
     covers: t.covers ?? [],
     genre: t.genre,
+    ...(t.sound ? { sound: t.sound } : {}),
     to: t.to,
     songs: t.songs,
     from: t.from,
@@ -766,7 +771,8 @@ function artistHead(a: Artist): HeadBlock {
       src: files.photos[a.key]?.coverLarge,
       round: true,
       covers: artistCovers(a, album, songArt),
-      genre: artistGenre(a, album)
+      genre: artistGenre(a, album),
+      ...artistSound(a, album, (id) => files.track(id))
     },
     back: { label: 'All artists', to: at('') },
     looks: lookSwitch('artistPage'),

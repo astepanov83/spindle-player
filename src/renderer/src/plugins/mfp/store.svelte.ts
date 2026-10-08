@@ -41,7 +41,9 @@ class MfpStore {
         lengths: e.songs.map((s) => Math.round(s.length)),
         title: e.title,
         artist: e.artist,
-        genre: 'Rock'
+        genre: 'Rock',
+        // no data to read: flat bars in the sound picture
+        loudness: e.songs.map(() => '')
       }
       this.#art.set(
         e.id,

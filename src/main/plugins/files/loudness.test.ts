@@ -353,6 +353,18 @@ describe('the plan and the albums', () => {
     expect(d.tracks[0].art?.loudness).toEqual(['/'.repeat(points)])
   })
 
+  it('an album or loose song whose files all failed gets flat bars, not rings', () => {
+    const d = data()
+    d.tracks[0].art = { palette: d.albums[0].palette, cover: '', coverLarge: '', seed: 's1' }
+    const store: LoudStore = new Map([
+      ['/m/s1.mp3', { size: 1, mtime: 1, cuts: '' }],
+      ['/m/s2.mp3', { size: 1, mtime: 1, cuts: '' }]
+    ])
+    addLoudness(d, plan, store, new WeakMap())
+    expect(d.albums[0].loudness).toEqual(['', ''])
+    expect(d.tracks[0].art?.loudness).toEqual([''])
+  })
+
   it('makes the text once per curve', () => {
     const c = curve(255)
     const store: LoudStore = new Map([

@@ -21,6 +21,8 @@ export interface VirtualListOptions {
   // each row's key, so a measured height stays with its row when rows come
   // above it (a grid's heading rows are not as tall as its tiles)
   key?: (index: number) => string
+  // px a jump to a row leaves above it, for heads that stick over the top
+  paddingStart?: number
 }
 
 export interface VirtualList {
@@ -77,6 +79,7 @@ export function virtualList(opts: () => VirtualListOptions, overscan = 8): Virtu
         count: o.count,
         estimateSize: typeof size === 'function' ? size : () => size,
         getItemKey: o.key ?? ((i: number) => i),
+        scrollPaddingStart: o.paddingStart ?? 0,
         scrollMargin: m,
         getScrollElement: () => el
       })

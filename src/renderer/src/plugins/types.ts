@@ -54,6 +54,7 @@ export interface Tab {
 export type Block =
   | HeadBlock
   | TilesBlock
+  | ListBlock
   | SongsBlock
   | RowsBlock
   | TreeBlock
@@ -222,6 +223,37 @@ export interface TileGroups<T = unknown> {
   artist?: (heading: Heading, items: readonly T[]) => ArtistHeading
   // the A-Z strip on the right
   strip?: boolean
+}
+
+// The list look of Albums and Artists (ticket 097): a row per item, with
+// columns on the right. Only the rows on screen are drawn. The same groups
+// as a tiles block; without them, plain rows (an artist's albums).
+export interface ListBlock<T = unknown> {
+  kind: 'list'
+  items: readonly T[]
+  key(item: T): string
+  row(item: T): ListRow
+  // the title column's head, then a head and width in px for each of a
+  // row's `cols`; for the eye only, they don't sort
+  title: string
+  cols: { head: string; width: number }[]
+  // artists' round pictures
+  round?: boolean
+  groups?: TileGroups<T>
+}
+
+// A tile's data with its columns. `subtitle` is the line under the title,
+// a link when `subTo` is set (the album artist's page).
+export interface ListRow extends Tile {
+  subTo?: PageAddress
+  // the columns' text: "2003", "9", "41 min"
+  cols: string[]
+  // the first column as said under the title in a narrow list: "3 albums"
+  under?: string
+  // a few small covers after the name (an artist's newest albums)
+  strip?: CoverArt[]
+  // what a screen reader says for the row
+  label: string
 }
 
 // An artist over their albums: picture, name, count, play; the name opens
@@ -417,6 +449,8 @@ export interface FoundGroup {
 // A list block for a plugin's own array: its tiles and rows are typed by it.
 export const tilesBlock = <T>(b: Omit<TilesBlock<T>, 'kind'>): TilesBlock =>
   ({ kind: 'tiles', ...b }) as TilesBlock
+export const listBlock = <T>(b: Omit<ListBlock<T>, 'kind'>): ListBlock =>
+  ({ kind: 'list', ...b }) as ListBlock
 export const rowsBlock = <T>(
   b: Omit<PageRowsBlock<T>, 'kind'> | Omit<ItemRowsBlock<T>, 'kind'>
 ): RowsBlock => ({ kind: 'rows', ...b }) as RowsBlock

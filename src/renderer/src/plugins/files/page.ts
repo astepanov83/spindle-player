@@ -39,19 +39,22 @@ import { playsOf } from '../../library/plays'
 import type { Plays } from '../../../../shared/plays'
 import { albumSorts, albumsView, parseAlbumSort, sortAlbums, type AlbumSort } from './album-sort'
 import { files } from './store.svelte'
-import { lookId, lookSwitch, setViewLook } from './looks'
+import { lookId, lookSwitch, setViewLook, viewLook } from './looks'
 import { notice } from '../../stores/notice.svelte'
 import {
+  listBlock,
   rowsBlock,
   tilesBlock,
   type Block,
   type EmptyBlock,
+  type ListBlock,
   type HeadBlock,
   type PageAddress,
   type Piece,
   type ArtistHeading,
   type CoverArt,
   type SearchGroup,
+  type Tile,
   type TileGroups,
   type TilesBlock
 } from '../types'
@@ -177,7 +180,9 @@ function albumsPage(page: string, query: string): Block[] {
         menu: { prefix: 'Sort:' }
       }
     },
-    albumTiles(sortedAlbums(by), undefined, albumGroups(by))
+    viewLook('albums') === 'list'
+      ? albumRows(sortedAlbums(by), undefined, albumGroups(by))
+      : albumTiles(sortedAlbums(by), undefined, albumGroups(by))
   ]
 }
 
@@ -225,8 +230,23 @@ function sortedAlbums(by: AlbumSort): Album[] {
   return out
 }
 
-// Albums as covers. On an artist's page the line under names the year, and
-// an album opens under the artist.
+// An album as a tile. On an artist's page the line under names the year, and
+// the album opens under the artist.
+function albumTile(al: Album, under?: { artist: string }): Tile {
+  return {
+    title: al.title,
+    subtitle: under ? (al.year ? String(al.year) : '') : al.artist,
+    art: al,
+    to: at(under ? artistPage(under.artist, al.id) : albumPage(al.id)),
+    // the album of the song the queue plays (not while radio plays)
+    playing: (key) => trackOf(key)?.albumId === al.id,
+    songs: () => trackKeys(al.trackIds),
+    from: al.title,
+    link: albumLink(al)
+  }
+}
+
+// Albums as covers.
 function albumTiles(
   albums: Album[],
   under?: { artist: string },
@@ -236,17 +256,46 @@ function albumTiles(
     items: albums,
     ...(groups ? { groups } : {}),
     key: (al) => albumPage(al.id),
-    tile: (al) => ({
-      title: al.title,
-      subtitle: under ? (al.year ? String(al.year) : '') : al.artist,
-      art: al,
-      to: at(under ? artistPage(under.artist, al.id) : albumPage(al.id)),
-      // the album of the song the queue plays (not while radio plays)
-      playing: (key) => trackOf(key)?.albumId === al.id,
-      songs: () => trackKeys(al.trackIds),
-      from: al.title,
-      link: albumLink(al)
-    })
+    tile: (al) => albumTile(al, under)
+  })
+}
+
+// Albums as rows (ticket 097): the artist under the title, a link to their
+// page, then Year, Songs, Length. On an artist's page no artist line: the
+// year is a column.
+function albumRows(
+  albums: Album[],
+  under?: { artist: string },
+  groups?: TileGroups<Album>
+): ListBlock {
+  return listBlock<Album>({
+    items: albums,
+    ...(groups ? { groups } : {}),
+    title: 'Title',
+    // room for "under a minute" and "1 h 15 min"
+    cols: [
+      { head: 'Year', width: 48 },
+      { head: 'Songs', width: 56 },
+      { head: 'Length', width: 104 }
+    ],
+    key: (al) => albumPage(al.id),
+    row: (al) => {
+      const year = al.year ? String(al.year) : ''
+      const n = al.trackIds.length
+      const length = fmtLength(al.trackIds.reduce((s, id) => s + files.track(id).duration, 0))
+      // a split credit ("A, B") has no page
+      const who = under ? undefined : files.getArtist(artistKey(al.artist))
+      const sub = under ? undefined : al.artist
+      return {
+        ...albumTile(al, under),
+        subtitle: sub,
+        ...(who ? { subTo: at(artistPage(who.key)) } : {}),
+        cols: [year, String(n), length],
+        label: [al.title, sub, year, fmtCount(n, 'song', 'songs'), length]
+          .filter(Boolean)
+          .join(', ')
+      }
+    }
   })
 }
 
@@ -266,24 +315,59 @@ const artistCount = (a: Artist): string =>
     ? fmtCount(a.albums.length, 'album', 'albums')
     : fmtCount(a.also.length, 'song', 'songs')
 
+const artistTile = (a: Artist): Tile => ({
+  title: a.name,
+  subtitle: artistCount(a),
+  photo: files.photos[a.key]?.cover,
+  covers: artistCovers(a, album, songArt),
+  to: at(artistPage(a.key)),
+  playing: (item) => playsArtist(item, a.key),
+  songs: () => trackKeys(artistSongs(a, album)),
+  from: a.name,
+  link: queueLink('artist', a.key),
+  actions: [{ id: 'edit', label: 'Edit artist' }]
+})
+
 function artistTiles(artists: Artist[], groups?: TileGroups<Artist>): TilesBlock {
   return tilesBlock<Artist>({
     items: artists,
     ...(groups ? { groups } : {}),
     round: true,
     key: (a) => artistPage(a.key),
-    tile: (a) => ({
-      title: a.name,
-      subtitle: artistCount(a),
-      photo: files.photos[a.key]?.cover,
-      covers: artistCovers(a, album, songArt),
-      to: at(artistPage(a.key)),
-      playing: (item) => playsArtist(item, a.key),
-      songs: () => trackKeys(artistSongs(a, album)),
-      from: a.name,
-      link: queueLink('artist', a.key),
-      actions: [{ id: 'edit', label: 'Edit artist' }]
-    })
+    tile: artistTile
+  })
+}
+
+// newest first, no year last
+const newest = (albums: Album[]): Album[] => [...albums].sort((x, y) => y.year - x.year)
+
+// Artists as rows (ticket 097): the name, up to 6 covers of their newest
+// albums, then Albums and Songs.
+function artistRows(artists: Artist[], groups?: TileGroups<Artist>): ListBlock {
+  return listBlock<Artist>({
+    items: artists,
+    ...(groups ? { groups } : {}),
+    round: true,
+    title: 'Name',
+    cols: [
+      { head: 'Albums', width: 64 },
+      { head: 'Songs', width: 64 }
+    ],
+    key: (a) => artistPage(a.key),
+    row: (a) => {
+      const n = a.albums.length
+      const songs = artistSongs(a, album).length
+      return {
+        ...artistTile(a),
+        subtitle: undefined,
+        strip: newest(a.albums.map(album)).slice(0, 6),
+        cols: [n ? String(n) : '', String(songs)],
+        under: artistCount(a),
+        label: [a.name, n ? fmtCount(n, 'album', 'albums') : '', fmtCount(songs, 'song', 'songs')]
+          .filter(Boolean)
+          .join(', ')
+      }
+    }
   })
 }
 
@@ -326,8 +410,10 @@ function artistsPage(page: string, query: string): Block[] {
   return [
     head,
     ...(shown.length ? [] : [noMatches('No artist has that in their name.')]),
-    // smaller than the search results' artists, so more fit in a row
-    { ...artistTiles(shown, groups), small: true }
+    viewLook('artists') === 'list'
+      ? artistRows(shown, groups)
+      : // smaller than the search results' artists, so more fit in a row
+        { ...artistTiles(shown, groups), small: true }
   ]
 }
 

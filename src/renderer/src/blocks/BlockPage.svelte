@@ -9,6 +9,7 @@
   import Changes from './Changes.svelte'
   import Chips from './Chips.svelte'
   import Head from './Head.svelte'
+  import List from './List.svelte'
   import Nothing from './Nothing.svelte'
   import Results from './Results.svelte'
   import Rows from './Rows.svelte'
@@ -51,7 +52,7 @@
   const keys = $derived.by(() => {
     const seen: Record<string, number> = {}
     return blocks.map((b) => {
-      const kind = b.kind === 'tiles' && b.round ? 'round' : b.kind
+      const kind = (b.kind === 'tiles' || b.kind === 'list') && b.round ? `round ${b.kind}` : b.kind
       const n = (seen[kind] = (seen[kind] ?? -1) + 1)
       return `${kind} ${n}`
     })
@@ -99,6 +100,8 @@
       <Head block={b} {tab} {plugin} {nav} />
     {:else if b.kind === 'tiles'}
       <Tiles block={b} {tab} {plugin} {scrollEl} />
+    {:else if b.kind === 'list'}
+      <List block={b} {tab} {plugin} {scrollEl} />
     {:else if b.kind === 'songs'}
       {#if gapBefore(i)}<div class="gap"></div>{/if}
       <Songs block={b} {plugin} {scrollEl} />

@@ -301,14 +301,16 @@ export function rowAfterRemove(i: number, count: number): number | null {
 }
 
 // The keys inside a list (song table, queue, album page, search songs,
-// radio lists), for the list in Settings. listStep, ui/roving.ts (Enter and
-// the selection keys), the radio rows and the queue rows run them; a test
+// radio lists, the list look of Albums and Artists), for the list in
+// Settings. listStep, ui/roving.ts (Enter and the selection keys), the radio
+// rows, the queue rows and blocks/List.svelte (Space) run them; a test
 // checks listStep's.
 export const listShortcuts: { keys: string[]; does: string }[] = [
   { keys: ['ArrowUp', 'ArrowDown'], does: 'Previous or next row' },
   { keys: ['PageUp', 'PageDown'], does: 'A screen of rows up or down' },
   { keys: ['Home', 'End'], does: 'First or last row' },
-  { keys: ['Enter'], does: 'Play the row' },
+  { keys: ['Enter'], does: 'Play the row; on an album or artist row: open it' },
+  { keys: ['Space'], does: 'On an album or artist row: play it, or pause it while it plays' },
   {
     keys: ['Ctrl+click', 'Shift+click'],
     does: 'On a song: select it too, or every song from the last one clicked'
@@ -319,7 +321,10 @@ export const listShortcuts: { keys: string[]; does: string }[] = [
   },
   { keys: ['Ctrl+A'], does: 'Select every song in the list' },
   { keys: ['Escape'], does: 'Select none' },
-  { keys: ['ArrowRight', 'ArrowLeft'], does: 'On a station: to its star and menu, and back' },
+  {
+    keys: ['ArrowRight', 'ArrowLeft'],
+    does: 'On a station: to its star and menu, and back; on an album or artist row: to its play button and artist'
+  },
   {
     keys: ['Alt+ArrowUp', 'Alt+ArrowDown'],
     does: 'On a queue, playlist or saved station row: move it, or the selected songs'

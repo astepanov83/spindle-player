@@ -111,19 +111,20 @@ Every key is decided in `src/renderer/src/keys.ts` (plain functions with tests);
 - A held arrow keeps seeking; a held Backspace or Alt+← goes back once.
 - While a menu is open, it gets every key but Esc.
 
-Lists (song table, queue, album page, search results songs, radio stations) are one Tab stop. Inside a list:
+Lists (song table, queue, album page, search results songs, radio stations, the list look of Albums and Artists) are one Tab stop. Inside a list:
 
 | Key | Does |
 |---|---|
 | ↑ / ↓ | previous / next row |
 | Page Up / Page Down | a screen of rows |
 | Home / End | first / last row |
-| Enter | play the row |
+| Enter | play the row; on an album or artist row: open it |
+| Space | on an album or artist row: play it, or pause and resume it while it plays (elsewhere Space plays and pauses) |
 | Ctrl+click / Shift+click | on a song: select it too (again: take it out), or every song from the last one clicked to it. A plain click still plays |
 | Shift+↑ / Shift+↓ | select songs from the last one clicked (or the focused one) up or down; Shift with Page Up, Page Down, Home, End too |
 | Ctrl+A | select every song in the list |
 | Esc | select none; with nothing selected it goes on to close the menu, Settings or the drawer |
-| → / ← | on a station: to its star and back |
+| → / ← | on a station: to its star and back; on an album or artist row: to its play button and the artist's name |
 | Alt+↑ / Alt+↓ | on a queue row, or a playlist row while the playlist shows in its own order: move the song, or every selected song with it |
 | Delete | on a queue row: remove the song from the queue; on a playlist row: remove it from the playlist. On a selected row, every selected song goes. Focus goes to the row that takes its place. The notice offers Undo |
 

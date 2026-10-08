@@ -10,7 +10,15 @@ import {
   resolve,
   type ArtistsFile
 } from '../../../../shared/plugins/files/artists-file'
-import type { Block, HeadBlock, PageRow, RowsBlock, SongsBlock, TilesBlock } from '../types'
+import type {
+  Block,
+  HeadBlock,
+  ListBlock,
+  PageRow,
+  RowsBlock,
+  SongsBlock,
+  TilesBlock
+} from '../types'
 
 const api = {
   addFolder: vi.fn(),
@@ -212,6 +220,75 @@ describe('pages', () => {
     // the search results' tiles stay plain
     const found = page.filesSearch('juno')
     expect(found.every((f) => !('tiles' in f) || !f.tiles.groups)).toBe(true)
+  })
+
+  it("Albums as a list: a row each with artist, Year, Songs, Length, in the grid's groups (097)", () => {
+    page.filesAct('albums', 'look', 'list')
+    const blocks = page.filesPage('albums', '', '')
+    expect(kinds(blocks)).toEqual(['head', 'list'])
+    const l = blocks[1] as ListBlock
+    expect(l.items).toEqual(files.albums)
+    expect(l.title).toBe('Title')
+    expect(l.cols.map((c) => c.head)).toEqual(['Year', 'Songs', 'Length'])
+    expect(l.key(files.albums[0])).toBe('album/a')
+    const r = l.row(files.albums[0])
+    expect(r).toMatchObject({
+      title: 'Album a',
+      subtitle: 'Marina Vale',
+      subTo: at('artist/marinavale'),
+      cols: ['2003', '3', '6 min'],
+      label: 'Album a, Marina Vale, 2003, 3 songs, 6 min',
+      to: at('album/a'),
+      from: 'Album a',
+      link: { plugin: 'files', page: 'album/a' }
+    })
+    expect(r.songs()).toEqual(['files:a1', 'files:a2', 'files:a3'])
+    expect(r.playing?.('files:a2')).toBe(true)
+    expect(r.playing?.('files:b1')).toBe(false)
+    // the same groups as the grid: album artists by Artist, none by plays
+    expect(l.groups?.artist).toBeDefined()
+    expect(l.groups?.strip).toBe(true)
+    page.filesAct('albums', 'sort', 'plays')
+    expect((page.filesPage('albums', '', '')[1] as ListBlock).groups).toBeUndefined()
+    // a search shows the results, as in the grid
+    expect(kinds(page.filesPage('albums', '', 'juno'))).toEqual(['results'])
+    // an album with no year has an empty Year
+    files.load({ ...lib(), albums: [album('a', ['a1', 'a2', 'a3'], { year: 0 })] })
+    expect((page.filesPage('albums', '', '')[1] as ListBlock).row(files.albums[0]).cols[0]).toBe('')
+  })
+
+  it('Artists as a list: their newest covers, Albums and Songs, letters, Edit artist (097)', () => {
+    files.load({
+      ...lib(),
+      albums: [...lib().albums, album('c', ['c1'], { year: 2010 })],
+      tracks: [...lib().tracks, track('c1', 'c')]
+    })
+    page.filesAct('artists', 'look', 'list')
+    const blocks = page.filesPage('artists', '', '')
+    expect(kinds(blocks)).toEqual(['head', 'list'])
+    const l = blocks[1] as ListBlock
+    expect(l.round).toBe(true)
+    expect(l.title).toBe('Name')
+    expect(l.cols.map((c) => c.head)).toEqual(['Albums', 'Songs'])
+    expect(l.groups?.strip).toBe(true)
+    const marina = files.getArtist('marinavale')!
+    const r = l.row(marina)
+    expect(r).toMatchObject({
+      title: 'Marina Vale',
+      cols: ['2', '4'],
+      under: '2 albums',
+      label: 'Marina Vale, 2 albums, 4 songs',
+      to: at('artist/marinavale'),
+      actions: [{ id: 'edit', label: 'Edit artist' }]
+    })
+    expect(r.subtitle).toBeUndefined()
+    // newest first
+    expect(r.strip?.map((c) => c.cover)).toEqual(['c-c', 'c-a'])
+    // filtered by a search: no headings, as the grid
+    expect((page.filesPage('artists', '', 'juno').at(-1) as ListBlock).groups).toBeUndefined()
+    // shelves is not built yet: the grid
+    page.filesAct('artists', 'look', 'shelves')
+    expect(kinds(page.filesPage('artists', '', ''))).toEqual(['head', 'tiles'])
   })
 
   it('Classic Songs: the table has Plays and Last played (085)', () => {

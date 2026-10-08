@@ -7,8 +7,8 @@
   import type { PluginId } from '../../../shared/plugins'
   import ArtistPic from '../library/ArtistPic.svelte'
   import { sections, songMenu } from '../library/song-menu'
-  import { gridLayout, gridPlaces } from '../library/grid-rows'
-  import { groupRuns, stripLetters, type Run } from '../library/groups'
+  import { gridLayout, gridPlaces, headSizes, letterRows } from '../library/grid-rows'
+  import { groupRuns, type Run } from '../library/groups'
   import { gridColumns } from '../library/views'
   import Cover from '../ui/Cover.svelte'
   import Eq from '../ui/Eq.svelte'
@@ -24,6 +24,7 @@
   import { queue } from '../stores/queue.svelte'
   import { theme } from '../stores/theme.svelte'
   import { songDrag } from '../stores/song-drag.svelte'
+  import LetterStrip from './LetterStrip.svelte'
   import TileHeading from './TileHeading.svelte'
 
   let {
@@ -40,9 +41,6 @@
 
   // the same both ways (ticket 096)
   const GAP = 20
-  // heading rows have set heights, so the rows above the screen are known
-  const LETTER_HEAD = 52
-  const ARTIST_HEAD = 76
   let list: HTMLDivElement | undefined = $state()
   let width = $state(0)
 
@@ -51,7 +49,7 @@
   const runs = $derived(b.groups && groupRuns(items, b.groups.grouping))
   const layout = $derived(gridLayout(items, cols, runs))
   const rows = $derived(layout.rows)
-  const headSize = $derived(b.groups?.artist ? ARTIST_HEAD : LETTER_HEAD)
+  const headSize = $derived(b.groups?.artist ? headSizes.artist : headSizes.letter)
   // picture + a two-line title + line under, measured for real once drawn.
   // Two lines: at 140px most rows have a title that wraps, and a row guessed
   // short shrinks the page above the screen until it is drawn.
@@ -115,34 +113,8 @@
     })
   )
 
-  // the library's size: the strip goes under 520px (ticket 043's narrow
-  // widths), and scrolls when its letters don't fit the height
-  let boxWidth = $state(0)
-  let boxHeight = $state(0)
-  $effect(() => {
-    const el = scrollEl
-    if (!el) return
-    const sizes = new ResizeObserver(() => {
-      boxWidth = el.getBoundingClientRect().width
-      boxHeight = el.clientHeight
-    })
-    sizes.observe(el)
-    return () => sizes.disconnect()
-  })
-
-  // the A-Z strip, while the headings are letters or artists
-  const strip = $derived(
-    b.groups?.strip && runs && boxWidth >= 520 ? stripLetters(runs) : undefined
-  )
-  // the first heading row of each letter
-  const letterRows = $derived.by(() => {
-    const at: Record<string, number> = {}
-    rows.forEach((r, i) => {
-      const l = 'head' in r ? r.head.letter : undefined
-      if (l !== undefined) at[l] ??= i
-    })
-    return at
-  })
+  // the first heading row of each letter, for the strip
+  const letters = $derived(letterRows(rows))
 
   function measure(node: HTMLDivElement): void {
     v.measure(node)
@@ -183,18 +155,9 @@
   }
 </script>
 
-<div class="tiles" class:with-strip={!!strip}>
-  <!-- before the grid, so Tab reaches it without going through every tile -->
-  {#if strip}
-    <nav class="strip" aria-label="Go to letter" style:max-height="{boxHeight - 8}px">
-      {#each strip as s (s.letter)}
-        <button
-          disabled={!s.has}
-          aria-label={s.letter === '#' ? 'Numbers and symbols' : s.letter}
-          onclick={() => v.scrollToIndex(letterRows[s.letter])}>{s.letter}</button
-        >
-      {/each}
-    </nav>
+<div class="tiles">
+  {#if b.groups?.strip && runs}
+    <LetterStrip {runs} {scrollEl} go={(l) => v.scrollToIndex(letters[l])} />
   {/if}
   <div
     class="grid"
@@ -271,7 +234,7 @@
 </div>
 
 <style>
-  .with-strip {
+  .tiles {
     display: flex;
     gap: 8px;
   }
@@ -292,35 +255,6 @@
   .headrow {
     display: block;
     padding-bottom: 0;
-  }
-  /* stays in view while the grid scrolls under it */
-  .strip {
-    order: 1;
-    position: sticky;
-    top: 4px;
-    align-self: flex-start;
-    overflow-y: auto;
-    scrollbar-width: none;
-    display: flex;
-    flex-direction: column;
-    margin-right: -10px;
-  }
-  .strip button {
-    font-size: 10px;
-    font-weight: 600;
-    line-height: 1;
-    padding: 2px 4px;
-    min-width: 18px;
-    color: var(--ink-2);
-    border-radius: 4px;
-  }
-  .strip button:hover:not(:disabled) {
-    color: var(--ink);
-    background: var(--field);
-  }
-  .strip button:disabled {
-    color: var(--ink-3);
-    opacity: 0.4;
   }
 
   .card {

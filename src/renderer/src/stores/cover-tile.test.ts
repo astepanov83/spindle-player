@@ -11,4 +11,11 @@ describe('tileKey', () => {
     expect(tileKey(art, 'type', 'dark')).not.toBe(tileKey(art, 'rings', 'dark'))
     expect(tileKey(art, 'rings', 'light')).not.toBe(tileKey(art, 'rings', 'dark'))
   })
+
+  it('changes when a rescan changes what the picture shows', () => {
+    const art = { seed: 's', palette: fallbackPalettes('s'), lengths: [200, 300], title: 'A' }
+    const more = { ...art, lengths: [200, 300, 100] }
+    expect(tileKey(more, 'rings', 'dark')).not.toBe(tileKey(art, 'rings', 'dark'))
+    expect(tileKey({ ...art, title: 'B' }, 'type', 'dark')).not.toBe(tileKey(art, 'type', 'dark'))
+  })
 })

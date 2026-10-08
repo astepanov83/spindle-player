@@ -31,13 +31,30 @@ export function pixelsOf(bucket: Bucket, dpr = globalThis.devicePixelRatio ?? 1)
 export const colorsOf = (art: PictureArt, theme: ThemeName): string =>
   art.palette ? art.palette[theme].slice(0, 2).join('') : ''
 
-// What of the item changes its picture besides the seed and colors: the
-// genre's family, and for sound the loudness, so the picture is drawn again
-// when it comes in (and rings meanwhile, under the key of rings).
-export function detailOf(style: NoCover, art: PictureArt): string {
-  if (style === 'genre') return ':' + familyOf(art.genre)
-  if (style === 'sound') return ':' + hashOf((art.loudness ?? []).join(',')).toString(36)
-  return ''
+// What the drawing reads from the item besides the seed and colors, hashed,
+// so a rescan that changes it (a track added, a title retagged) draws again:
+// the album id stays the same then. Sound with no loudness yet is rings, and
+// shares its key. An artist's picture shows their initials, from the title.
+export function detailOf(style: NoCover, art: PictureArt, artist = false): string {
+  const read = readOf(style, art, artist)
+  return read ? ':' + hashOf(read).toString(36) : ''
+}
+
+function readOf(style: NoCover, art: PictureArt, artist: boolean): string {
+  const title = art.title ?? ''
+  const lengths = (art.lengths ?? []).join(',')
+  switch (style) {
+    case 'genre':
+      return familyOf(art.genre)
+    case 'type':
+      return artist ? title : `${title}\0${art.artist ?? ''}`
+    case 'rings':
+      return artist ? title : lengths
+    case 'sound':
+      return `${artist ? title : ''}\0${lengths}\0${(art.loudness ?? []).join(',')}`
+    default:
+      return ''
+  }
 }
 
 export function pictureKey(
@@ -48,7 +65,7 @@ export function pictureKey(
   artist = false
 ): string {
   const style = styleFor(asked, art)
-  return `${artist ? 'artist:' : ''}${style}${detailOf(style, art)}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
+  return `${artist ? 'artist:' : ''}${style}${detailOf(style, art, artist)}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
 }
 
 // a few thousand: a big library's whole Albums grid at one size

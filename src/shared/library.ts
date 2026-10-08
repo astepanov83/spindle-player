@@ -80,10 +80,11 @@ export interface MadeArt {
   // the genre tag as written; the genre style picks a drawing family from it
   // (ticket 104). An album's is the one most of its tracks have.
   genre?: string
-  // Each track's loudness over time (ticket 106): 32 values 0-1 per track,
-  // in the order of `lengths`; [] for a track that could not be read. Sent
-  // only while the sound style is chosen, once every track is read.
-  loudness?: number[][]
+  // Each track's loudness over time (ticket 106): 32 values 0-1 per track
+  // as 32 characters (decodeCurve in loudness-text.ts), in the order of
+  // `lengths`; '' for a track that could not be read. Sent only while the
+  // sound style is chosen, once every track is read.
+  loudness?: string[]
 }
 
 // What a made picture is drawn from where a plugin has no palette for the

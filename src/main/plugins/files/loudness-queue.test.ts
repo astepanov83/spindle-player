@@ -17,6 +17,8 @@ interface Setup {
   s: { can: boolean; playing: boolean; now: number }
   reads: Map<string, { end: (o: ReadOutcome) => void; signal: AbortSignal }>
   done: string[]
+  halts: string[]
+  starts(): number
   tick(ms: number): Promise<void>
   end(path: string, o?: ReadOutcome): Promise<void>
 }
@@ -26,12 +28,18 @@ function setup(paths: string[]): Setup {
   const left = paths.map(file)
   const reads = new Map<string, { end: (o: ReadOutcome) => void; signal: AbortSignal }>()
   const done: string[] = []
+  const halts: string[] = []
+  let starts = 0
   const timers: { at: number; f: () => void }[] = []
   const s = { can: true, playing: false, now: 0 }
   const deps: LoudDeps = {
     next: (running) => left.find((f) => !running.has(f.path) && !done.includes(f.path)),
-    read: (f, signal) => new Promise((end) => reads.set(f.path, { end, signal })),
+    read: (f, signal) => {
+      starts++
+      return new Promise((end) => reads.set(f.path, { end, signal }))
+    },
     done: (f) => done.push(f.path),
+    halted: (why) => halts.push(why),
     canRun: () => s.can,
     playing: () => s.playing,
     now: () => s.now,
@@ -55,7 +63,7 @@ function setup(paths: string[]): Setup {
     reads.delete(path)
     await new Promise((r) => setTimeout(r, 0))
   }
-  return { q, s, reads, done, tick, end }
+  return { q, s, reads, done, halts, starts: () => starts, tick, end }
 }
 
 describe('LoudQueue', () => {
@@ -131,8 +139,40 @@ describe('LoudQueue', () => {
     const t = setup(['a', 'b'])
     t.s.playing = true
     t.q.kick()
-    await t.end('a', { kind: 'bad' })
+    await t.end('a', { kind: 'bad', why: 'Invalid data' })
     expect(t.done).toEqual(['a'])
     expect([...t.reads.keys()]).toEqual(['b'])
+  })
+
+  it('ffmpeg that cannot run halts the queue, with no new tries until reset', async () => {
+    const t = setup(['a', 'b', 'c'])
+    t.q.kick()
+    await t.end('a', { kind: 'nostart', why: 'EACCES' })
+    expect(t.halts).toEqual(['EACCES'])
+    // b, which ran beside it, is stopped
+    expect(t.reads.get('b')?.signal.aborted).toBe(true)
+    t.q.kick()
+    expect(t.starts()).toBe(2)
+    t.q.reset()
+    t.q.kick()
+    expect(t.starts()).toBe(4)
+    expect(t.done).toEqual([])
+  })
+
+  it('a read that throws counts as ffmpeg not running', async () => {
+    const t = setup(['a'])
+    t.q.kick()
+    t.reads.get('a')!.end(Promise.reject(new Error('spawn EMFILE')) as never)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(t.halts).toEqual(['Error: spawn EMFILE'])
+  })
+
+  it('a file that could not be read goes to done as later', async () => {
+    const seen: string[] = []
+    const t = setup(['a'])
+    t.q.deps.done = (_, o) => void seen.push(o.kind)
+    t.q.kick()
+    await t.end('a', { kind: 'later', why: 'No such file' })
+    expect(seen).toEqual(['later'])
   })
 })

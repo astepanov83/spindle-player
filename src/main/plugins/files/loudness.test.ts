@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Album, LibraryData, Track } from '../../../shared/library'
+import { decodeCurve } from '../../../shared/loudness-text'
 import {
   addLoudness,
   curveOf,
@@ -16,7 +17,8 @@ import {
   serializeLoudness,
   splitCurves,
   topDb,
-  valuesOf,
+  textOf,
+  completes,
   windowsPerSecond,
   type LoudFile,
   type LoudStore,
@@ -118,8 +120,10 @@ describe('slicing a decoded buffer into 32 values', () => {
     )
   })
 
-  it('gives the page values 0-1 in steps of 0.01', () => {
-    expect(valuesOf(Uint8Array.from([0, 128, 255]))).toEqual([0, 0.5, 1])
+  it('gives the page one character per value, 64 levels', () => {
+    const text = textOf(Uint8Array.from([0, 128, 255]))
+    expect(text).toBe('Ag/')
+    expect(decodeCurve(text)).toEqual([0, 32 / 63, 1])
   })
 })
 
@@ -317,16 +321,16 @@ describe('the plan and the albums', () => {
     ])
     addLoudness(d, plan, store, new WeakMap())
     expect(d.albums[1].loudness).toEqual([
-      Array(points).fill(1),
-      Array(points).fill(0),
-      Array(points).fill(0.2)
+      '/'.repeat(points),
+      'A'.repeat(points),
+      'N'.repeat(points)
     ])
     // s2 is not read yet
     expect(d.albums[0].loudness).toBeUndefined()
     // could not be read: an empty curve, and the album has its picture
     store.set('/m/s2.mp3', { size: 1, mtime: 1, cuts: '' })
     addLoudness(d, plan, store, new WeakMap())
-    expect(d.albums[0].loudness).toEqual([Array(points).fill(1), []])
+    expect(d.albums[0].loudness).toEqual(['/'.repeat(points), ''])
   })
 
   it('a changed file is not shown until read again', () => {
@@ -346,19 +350,41 @@ describe('the plan and the albums', () => {
       ['/m/s1.mp3', { size: 1, mtime: 1, cuts: '', curves: [curve(255)] }]
     ])
     addLoudness(d, plan, store, new WeakMap())
-    expect(d.tracks[0].art?.loudness).toEqual([Array(points).fill(1)])
+    expect(d.tracks[0].art?.loudness).toEqual(['/'.repeat(points)])
   })
 
-  it('makes the values once per curve', () => {
+  it('makes the text once per curve', () => {
+    const c = curve(255)
     const store: LoudStore = new Map([
-      ['/m/s1.mp3', { size: 1, mtime: 1, cuts: '', curves: [curve(255)] }],
+      ['/m/s1.mp3', { size: 1, mtime: 1, cuts: '', curves: [c] }],
       ['/m/s2.mp3', { size: 1, mtime: 1, cuts: '', curves: [curve(0)] }]
     ])
-    const cache = new WeakMap<Uint8Array, number[]>()
-    const a = data()
-    const b = data()
-    addLoudness(a, plan, store, cache)
-    addLoudness(b, plan, store, cache)
-    expect(a.albums[0].loudness![0]).toBe(b.albums[0].loudness![0])
+    const cache = new WeakMap<Uint8Array, string>()
+    addLoudness(data(), plan, store, cache)
+    expect(cache.get(c)).toBe('/'.repeat(points))
+  })
+
+  it('a file read completes an album only when its last song is in', () => {
+    const store: LoudStore = new Map([
+      ['/m/s1.mp3', { size: 1, mtime: 1, cuts: '', curves: [curve(9)] }]
+    ])
+    expect(completes(plan, store, '/m/s1.mp3')).toBe(false)
+    store.set('/m/s2.mp3', { size: 1, mtime: 1, cuts: '' })
+    expect(completes(plan, store, '/m/s2.mp3')).toBe(true)
+    expect(completes(plan, store, '/m/img.flac')).toBe(false)
+  })
+
+  it('a loose song with its own picture completes on its own', () => {
+    const d = data()
+    d.tracks[0].art = { palette: d.albums[0].palette, cover: '', coverLarge: '', seed: 's1' }
+    const p = loudPlan(
+      d,
+      (id) => paths.get(id),
+      (x) => sizes.get(x)
+    )
+    const store: LoudStore = new Map([
+      ['/m/s1.mp3', { size: 1, mtime: 1, cuts: '', curves: [curve(9)] }]
+    ])
+    expect(completes(p, store, '/m/s1.mp3')).toBe(true)
   })
 })

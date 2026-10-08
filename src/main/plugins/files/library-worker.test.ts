@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync
@@ -850,8 +851,15 @@ describe('the library process', () => {
 
   const ffmpeg = join(__dirname, '../../../../resources/ffmpeg/ffmpeg')
   describe.skipIf(!existsSync(ffmpeg))('loudness curves (ticket 106)', () => {
-    type Sent = { albums?: { loudness?: number[][] }[] }
-    const curves = (): number[][][] =>
+    type Sent = {
+      albums?: { loudness?: string[] }[]
+      tracks?: { art?: { loudness?: string[] } }[]
+    }
+    const sent = (): Sent[] =>
+      heard.flatMap((m) =>
+        m.type === 'library' ? [JSON.parse(new TextDecoder().decode(m.bytes)) as Sent] : []
+      )
+    const curves = (): string[][] =>
       heard.flatMap((m) =>
         m.type === 'library'
           ? ((JSON.parse(new TextDecoder().decode(m.bytes)) as Sent).albums ?? []).flatMap((a) =>
@@ -905,11 +913,42 @@ describe('the library process', () => {
       send({ type: 'sound', on: true })
       await until(() => curves().length > 0)
       expect(curves()).toHaveLength(1)
-      // left again: the albums lose their curves and the counts go
+      // the loose songs' own pictures have theirs too
+      expect(sent().some((l) => l.tracks?.some((t) => t.art?.loudness))).toBe(true)
+      // left again: the next library has no curves anywhere, and the counts go
+      const before = sent().length
       send({ type: 'sound', on: false })
+      await until(() => sent().length > before)
+      const after = sent().slice(before)
+      expect(after.length).toBeGreaterThan(0)
+      for (const l of after) {
+        expect(l.albums?.length).toBeGreaterThan(0)
+        expect(l.albums?.some((a) => a.loudness)).toBe(false)
+        expect(l.tracks?.some((t) => t.art?.loudness)).toBe(false)
+      }
       await settle(50)
       expect(counts()).toBeUndefined()
       send({ type: 'flush' })
+    })
+
+    it('a music folder that is gone marks nothing bad; its files are read once it is back', async () => {
+      start(true, [], {}, {}, { ffmpeg, sound: false })
+      scan(1)
+      await until(() => scanned(1))
+      const away = join(dir, 'away')
+      renameSync(music, away)
+      scan(2)
+      await until(() => scanned(2))
+      send({ type: 'sound', on: true })
+      await settle()
+      expect(curves()).toEqual([])
+      expect(counts()).toEqual({ done: 0, total: 2 })
+      renameSync(away, music)
+      scan(3)
+      await until(() => (counts() as { done: number } | undefined)?.done === 2)
+      expect(curves().length).toBeGreaterThan(0)
+      send({ type: 'flush' })
+      expect(loudness().files[join(music, 'b.wav')].curves).toHaveLength(1)
     })
 
     it('a file read before is not read again', async () => {

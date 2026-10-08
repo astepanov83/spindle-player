@@ -2,6 +2,7 @@
 // 106): mono at a low rate, raw 16-bit samples on stdout, summed as they
 // come, so an hour-long disc image never sits in memory.
 import { spawn } from 'child_process'
+import { open } from 'fs/promises'
 import { setPriority } from 'os'
 import { Energy, splitCurves, type Cut } from './loudness'
 
@@ -9,10 +10,37 @@ import { Energy, splitCurves, type Cut } from './loudness'
 // cheaper than handling every sample at 44.1 kHz.
 export const decodeRate = 8000
 
-// curves: one per cut. bad: ffmpeg could not decode it (or hung), so it is
-// not tried again until it changes. stopped: asked to stop; try again later.
+// curves: one per cut. bad: the file can be read but ffmpeg can't decode it,
+// so it is not tried again until it changes. later: the file could not be
+// read or the read hung (a drive or NAS gone away): try after the next scan.
+// nostart: ffmpeg itself could not run. stopped: asked to stop.
+// `why` is the end of ffmpeg's error output, for the log.
 export type ReadOutcome =
-  { kind: 'ok'; curves: Uint8Array[] } | { kind: 'bad' } | { kind: 'stopped' }
+  | { kind: 'ok'; curves: Uint8Array[] }
+  | { kind: 'bad'; why: string }
+  | { kind: 'later'; why: string }
+  | { kind: 'nostart'; why: string }
+  | { kind: 'stopped' }
+
+// what is kept of ffmpeg's error output
+const errorTail = 300
+// how long the check that the file can be read may take
+const openCheckMs = 10_000
+
+// Whether one byte of the file can be read: if not, a failed decode says
+// nothing about the file.
+export function canRead(path: string, ms = openCheckMs): Promise<boolean> {
+  const check = (async (): Promise<boolean> => {
+    const fh = await open(path, 'r')
+    try {
+      await fh.read(new Uint8Array(1), 0, 1, 0)
+      return true
+    } finally {
+      await fh.close()
+    }
+  })().catch(() => false)
+  return Promise.race([check, new Promise<boolean>((r) => setTimeout(() => r(false), ms))])
+}
 
 export function loudnessArgs(path: string): string[] {
   return [
@@ -52,7 +80,7 @@ export function readLoudness(
   return new Promise((resolve) => {
     if (signal.aborted) return resolve({ kind: 'stopped' })
     const child = spawn(ffmpeg, loudnessArgs(path), {
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
     // the lowest CPU priority, so playback and the page never wait on it
@@ -73,18 +101,29 @@ export function readLoudness(
       child.kill('SIGKILL')
     }, timeoutMs(duration))
     child.stdout.on('data', (b: Buffer) => energy.add(b))
+    let err = ''
+    child.stderr.on('data', (b: Buffer) => {
+      err = (err + b.toString()).slice(-errorTail)
+    })
     const end = (o: ReadOutcome): void => {
       clearTimeout(timer)
       signal.removeEventListener('abort', stop)
       resolve(o)
     }
-    // no ffmpeg to run: nothing is known about the file
-    child.on('error', () => end({ kind: 'stopped' }))
+    let ended = false
+    // ffmpeg could not run (EACCES, EMFILE...): nothing is known about the file
+    child.on('error', (e) => {
+      ended = true
+      end({ kind: 'nostart', why: String(e) })
+    })
     child.on('close', (code) => {
+      if (ended) return
       if (why === 'stop') return end({ kind: 'stopped' })
+      if (why === 'timeout') return end({ kind: 'later', why: 'timed out' })
       const w = energy.finish()
-      if (why === 'timeout' || code !== 0 || !w.sums.length) return end({ kind: 'bad' })
-      end({ kind: 'ok', curves: splitCurves(w, cuts) })
+      if (code === 0 && w.sums.length) return end({ kind: 'ok', curves: splitCurves(w, cuts) })
+      const tail = err.trim() || `exit ${code}`
+      void canRead(path).then((ok) => end({ kind: ok ? 'bad' : 'later', why: tail }))
     })
   })
 }

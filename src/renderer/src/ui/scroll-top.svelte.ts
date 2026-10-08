@@ -32,6 +32,8 @@ interface Place {
   // starts at that item (ticket 095).
   look?: string
   item?: { key: string; y: number }
+  // the item was first on screen in another look
+  relooked?: boolean
 }
 
 // Grid rows carry data-index inside a data-grid, "square" or "round"
@@ -69,7 +71,7 @@ function placeOf(el: HTMLElement, look: string | undefined): Place {
 // top it stays at the top, with the head in view.
 function inLook(p: Place, look: string | undefined): Place {
   if (p.look === look) return p
-  return p.item && p.top > 0 ? { top: p.top, item: p.item } : { top: 0 }
+  return p.item && p.top > 0 ? { top: p.top, item: p.item, relooked: true } : { top: 0 }
 }
 
 // Call during component setup: `view` reads whatever picks the view.
@@ -132,7 +134,13 @@ function scrollWhenDrawn(el: HTMLElement, place: Place): () => void {
     const item = place.row ? undefined : place.item
     if (item) {
       const r = el.querySelector<HTMLElement>(`[data-item="${CSS.escape(item.key)}"]`)
-      if (r) return r.getBoundingClientRect().top - box.top - item.y
+      if (r) {
+        // A tall tile half above the top would leave a 60px list row out of
+        // view, and switching back would keep another item: show at least half.
+        const b = r.getBoundingClientRect()
+        const hidden = place.relooked && item.y < -(b.bottom - b.top) / 2
+        return b.top - box.top - (hidden ? 0 : item.y)
+      }
       // not drawn: where its list says its row is
       const at = findItem(item.key)
       if (at !== undefined) return at - el.scrollTop - item.y

@@ -127,11 +127,21 @@ describe('a new look of the view (ticket 095)', () => {
   })
 
   it('keeps the first item on screen where it was', async () => {
-    // a8 and a9's row (y 600) is the first on screen, 50px above the box's top
+    // a8 and a9's row (y 600) is the first on screen, 10px above the box's top
+    box!.scrollTop = 610
+    await switchTo('list')
+    // a8's list row is at 440: 10px above the top again
+    expect(box!.scrollTop).toBe(450)
+  })
+
+  it('shows the item at the top when its new row would be more than half out of view', async () => {
+    // a8's 100px tile is 50px above the top; its 30px list row would be out of view
     box!.scrollTop = 650
     await switchTo('list')
-    // a8's list row is at 440: 50px above the top again
-    expect(box!.scrollTop).toBe(490)
+    expect(box!.scrollTop).toBe(440)
+    // and back: the same item, now at the top
+    await switchTo('grid')
+    expect(box!.scrollTop).toBe(600)
   })
 
   it('stays at the top when it was there', async () => {
@@ -145,7 +155,8 @@ describe('a new look of the view (ticket 095)', () => {
     const stop = addFinder((key) => (key === 'album/a18' ? 740 : undefined))
     await switchTo('list')
     stop()
-    expect(box!.scrollTop).toBe(790)
+    // 50px above the top would hide its 30px row: at the top
+    expect(box!.scrollTop).toBe(740)
   })
 
   it('starts a place kept in another look at its item', async () => {
@@ -160,6 +171,6 @@ describe('a new look of the view (ticket 095)', () => {
     library.back()
     flushSync()
     await settle()
-    expect(box!.scrollTop).toBe(490)
+    expect(box!.scrollTop).toBe(440)
   })
 })

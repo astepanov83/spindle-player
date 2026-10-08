@@ -338,8 +338,8 @@ function artistTiles(artists: Artist[], groups?: TileGroups<Artist>): TilesBlock
   })
 }
 
-// newest first, no year last
-const newest = (albums: Album[]): Album[] => [...albums].sort((x, y) => y.year - x.year)
+// newest first, no year last, as the Year sort
+const newest = (albums: Album[]): Album[] => sortAlbums(albums, 'year', () => undefined)
 
 // Artists as rows (ticket 097): the name, up to 6 covers of their newest
 // albums, then Albums and Songs.
@@ -360,7 +360,8 @@ function artistRows(artists: Artist[], groups?: TileGroups<Artist>): ListBlock {
       return {
         ...artistTile(a),
         subtitle: undefined,
-        strip: newest(a.albums.map(album)).slice(0, 6),
+        // only covers, as the artist's picture takes them
+        strip: newest(a.albums.map(album).filter((al) => al.cover)).slice(0, 6),
         cols: [n ? String(n) : '', String(songs)],
         under: artistCount(a),
         label: [a.name, n ? fmtCount(n, 'album', 'albums') : '', fmtCount(songs, 'song', 'songs')]

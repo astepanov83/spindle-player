@@ -8,7 +8,6 @@
   import { untrack } from 'svelte'
   import type { PluginId } from '../../../shared/plugins'
   import ArtistPic from '../library/ArtistPic.svelte'
-  import { sections, songMenu } from '../library/song-menu'
   import { gridLayout, gridPlaces, headSizes, letterRows, type GridRow } from '../library/grid-rows'
   import { groupRuns, type Heading, type Run } from '../library/groups'
   import { listColumns, scrollRow, stuckHead } from '../library/list-rows'
@@ -19,17 +18,15 @@
   import { keepPlace } from '../ui/keep-place.svelte'
   import { roving } from '../ui/roving'
   import { virtualList } from '../ui/virtual-list.svelte'
-  import { actOnPage, itemsVersion, openFrom } from '../plugins'
+  import { itemsVersion, openFrom } from '../plugins'
   import type { CoverArt, ListBlock, ListRow } from '../plugins/types'
-  import { menu } from '../stores/menu.svelte'
   import { player } from '../stores/player.svelte'
   import { queue } from '../stores/queue.svelte'
-  import { queues } from '../stores/queues.svelte'
-  import { songDrag } from '../stores/song-drag.svelte'
   import { theme } from '../stores/theme.svelte'
   import LetterStrip from './LetterStrip.svelte'
   import { playPage } from './page-play'
   import TileHeading from './TileHeading.svelte'
+  import { runsCache, tileMenu, tilePlaying, tilePress, unlessDragged } from './tile-acts'
 
   let {
     block: b,
@@ -74,15 +71,9 @@
     10
   )
 
-  // the last list's runs: the place is worked out on the list before a
-  // scan's change and the one after
-  let ranFor: { items: unknown[]; runs: Run[] | undefined } | undefined
-  function runsOf(list: unknown[]): Run[] | undefined {
-    if (list === items) return runs
-    if (ranFor?.items !== list)
-      ranFor = { items: list, runs: b.groups && groupRuns(list, b.groups.grouping) }
-    return ranFor.runs
-  }
+  const runsFor = runsCache()
+  const runsOf = (list: unknown[]): Run[] | undefined =>
+    list === items ? runs : runsFor(list, b.groups)
 
   keepPlace(() => ({
     scrollEl,
@@ -120,6 +111,8 @@
     box.addEventListener('scroll', read, { passive: true })
     const sizes = new ResizeObserver(read)
     sizes.observe(box)
+    // the head above the list can change height without a scroll
+    sizes.observe(el)
     return () => {
       box.removeEventListener('scroll', read)
       sizes.disconnect()
@@ -132,44 +125,10 @@
   const shown = $derived(b.cols.slice(0, fit.shown))
   const template = $derived(`48px minmax(0, 1fr)${shown.map((c) => ` ${c.width}px`).join('')}`)
 
-  // not while radio plays
-  const playing = (r: ListRow): boolean => !!queues.item && !!r.playing?.(queues.item)
-
   // in the markup this would lose its spaces next to a block
   const dot = ' · '
 
   const tint = (c: CoverArt): string => c.palette[theme.light ? 'light' : 'dark'][0]
-
-  // A row dragged takes all its songs to a playlist or the queue (ticket 089).
-  function press(e: PointerEvent, r: ListRow): void {
-    songDrag.press(e, () => ({
-      keys: r.songs(),
-      from: r.from,
-      link: r.link,
-      title: r.title,
-      sub: r.subtitle,
-      cover: r.art?.cover ?? r.photo
-    }))
-  }
-
-  // the click that ends a drag opens and plays nothing
-  const unlessDragged = (run: () => void) => (): void => {
-    if (!songDrag.tookClick()) run()
-  }
-
-  function openMenu(e: MouseEvent, x: unknown, r: ListRow): void {
-    const key = b.key(x)
-    menu.showFor(
-      e,
-      sections(
-        songMenu(r.songs(), { from: r.from, link: r.link }),
-        (r.actions ?? []).map((a) => ({
-          label: a.label,
-          run: () => actOnPage(plugin, key, a.id)
-        }))
-      )
-    )
-  }
 
   // Right and Left step through a row's buttons: the row, play, the artist.
   function onrowkey(e: KeyboardEvent & { currentTarget: HTMLElement }): void {
@@ -256,8 +215,14 @@
           {@const x = row.items[0]}
           {@const key = b.key(x)}
           {@const r = b.row(x)}
-          {@const on = playing(r)}
-          {@const under = fit.under ? (r.under ?? r.cols[0]) : ''}
+          {@const on = tilePlaying(r)}
+          <!-- narrow: the first column; an artist with no albums of their
+               own says "3 songs" where the covers would be -->
+          {@const under = fit.under
+            ? (r.under ?? r.cols[0])
+            : !r.subtitle && !r.strip?.length
+              ? (r.under ?? '')
+              : ''}
           <div
             class="line row"
             role="group"
@@ -265,8 +230,8 @@
             data-item={key}
             style:grid-template-columns={template}
             style:transform="translateY({v.offset(item)}px)"
-            onpointerdown={(e) => press(e, r)}
-            oncontextmenu={(e) => openMenu(e, x, r)}
+            onpointerdown={(e) => tilePress(e, r, r.subtitle ?? r.under)}
+            oncontextmenu={(e) => tileMenu(e, plugin, key, r)}
           >
             <button
               class="main"

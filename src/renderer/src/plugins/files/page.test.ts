@@ -260,8 +260,12 @@ describe('pages', () => {
   it('Artists as a list: their newest covers, Albums and Songs, letters, Edit artist (097)', () => {
     files.load({
       ...lib(),
-      albums: [...lib().albums, album('c', ['c1'], { year: 2010 })],
-      tracks: [...lib().tracks, track('c1', 'c')]
+      albums: [
+        ...lib().albums,
+        album('c', ['c1'], { year: 2010 }),
+        album('d', ['d1'], { year: 2020, cover: '' })
+      ],
+      tracks: [...lib().tracks, track('c1', 'c'), track('d1', 'd')]
     })
     page.filesAct('artists', 'look', 'list')
     const blocks = page.filesPage('artists', '', '')
@@ -275,14 +279,14 @@ describe('pages', () => {
     const r = l.row(marina)
     expect(r).toMatchObject({
       title: 'Marina Vale',
-      cols: ['2', '4'],
-      under: '2 albums',
-      label: 'Marina Vale, 2 albums, 4 songs',
+      cols: ['3', '5'],
+      under: '3 albums',
+      label: 'Marina Vale, 3 albums, 5 songs',
       to: at('artist/marinavale'),
       actions: [{ id: 'edit', label: 'Edit artist' }]
     })
     expect(r.subtitle).toBeUndefined()
-    // newest first
+    // newest first, only albums with a cover
     expect(r.strip?.map((c) => c.cover)).toEqual(['c-c', 'c-a'])
     // filtered by a search: no headings, as the grid
     expect((page.filesPage('artists', '', 'juno').at(-1) as ListBlock).groups).toBeUndefined()

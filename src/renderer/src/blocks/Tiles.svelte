@@ -6,7 +6,6 @@
   import { untrack } from 'svelte'
   import type { PluginId } from '../../../shared/plugins'
   import ArtistPic from '../library/ArtistPic.svelte'
-  import { sections, songMenu } from '../library/song-menu'
   import { gridLayout, gridPlaces, headSizes, letterRows } from '../library/grid-rows'
   import { groupRuns, type Run } from '../library/groups'
   import { gridColumns } from '../library/views'
@@ -16,16 +15,14 @@
   import { keepPlace } from '../ui/keep-place.svelte'
   import { addFinder } from '../ui/item-finder'
   import { virtualList } from '../ui/virtual-list.svelte'
-  import { actOnPage, itemsVersion, openFrom } from '../plugins'
-  import type { Tile, TilesBlock } from '../plugins/types'
-  import { menu } from '../stores/menu.svelte'
+  import { itemsVersion, openFrom } from '../plugins'
+  import type { TilesBlock } from '../plugins/types'
   import { player } from '../stores/player.svelte'
-  import { queues } from '../stores/queues.svelte'
   import { queue } from '../stores/queue.svelte'
   import { theme } from '../stores/theme.svelte'
-  import { songDrag } from '../stores/song-drag.svelte'
   import LetterStrip from './LetterStrip.svelte'
   import TileHeading from './TileHeading.svelte'
+  import { runsCache, tileMenu, tilePlaying, tilePress, unlessDragged } from './tile-acts'
 
   let {
     block: b,
@@ -83,15 +80,9 @@
     return tiles ? (v.total - heads * headSize) / tiles : 0
   })
 
-  // the last list's runs: the place is worked out on the list before a
-  // scan's change and the one after
-  let ranFor: { items: unknown[]; runs: Run[] | undefined } | undefined
-  function runsOf(list: unknown[]): Run[] | undefined {
-    if (list === items) return runs
-    if (ranFor?.items !== list)
-      ranFor = { items: list, runs: b.groups && groupRuns(list, b.groups.grouping) }
-    return ranFor.runs
-  }
+  const runsFor = runsCache()
+  const runsOf = (list: unknown[]): Run[] | undefined =>
+    list === items ? runs : runsFor(list, b.groups)
 
   keepPlace(() => ({
     scrollEl,
@@ -118,40 +109,6 @@
 
   function measure(node: HTMLDivElement): void {
     v.measure(node)
-  }
-
-  // not while radio plays
-  const playing = (t: Tile): boolean => !!queues.item && !!t.playing?.(queues.item)
-
-  // A tile dragged takes all its songs to a playlist or the queue (ticket 089).
-  function press(e: PointerEvent, t: Tile): void {
-    songDrag.press(e, () => ({
-      keys: t.songs(),
-      from: t.from,
-      link: t.link,
-      title: t.title,
-      sub: t.subtitle,
-      cover: t.art?.cover ?? t.photo
-    }))
-  }
-
-  // the click that ends a drag opens and plays nothing
-  const unlessDragged = (run: () => void) => (): void => {
-    if (!songDrag.tookClick()) run()
-  }
-
-  function openMenu(e: MouseEvent, x: unknown, t: Tile): void {
-    const key = b.key(x)
-    menu.showFor(
-      e,
-      sections(
-        songMenu(t.songs(), { from: t.from, link: t.link }),
-        (t.actions ?? []).map((a) => ({
-          label: a.label,
-          run: () => actOnPage(plugin, key, a.id)
-        }))
-      )
-    )
   }
 </script>
 
@@ -197,8 +154,8 @@
               class:round={b.round}
               data-item={b.key(x)}
               role="group"
-              onpointerdown={(e) => press(e, t)}
-              oncontextmenu={(e) => openMenu(e, x, t)}
+              onpointerdown={(e) => tilePress(e, t)}
+              oncontextmenu={(e) => tileMenu(e, plugin, b.key(x), t)}
             >
               <div class="wrap">
                 <button
@@ -220,7 +177,7 @@
                 </button>
               </div>
               <div class="t">
-                {#if playing(t)}<Eq paused={!player.playing} />{/if}<span title={t.title}
+                {#if tilePlaying(t)}<Eq paused={!player.playing} />{/if}<span title={t.title}
                   >{t.title}</span
                 >
               </div>

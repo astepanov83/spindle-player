@@ -38,9 +38,9 @@ interface Place {
 }
 
 // Grid rows carry data-index inside a data-grid, "square" or "round"
-// (blocks/Tiles.svelte). A
-// view has one of each at most: the search results have both, so a row is
-// looked up in its own grid.
+// (blocks/Tiles.svelte), and list rows carry it with no grid. An artist page
+// has several grids or lists, each from 0, so a row is only the fallback for
+// views with no data-item (song tables, Folders).
 const rows = (el: HTMLElement, grid?: string): NodeListOf<HTMLElement> =>
   el.querySelectorAll<HTMLElement>(grid ? `[data-grid="${grid}"] > [data-index]` : '[data-index]')
 
@@ -133,8 +133,8 @@ function scrollWhenDrawn(el: HTMLElement, place: Place): () => void {
       const b = song.getBoundingClientRect()
       return b.top - box.top - (box.height - b.height) / 2
     }
-    // in the same look the grid row puts it back, as before
-    const item = place.row ? undefined : place.item
+    // the item key is unique on the page; a row number is not, with several grids
+    const item = place.item
     if (item) {
       const r = el.querySelector<HTMLElement>(`[data-item="${CSS.escape(item.key)}"]`)
       if (r) {

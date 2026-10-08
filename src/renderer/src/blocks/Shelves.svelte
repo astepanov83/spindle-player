@@ -177,6 +177,16 @@
     focused = { el: t, shelf: s.shelf }
   }
 
+  // Focus left the shelf. Still on the page: the user moved it (a click on
+  // empty space, Tab), so a later scroll must not pull it back. Gone from the
+  // page: a scroll took it, and the effect below finds it a new shelf.
+  function onfocusout(): void {
+    const was = focused
+    queueMicrotask(() => {
+      if (was?.el.isConnected && focused === was) focused = null
+    })
+  }
+
   // A focused shelf that a scroll took off the page hands the focus to the
   // nearest shelf drawn, at its heading, so the next arrow still moves in
   // the shelves (as roving does for the list).
@@ -201,7 +211,14 @@
     <LetterStrip {runs} {scrollEl} go={goLetter} />
   {/if}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="shelves" bind:this={list} style:height="{v.total}px" {onkeydown} {onfocusin}>
+  <div
+    class="shelves"
+    bind:this={list}
+    style:height="{v.total}px"
+    {onkeydown}
+    {onfocusin}
+    {onfocusout}
+  >
     {#each v.items as item (item.key)}
       {@const x = items[item.index]}
       {#if x !== undefined}

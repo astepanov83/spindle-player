@@ -117,6 +117,21 @@ export function diffLibrary(old: LibraryData, next: LibraryData): PatchBody | un
   return out
 }
 
+// Whether a patch only brings loudness curves for albums the page has
+// (ticket 106). The first read of a big library sends one every few seconds
+// for hours, so the page then swaps those albums and keeps the lists it made
+// from songs, folders and artists. A loose song's curve comes as a changed
+// song, so it takes the long way.
+export function onlyLoudness(p: PatchBody, old: (id: string) => Album | undefined): boolean {
+  if (!p.albums.length || p.tracks.length || p.goneTracks.length || p.order || p.folders)
+    return false
+  if (p.photos || p.gonePhotos) return false
+  return p.albums.every((a) => {
+    const o = old(a.id)
+    return !!o && same({ ...o, loudness: undefined }, { ...a, loudness: undefined })
+  })
+}
+
 // A folder is the same one when its path from the music folder is, so the
 // key is the names from the top down.
 function folderKeys(folders: Folder[]): string[] {

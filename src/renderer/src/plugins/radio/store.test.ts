@@ -10,7 +10,7 @@ import type {
   RadioLogo,
   RadioTitle
 } from '../../../../shared/plugins/radio/ipc'
-import { defaultPalettes, fallbackPalettes } from '../../../../shared/palette'
+import { fallbackPalettes } from '../../../../shared/palette'
 import type { HistoryEntry, Station } from '../../../../shared/plugins/radio/stations'
 
 const fake = vi.hoisted(() => ({
@@ -636,9 +636,16 @@ describe('the station’s logo', () => {
   const hash = 'a'.repeat(40)
   const logo = { hash, palette: fallbackPalettes('logo') }
 
-  it('is a tile in the fixed colors until main made the logo', async () => {
+  const made = (): object => ({ seed: mine[0].id, lengths: [], title: mine[0].name })
+
+  it('is a made picture in colors from its id until main made the logo (103)', async () => {
     await start(mine[0])
-    expect(radio.art).toEqual({ palette: defaultPalettes, cover: '', coverLarge: '' })
+    expect(radio.art).toEqual({
+      palette: fallbackPalettes(mine[0].id),
+      cover: '',
+      coverLarge: '',
+      ...made()
+    })
   })
 
   it('becomes the cover and the colors when main made it', async () => {
@@ -647,7 +654,8 @@ describe('the station’s logo', () => {
     expect(radio.art).toEqual({
       palette: logo.palette,
       cover: `spindle://cover/small/${hash}`,
-      coverLarge: `spindle://cover/large/${hash}`
+      coverLarge: `spindle://cover/large/${hash}`,
+      ...made()
     })
     expect(radio.stations[0].logo).toEqual(logo)
     // another station's logo changes only that one
@@ -662,10 +670,11 @@ describe('the station’s logo', () => {
     expect(radio.art?.coverLarge).toBe('')
   })
 
-  it('goes back to the tile when main drops it', async () => {
+  it('goes back to the made picture when main drops it', async () => {
     await start({ ...mine[0], logo })
     logoListener!({ id: 'a' })
-    expect(radio.art?.palette).toEqual(defaultPalettes)
+    expect(radio.art?.palette).toEqual(fallbackPalettes(mine[0].id))
+    expect(radio.art?.cover).toBe('')
   })
 })
 

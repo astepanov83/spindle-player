@@ -1,7 +1,7 @@
 // Radio stations: My stations (stations.json) and the titles heard on each
 // station (radio-history.json). Main checks both files and what the page sends.
 import { coverUrls, type Art } from '../../library'
-import { defaultPalettes, parseThemePalettes, type ThemePalettes } from '../../palette'
+import { fallbackPalettes, parseThemePalettes, type ThemePalettes } from '../../palette'
 import { cleanName } from '../../playlists'
 import { stationIdPattern } from './ids'
 
@@ -255,17 +255,18 @@ export function withLogo(s: Station, logo: StationLogo | undefined): Station {
 }
 
 // No logo: a tile in the fixed colors.
-const noLogo: Art = { palette: defaultPalettes, cover: '', coverLarge: '' }
-
 // The logo as an album's cover, so the app colors, the stage and the media
-// controls work as for a song. A small logo is left off the stage.
+// controls work as for a song. A small logo is left off the stage. With no
+// logo: colors from the station id, and a picture made from it (ticket 103).
 export function stationArt(s: Station): Art {
-  if (!s.logo) return noLogo
+  const made = { seed: s.id, lengths: [], title: s.name }
+  if (!s.logo) return { palette: fallbackPalettes(s.id), cover: '', coverLarge: '', ...made }
   const urls = coverUrls(s.logo.hash)
   return {
     palette: s.logo.palette,
     cover: urls.cover,
-    coverLarge: s.logo.small ? '' : urls.coverLarge
+    coverLarge: s.logo.small ? '' : urls.coverLarge,
+    ...made
   }
 }
 

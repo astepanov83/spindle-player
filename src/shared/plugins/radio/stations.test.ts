@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultPalettes, type ThemePalettes } from '../../palette'
+import { fallbackPalettes, type ThemePalettes } from '../../palette'
 import {
   addEntry,
   addTitle,
@@ -112,15 +112,27 @@ describe('station logos', () => {
     })
   })
 
-  it('gives a station with no logo a tile in the fixed colors', () => {
-    expect(stationArt(st('a'))).toEqual({ palette: defaultPalettes, cover: '', coverLarge: '' })
+  it('gives a station with no logo colors and a made picture from its id (103)', () => {
+    const s = st('a')
+    expect(stationArt(s)).toEqual({
+      palette: fallbackPalettes(s.id),
+      cover: '',
+      coverLarge: '',
+      seed: s.id,
+      lengths: [],
+      title: s.name
+    })
   })
 
   it('gives a logo the art of an album cover', () => {
-    expect(stationArt(st('a', { logo: { hash: hashA, palette: colors } }))).toEqual({
+    const s = st('a', { logo: { hash: hashA, palette: colors } })
+    expect(stationArt(s)).toEqual({
       palette: colors,
       cover: `spindle://cover/small/${hashA}`,
-      coverLarge: `spindle://cover/large/${hashA}`
+      coverLarge: `spindle://cover/large/${hashA}`,
+      seed: s.id,
+      lengths: [],
+      title: s.name
     })
   })
 

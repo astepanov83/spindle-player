@@ -18,6 +18,8 @@ export interface ViewLooks {
   artistPage: 'sections' | 'albums' | 'column'
 }
 export type LookView = keyof ViewLooks
+// what an album, artist or station with no picture shows (ticket 103)
+export type NoCover = 'record' | 'rings' | 'type' | 'sound' | 'genre'
 
 export interface Settings {
   template: TemplateId
@@ -40,6 +42,7 @@ export interface Settings {
   artistsShown: ArtistsShown
   viewLooks: ViewLooks
   loudness: Loudness
+  noCover: NoCover
 }
 
 export interface Size {
@@ -86,6 +89,7 @@ export const coverSources: CoverSource[] = ['musicbrainz', 'deezer', 'itunes']
 export const closeActions: CloseAction[] = ['ask', 'minimize', 'quit']
 export const artistsShownChoices: ArtistsShown[] = ['album', 'all']
 export const loudnessChoices: Loudness[] = ['off', 'song', 'album']
+export const noCoverChoices: NoCover[] = ['record', 'rings', 'type', 'sound', 'genre']
 // each view's looks, the default first
 export const viewLookChoices: { [V in LookView]: ViewLooks[V][] } = {
   albums: ['grid', 'list'],
@@ -115,7 +119,8 @@ export function defaultSettings(): Settings {
     viewSorts: {},
     artistsShown: 'album',
     viewLooks: { albums: 'grid', artists: 'grid', artistPage: 'sections' },
-    loudness: 'album'
+    loudness: 'album',
+    noCover: 'rings'
   }
 }
 
@@ -340,6 +345,7 @@ export function parseStoredSettings(
     artistsShown: oneOf(r.artistsShown, artistsShownChoices, base.artistsShown),
     viewLooks: parseViewLooks(r.viewLooks, base.viewLooks),
     loudness: oneOf(r.loudness, loudnessChoices, base.loudness),
+    noCover: oneOf(r.noCover, noCoverChoices, base.noCover),
     windowSizes,
     windowMaximized:
       r.windowMaximized === undefined
@@ -438,6 +444,7 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   )
     return false
   if (has('loudness') && !loudnessChoices.includes(raw.loudness as Loudness)) return false
+  if (has('noCover') && !noCoverChoices.includes(raw.noCover as NoCover)) return false
   if (
     has('coverSources') &&
     (!isObject(raw.coverSources) ||
@@ -475,6 +482,7 @@ export function pageSettings(s: StoredSettings): Settings {
     viewSorts: { ...s.viewSorts },
     artistsShown: s.artistsShown,
     viewLooks: { ...s.viewLooks },
-    loudness: s.loudness
+    loudness: s.loudness,
+    noCover: s.noCover
   }
 }

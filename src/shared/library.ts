@@ -66,8 +66,34 @@ export interface ArtistCredit {
   grouped?: true
 }
 
+// What a picture made for an item with no cover is drawn from (ticket 103).
+// The same seed always gives the same picture.
+export interface MadeArt {
+  // the album id, a loose song's id, the station id; not a name, which a
+  // rename in artists.json would change
+  seed?: string
+  // track lengths in seconds, in disc order: an album's tracks, a song's
+  // one, none for a station
+  lengths?: number[]
+  title?: string
+  artist?: string
+}
+
+// What a made picture is drawn from where a plugin has no palette for the
+// item: its colors then come from the seed.
+export type PictureArt = MadeArt & { palette?: ThemePalettes }
+
+// Only what a made picture needs, from an album or other art.
+export const pictureOf = (a: PictureArt): PictureArt => ({
+  palette: a.palette,
+  seed: a.seed,
+  lengths: a.lengths,
+  title: a.title,
+  artist: a.artist
+})
+
 // A cover and the colors picked from it. An Album is one too.
-export interface Art {
+export interface Art extends MadeArt {
   // [--c1, --c2, --c3] (main, accent, dark) for each theme, from the cover (ticket 009)
   palette: ThemePalettes
   // small cover URL for grids and lists, or '' when there is none

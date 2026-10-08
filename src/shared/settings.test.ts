@@ -38,6 +38,7 @@ describe('parseStoredSettings', () => {
       artistsShown: 'all',
       viewLooks: { albums: 'list', artists: 'shelves', artistPage: 'column' },
       loudness: 'song',
+      noCover: 'type',
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowMaximized: { studio: true, focus: false },
       windowPlace: { x: -1200, y: 40 },
@@ -139,6 +140,7 @@ describe('parseStoredSettings with a base', () => {
     artistsShown: 'all',
     viewLooks: { albums: 'list', artists: 'list', artistPage: 'albums' },
     loudness: 'off',
+    noCover: 'record',
     windowSizes: { focus: { width: 500, height: 700 } },
     windowMaximized: { focus: true },
     windowPlace: { x: 40, y: 60 },
@@ -479,6 +481,30 @@ describe('loudness setting', () => {
 
   it('gives the page the field', () => {
     expect(pageSettings(parseStoredSettings({ loudness: 'off' })).loudness).toBe('off')
+  })
+})
+
+describe('no cover setting', () => {
+  it('draws rings by default, also for an old file without it', () => {
+    expect(parseStoredSettings(undefined).noCover).toBe('rings')
+    expect(parseStoredSettings({ theme: 'dark' }).noCover).toBe('rings')
+  })
+
+  it('keeps a known choice and falls back on a wrong one', () => {
+    expect(parseStoredSettings({ noCover: 'type' }).noCover).toBe('type')
+    expect(parseStoredSettings({ noCover: 'record' }).noCover).toBe('record')
+    expect(parseStoredSettings({ noCover: 'stars' }).noCover).toBe('rings')
+  })
+
+  // an old file is known as it is, so starting the app doesn't copy or write it
+  it('knows the field in a file, and a file without it', () => {
+    expect(isKnownSettingsFile({ noCover: 'genre' })).toBe(true)
+    expect(isKnownSettingsFile({ theme: 'dark' })).toBe(true)
+    expect(isKnownSettingsFile({ noCover: 'stars' })).toBe(false)
+  })
+
+  it('gives the page the field', () => {
+    expect(pageSettings(parseStoredSettings({ noCover: 'type' })).noCover).toBe('type')
   })
 })
 

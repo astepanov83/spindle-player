@@ -7,7 +7,7 @@ import type { LibraryData, Track } from '../../../shared/library'
 import type { RadioTitle } from '../../../shared/plugins/radio/ipc'
 import { itemKey } from '../../../shared/plugins/items'
 import type { Station } from '../../../shared/plugins/radio/stations'
-import { defaultPalettes } from '../../../shared/palette'
+import { defaultPalettes, fallbackPalettes } from '../../../shared/palette'
 
 const fake = vi.hoisted(() => ({
   on: {} as Partial<EngineEvents>,
@@ -157,7 +157,8 @@ describe('queue to radio', () => {
     heard({ stationId: 'a', title: 'Iron Maiden - Powerslave * Blacky OnAir *', at: 1 })
     expect(queues.title).toBe('Iron Maiden - Powerslave')
     expect(queues.sub).toBe('Station a')
-    expect(queues.art?.palette).toEqual(defaultPalettes)
+    // no logo: colors from the station id (103)
+    expect(queues.art?.palette).toEqual(fallbackPalettes('a'))
     // the system's media controls: the song, by the station
     expect(queues.media).toEqual({
       title: 'Iron Maiden - Powerslave',

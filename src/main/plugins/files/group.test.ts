@@ -229,6 +229,43 @@ describe('buildLibrary', () => {
     expect(four.art).toBeUndefined()
   })
 
+  it('gives an album what a made picture needs: its id and track lengths in disc order (103)', () => {
+    const { data } = build([
+      entry('/m/nb/d2.mp3', { album: 'Night Bus', artist: 'QH', track: 1, disc: 2, duration: 30 }),
+      entry('/m/nb/2.mp3', { album: 'Night Bus', artist: 'QH', track: 2, duration: 241.6 }),
+      entry('/m/nb/1.mp3', { album: 'Night Bus', artist: 'QH', track: 1, duration: 180.2 })
+    ])
+    const al = data.albums[0]
+    expect(al.seed).toBe(al.id)
+    expect(al.seed).toBe(shortHash('/m/nb\0night bus\0'))
+    expect(al.lengths).toEqual([180, 242, 30])
+    expect(al).toMatchObject({ title: 'Night Bus', artist: 'QH' })
+    // a song of a tagged album shows the album's picture
+    expect(data.tracks.every((t) => t.art === undefined)).toBe(true)
+  })
+
+  it('gives a loose song with no cover a picture of its own, from its id (103)', () => {
+    const { data } = build([entry('/m/Loose/memo.mp3', { duration: 15.4 })])
+    const t = data.tracks[0]
+    expect(t.art).toEqual({
+      palette: fallbackPalettes(t.id),
+      cover: '',
+      coverLarge: '',
+      seed: t.id,
+      lengths: [15],
+      title: 'memo',
+      artist: unknownArtist
+    })
+    expect(data.albums[0]).toMatchObject({ seed: data.albums[0].id, lengths: [15] })
+  })
+
+  it('keeps a loose song with a folder image on the folder picture (103)', () => {
+    const { data } = build([entry('/m/Loose/memo.mp3')], (ix) =>
+      ix.images.set('/m/Loose', { path: '/m/Loose/cover.jpg', mtime: 1, size: 1, cover: 'img' })
+    )
+    expect(data.tracks[0].art).toBeUndefined()
+  })
+
   it('finds a folder image next to disc folders', () => {
     const { data } = build([entry('/m/Album/CD1/1.mp3', { album: 'A' })], (ix) => {
       ix.images.set('/m/Album', { path: '/m/Album/folder.jpg', mtime: 1, size: 1, cover: 'f' })

@@ -34,16 +34,24 @@ class MfpStore {
     for (const e of d.episodes) {
       this.#episodes.set(e.id, e)
       for (const song of e.songs) this.#songs.set(song.id, { song, episode: e })
-      // every episode has the site's picture; with none yet, colors of its own
+      // every episode has the site's picture; with none yet, colors and a
+      // made picture of its own (ticket 103)
+      const made = {
+        seed: e.id,
+        lengths: e.songs.map((s) => Math.round(s.length)),
+        title: e.title,
+        artist: e.artist
+      }
       this.#art.set(
         e.id,
         cover && urls
           ? {
               palette: cover.palette,
               cover: urls.cover,
-              coverLarge: cover.small ? '' : urls.coverLarge
+              coverLarge: cover.small ? '' : urls.coverLarge,
+              ...made
             }
-          : { palette: fallbackPalettes(e.id), cover: '', coverLarge: '' }
+          : { palette: fallbackPalettes(e.id), cover: '', coverLarge: '', ...made }
       )
     }
     this.episodes = d.episodes

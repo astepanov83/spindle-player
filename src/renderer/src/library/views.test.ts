@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Album, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 import {
-  heldShift,
-  placeShift,
+  evenPlaces,
+  heldMove,
   chunk,
   filterAlbums,
   gridColumns,
@@ -244,7 +244,28 @@ describe('sort', () => {
   })
 })
 
-describe('placeShift', () => {
+// heldMove on even rows of 1px, counted in rows; at the top it stays there
+function heldShift(
+  old: string[],
+  next: string[],
+  from: number,
+  per: number,
+  key: (s: string) => string
+): { rows: number; held?: string } {
+  const before = evenPlaces(old.length, per, 1)
+  const after = evenPlaces(next.length, per, 1)
+  const { px, held } = heldMove(old, next, from, per, key, before, after)
+  return held === undefined ? { rows: px } : { rows: px, held }
+}
+const placeShift = (
+  old: string[],
+  next: string[],
+  first: number,
+  per: number,
+  key: (s: string) => string
+): number => (first <= 0 ? 0 : heldShift(old, next, first * per, per, key).rows)
+
+describe('heldMove', () => {
   const id = (s: string): string => s
   it('moves the view by the rows that came above the first row shown', () => {
     // row 2 ("c") was first on screen; two songs came before it

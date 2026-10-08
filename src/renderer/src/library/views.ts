@@ -219,46 +219,6 @@ export function chunk<T>(items: T[], size: number): T[][] {
   return out
 }
 
-// How many rows the view must move so the first row on screen stays in its
-// place when songs or albums come or go above it (a scan adds them, ticket 022).
-// `first`: the first row on screen; `per`: items in a row (1 in a table). At
-// the top it stays at the top, so new songs show. Items are matched by key.
-// A list scrolled past its end moves by the rows it grew, so what is below
-// it (a folder's songs under its subfolders) stays in place.
-export function placeShift<T>(
-  old: T[],
-  next: T[],
-  first: number,
-  per: number,
-  key: (item: T) => string
-): number {
-  return first <= 0 ? 0 : heldShift(old, next, first * per, per, key).rows
-}
-
-// placeShift from an item, not a row: `from` is the index of the item to hold
-// in place. In a grid, songs that come above move the items a column or two,
-// so the next change holds the same item again (see keep-place.svelte.ts); a
-// row's first item each time would lose those columns and drift up.
-// Returns the rows to move and the item held.
-export function heldShift<T>(
-  old: T[],
-  next: T[],
-  from: number,
-  per: number,
-  key: (item: T) => string
-): { rows: number; held?: string } {
-  const { px, held } = heldMove(
-    old,
-    next,
-    from,
-    per,
-    key,
-    evenPlaces(old.length, per, 1),
-    evenPlaces(next.length, per, 1)
-  )
-  return held === undefined ? { rows: px } : { rows: px, held }
-}
-
 // Where the items of a list are, in px from its top. Rows of different
 // heights (a grid with headings, ticket 096) count by items too, so a scan
 // that adds some above still holds the screen.
@@ -280,7 +240,14 @@ export function evenPlaces(n: number, per: number, size: number): ItemPlaces {
   }
 }
 
-// heldShift in px, with the places before and after the change.
+// How far the view must move, in px, so the item at index `from` stays in
+// its place when songs or albums come or go above it (a scan adds them,
+// ticket 022), with the places before and after the change. Items are matched
+// by key. In a grid, songs that come above move the items a column or two,
+// so the next change holds the same item again (see keep-place.svelte.ts); a
+// row's first item each time would lose those columns and drift up. A list
+// scrolled past its end moves by what it grew, so what is below it (a
+// folder's songs under its subfolders) stays in place.
 export function heldMove<T>(
   old: T[],
   next: T[],

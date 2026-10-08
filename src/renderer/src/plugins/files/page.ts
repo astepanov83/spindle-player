@@ -264,6 +264,10 @@ function albumTiles(
   })
 }
 
+// an album's length, in seconds
+const albumLength = (al: Album): number =>
+  al.trackIds.reduce((s, id) => s + files.track(id).duration, 0)
+
 // Albums as rows (ticket 097): the artist under the title, a link to their
 // page, then Year, Songs, Length. On an artist's page no artist line, but
 // for the albums of `others` they appear on.
@@ -286,7 +290,7 @@ function albumRows(
     row: (al) => {
       const year = al.year ? String(al.year) : ''
       const n = al.trackIds.length
-      const length = fmtLength(al.trackIds.reduce((s, id) => s + files.track(id).duration, 0))
+      const length = fmtLength(albumLength(al))
       const own = under && !under.others
       // a split credit ("A, B") has no page
       const who = own ? undefined : files.getArtist(artistKey(al.artist))
@@ -358,12 +362,15 @@ function artistRows(artists: Artist[], groups?: TileGroups<Artist>): ListBlock {
     key: (a) => artistPage(a.key),
     row: (a) => {
       const n = a.albums.length
-      const songs = artistSongs(a, album).length
+      const songs = a.albums.reduce((s, id) => s + album(id).trackIds.length, a.also.length)
       return {
         ...artistTile(a),
         subtitle: undefined,
         // only covers, as the artist's picture takes them
-        strip: newest(a.albums.map(album).filter((al) => al.cover)).slice(0, 6),
+        strip: newestOf(a)
+          .map(album)
+          .filter((al) => al.cover)
+          .slice(0, 6),
         cols: [n ? String(n) : '', String(songs)],
         under: artistCount(a),
         label: [a.name, n ? fmtCount(n, 'album', 'albums') : '', fmtCount(songs, 'song', 'songs')]
@@ -403,6 +410,16 @@ function artistShelves(artists: Artist[], letters?: Grouping<Artist>): ShelvesBl
   })
 }
 
+// Each artist's albums newest first, sorted once: a list row asks on every
+// draw. The store makes new artists when the songs change.
+const newestIds = new WeakMap<Artist, string[]>()
+
+function newestOf(a: Artist): string[] {
+  let ids = newestIds.get(a)
+  if (!ids) newestIds.set(a, (ids = newest(a.albums.map(album)).map((al) => al.id)))
+  return ids
+}
+
 // Each artist's shelf, made once: a shelf is asked on every draw and arrow
 // key, and a big artist's albums take a sort. The store makes new artists
 // when the songs change, so a kept shelf is never out of date.
@@ -414,8 +431,10 @@ function shelfOf(a: Artist): Tile[] {
   const under = { artist: a.key }
   if (a.albums.length) tiles = newest(a.albums.map(album)).map((al) => albumTile(al, under))
   else {
-    const on = [...new Set(a.also.map((id) => files.track(id).albumId))].map(album)
-    tiles = newest(on).map((al) => ({ ...albumTile(al, under), subtitle: al.artist }))
+    tiles = artistPartsOf(a).appearsOn.map((al) => ({
+      ...albumTile(al, under),
+      subtitle: al.artist
+    }))
   }
   shelves.set(a, tiles)
   return tiles
@@ -515,7 +534,7 @@ function albumBlocks(
   const { items, numbers, groups, artist } = albumList(al)
   const marked = theirs && trackKeys(theirs.ids)
   const link = albumLink(al)
-  const length = tracks.reduce((s, t) => s + t.duration, 0)
+  const length = albumLength(al)
   const where = albumFolder(al)
   // one link per artist of a split credit
   const names = artistLinks(al, (key) => !!files.getArtist(key)).flatMap(
@@ -669,7 +688,7 @@ function artistColumn(a: Artist): Block[] {
 
 // An album with its songs on the artist's page, opening under the artist.
 function albumSongs(a: Artist, al: Album): AlbumSongs {
-  const length = al.trackIds.reduce((s, id) => s + files.track(id).duration, 0)
+  const length = albumLength(al)
   return {
     ...albumTile(al, { artist: a.key }),
     key: albumPage(al.id),

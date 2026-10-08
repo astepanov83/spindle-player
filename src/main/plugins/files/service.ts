@@ -252,8 +252,7 @@ export class LibraryService {
   // seeks. The loudness reads wait a few seconds (ticket 106).
   mediaOpened(dev: number): void {
     const now = Date.now()
-    // only the loudness reads (sound style) wait for it
-    if (now - this.#songStart > 1000 && this.store.live().noCover === 'sound') {
+    if (now - this.#songStart > 1000) {
       this.#songStart = now
       this.#post({ type: 'song-start' })
     }

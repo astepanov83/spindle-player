@@ -87,7 +87,6 @@ import {
 import { listSources, pruneSources, readSource, saveSource } from './fetched-files'
 import {
   addLoudness,
-  completes,
   isFresh,
   loudCounts,
   loudPlan,
@@ -350,9 +349,7 @@ let loudWriter: JsonFileWriter<unknown> | undefined
 let plan: LoudPlan | undefined
 // files before this place in plan.files are read
 let planDone = 0
-const loudValues = new WeakMap<Uint8Array, string>()
-// files that could not be read this time (a drive gone away), tried again after the next scan
-const loudLater = new Set<string>()
+const loudValues = new WeakMap<Uint8Array, number[]>()
 // the app window is closed: nothing is read until one opens
 let windowGone = false
 // a change not handed to the writer yet
@@ -402,23 +399,12 @@ function nextLoud(running: ReadonlySet<string>): LoudFile | undefined {
     const f = files[i]
     const fresh = isFresh(loud.get(f.path), f)
     if (fresh && i === planDone) planDone++
-    if (fresh || running.has(f.path) || loudLater.has(f.path)) continue
-    // a music folder the last scan could not reach: ffmpeg would fail on each file
-    if (status.missing.some((m) => isUnder(f.path, m))) continue
-    return f
+    if (!fresh && !running.has(f.path)) return f
   }
   return undefined
 }
 
-function loudDone(
-  f: LoudFile,
-  o: { kind: 'ok'; curves: Uint8Array[] } | { kind: 'bad' | 'later'; why: string }
-): void {
-  if (o.kind === 'later') {
-    loudLater.add(f.path)
-    log(`Loudness: could not read ${f.path}, trying after the next scan: ${o.why}`)
-    return
-  }
+function loudDone(f: LoudFile, o: { kind: 'ok'; curves: Uint8Array[] } | { kind: 'bad' }): void {
   // the file changed or went while it was read
   const e = ix.files.get(f.path)
   if (!e || e.size !== f.size || e.mtime !== f.mtime) return
@@ -428,7 +414,7 @@ function loudDone(
     cuts: f.key,
     ...(o.kind === 'ok' ? { curves: o.curves } : {})
   })
-  if (o.kind === 'bad') log(`Loudness: could not decode ${f.path}: ${o.why}`)
+  if (o.kind === 'bad') log(`Loudness: could not decode ${f.path}`)
   saveLoudness()
   loudStatusSoon()
   if (loudRun) {
@@ -441,11 +427,8 @@ function loudDone(
       loudRun = undefined
     }
   }
-  // the page gets the library again only when an album's curves are all in
-  if (plan && completes(plan, loud, f.path)) {
-    dirty = true
-    publisher.soon()
-  }
+  dirty = true
+  publisher.soon()
 }
 
 // when the reads began, for the log line once all are read
@@ -468,7 +451,6 @@ const loudQueue = new LoudQueue({
     return readLoudness(start.ffmpeg!, f.path, f.duration, f.cuts, signal)
   },
   done: loudDone,
-  halted: (why) => log(`Loudness: ffmpeg could not run, trying again after the next scan: ${why}`),
   canRun: () =>
     !!plan &&
     sound &&
@@ -492,9 +474,6 @@ function setSound(next: boolean): void {
   if (!sound) {
     loudQueue.stop()
     plan = undefined
-  } else {
-    loudLater.clear()
-    loudQueue.reset()
   }
   // the albums get their curves, or lose them
   dirty = true
@@ -1288,9 +1267,6 @@ function scanThenGroups(folders: string[], retryFailed: boolean, id: number): vo
     })
     .then(() => {
       if (ended) startGroupsJob()
-      // a drive that was gone may be back
-      loudLater.clear()
-      loudQueue.reset()
       loudQueue.kick()
     })
 }

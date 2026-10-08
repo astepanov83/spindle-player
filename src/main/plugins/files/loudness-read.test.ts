@@ -1,10 +1,10 @@
 import { execFileSync } from 'child_process'
-import { chmodSync, copyFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { points, type Cut } from './loudness'
-import { canRead, readLoudness, type ReadOutcome } from './loudness-read'
+import { readLoudness, type ReadOutcome } from './loudness-read'
 
 const ffmpeg = join(__dirname, '../../../../resources/ffmpeg/ffmpeg')
 
@@ -54,35 +54,9 @@ describe.skipIf(!existsSync(ffmpeg))('readLoudness with the bundled ffmpeg', () 
     expect(Math.max(...quiet)).toBeLessThan(Math.min(...loud) - 100)
   })
 
-  it('a file ffmpeg cannot decode is bad, with why', async () => {
-    const o = await read('junk.mp3')
-    expect(o.kind).toBe('bad')
-    expect((o as { why: string }).why).toMatch(/Invalid data|could not find|Error/i)
-  })
-
-  it('a file that cannot be opened is for later, not bad (a drive gone away)', async () => {
-    expect((await read('missing.flac')).kind).toBe('later')
-    const locked = join(dir, 'locked.flac')
-    copyFileSync(join(dir, 'two.flac'), locked)
-    chmodSync(locked, 0)
-    // root can read it anyway
-    if (!(await canRead(locked))) expect((await read('locked.flac')).kind).toBe('later')
-  })
-
-  it('canRead tells a readable file from a missing one', async () => {
-    expect(await canRead(join(dir, 'two.flac'))).toBe(true)
-    expect(await canRead(join(dir, 'missing.flac'))).toBe(false)
-  })
-
-  it('ffmpeg that cannot run is nostart', async () => {
-    const o = await readLoudness(
-      join(dir, 'junk.mp3'),
-      join(dir, 'two.flac'),
-      8,
-      [{ start: 0 }],
-      new AbortController().signal
-    )
-    expect(o.kind).toBe('nostart')
+  it('a file ffmpeg cannot decode is bad', async () => {
+    expect(await read('junk.mp3')).toEqual({ kind: 'bad' })
+    expect(await read('missing.flac')).toEqual({ kind: 'bad' })
   })
 
   it('a stop ends the read as stopped', async () => {

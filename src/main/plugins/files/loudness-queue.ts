@@ -15,10 +15,8 @@ export interface LoudDeps {
   // the next file to read that is not running, or none
   next(running: ReadonlySet<string>): LoudFile | undefined
   read(f: LoudFile, signal: AbortSignal): Promise<ReadOutcome>
-  // a read ended with curves, as bad, or for later (not stopped, not nostart)
-  done(f: LoudFile, o: Extract<ReadOutcome, { kind: 'ok' | 'bad' | 'later' }>): void
-  // ffmpeg could not run: the queue halts until reset()
-  halted(why: string): void
+  // a read ended with curves or as bad (not when it was stopped)
+  done(f: LoudFile, o: Exclude<ReadOutcome, { kind: 'stopped' }>): void
   // the setting, Music files, no scan or cover jobs running, a window open
   canRun(): boolean
   playing(): boolean
@@ -31,8 +29,6 @@ export class LoudQueue {
   #holdUntil = 0
   // a timer is set to kick when the hold ends
   #waking = false
-  // ffmpeg could not run; trying the next file at once would only fail again
-  #halted = false
 
   constructor(readonly deps: LoudDeps) {}
 
@@ -43,7 +39,6 @@ export class LoudQueue {
   // Starts files while there is room; called whenever that may have changed.
   kick(): void {
     const d = this.deps
-    if (this.#halted) return
     const wait = this.#holdUntil - d.now()
     if (wait > 0) {
       if (this.#waking) return
@@ -72,27 +67,16 @@ export class LoudQueue {
       // ffmpeg keeps a few cores busy while it runs, so at most half the time
       const now = this.deps.now()
       if (this.deps.playing()) this.#holdUntil = Math.max(this.#holdUntil, now + (now - t0))
-      if (o.kind === 'nostart') {
-        this.#halted = true
-        this.stop()
-        this.deps.halted(o.why)
-        return
-      }
       if (o.kind !== 'stopped') this.deps.done(f, o)
       this.kick()
     }
-    this.deps.read(f, stop.signal).then(ended, (e) => ended({ kind: 'nostart', why: String(e) }))
+    this.deps.read(f, stop.signal).then(ended, () => ended({ kind: 'stopped' }))
   }
 
   // A song is starting: its first seconds get the disk and the CPU. Reads
   // that run go on (at the lowest priority); no new one starts until later.
   hold(): void {
     this.#holdUntil = this.deps.now() + songStartMs
-  }
-
-  // Tries again after a halt: called when a scan ends or the style is chosen.
-  reset(): void {
-    this.#halted = false
   }
 
   // Stops the reads that run; they are read again later.

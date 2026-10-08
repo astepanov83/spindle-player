@@ -3,7 +3,6 @@
 // (loudness-read.ts); here the samples become 32 values per song, which are
 // kept in loudness.json and sent with the albums. Plain TS, so it is tested.
 import type { LibraryData } from '../../../shared/library'
-import { encodeCurve } from '../../../shared/loudness-text'
 
 // values per song
 export const points = 32
@@ -117,8 +116,9 @@ export function splitCurves(w: Windows, cuts: Cut[]): Uint8Array[] {
   return cuts.map((c) => curveOf(w, at(c.start), c.end === undefined ? w.sums.length : at(c.end)))
 }
 
-// The page's text: one character per value (see shared/loudness-text.ts).
-export const textOf = (curve: Uint8Array): string => encodeCurve(Array.from(curve, (b) => b / 255))
+// The page's values: 0-1 in steps of 0.01, plenty for a picture and short in JSON.
+export const valuesOf = (curve: Uint8Array): number[] =>
+  Array.from(curve, (b) => Math.round((b / 255) * 100) / 100)
 
 // --- loudness.json ---
 
@@ -224,9 +224,6 @@ export interface LoudPlan {
   songs: Map<string, { path: string; i: number }>
   // songs each file has
   counts: Map<string, number>
-  // file -> the songs whose curves show together: each album it has songs
-  // of, and each of its loose songs with a picture of their own
-  shows: Map<string, string[][]>
 }
 
 // Albums with no cover come first: theirs are the pictures that show.
@@ -235,10 +232,7 @@ export function loudPlan(
   pathOf: (fileId: string) => string | undefined,
   fileOf: (path: string) => { size: number; mtime: number; duration: number } | undefined
 ): LoudPlan {
-  const byPath = new Map<
-    string,
-    { file: LoudFile; ids: { id: string; cut: Cut }[]; shows: Set<string[]> }
-  >()
+  const byPath = new Map<string, { file: LoudFile; ids: { id: string; cut: Cut }[] }>()
   const track = new Map(data.tracks.map((t) => [t.id, t]))
   const albums = [...data.albums.filter((a) => !a.cover), ...data.albums.filter((a) => a.cover)]
   for (const al of albums)
@@ -250,40 +244,24 @@ export function loudPlan(
       let p = byPath.get(path)
       if (!p) {
         const file = { path, size: f.size, mtime: f.mtime, duration: f.duration, cuts: [], key: '' }
-        byPath.set(path, (p = { file, ids: [], shows: new Set() }))
+        byPath.set(path, (p = { file, ids: [] }))
       }
       const cut: Cut = t.part ? { start: t.part.start } : { start: 0 }
       if (t.part?.end !== undefined) cut.end = t.part.end
       p.ids.push({ id, cut })
-      p.shows.add(al.trackIds)
-      if (t.art?.seed) p.shows.add([id])
     }
   const files: LoudFile[] = []
   const songs = new Map<string, { path: string; i: number }>()
   const counts = new Map<string, number>()
-  const shows = new Map<string, string[][]>()
-  for (const { file, ids, shows: groups } of byPath.values()) {
+  for (const { file, ids } of byPath.values()) {
     ids.sort((a, b) => a.cut.start - b.cut.start)
     file.cuts = ids.map((x) => x.cut)
     file.key = cutsKey(file.cuts)
     ids.forEach((x, i) => songs.set(x.id, { path: file.path, i }))
     counts.set(file.path, ids.length)
-    shows.set(file.path, [...groups])
     files.push(file)
   }
-  return { files, songs, counts, shows }
-}
-
-// True when a file just read makes the page show something new: an album
-// whose songs are now all read, or a loose song's own picture. Only then is
-// the library sent again.
-export function completes(plan: LoudPlan, store: LoudStore, path: string): boolean {
-  const byPath = new Map(plan.files.map((f) => [f.path, f]))
-  const read = (id: string): boolean => {
-    const f = byPath.get(plan.songs.get(id)?.path ?? '')
-    return !!f && isFresh(store.get(f.path), f)
-  }
-  return (plan.shows.get(path) ?? []).some((ids) => ids.every(read))
+  return { files, songs, counts }
 }
 
 // Songs done (read, or could not be read) of all songs in the plan.
@@ -299,30 +277,30 @@ export function loudCounts(plan: LoudPlan, store: LoudStore): { done: number; to
 }
 
 // Puts the curves on the albums, and on loose songs' own pictures. An album
-// gets them once every song is read (one that could not be read has ''), so
-// the picture doesn't change while its songs come in. `cache` keeps each
-// curve's text, so a build doesn't make it again.
+// gets them once every song is read (one that could not be read has []), so
+// the picture doesn't change while its songs come in. `cache` keeps the
+// page's values of each curve, so a build makes no new arrays.
 export function addLoudness(
   data: LibraryData,
   plan: LoudPlan,
   store: LoudStore,
-  cache: WeakMap<Uint8Array, string>
+  cache: WeakMap<Uint8Array, number[]>
 ): void {
   const byPath = new Map(plan.files.map((f) => [f.path, f]))
-  const curveOf = (id: string): string | undefined => {
+  const curveOf = (id: string): number[] | undefined => {
     const s = plan.songs.get(id)
     const f = s && byPath.get(s.path)
     const e = f && store.get(f.path)
     if (!s || !f || !isFresh(e, f)) return undefined
     const c = e!.curves?.[s.i]
-    if (!c) return ''
+    if (!c) return []
     let v = cache.get(c)
-    if (v === undefined) cache.set(c, (v = textOf(c)))
+    if (!v) cache.set(c, (v = valuesOf(c)))
     return v
   }
   for (const al of data.albums) {
     const all = al.trackIds.map(curveOf)
-    if (all.every((c) => c !== undefined) && all.some((c) => c)) al.loudness = all as string[]
+    if (all.every((c) => c) && all.some((c) => c!.length)) al.loudness = all as number[][]
   }
   for (const t of data.tracks) {
     if (!t.art?.seed) continue

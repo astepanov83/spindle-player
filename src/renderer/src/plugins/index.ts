@@ -165,14 +165,6 @@ export function coverLines(): { text: string; busy: boolean }[] {
   return plugins.flatMap((p) => (pluginOn(p.id) ? (halves[p.id].coverLines?.() ?? []) : []))
 }
 
-// The loudness reading lines of the plugins that are on, for Settings.
-export function soundLines(): string[] {
-  return plugins.flatMap((p) => {
-    const line = pluginOn(p.id) ? halves[p.id].soundLine?.() : undefined
-    return line ? [line] : []
-  })
-}
-
 // Each plugin's start, asked for at once, on or off: a plugin turned on later
 // has its data. Once all have answered, `load` loads them in list order and
 // gives the ids each one moved, and `listen` lets them hear main's news.

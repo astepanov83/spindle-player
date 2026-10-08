@@ -2,25 +2,21 @@
      radio group, each with a small picture of an album drawn in it. -->
 <script lang="ts">
   import type { PictureArt } from '../../../shared/library'
-  import { encodeCurve } from '../../../shared/loudness-text'
   import { fallbackPalettes } from '../../../shared/palette'
   import type { NoCover } from '../../../shared/settings'
   import Cover from '../ui/Cover.svelte'
   import { radioStep } from '../keys'
-  import { soundLines } from '../plugins'
   import { settings } from '../stores/settings.svelte'
 
+  // 'sound' shows once ticket 107 draws it
   const shown: { value: NoCover; label: string }[] = [
     { value: 'rings', label: 'Track rings' },
     { value: 'type', label: 'Title' },
-    { value: 'sound', label: 'Sound' },
     { value: 'genre', label: 'Genre' },
     { value: 'record', label: 'Plain record' }
   ]
   const hints: Partial<Record<NoCover, string>> = {
     rings: 'A record with one ring per song, as wide as the song is long, in colors of its own.',
-    sound:
-      'A ring of bars, one arc per song. The bars show how loud the song is, so the pictures fill in over time as the songs are read.',
     type: 'The title and artist, set on a color of their own.',
     genre: 'A drawing for the genre tag, in colors of its own. Albums of one genre look alike.',
     record: 'The same grey record for every album.'
@@ -31,13 +27,8 @@
     lengths: [312, 428, 265, 503, 377],
     title: 'Blue Hours',
     artist: 'Marina Vale',
-    genre: 'Jazz',
-    // a made-up curve for each song, so the picker shows bars
-    loudness: [0.5, 0.8, 0.35, 0.9, 0.6].map((base, i) =>
-      encodeCurve(Array.from({ length: 32 }, (_, k) => base * (0.8 + 0.2 * Math.sin(k / 4 + i))))
-    )
+    genre: 'Jazz'
   }
-  const reading = $derived(settings.noCover === 'sound' ? soundLines() : [])
 
   const picked = $derived(
     Math.max(
@@ -74,7 +65,6 @@
     {/each}
   </div>
   {#if hints[settings.noCover]}<p class="hint">{hints[settings.noCover]}</p>{/if}
-  {#each reading as line (line)}<p class="hint">{line}</p>{/each}
 </div>
 
 <style>

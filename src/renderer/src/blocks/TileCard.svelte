@@ -62,7 +62,6 @@
           photo={t.photo}
           covers={t.covers ?? []}
           genre={t.genre}
-          sound={t.sound}
         />{:else}<Cover
           src={t.art?.cover}
           art={t.art}

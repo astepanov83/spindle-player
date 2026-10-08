@@ -87,9 +87,6 @@ export interface MadeArt {
   loudness?: string[]
 }
 
-// What the sound picture of an artist is drawn from: all their songs.
-export type SoundArt = Pick<MadeArt, 'lengths' | 'loudness'>
-
 // What a made picture is drawn from where a plugin has no palette for the
 // item: its colors then come from the seed.
 export type PictureArt = MadeArt & { palette?: ThemePalettes }

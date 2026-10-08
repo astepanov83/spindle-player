@@ -1,7 +1,7 @@
 // What the core asks a plugin's page half about its items. See
 // work/specs/plugins.md, "Items". Plain data: the core draws it.
 import type { IdMoves } from '../../../shared/id-moves'
-import type { Art, PictureArt, ReplayGain, SoundArt } from '../../../shared/library'
+import type { Art, PictureArt, ReplayGain } from '../../../shared/library'
 import type { PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
@@ -209,9 +209,6 @@ export interface Tile {
   covers?: CoverArt[]
   // their albums' most common genre, for the picture made when they have no cover
   genre?: string
-  // all their songs' lengths and loudness, for the sound picture; asked only
-  // when that style is chosen
-  sound?: () => SoundArt
   to: PageAddress
   // whether the item playing is one of its songs (marked)
   playing?: (item: ItemKey) => boolean
@@ -326,7 +323,6 @@ export interface ArtistHeading {
   photo?: string
   covers: CoverArt[]
   genre?: string
-  sound?: () => SoundArt
   // none for a name with no page (a split credit)
   to?: PageAddress
   songs: () => ItemKey[]
@@ -680,9 +676,6 @@ export interface PageHalf {
   // The online cover lookup's lines under "Find missing covers online" in
   // Settings, with a spinner on the one that runs.
   coverLines?(): { text: string; busy: boolean }[]
-  // The loudness reading, under the sound picture's choice in Settings:
-  // "Reading 1,240 of 8,000 songs" while it runs (ticket 107).
-  soundLine?(): string | undefined
   // Files from the system dropped on the window, asked while it is on.
   drop?(dropped: File[]): void
   // At start: asks main for its data, at once with the core's own asks (see

@@ -2,7 +2,7 @@
 // an artist's picture. No DOM. Who counts as an artist is in shared/plugins/files/artists.ts.
 import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
 import { commonGenre } from '../../../../shared/genre'
-import type { ArtistCredit, SoundArt } from '../../../../shared/library'
+import type { ArtistCredit } from '../../../../shared/library'
 import type { ArtistsShown } from '../../../../shared/settings'
 import { foldedName, foldQuery } from '../../library/views'
 import type { CoverArt } from '../types'
@@ -55,54 +55,6 @@ export const artistGenre = (
   a: Artist,
   album: (id: string) => { genre?: string }
 ): string | undefined => commonGenre(a.albums.map(album))
-
-// All the songs of an artist as one ring for the sound picture (ticket 107):
-// their albums' songs, then their songs on other albums. No loudness at all
-// (nothing read yet) gives none, so the picture is rings until some is in; a
-// song not read yet has flat bars.
-export function artistSound(
-  a: Artist,
-  album: (id: string) => SoundSource,
-  track: (id: string) => { albumId: string; duration: number; art?: SoundSource }
-): SoundArt {
-  return soundOf(
-    a.albums.map(album),
-    a.also.map((id) => {
-      const t = track(id)
-      const al = album(t.albumId)
-      const own = t.art?.loudness?.[0]
-      return {
-        length: Math.round(t.duration),
-        loudness: own ?? al.loudness?.[al.trackIds?.indexOf(id) ?? -1]
-      }
-    })
-  )
-}
-
-export interface SoundSource {
-  lengths?: number[]
-  loudness?: string[]
-  trackIds?: string[]
-}
-
-// Albums' songs, then single songs, as one list of lengths and curves.
-export function soundOf(
-  albums: readonly SoundSource[],
-  songs: readonly { length: number; loudness?: string }[] = []
-): SoundArt {
-  const lengths: number[] = []
-  const loudness: string[] = []
-  for (const al of albums)
-    (al.lengths ?? []).forEach((l, i) => {
-      lengths.push(l)
-      loudness.push(al.loudness?.[i] ?? '')
-    })
-  for (const s of songs) {
-    lengths.push(s.length)
-    loudness.push(s.loudness ?? '')
-  }
-  return { lengths, ...(loudness.some(Boolean) ? { loudness } : {}) }
-}
 
 // Up to 4 different covers for the picture made from covers: their albums
 // first, then the pictures of their songs on other albums. With their colors,

@@ -4,8 +4,8 @@
 import type { PictureArt } from '../../../shared/library'
 import type { NoCover } from '../../../shared/settings'
 import type { ThemeName } from '../../../shared/theme'
-import { drawPicture, styleFor } from '../no-cover/draw'
-import { detailOf } from '../no-cover/pictures'
+import { drawPicture } from '../no-cover/draw'
+import { familyOf } from '../no-cover/genre'
 
 type TileArt = PictureArt & Required<Pick<PictureArt, 'palette'>>
 
@@ -13,9 +13,8 @@ type TileArt = PictureArt & Required<Pick<PictureArt, 'palette'>>
 // The colors are in it, since new ones can come for the same seed.
 export function tileKey(art: TileArt, style: NoCover, theme: ThemeName): string {
   const p = art.palette[theme]
-  const drawn = styleFor(style, art)
   return art.seed
-    ? `tile:${drawn}${detailOf(drawn, art)}|${theme}|${p[0]}${p[1]}|${art.seed}`
+    ? `tile:${style}${style === 'genre' ? ':' + familyOf(art.genre) : ''}|${theme}|${p[0]}${p[1]}|${art.seed}`
     : `tile:${p[0]}${p[2]}`
 }
 

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { PictureArt } from '../../../shared/library'
 import type { NoCover } from '../../../shared/settings'
 import { fallbackPalettes } from '../../../shared/palette'
-import { styleFor } from './draw'
 import { bucketOf, pictureKey, pixelsOf } from './pictures'
 
 describe('size buckets', () => {
@@ -45,8 +44,7 @@ describe('keys after a rescan', () => {
     lengths: [200, 300],
     title: 'Blue',
     artist: 'Joni',
-    genre: 'Folk',
-    loudness: ['A'.repeat(32), 'B'.repeat(32)]
+    genre: 'Folk'
   }
   const key = (style: NoCover, a: PictureArt, artist = false): string =>
     pictureKey(style, { ...a, seed: 'a' }, 'dark', 128, artist)
@@ -56,42 +54,12 @@ describe('keys after a rescan', () => {
     expect(key('type', { ...art, title: 'blue' })).not.toBe(key('type', art))
     expect(key('type', { ...art, artist: 'Joni M' })).not.toBe(key('type', art))
     expect(key('genre', { ...art, genre: 'Death Metal' })).not.toBe(key('genre', art))
-    expect(key('sound', { ...art, lengths: [200, 301] })).not.toBe(key('sound', art))
     expect(key('rings', { ...art, title: 'Joni M' }, true)).not.toBe(key('rings', art, true))
-    expect(key('sound', { ...art, title: 'Joni M' }, true)).not.toBe(key('sound', art, true))
   })
 
   it('stays when only what the style does not draw changes', () => {
     expect(key('rings', { ...art, title: 'Other' })).toBe(key('rings', art))
     expect(key('genre', { ...art, genre: 'folk' })).toBe(key('genre', art))
     expect(key('record', { ...art, lengths: [1] })).toBe(key('record', art))
-  })
-})
-
-describe('sound picture keys', () => {
-  const art = { seed: 'a', lengths: [200, 300] }
-
-  it('is the rings key until the loudness is in, then changes with it', () => {
-    const rings = pictureKey('rings', art, 'dark', 128)
-    expect(pictureKey('sound', art, 'dark', 128)).toBe(rings)
-    const loud = pictureKey(
-      'sound',
-      { ...art, loudness: ['A'.repeat(32), 'B'.repeat(32)] },
-      'dark',
-      128
-    )
-    expect(loud).not.toBe(rings)
-    expect(
-      pictureKey('sound', { ...art, loudness: ['A'.repeat(32), 'C'.repeat(32)] }, 'dark', 128)
-    ).not.toBe(loud)
-    expect(
-      pictureKey('sound', { ...art, loudness: ['A'.repeat(32), 'B'.repeat(32)] }, 'dark', 128)
-    ).toBe(loud)
-  })
-
-  it('draws a station, or tracks that cannot be read, as flat bars', () => {
-    expect(styleFor('sound', { seed: 's' })).toBe('sound')
-    expect(styleFor('sound', { ...art, loudness: ['', ''] })).toBe('sound')
-    expect(styleFor('type', art)).toBe('type')
   })
 })

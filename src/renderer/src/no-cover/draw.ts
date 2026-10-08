@@ -10,13 +10,12 @@ import { drawRecord } from './record'
 import { drawArtistRings, drawArtistType } from './artist'
 import { drawGenre } from './genre-art'
 import { drawRings } from './rings'
-import { drawArtistSound, drawSound } from './sound'
 import { artistFont, drawType, titleFont } from './type'
 
+// 'sound' comes with ticket 107; until then it draws as the default.
 const styles: Partial<Record<NoCover, Draw>> = {
   record: drawRecord,
   rings: drawRings,
-  sound: drawSound,
   type: drawType,
   genre: drawGenre
 }
@@ -24,9 +23,9 @@ export const drawOf = (style: NoCover): Draw => styles[style] ?? drawRings
 
 // An artist's version of each style (ticket 105): their initials. Record is
 // the grey record, drawn by Cover. Genre is the same drawing, in a circle.
+// Sound adds its own with 107.
 const artistStyles: Partial<Record<NoCover, Draw>> = {
   rings: drawArtistRings,
-  sound: drawArtistSound,
   type: drawArtistType,
   genre: drawGenre
 }
@@ -41,13 +40,6 @@ async function fontsFor(text: string): Promise<void> {
   await Promise.all([fonts.load(titleFont(10), text), fonts.load(artistFont(10), text)])
 }
 
-// Sound is drawn once the item's loudness is in. A song of a known length
-// that has none yet shows rings; a station (no length) and an item whose
-// tracks cannot be read (all '') get flat bars.
-export function styleFor(style: NoCover, art: PictureArt): NoCover {
-  return style === 'sound' && !art.loudness && art.lengths?.length ? 'rings' : style
-}
-
 export async function drawPicture(
   style: NoCover,
   art: PictureArt & { seed: string },
@@ -56,7 +48,6 @@ export async function drawPicture(
   small: boolean,
   forArtist = false
 ): Promise<Blob> {
-  style = styleFor(style, art)
   const title = art.title ?? ''
   const artist = art.artist ?? ''
   if (forArtist || style === 'type') await fontsFor(title + artist)
@@ -68,7 +59,6 @@ export async function drawPicture(
     inks: inksOf(art.palette ?? fallbackPalettes(art.seed), theme),
     hash: hashOf(art.seed),
     lengths: art.lengths ?? [],
-    loudness: art.loudness,
     title,
     artist,
     genre: art.genre,

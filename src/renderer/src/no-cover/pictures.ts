@@ -5,7 +5,7 @@ import type { ThemeName } from '../../../shared/theme'
 import { PictureCache } from './cache'
 import type { PictureArt } from '../../../shared/library'
 import { hashOf } from './drawing'
-import { drawPicture, styleFor } from './draw'
+import { drawPicture } from './draw'
 import { familyOf } from './genre'
 import { TurnQueue } from './queue'
 
@@ -33,8 +33,8 @@ export const colorsOf = (art: PictureArt, theme: ThemeName): string =>
 
 // What the drawing reads from the item besides the seed and colors, hashed,
 // so a rescan that changes it (a track added, a title retagged) draws again:
-// the album id stays the same then. Sound with no loudness yet is rings, and
-// shares its key. An artist's picture shows their initials, from the title.
+// the album id stays the same then. An artist's picture shows their
+// initials, from the title.
 export function detailOf(style: NoCover, art: PictureArt, artist = false): string {
   const read = readOf(style, art, artist)
   return read ? ':' + hashOf(read).toString(36) : ''
@@ -42,31 +42,26 @@ export function detailOf(style: NoCover, art: PictureArt, artist = false): strin
 
 function readOf(style: NoCover, art: PictureArt, artist: boolean): string {
   const title = art.title ?? ''
-  const lengths = (art.lengths ?? []).join(',')
   switch (style) {
     case 'genre':
       return familyOf(art.genre)
     case 'type':
       return artist ? title : `${title}\0${art.artist ?? ''}`
     case 'rings':
-      return artist ? title : lengths
-    case 'sound':
-      return `${artist ? title : ''}\0${lengths}\0${(art.loudness ?? []).join(',')}`
+      return artist ? title : (art.lengths ?? []).join(',')
     default:
       return ''
   }
 }
 
-export function pictureKey(
-  asked: NoCover,
+export const pictureKey = (
+  style: NoCover,
   art: PictureArt & { seed: string },
   theme: ThemeName,
   bucket: Bucket,
   artist = false
-): string {
-  const style = styleFor(asked, art)
-  return `${artist ? 'artist:' : ''}${style}${detailOf(style, art, artist)}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
-}
+): string =>
+  `${artist ? 'artist:' : ''}${style}${detailOf(style, art, artist)}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
 
 // A few thousand: a big library's whole Albums grid at one size. The bytes
 // cap busy pictures (genre's blurs) drawn big on a sharp screen.

@@ -73,7 +73,7 @@ import { scanLogLine } from './scan-log'
 import { markerOf, smallName } from '../../covers/cover-names'
 import { CoverFetcher } from './cover-fetch'
 import { findSongCover, stopsSongLookups } from './song-cover'
-import { PublishTimer } from './publish'
+import { loudGapMs, PaceTimer, PublishTimer } from './publish'
 import { diffLibrary, type LibraryMessage } from '../../../shared/plugins/files/library-patch'
 import { CoverHttp, defaultLimits, NetError } from './cover-http'
 import {
@@ -442,11 +442,22 @@ function loudDone(
     }
   }
   // the page gets the library again only when an album's curves are all in
-  if (plan && completes(plan, loud, f.path)) {
+  if (plan && completes(plan, loud, f.path)) loudSends.soon()
+}
+
+// Curves send the library on their own, slower timer (see loudGapMs).
+const loudSends = new PaceTimer({
+  run: () => {
     dirty = true
     publisher.soon()
+  },
+  gapMs: () => loudGapMs(built.data.tracks.length),
+  now: () => performance.now(),
+  setTimer: (f, ms) => {
+    const t = setTimeout(f, ms)
+    return () => clearTimeout(t)
   }
-}
+})
 
 // when the reads began, for the log line once all are read
 let loudRun: { t0: number; files: number; songs: number } | undefined

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { publishGapMs, PublishTimer } from './publish'
+import { loudGapMs, PaceTimer, publishGapMs, PublishTimer } from './publish'
 
 describe('publishGapMs', () => {
   it('is 1s for a small library and grows to 5s at 50k songs', () => {
@@ -99,5 +99,41 @@ describe('PublishTimer', () => {
     time.advance(10000)
     // the first took 300ms, so the next comes 3s after it ended
     expect(sent).toEqual([250, 3550])
+  })
+})
+
+describe('loudGapMs', () => {
+  it('is 1s for a small library and 30s from 30k songs', () => {
+    expect(loudGapMs(400)).toBe(1000)
+    expect(loudGapMs(5000)).toBe(5000)
+    expect(loudGapMs(42900)).toBe(30000)
+  })
+})
+
+describe('PaceTimer', () => {
+  it('runs at once after a quiet spell, then once per gap for many asks', () => {
+    const time = fakeTime()
+    const runs: number[] = []
+    const pace = new PaceTimer({
+      run: () => runs.push(time.now()),
+      gapMs: () => 30000,
+      now: time.now,
+      setTimer: time.setTimer
+    })
+    pace.soon()
+    time.advance(0)
+    expect(runs).toEqual([0])
+    // an album done every second
+    for (let i = 0; i < 65; i++) {
+      time.advance(1000)
+      pace.soon()
+    }
+    time.advance(0)
+    expect(runs).toEqual([0, 30000, 60000])
+    time.advance(100000)
+    expect(runs).toEqual([0, 30000, 60000, 90000])
+    pace.soon()
+    time.advance(0)
+    expect(runs).toEqual([0, 30000, 60000, 90000, 165000])
   })
 })

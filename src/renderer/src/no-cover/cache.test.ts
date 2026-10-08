@@ -64,3 +64,31 @@ describe('PictureCache', () => {
     expect(await cache.load('k', blob)).toBe('blob:1')
   })
 })
+
+describe('PictureCache holds', () => {
+  it('keeps a picture a tile holds over the count, and drops it once let go', async () => {
+    const { cache, revoked } = setup(1)
+    const a = await cache.load('a', blob)
+    const release = cache.hold('a')
+    await cache.load('b', blob)
+    // a is the oldest, but held: b is the one over
+    expect(cache.get('a')).toBe(a)
+    expect(revoked).toEqual(['blob:2'])
+    release()
+    release()
+    expect(cache.held('a')).toBe(false)
+    await cache.load('c', blob)
+    expect(cache.get('a')).toBeUndefined()
+    expect(revoked).toEqual(['blob:2', 'blob:1'])
+  })
+
+  it('counts each holder', () => {
+    const { cache } = setup()
+    const one = cache.hold('k')
+    const two = cache.hold('k')
+    one()
+    expect(cache.held('k')).toBe(true)
+    two()
+    expect(cache.held('k')).toBe(false)
+  })
+})

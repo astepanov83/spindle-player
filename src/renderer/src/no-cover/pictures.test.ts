@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { fallbackPalettes } from '../../../shared/palette'
 import { bucketOf, pictureKey, pixelsOf } from './pictures'
 
 describe('size buckets', () => {
@@ -14,14 +15,19 @@ describe('size buckets', () => {
     expect(pixelsOf(512, 3)).toBe(1024)
   })
 
-  it('keys a picture by style, theme, bucket and seed', () => {
+  it('keys a picture by style, theme, bucket, colors and seed', () => {
+    const p = fallbackPalettes('a')
+    const art = { seed: 'a', palette: p }
     const keys = new Set([
-      pictureKey('rings', 'a', 'dark', 128),
-      pictureKey('type', 'a', 'dark', 128),
-      pictureKey('rings', 'a', 'light', 128),
-      pictureKey('rings', 'a', 'dark', 256),
-      pictureKey('rings', 'b', 'dark', 128)
+      pictureKey('rings', art, 'dark', 128),
+      pictureKey('type', art, 'dark', 128),
+      pictureKey('rings', art, 'light', 128),
+      pictureKey('rings', art, 'dark', 256),
+      pictureKey('rings', { ...art, seed: 'b' }, 'dark', 128),
+      // a logo came with new colors for the same seed
+      pictureKey('rings', { ...art, palette: fallbackPalettes('logo') }, 'dark', 128),
+      pictureKey('rings', { seed: 'a' }, 'dark', 128)
     ])
-    expect(keys.size).toBe(5)
+    expect(keys.size).toBe(7)
   })
 })

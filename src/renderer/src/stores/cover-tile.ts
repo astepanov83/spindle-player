@@ -9,9 +9,10 @@ import { drawPicture } from '../no-cover/draw'
 type TileArt = PictureArt & Required<Pick<PictureArt, 'palette'>>
 
 // The key the tile is kept under: the same picture gives the same tile.
+// The colors are in it, since new ones can come for the same seed.
 export function tileKey(art: TileArt, style: NoCover, theme: ThemeName): string {
   const p = art.palette[theme]
-  return art.seed ? `tile:${style}|${theme}|${art.seed}` : `tile:${p[0]}${p[2]}`
+  return art.seed ? `tile:${style}|${theme}|${p[0]}${p[1]}|${art.seed}` : `tile:${p[0]}${p[2]}`
 }
 
 export async function paletteTile(

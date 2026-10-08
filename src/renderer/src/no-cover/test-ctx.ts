@@ -1,5 +1,5 @@
-// A canvas context for tests: it keeps what was drawn that a test checks,
-// and measures text as one unit per character per font pixel.
+// Test helper only: a canvas context that keeps what was drawn that a test
+// checks, and measures text as one unit per character per font pixel.
 import type { Ctx } from './drawing'
 
 export interface Drawn {

@@ -1,10 +1,11 @@
-// Made pictures for Cover.svelte (ticket 103): one per style, seed, theme and
-// size bucket, drawn a few at a time and kept as blob URLs.
+// Made pictures for Cover.svelte (ticket 103): one per style, seed, colors,
+// theme and size bucket, drawn a few at a time and kept as blob URLs.
 import type { NoCover } from '../../../shared/settings'
 import type { ThemeName } from '../../../shared/theme'
 import { PictureCache } from './cache'
 import type { PictureArt } from '../../../shared/library'
 import { drawPicture } from './draw'
+import { TurnQueue } from './queue'
 
 export const buckets = [48, 128, 256, 512] as const
 export type Bucket = (typeof buckets)[number]
@@ -22,12 +23,18 @@ export function pixelsOf(bucket: Bucket, dpr = globalThis.devicePixelRatio ?? 1)
   return Math.round((bucket === 48 ? 64 : bucket) * Math.min(2, Math.max(1, dpr)))
 }
 
+// The colors a picture is drawn in (main and accent), or '' when they come
+// from the seed. In the key, since a station's logo can bring new colors for
+// the same seed, and the picture must follow the tint.
+export const colorsOf = (art: PictureArt, theme: ThemeName): string =>
+  art.palette ? art.palette[theme].slice(0, 2).join('') : ''
+
 export const pictureKey = (
   style: NoCover,
-  seed: string,
+  art: PictureArt & { seed: string },
   theme: ThemeName,
   bucket: Bucket
-): string => `${style}|${theme}|${bucket}|${seed}`
+): string => `${style}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
 
 // a few thousand: a big library's whole Albums grid at one size
 const cache = new PictureCache(
@@ -45,23 +52,14 @@ const idle = (): Promise<void> =>
   )
 
 // Two drawings at a time, each started in idle time.
-let running = 0
-const waiting: (() => void)[] = []
-async function inTurn<T>(job: () => Promise<T>): Promise<T> {
-  if (running >= 2) await new Promise<void>((go) => waiting.push(go))
-  else running++
-  try {
-    await idle()
-    return await job()
-  } finally {
-    // a finished one hands its turn straight on
-    const next = waiting.shift()
-    if (next) next()
-    else running--
-  }
-}
+const queue = new TurnQueue(2, idle)
 
 export const cachedPicture = (key: string): string | undefined => cache.get(key)
+
+// A tile shows or waits for the picture until the returned function is
+// called: a held picture is not dropped from the cache, and a drawing no
+// tile holds is not made.
+export const holdPicture = (key: string): (() => void) => cache.hold(key)
 
 export function loadPicture(
   key: string,
@@ -71,6 +69,9 @@ export function loadPicture(
   bucket: Bucket
 ): Promise<string | undefined> {
   return cache.load(key, () =>
-    inTurn(() => drawPicture(style, art, theme, pixelsOf(bucket), bucket === 48))
+    queue.run(
+      () => drawPicture(style, art, theme, pixelsOf(bucket), bucket === 48),
+      () => cache.held(key)
+    )
   )
 }

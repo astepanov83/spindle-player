@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { fallbackPalettes } from '../../../shared/palette'
 import { inksOf } from './colors'
-import { fakeCtx } from './fake-ctx'
+import { fakeCtx } from './test-ctx'
 import { angleOf, drawRings, patternOf, patterns, ringsOf } from './rings'
 
 const sum = (a: number[]): number => a.reduce((x, y) => x + y, 0)

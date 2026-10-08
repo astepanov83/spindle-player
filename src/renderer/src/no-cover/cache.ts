@@ -1,7 +1,8 @@
 // Made pictures, drawn once and kept as blob URLs (ticket 103). The virtual
 // grids show thousands while scrolling, so each is drawn once per key and
 // shown through an <img> as a real cover is. Over `max` pictures, the ones
-// used longest ago are dropped and their URLs freed.
+// used longest ago are dropped and their URLs freed, except ones a tile on
+// screen holds.
 
 export interface UrlIo {
   create(blob: Blob): string
@@ -12,6 +13,8 @@ export class PictureCache {
   // in the order they were last used, oldest first
   #urls = new Map<string, string>()
   #pending = new Map<string, Promise<string | undefined>>()
+  // how many tiles show or wait for each key
+  #holds = new Map<string, number>()
 
   constructor(
     readonly io: UrlIo,
@@ -20,6 +23,23 @@ export class PictureCache {
 
   get size(): number {
     return this.#urls.size
+  }
+
+  // A tile shows or waits for `key` until the returned function is called.
+  hold(key: string): () => void {
+    this.#holds.set(key, (this.#holds.get(key) ?? 0) + 1)
+    let held = true
+    return () => {
+      if (!held) return
+      held = false
+      const n = this.#holds.get(key)! - 1
+      if (n) this.#holds.set(key, n)
+      else this.#holds.delete(key)
+    }
+  }
+
+  held(key: string): boolean {
+    return this.#holds.has(key)
   }
 
   // The URL drawn for `key`, if there is one; it counts as used now.
@@ -60,6 +80,7 @@ export class PictureCache {
   #trim(): void {
     for (const [key, url] of this.#urls) {
       if (this.#urls.size <= this.max) return
+      if (this.#holds.has(key)) continue
       this.#urls.delete(key)
       this.io.revoke(url)
     }

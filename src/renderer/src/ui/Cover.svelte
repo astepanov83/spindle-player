@@ -3,7 +3,13 @@
 <script lang="ts">
   import type { NoCover } from '../../../shared/settings'
   import type { PictureArt } from '../../../shared/library'
-  import { bucketOf, cachedPicture, loadPicture, pictureKey } from '../no-cover/pictures'
+  import {
+    bucketOf,
+    cachedPicture,
+    holdPicture,
+    loadPicture,
+    pictureKey
+  } from '../no-cover/pictures'
   import { settings } from '../stores/settings.svelte'
   import { theme } from '../stores/theme.svelte'
 
@@ -44,7 +50,7 @@
   let width = $state(0)
   const themeName = $derived(theme.light ? 'light' : 'dark')
   const key = $derived(
-    made && seed && width ? pictureKey(drawn, seed, themeName, bucketOf(width)) : ''
+    made && seed && width ? pictureKey(drawn, { ...art, seed }, themeName, bucketOf(width)) : ''
   )
   // the last drawing that came in; a cached one shows at once
   let drawnPic = $state({ key: '', url: '' })
@@ -53,14 +59,21 @@
   )
   const ground = $derived(tint ?? art?.palette?.[themeName][0])
 
+  // Held while shown or waited for: a tile scrolled away lets go, so its
+  // drawing is dropped, and the cache keeps what is on screen.
   $effect(() => {
-    if (!key || pic || !seed) return
+    if (!key || !seed) return
+    const release = holdPicture(key)
+    if (pic) return release
     const k = key
     let live = true
     void loadPicture(k, drawn, { ...art, seed }, themeName, bucketOf(width)).then((url) => {
       if (live && url) drawnPic = { key: k, url }
     })
-    return () => (live = false)
+    return () => {
+      live = false
+      release()
+    }
   })
 </script>
 

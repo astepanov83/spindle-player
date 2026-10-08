@@ -247,8 +247,50 @@ export function heldShift<T>(
   per: number,
   key: (item: T) => string
 ): { rows: number; held?: string } {
-  if (from >= old.length)
-    return { rows: Math.ceil(next.length / per) - Math.ceil(old.length / per) }
+  const { px, held } = heldMove(
+    old,
+    next,
+    from,
+    per,
+    key,
+    evenPlaces(old.length, per, 1),
+    evenPlaces(next.length, per, 1)
+  )
+  return held === undefined ? { rows: px } : { rows: px, held }
+}
+
+// Where the items of a list are, in px from its top. Rows of different
+// heights (a grid with headings, ticket 096) count by items too, so a scan
+// that adds some above still holds the screen.
+export interface ItemPlaces {
+  // the top of item i's row
+  top(i: number): number
+  // the first item of the row at y px; under a heading, the item below it
+  at(y: number): number
+  // the whole list
+  height: number
+}
+
+// n items, `per` to a row, rows of `size` px.
+export function evenPlaces(n: number, per: number, size: number): ItemPlaces {
+  return {
+    top: (i) => Math.floor(i / per) * size,
+    at: (y) => Math.max(0, Math.floor(y / size)) * per,
+    height: Math.ceil(n / per) * size
+  }
+}
+
+// heldShift in px, with the places before and after the change.
+export function heldMove<T>(
+  old: T[],
+  next: T[],
+  from: number,
+  per: number,
+  key: (item: T) => string,
+  before: ItemPlaces,
+  after: ItemPlaces
+): { px: number; held?: string } {
+  if (from >= old.length) return { px: after.height - before.height }
   const at = new Map<string, number>()
   next.forEach((x, i) => at.set(key(x), i))
   // the item, or the next that is still there
@@ -256,7 +298,7 @@ export function heldShift<T>(
   for (let i = from; i < end; i++) {
     const k = key(old[i])
     const j = at.get(k)
-    if (j !== undefined) return { rows: Math.floor(j / per) - Math.floor(i / per), held: k }
+    if (j !== undefined) return { px: after.top(j) - before.top(i), held: k }
   }
-  return { rows: 0 }
+  return { px: 0 }
 }

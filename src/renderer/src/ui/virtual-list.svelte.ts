@@ -18,6 +18,9 @@ export interface VirtualListOptions {
   size: number | ((index: number) => number)
   // measure rows again, for rows whose height depends on the width
   remeasure?: boolean
+  // each row's key, so a measured height stays with its row when rows come
+  // above it (a grid's heading rows are not as tall as its tiles)
+  key?: (index: number) => string
 }
 
 export interface VirtualList {
@@ -73,6 +76,7 @@ export function virtualList(opts: () => VirtualListOptions, overscan = 8): Virtu
       v.setOptions({
         count: o.count,
         estimateSize: typeof size === 'function' ? size : () => size,
+        getItemKey: o.key ?? ((i: number) => i),
         scrollMargin: m,
         getScrollElement: () => el
       })

@@ -9,6 +9,7 @@ import type { SettingBlock } from '../../../shared/setting-blocks'
 import type { EngineEvents } from '../audio/engine'
 import type { IconName } from '../ui/icons'
 import type { Sort } from '../library/views'
+import type { Grouping, Heading } from '../library/groups'
 
 // A cover and its colors, for a picture made from covers (an artist's round tile).
 export type CoverArt = Pick<Art, 'cover' | 'palette'>
@@ -208,6 +209,32 @@ export interface TilesBlock<T = unknown> {
   tile(item: T): Tile
   // artists' round pictures
   round?: boolean
+  // smaller tiles, so more fit in a row (the Artists grid)
+  small?: boolean
+  // heading rows over runs of tiles (ticket 096); the items are in the sort
+  // the grouping follows
+  groups?: TileGroups<T>
+}
+
+export interface TileGroups<T = unknown> {
+  grouping: Grouping<T>
+  // an album artist's heading, asked when drawn, with the items under it
+  artist?: (heading: Heading, items: readonly T[]) => ArtistHeading
+  // the A-Z strip on the right
+  strip?: boolean
+}
+
+// An artist over their albums: picture, name, count, play; the name opens
+// their page.
+export interface ArtistHeading {
+  sub: string
+  photo?: string
+  covers: CoverArt[]
+  // none for a name with no page (a split credit)
+  to?: PageAddress
+  songs: () => ItemKey[]
+  from: string
+  link?: QueueLink
 }
 
 // A list of songs. With `sort` (null: in the order given) it is the sortable

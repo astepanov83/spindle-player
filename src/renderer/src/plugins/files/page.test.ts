@@ -170,6 +170,50 @@ describe('pages', () => {
     expect(settings.viewSorts).toEqual({ albums: 'artist' })
   })
 
+  it('Albums: headings by the sort, artists with their picture and page (096)', () => {
+    const groups = (): TilesBlock['groups'] => tiles(page.filesPage('albums', '', '')[1]).groups
+    // Artist: an album artist over their albums, and the strip
+    const g = groups()!
+    expect(g.strip).toBe(true)
+    const heading = g.grouping.heading(files.albums[0])
+    expect(heading).toMatchObject({ title: 'Marina Vale', letter: 'M', artist: 'Marina Vale' })
+    const a = g.artist!(heading, [files.albums[0]])
+    expect(a).toMatchObject({
+      sub: '1 album',
+      to: at('artist/marinavale'),
+      from: 'Marina Vale',
+      link: { plugin: 'files', page: 'artist/marinavale' }
+    })
+    expect(a.covers.map((c) => c.cover)).toEqual(['c-a'])
+    expect(a.songs()).toEqual(['files:a1', 'files:a2', 'files:a3'])
+    // a split credit has no page: the albums' covers, no link
+    const split = g.artist!({ key: 'artist:x', title: 'A, B', artist: 'A, B' }, files.albums)
+    expect(split.to).toBeUndefined()
+    expect(split).toMatchObject({ sub: '2 albums', from: 'A, B' })
+    expect(split.covers.map((c) => c.cover)).toEqual(['c-a', 'c-b'])
+    // Name: letters with the strip; Year: decades without; the play sorts: none
+    page.filesAct('albums', 'sort', 'name')
+    expect(groups()?.strip).toBe(true)
+    expect(groups()?.artist).toBeUndefined()
+    expect(groups()?.grouping.heading(files.albums[1]).title).toBe('A')
+    page.filesAct('albums', 'sort', 'year')
+    expect(groups()?.strip).toBe(false)
+    expect(groups()?.grouping.heading(files.albums[0]).title).toBe('2000s')
+    page.filesAct('albums', 'sort', 'plays')
+    expect(groups()).toBeUndefined()
+  })
+
+  it('Artists: letters and the strip, not while searching (096)', () => {
+    const t = tiles(page.filesPage('artists', '', '')[1])
+    expect(t.small).toBe(true)
+    expect(t.groups?.strip).toBe(true)
+    expect(t.groups?.grouping.heading(files.getArtist('junopark'))).toMatchObject({ title: 'J' })
+    expect(tiles(page.filesPage('artists', '', 'juno').at(-1)!).groups).toBeUndefined()
+    // the search results' tiles stay plain
+    const found = page.filesSearch('juno')
+    expect(found.every((f) => !('tiles' in f) || !f.tiles.groups)).toBe(true)
+  })
+
   it('Classic Songs: the table has Plays and Last played (085)', () => {
     expect(songs(page.filesPage('songs', '', '')[0]).plays).toBe(true)
   })

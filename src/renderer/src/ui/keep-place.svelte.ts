@@ -3,7 +3,7 @@
 // search moves the view as before. A list scrolled to the top stays there,
 // so new songs show. Call during component setup.
 import { tick, untrack } from 'svelte'
-import { heldShift } from '../library/views'
+import { evenPlaces, heldMove, type ItemPlaces } from '../library/views'
 
 export interface PlaceOptions<T> {
   // the element that scrolls, and the one the rows sit in
@@ -15,6 +15,9 @@ export interface PlaceOptions<T> {
   // row height in px
   rowSize: number
   key: (item: T) => string
+  // where a list's items are when its rows differ in height (a grid with
+  // headings); else rows of `per` items, `rowSize` px each
+  places?: (items: T[]) => ItemPlaces
   // changes with every library the page gets (or new data in a plugin)
   source: number | string
 }
@@ -39,17 +42,26 @@ export function keepPlace<T>(opts: () => PlaceOptions<T>): void {
         held = undefined
         return
       }
-      const first = Math.floor(-listTop / o.rowSize)
-      let from = first * o.per
+      const places = o.places ?? ((items: T[]) => evenPlaces(items.length, o.per, o.rowSize))
+      const before = places(prev.items)
+      let from = before.at(-listTop)
       if (held && Math.abs(box.scrollTop - held.scroll) < 1) {
         const k = held.key
         const i = prev.items.findIndex((x) => o.key(x) === k)
-        if (i >= 0 && Math.floor(i / o.per) === first) from = i
+        if (i >= 0 && before.top(i) === before.top(from)) from = i
       }
-      const { rows, held: key } = heldShift(prev.items, o.items, from, o.per, o.key)
+      const { px, held: key } = heldMove(
+        prev.items,
+        o.items,
+        from,
+        o.per,
+        o.key,
+        before,
+        places(o.items)
+      )
       // after the list has its new height, or the box can't scroll that far
       void tick().then(() => {
-        if (rows) box.scrollTop += rows * o.rowSize
+        if (px) box.scrollTop += px
         held = key === undefined ? undefined : { key, scroll: box.scrollTop }
       })
     })

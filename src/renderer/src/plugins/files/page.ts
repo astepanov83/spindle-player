@@ -49,9 +49,13 @@ import {
   type HeadBlock,
   type PageAddress,
   type Piece,
+  type ArtistHeading,
+  type CoverArt,
   type SearchGroup,
+  type TileGroups,
   type TilesBlock
 } from '../types'
+import { albumGrouping, artistGrouping, type Heading } from '../../library/groups'
 import { openArtist, showArtist, followArtist, goToFolder } from './nav'
 import { albumPage, artistPage, fixesPage, folderPage, parsePage } from './pages'
 import { fixCount, keepSeparate, nameFixes, tagNote, type NameFix } from './name-fixes'
@@ -173,8 +177,35 @@ function albumsPage(page: string, query: string): Block[] {
         menu: { prefix: 'Sort:' }
       }
     },
-    albumTiles(sortedAlbums(by))
+    albumTiles(sortedAlbums(by), undefined, albumGroups(by))
   ]
+}
+
+// Headings by the sort (ticket 096): an album artist over their albums, letters, decades.
+function albumGroups(by: AlbumSort): TileGroups<Album> | undefined {
+  const grouping = albumGrouping(by, Date.now())
+  if (!grouping) return undefined
+  return {
+    grouping,
+    strip: by === 'name' || by === 'artist',
+    ...(by === 'artist' ? { artist: albumArtistHeading } : {})
+  }
+}
+
+// An album artist over their albums: their picture, the albums under it,
+// and Play plays those. A split credit ("A, B") has no page of its own.
+function albumArtistHeading(h: Heading, albums: readonly Album[]): ArtistHeading {
+  const a = files.getArtist(artistKey(h.artist ?? h.title))
+  const covers: CoverArt[] = []
+  for (const al of albums) if (al.cover && covers.length < 4) covers.push(al)
+  return {
+    sub: fmtCount(albums.length, 'album', 'albums'),
+    photo: a && files.photos[a.key]?.cover,
+    covers: a ? artistCovers(a, album, songArt) : covers,
+    ...(a ? { to: at(artistPage(a.key)), link: queueLink('artist', a.key) } : {}),
+    songs: () => trackKeys(albums.flatMap((al) => al.trackIds)),
+    from: h.title
+  }
 }
 
 // The last sort, kept while the albums, the sort and the plays are the same:
@@ -194,9 +225,14 @@ function sortedAlbums(by: AlbumSort): Album[] {
 
 // Albums as covers. On an artist's page the line under names the year, and
 // an album opens under the artist.
-function albumTiles(albums: Album[], under?: { artist: string }): TilesBlock {
+function albumTiles(
+  albums: Album[],
+  under?: { artist: string },
+  groups?: TileGroups<Album>
+): TilesBlock {
   return tilesBlock<Album>({
     items: albums,
+    ...(groups ? { groups } : {}),
     key: (al) => albumPage(al.id),
     tile: (al) => ({
       title: al.title,
@@ -228,9 +264,10 @@ const artistCount = (a: Artist): string =>
     ? fmtCount(a.albums.length, 'album', 'albums')
     : fmtCount(a.also.length, 'song', 'songs')
 
-function artistTiles(artists: Artist[]): TilesBlock {
+function artistTiles(artists: Artist[], groups?: TileGroups<Artist>): TilesBlock {
   return tilesBlock<Artist>({
     items: artists,
+    ...(groups ? { groups } : {}),
     round: true,
     key: (a) => artistPage(a.key),
     tile: (a) => ({
@@ -282,10 +319,13 @@ function artistsPage(page: string, query: string): Block[] {
         { value: 'all', label: 'All artists' }
       ]
     }
+  // letters over the whole list; a search's few names need none
+  const groups = query.trim() ? undefined : { grouping: artistGrouping, strip: true }
   return [
     head,
     ...(shown.length ? [] : [noMatches('No artist has that in their name.')]),
-    artistTiles(shown)
+    // smaller than the search results' artists, so more fit in a row
+    { ...artistTiles(shown, groups), small: true }
   ]
 }
 

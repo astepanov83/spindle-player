@@ -203,3 +203,8 @@ export function stripLetters(runs: readonly Run[]): { letter: string; has: boole
     ...[...seen].filter((l) => !always.includes(l)).map((letter) => ({ letter, has: true }))
   ]
 }
+
+// An artist page's Singles and EPs (ticket 099): a short release, or one
+// whose title says so. No tag for it is read today.
+export const shortRelease = (al: Pick<Album, 'title' | 'trackIds'>): boolean =>
+  al.trackIds.length <= 6 || /\b(ep|single)\b/i.test(al.title)

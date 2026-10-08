@@ -103,9 +103,15 @@
   {n.text}
   {#each n.items as t, i (i)}
     {@const a = t.action}
-    {#if i > 0}<span class="dot">·</span>{/if}<span>{t.text}</span>
+    {@const p = t.play}
+    {#if i > 0}<span class="dot">·</span>{/if}{#if t.text}<span>{t.text}</span>{/if}
     {#if a}
       <button class="use" aria-label={a.hint} onclick={() => act(a.id, a.value)}>{a.label}</button>
+    {/if}
+    {#if p}
+      <button class="use" onclick={() => playPage('start', p.songs, p.from, p.link)}
+        >{p.label}</button
+      >
     {/if}
   {/each}
 {/snippet}

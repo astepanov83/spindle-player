@@ -158,11 +158,14 @@ export interface HeadBlock {
   // a small line, of names with a button each: "From tags: X (renamed) [Keep
   // separate]", or only text: "Song times are guessed". `hint` names the
   // button for screen readers when the label alone is the same on each.
+  // `play`: a button that plays some of the page's songs in order, never
+  // Pause, so only Play says it ("3 songs by Amber Fields [Play their songs]").
   note?: {
     text: string
     items: {
       text: string
       action?: { id: string; label: string; value: string; hint?: string }
+      play?: { label: string; songs: () => ItemKey[]; from: string; link?: QueueLink }
     }[]
   }
   buttons?: HeadButton[]
@@ -303,6 +306,12 @@ export interface SongsBlock {
   count?: boolean
   // the Artist column; off where every song has the page's artist
   artist?: boolean
+  // an album's list: the Album column in the Artist column's place (an
+  // artist's top songs, from several albums)
+  album?: boolean
+  // an album's list: these songs at full strength, the rest dim (the
+  // artist's own songs on an album opened under them)
+  marked?: ItemKey[]
   // the sortable table's Plays and Last played columns (ticket 085)
   plays?: boolean
   // a column head was clicked: act(id, 'sort', its key). May be a getter, so
@@ -429,6 +438,8 @@ export interface ChangesBlock {
 export interface TextBlock {
   kind: 'text'
   text: string
+  // it starts a part of the page, with room above it (not right under the head)
+  part?: boolean
 }
 
 // Words to search for, as a row of chips after a label: a click puts the

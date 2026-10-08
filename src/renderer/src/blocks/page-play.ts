@@ -26,9 +26,10 @@ export function playState(
 
 // Play pauses or resumes while the page's songs play, otherwise plays them
 // in order from the first one `can` play; Shuffle from a random one of those.
-// Either way shuffle is set to match, so the next list plays as it says.
+// `start` plays in order and never pauses. Either way shuffle is set to
+// match, so the next list plays as it says.
 export function playPage(
-  how: 'all' | 'shuffle',
+  how: 'all' | 'shuffle' | 'start',
   songs: () => ItemKey[],
   from: string,
   link: QueueLink | undefined,

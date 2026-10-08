@@ -126,7 +126,13 @@
     {:else if b.kind === 'changes'}
       <Changes block={b} {tab} {plugin} />
     {:else if b.kind === 'text'}
-      <h3 class="part section-label" class:over-rows={overRows(i)} class:top={underHead(i)}>
+      <h3
+        class="part section-label"
+        class:over-rows={overRows(i)}
+        class:top={underHead(i)}
+        class:gap-above={b.part && !underHead(i)}
+        class:after-tiles={blocks[i - 1]?.kind === 'tiles'}
+      >
         {b.text}
       </h3>
     {:else if b.kind === 'chips'}
@@ -154,6 +160,14 @@
   }
   .part {
     margin: 0 0 14px;
+  }
+  /* a part of an artist's page (ticket 099) */
+  .gap-above {
+    margin-top: 30px;
+  }
+  /* the grid's last row ends in its 20px row gap */
+  .gap-above.after-tiles {
+    margin-top: 10px;
   }
   .over-rows {
     margin: 14px 12px 6px;

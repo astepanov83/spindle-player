@@ -30,7 +30,14 @@ import {
   type FolderTree
 } from './folders'
 import { libraryProblem, scanLine, settingsText, stoppedText } from './scan-text'
-import { filterAlbums, nextSort, searchSongs, songRows, type SortKey } from '../../library/views'
+import {
+  filterAlbums,
+  nextSort,
+  searchSongs,
+  songRows,
+  type Sort,
+  type SortKey
+} from '../../library/views'
 import { library } from '../../stores/library.svelte'
 import { plays } from '../../stores/plays.svelte'
 import { setViewSort, settings, viewSort } from '../../stores/settings.svelte'
@@ -67,6 +74,7 @@ import { fixCount, keepSeparate, nameFixes, tagNote, type NameFix } from './name
 import { ai } from '../../ai.svelte'
 import { artistGroupsTask } from '../../../../shared/plugins/files/artists-file'
 import { trackKey, trackKeys, trackOf } from './tracks'
+import { artistParts, newest, theirSongs, topSongs, type ArtistParts } from './artist-parts'
 
 const at = (page: string): PageAddress => ({ plugin: 'files', page })
 
@@ -340,9 +348,6 @@ function artistTiles(artists: Artist[], groups?: TileGroups<Artist>): TilesBlock
   })
 }
 
-// newest first, no year last, as the Year sort
-const newest = (albums: Album[]): Album[] => sortAlbums(albums, 'year', () => undefined)
-
 // Artists as rows (ticket 097): the name, up to 6 covers of their newest
 // albums, then Albums and Songs.
 function artistRows(artists: Artist[], groups?: TileGroups<Artist>): ListBlock {
@@ -432,11 +437,15 @@ function artistsPage(page: string, query: string): Block[] {
   const p = parsePage(page)
   const open = p?.kind === 'artist' ? p : undefined
   const artist = open && files.getArtist(open.key)
-  if (!query.trim() && open?.album && files.findAlbum(open.album))
-    return albumBlocks(files.album(open.album), {
-      label: artist?.name ?? 'All artists',
-      to: at(artistPage(open.key))
-    })
+  if (!query.trim() && open?.album && files.findAlbum(open.album)) {
+    const al = files.album(open.album)
+    const theirs = artist && theirSongs(artist, al)
+    return albumBlocks(
+      al,
+      { label: artist?.name ?? 'All artists', to: at(artistPage(open.key)) },
+      theirs && artist ? { name: artist.name, ids: theirs } : undefined
+    )
+  }
   if (!query.trim() && artist) return artistBlocks(artist)
   if (!query.trim() && p?.kind === 'fixes') return fixesBlocks()
   const shown = shownArtists(files.artists, settings.artistsShown, query)
@@ -499,10 +508,17 @@ function goToAlbumFolder(id: string): void {
   if (where) goToFolder(files.folders.nodes[where.at].key)
 }
 
-function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
+// `theirs`: opened under an artist with songs on it, which are marked
+// (ticket 099), with a line that counts them and a Play for them alone.
+function albumBlocks(
+  al: Album,
+  back: HeadBlock['back'],
+  theirs?: { name: string; ids: string[] }
+): Block[] {
   const id = albumPage(al.id)
   const tracks = al.trackIds.map((t) => files.track(t))
   const items = trackKeys(al.trackIds)
+  const marked = theirs && trackKeys(theirs.ids)
   const link = albumLink(al)
   const length = tracks.reduce((s, t) => s + t.duration, 0)
   const where = albumFolder(al)
@@ -562,6 +578,15 @@ function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
       }
     ]
   }
+  // on the line that counts them, not with the head's buttons: one more
+  // there puts the last on a line of its own at Studio's usual width
+  if (marked && theirs)
+    head.note = {
+      text: `${fmtCount(theirs.ids.length, 'song', 'songs')} by ${theirs.name}`,
+      items: [
+        { text: '', play: { label: 'Play their songs', songs: () => marked, from: al.title, link } }
+      ]
+    }
   return [
     head,
     {
@@ -572,36 +597,119 @@ function albumBlocks(al: Album, back: HeadBlock['back']): Block[] {
       link,
       numbers,
       groups,
-      artist: !allBy(tracks, al.artist)
+      artist: !allBy(tracks, al.artist),
+      ...(marked ? { marked } : {})
     }
   ]
 }
 
-// their albums in order, then the "Also on" songs as sorted
-const artistPlayIds = (a: Artist): ItemKey[] =>
+// Their albums in order, then their songs on other albums: as the "Also
+// on" table sorts them, or in library order on a page without it.
+const artistPlayIds = (a: Artist, sort: Sort | null): ItemKey[] =>
   trackKeys(
     artistPageSongs(
       a,
       album,
       (id) => files.track(id),
-      files.artistSort,
+      sort,
       (t) => files.order(t)
     )
   )
 
-// An artist: their picture and name, their albums as covers, then their
-// songs on other albums. Edit renames or splits them (ticket 024).
+// An artist: their head, then their page in the look picked (ticket 099).
+// Edit renames or splits them (ticket 024).
 function artistBlocks(a: Artist): Block[] {
-  const id = artistPage(a.key)
+  if (viewLook('artistPage') === 'sections') return artistSections(a)
   const albums = a.albums.map(album)
   const also = trackKeys(a.also)
+  const blocks: Block[] = [artistHead(a, () => artistPlayIds(a, files.artistSort))]
+  if (albums.length)
+    blocks.push({ kind: 'text', text: 'Albums' }, albumTiles(albums, { artist: a.key }))
+  if (also.length)
+    blocks.push({
+      kind: 'songs',
+      id: artistPage(a.key),
+      items: also,
+      from: a.name,
+      link: queueLink('artist', a.key),
+      // with no albums above, "Also on" would head nothing, and the head
+      // already counts the songs
+      ...(albums.length ? { label: 'Also on' } : {}),
+      count: albums.length > 0,
+      artist: !allBy(
+        a.also.map((t) => files.track(t)),
+        a.name
+      ),
+      get sort() {
+        return files.artistSort
+      }
+    })
+  return blocks
+}
+
+// The sections look: their most played songs, then their releases in parts
+// as smaller covers.
+function artistSections(a: Artist): Block[] {
+  const parts = artistPartsOf(a)
+  return [
+    artistHead(a, () => artistPlayIds(a, null)),
+    ...topSongsBlocks(a),
+    ...partBlocks('Albums', partTiles(a, parts.albums)),
+    ...partBlocks('Singles and EPs', partTiles(a, parts.singles)),
+    ...partBlocks('Appears on', partTiles(a, parts.appearsOn, true))
+  ]
+}
+
+// Their releases in parts, newest first: albums, singles and EPs, and the
+// albums of others their songs are on.
+const artistPartsOf = (a: Artist): ArtistParts =>
+  artistParts(a, album, (id) => files.track(id).albumId)
+
+// A part of an artist's page under its heading; nothing when it is empty.
+function partBlocks(title: string, b: Block & { items: readonly unknown[] }): Block[] {
+  return b.items.length ? [{ kind: 'text', text: title, part: true }, b] : []
+}
+
+// A part's albums as covers, opening under the artist. On another artist's
+// album the line under names that artist, not the year.
+function partTiles(a: Artist, albums: Album[], others = false): TilesBlock {
+  const under = { artist: a.key }
+  return {
+    ...tilesBlock<Album>({
+      items: albums,
+      key: (al) => albumPage(al.id),
+      tile: (al) => ({ ...albumTile(al, under), ...(others ? { subtitle: al.artist } : {}) })
+    }),
+    small: true
+  }
+}
+
+// Their 5 most played songs, most first, with the album in the artist's
+// place; nothing while none of their songs was played.
+function topSongsBlocks(a: Artist): Block[] {
+  const top = topSongs(trackKeys(artistSongs(a, album)), (k) => plays.of(k))
+  if (!top.length) return []
+  return partBlocks('Top songs', {
+    kind: 'songs',
+    id: artistPage(a.key),
+    items: top,
+    from: a.name,
+    link: queueLink('artist', a.key),
+    album: true
+  })
+}
+
+// An artist's head: their picture, name and counts, Play, Shuffle, Add to
+// playlist, Edit and the song menu, the tags they come from, the names
+// editor while editing.
+function artistHead(a: Artist, playIds: () => ItemKey[]): HeadBlock {
+  const albums = a.albums.length
   const songs = artistSongs(a, album)
   const link = queueLink('artist', a.key)
-  const playIds = (): ItemKey[] => artistPlayIds(a)
   const head: HeadBlock = {
     kind: 'head',
     look: 'artist',
-    id,
+    id: artistPage(a.key),
     title: a.name,
     meta: 'Artist',
     art: {
@@ -614,7 +722,7 @@ function artistBlocks(a: Artist): Block[] {
     line: [
       {
         text: [
-          albums.length ? fmtCount(albums.length, 'album', 'albums') : '',
+          albums ? fmtCount(albums, 'album', 'albums') : '',
           fmtCount(songs.length, 'song', 'songs')
         ]
           .filter(Boolean)
@@ -665,29 +773,7 @@ function artistBlocks(a: Artist): Block[] {
       // one renames, two or more split
       ok: (names) => cleanNames(names).length > 0
     }
-  const blocks: Block[] = [head]
-  if (albums.length)
-    blocks.push({ kind: 'text', text: 'Albums' }, albumTiles(albums, { artist: a.key }))
-  if (also.length)
-    blocks.push({
-      kind: 'songs',
-      id,
-      items: also,
-      from: a.name,
-      link,
-      // with no albums above, "Also on" would head nothing, and the head
-      // already counts the songs
-      ...(albums.length ? { label: 'Also on' } : {}),
-      count: albums.length > 0,
-      artist: !allBy(
-        a.also.map((t) => files.track(t)),
-        a.name
-      ),
-      get sort() {
-        return files.artistSort
-      }
-    })
-  return blocks
+  return head
 }
 
 const keepTagId = 'keep-tag'

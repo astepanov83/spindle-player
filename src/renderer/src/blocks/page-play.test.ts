@@ -80,6 +80,16 @@ describe('a page Play and Shuffle (ticket 076)', () => {
     expect(s.queue.playList).toHaveBeenCalled()
   })
 
+  it('Start plays a part of the page in order and never pauses (099)', () => {
+    s.player.shuffle = true
+    s.queue.link = link
+    s.queue.current = 'files:b'
+    playPage('start', () => ['files:b', 'files:c'], 'X', link)
+    expect(s.queues.togglePlay).not.toHaveBeenCalled()
+    expect(s.player.shuffle).toBe(false)
+    expect(s.queue.playList).toHaveBeenCalledWith(['files:b', 'files:c'], 0, 'X', link)
+  })
+
   it('gathers the songs only when the queue came from this page', () => {
     const songs = vi.fn(() => keys)
     s.queue.link = queueLink('artist', 'other')

@@ -9,6 +9,7 @@ import {
   artistGrouping,
   groupRuns,
   letterOf,
+  shortRelease,
   stripLetters,
   yearHeading,
   type Run
@@ -279,5 +280,27 @@ describe('stripLetters', () => {
     const strip = stripLetters(groupRuns(artists, artistGrouping))
     expect(strip.slice(0, 27).map((s) => s.letter)).toEqual(['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'])
     expect(strip.filter((s) => s.has).map((s) => s.letter)).toEqual(['#', 'A', 'Z', 'К', 'か'])
+  })
+})
+
+describe('shortRelease (099)', () => {
+  const release = (title: string, songs: number): Pick<Album, 'title' | 'trackIds'> => ({
+    title,
+    trackIds: Array.from({ length: songs }, (_, i) => `t${i}`)
+  })
+
+  it('takes 6 songs or fewer', () => {
+    expect(shortRelease(release('Rain Days', 1))).toBe(true)
+    expect(shortRelease(release('Rain Days', 6))).toBe(true)
+    expect(shortRelease(release('Rain Days', 7))).toBe(false)
+  })
+
+  it('takes a longer one whose title says EP or single, as a word in any case', () => {
+    expect(shortRelease(release('Small Hours EP', 9))).toBe(true)
+    expect(shortRelease(release('Night Drive (Single)', 8))).toBe(true)
+    expect(shortRelease(release('the ep', 8))).toBe(true)
+    // part of another word is not it
+    expect(shortRelease(release('Deep Singles Collection', 12))).toBe(false)
+    expect(shortRelease(release('Epic', 10))).toBe(false)
   })
 })

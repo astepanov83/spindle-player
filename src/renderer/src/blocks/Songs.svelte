@@ -40,6 +40,9 @@
   })
 
   const artist = $derived(b.artist ?? true)
+  // the second column: the Artist, or on an artist's top songs the Album
+  const second = $derived(b.album ? 'Album' : artist ? 'Artist' : undefined)
+  const marked = $derived(b.marked && new Set(b.marked))
   // in the markup this would lose its spaces next to a block
   const dot = ' · '
 
@@ -88,11 +91,11 @@
   />
 {:else}
   <!-- the rows say it all to a screen reader; the heads are for the eye -->
-  <div class="list" class:noartist={!artist} class:starts={!!b.starts}>
+  <div class="list" class:noartist={!second} class:starts={!!b.starts}>
     <div class="shead song-head" aria-hidden="true">
       <span></span>
       <span>Title</span>
-      {#if artist}<span>Artist</span>{/if}
+      {#if second}<span>{second}</span>{/if}
       {#if b.starts}
         <span class="end" title={b.starts.hint}>Starts</span>
       {:else}
@@ -114,6 +117,7 @@
             data-song={splitKey(line.key)?.id}
             class:cur-row={cur}
             class:selected={sel.has(line.key)}
+            class:other={marked && !marked.has(line.key)}
             data-row
             aria-current={cur ? 'true' : undefined}
             onpointerdown={(e) => songDrag.press(e, () => dragOf(line.key))}
@@ -126,9 +130,11 @@
                 >{:else if line.no}{line.no}{/if}</span
             >
             <span class="nm" title={t?.title}
-              >{t?.title ?? ''}{#if away && !artist}<span class="away">{dot}{away}</span>{/if}</span
+              >{t?.title ?? ''}{#if away && !second}<span class="away">{dot}{away}</span>{/if}</span
             >
-            {#if artist}<span class="ar" class:away title={away ?? t?.subtitle}
+            {#if b.album}<span class="ar" class:away title={away ?? t?.group}
+                >{away ?? t?.group ?? ''}</span
+              >{:else if artist}<span class="ar" class:away title={away ?? t?.subtitle}
                 >{away ?? t?.subtitle ?? ''}</span
               >{/if}
             {#if b.starts}
@@ -211,6 +217,11 @@
   }
   .cur-row .nm {
     font-weight: 600;
+  }
+  /* another artist's song on an album opened under one (ticket 099): the
+     row's fill stays, its words go as dim as a played queue row */
+  .other > span {
+    opacity: var(--past);
   }
   .nm,
   .ar {

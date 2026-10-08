@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101320"/>
+      <stop offset="1" stop-color="#0b0c12"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="60"/></filter>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7fe3e8"/>
+      <stop offset="0.5" stop-color="#b9a6ff"/>
+      <stop offset="1" stop-color="#ff8fb8"/>
+    </linearGradient>
+    <clipPath id="card"><rect width="1280" height="320" rx="24"/></clipPath>
+  </defs>
+  <g clip-path="url(#card)">
+    <rect width="1280" height="320" fill="url(#bg)"/>
+    <g filter="url(#blur)" opacity="0.75">
+      <circle cx="230" cy="90" r="150" fill="#2f7fd6"/>
+      <circle cx="620" cy="300" r="140" fill="#8a2be2"/>
+      <circle cx="1000" cy="40" r="150" fill="#e0457b"/>
+      <circle cx="1180" cy="290" r="120" fill="#2fc7a0"/>
+    </g>
+    <g fill="#9fc4ff" opacity="0.85"><circle cx="342.0" cy="160.0" r="2.6"/><circle cx="341.6" cy="168.0" r="2.6"/><circle cx="340.6" cy="176.0" r="2.6"/><circle cx="343.0" cy="184.9" r="2.6"/><circle cx="336.5" cy="191.5" r="2.6"/><circle cx="333.4" cy="198.9" r="2.6"/><circle cx="334.9" cy="209.0" r="2.6"/><circle cx="325.4" cy="212.8" r="2.6"/><circle cx="320.5" cy="219.1" r="2.6"/><circle cx="318.1" cy="228.1" r="2.6"/><circle cx="309.1" cy="230.5" r="2.6"/><circle cx="302.8" cy="235.4" r="2.6"/><circle cx="296.0" cy="239.7" r="2.6"/><circle cx="288.9" cy="243.4" r="2.6"/><circle cx="281.5" cy="246.5" r="2.6"/><circle cx="274.9" cy="253.0" r="2.6"/><circle cx="266.0" cy="250.6" r="2.6"/><circle cx="258.0" cy="251.6" r="2.6"/><circle cx="250.0" cy="258.0" r="2.6"/><circle cx="242.0" cy="251.6" r="2.6"/><circle cx="234.0" cy="250.6" r="2.6"/><circle cx="225.1" cy="253.0" r="2.6"/><circle cx="218.5" cy="246.5" r="2.6"/><circle cx="211.1" cy="243.4" r="2.6"/><circle cx="204.0" cy="239.7" r="2.6"/><circle cx="197.2" cy="235.4" r="2.6"/><circle cx="190.9" cy="230.5" r="2.6"/><circle cx="181.9" cy="228.1" r="2.6"/><circle cx="179.5" cy="219.1" r="2.6"/><circle cx="174.6" cy="212.8" r="2.6"/><circle cx="165.1" cy="209.0" r="2.6"/><circle cx="166.6" cy="198.9" r="2.6"/><circle cx="163.5" cy="191.5" r="2.6"/><circle cx="157.0" cy="184.9" r="2.6"/><circle cx="159.4" cy="176.0" r="2.6"/><circle cx="158.4" cy="168.0" r="2.6"/><circle cx="158.0" cy="160.0" r="2.6"/><circle cx="158.4" cy="152.0" r="2.6"/><circle cx="159.4" cy="144.0" r="2.6"/><circle cx="157.0" cy="135.1" r="2.6"/><circle cx="163.5" cy="128.5" r="2.6"/><circle cx="166.6" cy="121.1" r="2.6"/><circle cx="165.1" cy="111.0" r="2.6"/><circle cx="174.6" cy="107.2" r="2.6"/><circle cx="179.5" cy="100.9" r="2.6"/><circle cx="181.9" cy="91.9" r="2.6"/><circle cx="190.9" cy="89.5" r="2.6"/><circle cx="197.2" cy="84.6" r="2.6"/><circle cx="204.0" cy="80.3" r="2.6"/><circle cx="211.1" cy="76.6" r="2.6"/><circle cx="218.5" cy="73.5" r="2.6"/><circle cx="225.1" cy="67.0" r="2.6"/><circle cx="234.0" cy="69.4" r="2.6"/><circle cx="242.0" cy="68.4" r="2.6"/><circle cx="250.0" cy="62.0" r="2.6"/><circle cx="258.0" cy="68.4" r="2.6"/><circle cx="266.0" cy="69.4" r="2.6"/><circle cx="274.9" cy="67.0" r="2.6"/><circle cx="281.5" cy="73.5" r="2.6"/><circle cx="288.9" cy="76.6" r="2.6"/><circle cx="296.0" cy="80.3" r="2.6"/><circle cx="302.8" cy="84.6" r="2.6"/><circle cx="309.1" cy="89.5" r="2.6"/><circle cx="318.1" cy="91.9" r="2.6"/><circle cx="320.5" cy="100.9" r="2.6"/><circle cx="325.4" cy="107.2" r="2.6"/><circle cx="334.9" cy="111.0" r="2.6"/><circle cx="333.4" cy="121.1" r="2.6"/><circle cx="336.5" cy="128.5" r="2.6"/><circle cx="343.0" cy="135.1" r="2.6"/><circle cx="340.6" cy="144.0" r="2.6"/><circle cx="341.6" cy="152.0" r="2.6"/></g>
+    <circle cx="250" cy="160" r="80" fill="#111216"/>
+    <circle cx="250" cy="160" r="66" fill="none" stroke="#2a2d38" stroke-width="2"/>
+    <circle cx="250" cy="160" r="53" fill="none" stroke="#2a2d38" stroke-width="2"/>
+    <circle cx="250" cy="160" r="32" fill="#4cc3c9"/>
+    <circle cx="250" cy="160" r="7" fill="#f3f4f7"/>
+    <text x="400" y="168" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="96" font-weight="800" fill="url(#title)" letter-spacing="-2">Spindle</text>
+    <text x="404" y="222" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" fill="#d7dbe8">A music player for your own files that wears</text>
+    <text x="404" y="260" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" fill="#d7dbe8">the colors of whatever you are playing.</text>
+  </g>
+</svg>

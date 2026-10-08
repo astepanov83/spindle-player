@@ -11,17 +11,15 @@ import { drawArtistRings, drawArtistType } from './artist'
 import { drawRings } from './rings'
 import { artistFont, drawType, titleFont } from './type'
 
-// 'sound' and 'genre' come with tickets 104, 106 and 107; until then they
-// draw as the default.
-const styles: Partial<Record<NoCover, Draw>> = {
+const styles: Record<NoCover, Draw> = {
   record: drawRecord,
   rings: drawRings,
   type: drawType
 }
-export const drawOf = (style: NoCover): Draw => styles[style] ?? drawRings
+export const drawOf = (style: NoCover): Draw => styles[style]
 
 // An artist's version of each style (ticket 105): their initials. Record is
-// the grey record, drawn by Cover. Genre and sound add theirs with 104 and 107.
+// the grey record, drawn by Cover.
 const artistStyles: Partial<Record<NoCover, Draw>> = {
   rings: drawArtistRings,
   type: drawArtistType

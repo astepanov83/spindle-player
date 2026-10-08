@@ -47,10 +47,8 @@ describe('artist pictures', () => {
     expect(sizeOf('東')).toBeGreaterThan(sizeOf('OB'))
   })
 
-  it('has a picture for each style: genre and sound use the rings one for now', () => {
+  it('has a picture for each style it draws', () => {
     expect(drawArtistOf('rings')).toBe(drawArtistRings)
     expect(drawArtistOf('type')).toBe(drawArtistType)
-    expect(drawArtistOf('genre')).toBe(drawArtistRings)
-    expect(drawArtistOf('sound')).toBe(drawArtistRings)
   })
 })

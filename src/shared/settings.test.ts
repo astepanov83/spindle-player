@@ -496,9 +496,15 @@ describe('no cover setting', () => {
     expect(parseStoredSettings({ noCover: 'stars' }).noCover).toBe('rings')
   })
 
+  it('reads a style that was taken out as the default', () => {
+    expect(parseStoredSettings({ noCover: 'genre' }).noCover).toBe('rings')
+    expect(parseStoredSettings({ noCover: 'sound' }).noCover).toBe('rings')
+  })
+
   // an old file is known as it is, so starting the app doesn't copy or write it
   it('knows the field in a file, and a file without it', () => {
     expect(isKnownSettingsFile({ noCover: 'genre' })).toBe(true)
+    expect(isKnownSettingsFile({ noCover: 'sound' })).toBe(true)
     expect(isKnownSettingsFile({ theme: 'dark' })).toBe(true)
     expect(isKnownSettingsFile({ noCover: 'stars' })).toBe(false)
   })

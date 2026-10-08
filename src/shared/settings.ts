@@ -19,7 +19,7 @@ export interface ViewLooks {
 }
 export type LookView = keyof ViewLooks
 // what an album, artist or station with no picture shows (ticket 103)
-export type NoCover = 'record' | 'rings' | 'type' | 'sound' | 'genre'
+export type NoCover = 'record' | 'rings' | 'type'
 
 export interface Settings {
   template: TemplateId
@@ -89,7 +89,10 @@ export const coverSources: CoverSource[] = ['musicbrainz', 'deezer', 'itunes']
 export const closeActions: CloseAction[] = ['ask', 'minimize', 'quit']
 export const artistsShownChoices: ArtistsShown[] = ['album', 'all']
 export const loudnessChoices: Loudness[] = ['off', 'song', 'album']
-export const noCoverChoices: NoCover[] = ['record', 'rings', 'type', 'sound', 'genre']
+export const noCoverChoices: NoCover[] = ['record', 'rings', 'type']
+// Styles taken out on 2026-10-09: still known in a file, so it is not copied
+// aside at start, and read as the default.
+const droppedNoCover = ['sound', 'genre']
 // each view's looks, the default first
 export const viewLookChoices: { [V in LookView]: ViewLooks[V][] } = {
   albums: ['grid', 'list'],
@@ -444,7 +447,8 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   )
     return false
   if (has('loudness') && !loudnessChoices.includes(raw.loudness as Loudness)) return false
-  if (has('noCover') && !noCoverChoices.includes(raw.noCover as NoCover)) return false
+  if (has('noCover') && ![...noCoverChoices, ...droppedNoCover].includes(raw.noCover as string))
+    return false
   if (
     has('coverSources') &&
     (!isObject(raw.coverSources) ||

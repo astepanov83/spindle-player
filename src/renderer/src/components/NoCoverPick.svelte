@@ -8,13 +8,12 @@
   import { radioStep } from '../keys'
   import { settings } from '../stores/settings.svelte'
 
-  // 'sound' and 'genre' show once tickets 104 and 107 draw them
   const shown: { value: NoCover; label: string }[] = [
     { value: 'rings', label: 'Track rings' },
     { value: 'type', label: 'Title' },
     { value: 'record', label: 'Plain record' }
   ]
-  const hints: Partial<Record<NoCover, string>> = {
+  const hints: Record<NoCover, string> = {
     rings: 'A record with one ring per song, as wide as the song is long, in colors of its own.',
     type: 'The title and artist, set on a color of their own.',
     record: 'The same grey record for every album.'

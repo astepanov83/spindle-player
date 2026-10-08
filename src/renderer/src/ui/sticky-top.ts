@@ -37,3 +37,9 @@ export function coveredTop(box: HTMLElement): number {
     })
   )
 }
+
+// How much of the box's top a list view's sticking title row covers, read
+// from an element under it (library/ViewHead.svelte); 0 under none.
+export function titleCover(el: Element | undefined): number {
+  return el ? parseFloat(getComputedStyle(el).getPropertyValue('--vhead-h')) || 0 : 0
+}

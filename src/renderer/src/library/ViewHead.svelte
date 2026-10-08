@@ -89,7 +89,9 @@
   >
 {/snippet}
 
-<div class="vhead">
+<!-- The row sticks at the top while the view scrolls, so the sort and the
+     look switch stay in reach; a line under it scrolls away. -->
+<div class="vhead" class:tight={!!below || !!hint} data-sticky-top>
   <div class="titlerow" bind:clientWidth={rowW}>
     <div class="lead" class:fixed={!!looks} bind:clientWidth={leadW}>
       <h2 class="page-title" {title}>{title}</h2>
@@ -124,15 +126,40 @@
       <div class="side">{@render menuButton(true)}</div>
     {/if}
   </div>
-  {#if below}{@render below()}{:else if hint}<div class="page-meta">{hint}</div>{/if}
 </div>
+{#if below}<div class="under">{@render below()}</div>{:else if hint}<div class="under page-meta">
+    {hint}
+  </div>{/if}
 
 <style>
+  /* It reaches up over the scroll box's top padding, so it sits still from
+     the start and no row shows above it. */
   .vhead {
-    padding: 6px 0 16px;
+    position: sticky;
+    top: calc(-1 * var(--scroll-pad-top, 20px));
+    z-index: 2;
+    margin-top: calc(-1 * var(--scroll-pad-top, 20px));
+    padding: calc(var(--scroll-pad-top, 20px) + 6px) 0 16px;
+    background: var(--bg);
+  }
+  .vhead.tight {
+    padding-bottom: 8px;
+  }
+  .under {
+    padding-bottom: 16px;
+  }
+  /* How much of the box's top the stuck row covers, for the parts that
+     stick under it and the jumps that land under it. The row's height is
+     set so this is known. */
+  .vhead ~ :global(*) {
+    --vhead-h: calc(var(--scroll-pad-top, 20px) + 62px);
+  }
+  .vhead.tight ~ :global(*) {
+    --vhead-h: calc(var(--scroll-pad-top, 20px) + 54px);
   }
   .titlerow {
     position: relative;
+    height: 40px;
     display: flex;
     align-items: center;
     gap: 10px;

@@ -113,12 +113,21 @@ button.row:active:not(.cur-row) {
   position: relative;
 }
 
+/* How much of the scroll box's top a list view's title row covers while it
+   sticks (library/ViewHead.svelte); 0 under no title row. A length, so JS
+   reads it in px. */
+@property --vhead-h {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
 /* The column heads over a song list. Every list of songs has them, sorting
    or not (ticket 075). They stick to the top of the scroll box, over its top
    padding; the list sets the grid so the heads line up with its rows. */
 .song-head {
   position: sticky;
-  top: calc(-1 * var(--scroll-pad-top, 20px));
+  top: calc(var(--vhead-h) - var(--scroll-pad-top, 20px));
   z-index: 1;
   height: 38px;
   background: var(--bg);
@@ -136,7 +145,7 @@ button.row:active:not(.cur-row) {
 }
 /* Up keeps the focused row clear of the sticky heads */
 .song-rows > .row {
-  scroll-margin-top: calc(38px + var(--scroll-pad-top, 20px));
+  scroll-margin-top: calc(var(--vhead-h) + 38px + var(--scroll-pad-top, 20px));
 }
 
 /* The playing song or station, in the album accent (specs/themes.md). */

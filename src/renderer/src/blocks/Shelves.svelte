@@ -13,6 +13,7 @@
   import { nearestRow } from '../ui/roving'
   import { keepPlace } from '../ui/keep-place.svelte'
   import { virtualList } from '../ui/virtual-list.svelte'
+  import { titleCover } from '../ui/sticky-top'
   import { itemsVersion } from '../plugins'
   import type { ShelvesBlock } from '../plugins/types'
   import LetterStrip from './LetterStrip.svelte'
@@ -43,7 +44,18 @@
     const all = items
     return (i: number): string => (all[i] === undefined ? `${i}` : b.key(all[i]))
   })
-  const v = virtualList(() => ({ count: items.length, scrollEl, list, size: ROW, key: rowKey }), 3)
+  // a jump lands under the title row
+  const v = virtualList(
+    () => ({
+      count: items.length,
+      scrollEl,
+      list,
+      size: ROW,
+      key: rowKey,
+      paddingStart: titleCover(list)
+    }),
+    3
+  )
 
   keepPlace(() => ({
     scrollEl,
@@ -90,7 +102,8 @@
     box.addEventListener('scroll', read, { passive: true })
     return () => box.removeEventListener('scroll', read)
   })
-  const firstShown = $derived(v.items.find((x) => x.end > top)?.index)
+  // not a shelf hidden under the title row
+  const firstShown = $derived(v.items.find((x) => x.end > top + titleCover(list))?.index)
   const activeDrawn = $derived(
     !!active && v.items.some((x) => x.index < items.length && b.key(items[x.index]) === active?.key)
   )
@@ -259,6 +272,7 @@
     min-width: 0;
   }
   .shelfrow {
+    scroll-margin-top: var(--vhead-h);
     position: absolute;
     top: 0;
     left: 0;

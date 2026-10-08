@@ -17,6 +17,7 @@
   import { addFinder } from '../ui/item-finder'
   import { keepPlace } from '../ui/keep-place.svelte'
   import { roving } from '../ui/roving'
+  import { titleCover } from '../ui/sticky-top'
   import { virtualList } from '../ui/virtual-list.svelte'
   import { itemsVersion, openFrom } from '../plugins'
   import type { CoverArt, ListBlock, ListRow } from '../plugins/types'
@@ -65,9 +66,16 @@
     return (i: number): string => r[i]?.key ?? `${i}`
   })
 
-  // a jump to a row leaves it clear of the column heads
+  // a jump to a row leaves it clear of the title row and column heads
   const v = virtualList(
-    () => ({ count: rows.length, scrollEl, list, size, key: rowKey, paddingStart: HEADS }),
+    () => ({
+      count: rows.length,
+      scrollEl,
+      list,
+      size,
+      key: rowKey,
+      paddingStart: titleCover(list) + HEADS
+    }),
     10
   )
 
@@ -105,7 +113,7 @@
     const el = list
     if (!box || !el || !runs) return
     const read = (): void => {
-      y = box.getBoundingClientRect().top + HEADS - el.getBoundingClientRect().top
+      y = box.getBoundingClientRect().top + titleCover(el) + HEADS - el.getBoundingClientRect().top
     }
     read()
     box.addEventListener('scroll', read, { passive: true })
@@ -330,7 +338,7 @@
   }
   .stuck {
     position: sticky;
-    top: calc(38px - var(--scroll-pad-top, 20px));
+    top: calc(var(--vhead-h) + 38px - var(--scroll-pad-top, 20px));
     z-index: 1;
     margin-bottom: calc(-1 * var(--head));
     background: var(--bg);
@@ -354,10 +362,10 @@
   }
   /* Up and Down keep the focused row clear of the heads that stick */
   .main {
-    scroll-margin-top: calc(38px + var(--scroll-pad-top, 20px));
+    scroll-margin-top: calc(var(--vhead-h) + 38px + var(--scroll-pad-top, 20px));
   }
   .grouped .main {
-    scroll-margin-top: calc(38px + var(--head) + var(--scroll-pad-top, 20px));
+    scroll-margin-top: calc(var(--vhead-h) + 38px + var(--head) + var(--scroll-pad-top, 20px));
   }
   .pic {
     position: relative;

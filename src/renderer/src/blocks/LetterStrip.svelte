@@ -35,7 +35,11 @@
 <!-- comes before the list in the page, so Tab reaches it without going
      through every row; CSS order keeps it on the right -->
 {#if strip}
-  <nav class="strip" aria-label="Go to letter" style:max-height="{boxHeight - 8}px">
+  <nav
+    class="strip"
+    aria-label="Go to letter"
+    style:max-height="calc({boxHeight - 8}px - var(--vhead-h))"
+  >
     {#each strip as s (s.letter)}
       <button
         disabled={!s.has}
@@ -51,7 +55,8 @@
   .strip {
     order: 1;
     position: sticky;
-    top: 4px;
+    /* under the title row while it sticks */
+    top: max(4px, calc(var(--vhead-h) - var(--scroll-pad-top, 20px) + 4px));
     align-self: flex-start;
     overflow-y: auto;
     scrollbar-width: none;

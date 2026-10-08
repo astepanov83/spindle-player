@@ -11,6 +11,7 @@
   import { keepPlace } from '../ui/keep-place.svelte'
   import { addFinder } from '../ui/item-finder'
   import { virtualList } from '../ui/virtual-list.svelte'
+  import { titleCover } from '../ui/sticky-top'
   import { itemsVersion } from '../plugins'
   import type { TilesBlock } from '../plugins/types'
   import LetterStrip from './LetterStrip.svelte'
@@ -61,9 +62,18 @@
     return (i: number): string => r[i]?.key ?? `${i}`
   })
 
-  // rows ahead, so a fast scroll finds them drawn
+  // rows ahead, so a fast scroll finds them drawn; a jump lands under the
+  // title row
   const v = virtualList(
-    () => ({ count: rows.length, scrollEl, list, size, key: rowKey, remeasure: true }),
+    () => ({
+      count: rows.length,
+      scrollEl,
+      list,
+      size,
+      key: rowKey,
+      remeasure: true,
+      paddingStart: titleCover(list)
+    }),
     6
   )
 
@@ -166,6 +176,10 @@
     position: relative;
     flex: 1;
     min-width: 0;
+  }
+  /* a tile Tab reaches comes clear of the title row */
+  .grid :global(*) {
+    scroll-margin-top: var(--vhead-h);
   }
   .gridrow {
     position: absolute;

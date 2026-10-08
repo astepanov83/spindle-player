@@ -1,6 +1,7 @@
 // The Artists view (ticket 021): search, what Play plays and the covers for
 // an artist's picture. No DOM. Who counts as an artist is in shared/plugins/files/artists.ts.
 import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
+import { commonGenre } from '../../../../shared/genre'
 import type { ArtistCredit } from '../../../../shared/library'
 import type { ArtistsShown } from '../../../../shared/settings'
 import { foldedName, foldQuery } from '../../library/views'
@@ -47,6 +48,13 @@ export function allBy(songs: ArtistCredit[], name: string): boolean {
 export function artistSongs(a: Artist, album: (id: string) => { trackIds: string[] }): string[] {
   return [...a.albums.flatMap((id) => album(id).trackIds), ...a.also]
 }
+
+// The genre most of their albums have, for the picture made for an artist
+// with no cover (ticket 104).
+export const artistGenre = (
+  a: Artist,
+  album: (id: string) => { genre?: string }
+): string | undefined => commonGenre(a.albums.map(album))
 
 // Up to 4 different covers for the picture made from covers: their albums
 // first, then the pictures of their songs on other albums. With their colors,

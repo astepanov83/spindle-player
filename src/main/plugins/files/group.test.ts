@@ -244,6 +244,21 @@ describe('buildLibrary', () => {
     expect(data.tracks.every((t) => t.art === undefined)).toBe(true)
   })
 
+  it('gives an album the genre most of its tracks have, and a loose song its own (104)', () => {
+    const { data } = build([
+      entry('/m/nb/1.mp3', { album: 'Night Bus', artist: 'QH', track: 1, genre: 'Jazz' }),
+      entry('/m/nb/2.mp3', { album: 'Night Bus', artist: 'QH', track: 2, genre: 'Rock' }),
+      entry('/m/nb/3.mp3', { album: 'Night Bus', artist: 'QH', track: 3, genre: 'rock' }),
+      entry('/m/bare/1.mp3', { album: 'Bare', artist: 'QH', track: 1 }),
+      entry('/m/Loose/memo.mp3', { genre: 'Folk' })
+    ])
+    const by = (t: string): LibraryData['albums'][number] =>
+      data.albums.find((al) => al.title === t)!
+    expect(by('Night Bus').genre).toBe('Rock')
+    expect(by('Bare').genre).toBeUndefined()
+    expect(data.tracks.find((t) => t.title === 'memo')!.art?.genre).toBe('Folk')
+  })
+
   it('gives a loose song with no cover a picture of its own, from its id (103)', () => {
     const { data } = build([entry('/m/Loose/memo.mp3', { duration: 15.4 })])
     const t = data.tracks[0]

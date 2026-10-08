@@ -5,6 +5,7 @@ import type { ThemeName } from '../../../shared/theme'
 import { PictureCache } from './cache'
 import type { PictureArt } from '../../../shared/library'
 import { drawPicture } from './draw'
+import { familyOf } from './genre'
 import { TurnQueue } from './queue'
 
 export const buckets = [48, 128, 256, 512] as const
@@ -36,7 +37,7 @@ export const pictureKey = (
   bucket: Bucket,
   artist = false
 ): string =>
-  `${artist ? 'artist:' : ''}${style}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
+  `${artist ? 'artist:' : ''}${style}${style === 'genre' ? ':' + familyOf(art.genre) : ''}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
 
 // a few thousand: a big library's whole Albums grid at one size
 const cache = new PictureCache(

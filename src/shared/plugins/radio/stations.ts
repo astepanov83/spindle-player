@@ -259,7 +259,12 @@ export function withLogo(s: Station, logo: StationLogo | undefined): Station {
 // controls work as for a song. A small logo is left off the stage. With no
 // logo: colors from the station id, and a picture made from it (ticket 103).
 export function stationArt(s: Station): Art {
-  const made = { seed: s.id, lengths: [], title: s.name }
+  const made = {
+    seed: s.id,
+    lengths: [],
+    title: s.name,
+    ...(s.tags.length ? { genre: s.tags.join(', ') } : {})
+  }
   if (!s.logo) return { palette: fallbackPalettes(s.id), cover: '', coverLarge: '', ...made }
   const urls = coverUrls(s.logo.hash)
   return {

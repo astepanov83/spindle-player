@@ -221,7 +221,12 @@
   {#if part !== 'back'}
     <div class="arthead" class:column>
       <div class="pic">
-        <ArtistPic name={b.title} photo={b.art?.src} covers={b.art?.covers ?? []} />
+        <ArtistPic
+          name={b.title}
+          photo={b.art?.src}
+          covers={b.art?.covers ?? []}
+          genre={b.art?.genre}
+        />
       </div>
       <div class="about">
         <div class="page-meta">{b.meta}</div>

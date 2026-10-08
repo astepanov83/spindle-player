@@ -124,6 +124,11 @@ describe('station logos', () => {
     })
   })
 
+  it('gives a station its tags as the genre of its picture (104)', () => {
+    expect(stationArt(st('a', { tags: ['jazz', 'lounge'] })).genre).toBe('jazz, lounge')
+    expect(stationArt(st('a', { tags: [] }))).not.toHaveProperty('genre')
+  })
+
   it('gives a logo the art of an album cover', () => {
     const s = st('a', { logo: { hash: hashA, palette: colors } })
     expect(stationArt(s)).toEqual({

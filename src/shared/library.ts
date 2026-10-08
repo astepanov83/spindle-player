@@ -77,6 +77,9 @@ export interface MadeArt {
   lengths?: number[]
   title?: string
   artist?: string
+  // the genre tag as written; the genre style picks a drawing family from it
+  // (ticket 104). An album's is the one most of its tracks have.
+  genre?: string
 }
 
 // What a made picture is drawn from where a plugin has no palette for the
@@ -89,7 +92,8 @@ export const pictureOf = (a: PictureArt): PictureArt => ({
   seed: a.seed,
   lengths: a.lengths,
   title: a.title,
-  artist: a.artist
+  artist: a.artist,
+  genre: a.genre
 })
 
 // A cover and the colors picked from it. An Album is one too.

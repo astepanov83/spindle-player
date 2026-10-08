@@ -16,6 +16,7 @@ export function fakeCtx(): { x: Ctx; drawn: Drawn } {
     stroke: () => drawn.strokes.push(state.lineWidth as number),
     fillText: (text: string, x: number, y: number) =>
       drawn.texts.push({ text, x, y, font: String(state.font) }),
+    createRadialGradient: () => ({ addColorStop: () => undefined }),
     measureText: (s: string) => ({ width: [...s].length * size() * 0.5 })
   }
   const x = new Proxy(state, {

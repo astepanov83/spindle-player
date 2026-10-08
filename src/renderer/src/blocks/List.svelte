@@ -262,6 +262,7 @@
                   name={r.title}
                   photo={r.photo}
                   covers={r.covers ?? []}
+                  genre={r.genre}
                 />{:else}<Cover
                   src={r.art?.cover}
                   art={r.art}

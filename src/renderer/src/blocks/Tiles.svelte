@@ -52,8 +52,13 @@
   const layout = $derived(gridLayout(items, cols, runs))
   const rows = $derived(layout.rows)
   const headSize = $derived(b.groups?.artist ? ARTIST_HEAD : LETTER_HEAD)
-  // picture + title + line under, measured for real once drawn
-  const estimate = $derived((width - GAP * (cols - 1)) / cols + (b.round ? 50 : 44) + GAP)
+  // picture + a two-line title + line under, measured for real once drawn.
+  // Two lines: at 140px most rows have a title that wraps, and a row guessed
+  // short shrinks the page above the screen until it is drawn.
+  const TITLE_LINE = 18
+  const estimate = $derived(
+    (width - GAP * (cols - 1)) / cols + (b.round ? 50 : 44) + TITLE_LINE + GAP
+  )
   // A new function measures every row again, so not on a new list: a scan
   // adds rows every few seconds.
   const size = $derived.by(() => {
@@ -64,11 +69,7 @@
   // a measured height stays with its row when rows come above it
   const rowKey = $derived.by(() => {
     const r = rows
-    return (i: number): string => {
-      const row = r[i]
-      if (!row) return `${i}`
-      return 'head' in row ? `h ${row.head.key}` : `t ${b.key(row.items[0])}`
-    }
+    return (i: number): string => r[i]?.key ?? `${i}`
   })
 
   // rows ahead, so a fast scroll finds them drawn
@@ -183,6 +184,18 @@
 </script>
 
 <div class="tiles" class:with-strip={!!strip}>
+  <!-- before the grid, so Tab reaches it without going through every tile -->
+  {#if strip}
+    <nav class="strip" aria-label="Go to letter" style:max-height="{boxHeight - 8}px">
+      {#each strip as s (s.letter)}
+        <button
+          disabled={!s.has}
+          aria-label={s.letter === '#' ? 'Numbers and symbols' : s.letter}
+          onclick={() => v.scrollToIndex(letterRows[s.letter])}>{s.letter}</button
+        >
+      {/each}
+    </nav>
+  {/if}
   <div
     class="grid"
     data-grid={b.round ? 'round' : 'square'}
@@ -255,18 +268,6 @@
       {/if}
     {/each}
   </div>
-  {#if strip}
-    <nav class="strip" aria-label="Go to letter" style:max-height="{boxHeight - 8}px">
-      {#each strip as s (s.letter)}
-        {@const at = letterRows[s.letter] as number | undefined}
-        <button
-          disabled={at === undefined}
-          aria-label={s.letter === '#' ? 'Numbers and symbols' : s.letter}
-          onclick={() => at !== undefined && v.scrollToIndex(at)}>{s.letter}</button
-        >
-      {/each}
-    </nav>
-  {/if}
 </div>
 
 <style>
@@ -294,6 +295,7 @@
   }
   /* stays in view while the grid scrolls under it */
   .strip {
+    order: 1;
     position: sticky;
     top: 4px;
     align-self: flex-start;

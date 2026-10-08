@@ -29,6 +29,22 @@ describe('gridLayout', () => {
   })
 })
 
+describe('row keys', () => {
+  it('an album that comes into a group above keeps the keys of the rows after it', () => {
+    const keys = (list: string[]): string[] =>
+      gridLayout(list, 2, groupRuns(list, byFirst)).rows.map((r) => r.key)
+    const before = ['a2', 'a3', 'a4', 'a5', 'b1', 'b2', 'b3']
+    expect(keys(before)).toEqual(['h a', 't a 0', 't a 1', 'h b', 't b 0', 't b 1'])
+    // a1 comes first in a: a's rows keep their names, one more at its end
+    const after = keys(['a1', ...before])
+    expect(after).toEqual(['h a', 't a 0', 't a 1', 't a 2', 'h b', 't b 0', 't b 1'])
+  })
+
+  it('plain rows are named by their place', () => {
+    expect(gridLayout(['x', 'y', 'z'], 2).rows.map((r) => r.key)).toEqual(['t 0', 't 1'])
+  })
+})
+
 describe('gridPlaces', () => {
   const items = ['a1', 'a2', 'a3', 'b1', 'c1', 'c2']
   // headings 50px, tile rows 200px

@@ -192,16 +192,18 @@ function albumGroups(by: AlbumSort): TileGroups<Album> | undefined {
   }
 }
 
+// up to 4 of the albums' covers
+const albumCovers = (albums: readonly Album[]): CoverArt[] =>
+  albums.filter((al) => al.cover).slice(0, 4)
+
 // An album artist over their albums: their picture, the albums under it,
 // and Play plays those. A split credit ("A, B") has no page of its own.
 function albumArtistHeading(h: Heading, albums: readonly Album[]): ArtistHeading {
   const a = files.getArtist(artistKey(h.artist ?? h.title))
-  const covers: CoverArt[] = []
-  for (const al of albums) if (al.cover && covers.length < 4) covers.push(al)
   return {
     sub: fmtCount(albums.length, 'album', 'albums'),
     photo: a && files.photos[a.key]?.cover,
-    covers: a ? artistCovers(a, album, songArt) : covers,
+    covers: a ? artistCovers(a, album, songArt) : albumCovers(albums),
     ...(a ? { to: at(artistPage(a.key)), link: queueLink('artist', a.key) } : {}),
     songs: () => trackKeys(albums.flatMap((al) => al.trackIds)),
     from: h.title

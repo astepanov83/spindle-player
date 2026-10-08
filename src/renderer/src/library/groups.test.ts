@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Album } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 import { sortAlbums } from '../plugins/files/album-sort'
+import { listArtists } from '../../../shared/plugins/files/artists'
 import {
   addedHeading,
   albumGrouping,
@@ -137,13 +138,19 @@ describe('letterOf', () => {
 
 describe('groupRuns', () => {
   it('artists by letter: each one run, in the sort of listArtists', () => {
-    const artists = names.map((name) => ({ name })).sort((a, b) => collator.compare(a.name, b.name))
+    // the real list, so a change to its sort shows here
+    const artists = listArtists(
+      names.filter(Boolean).map((n, i) => album(`a${i}`, { artist: n })),
+      () => {
+        throw new Error('no songs')
+      }
+    )
     const runs = groupRuns(artists, artistGrouping)
     oneRunEach(runs)
     expect(runs[0]).toEqual({
       heading: { key: 'letter:#', title: '#', letter: '#' },
       start: 0,
-      end: 6
+      end: 5
     })
     const titles = runs.map((r) => r.heading.title)
     expect(titles.slice(0, 4)).toEqual(['#', 'A', 'E', 'F'])

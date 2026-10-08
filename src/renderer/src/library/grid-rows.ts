@@ -3,10 +3,14 @@
 import type { Heading, Run } from './groups'
 import type { ItemPlaces } from './views'
 
+// key: the row's name for the virtual list, which keeps a measured height by
+// it. A tile row is named by its group and its place in the group, not by
+// its first item, so an album that comes into a group above the screen
+// renames no row after it and they keep their heights.
 export type GridRow<T> =
-  | { head: Heading; run: Run }
+  | { key: string; head: Heading; run: Run }
   // start: the index of its first item
-  | { items: T[]; start: number }
+  | { key: string; items: T[]; start: number }
 
 export interface GridLayout<T> {
   rows: GridRow<T>[]
@@ -27,20 +31,20 @@ export function gridLayout<T>(
   // heading rows before each row, and one more entry for the end
   const heads: number[] = []
   let h = 0
-  const cut = (start: number, end: number): void => {
-    for (let i = start; i < end; i += cols) {
+  const cut = (start: number, end: number, group: string): void => {
+    for (let i = start, r = 0; i < end; i += cols, r++) {
       const n = Math.min(cols, end - i)
       rowOf.fill(rows.length, i, i + n)
       heads.push(h)
-      rows.push({ items: items.slice(i, i + n), start: i })
+      rows.push({ key: `t ${group}${r}`, items: items.slice(i, i + n), start: i })
     }
   }
-  if (!runs) cut(0, items.length)
+  if (!runs) cut(0, items.length, '')
   else
     for (const run of runs) {
       heads.push(h++)
-      rows.push({ head: run.heading, run })
-      cut(run.start, run.end)
+      rows.push({ key: `h ${run.heading.key}`, head: run.heading, run })
+      cut(run.start, run.end, `${run.heading.key} `)
     }
   heads.push(h)
   return { rows, rowOf: (i) => rowOf[i], headsBefore: (r) => heads[Math.min(r, rows.length)] }

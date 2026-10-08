@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { PictureCache } from './cache'
 
-function setup(max = 3): { cache: PictureCache; made: string[]; revoked: string[] } {
+function setup(
+  max = 3,
+  maxBytes = Infinity
+): { cache: PictureCache; made: string[]; revoked: string[] } {
   const made: string[] = []
   const revoked: string[] = []
   let n = 0
@@ -14,7 +17,8 @@ function setup(max = 3): { cache: PictureCache; made: string[]; revoked: string[
       },
       revoke: (url) => revoked.push(url)
     },
-    max
+    max,
+    maxBytes
   )
   return { cache, made, revoked }
 }
@@ -90,5 +94,26 @@ describe('PictureCache holds', () => {
     expect(cache.held('k')).toBe(true)
     two()
     expect(cache.held('k')).toBe(false)
+  })
+
+  it('drops the ones used longest ago over the bytes, never a held one', async () => {
+    const { cache, revoked } = setup(100, 25)
+    const of = (n: number) => (): Promise<Blob> => Promise.resolve(new Blob(['x'.repeat(n)]))
+    const release = cache.hold('a')
+    await cache.load('a', of(10))
+    await cache.load('b', of(10))
+    await cache.load('c', of(4))
+    expect(cache.bytes).toBe(24)
+    // b is used longest ago but a; a is held
+    await cache.load('d', of(5))
+    expect(revoked).toEqual(['blob:2'])
+    expect(cache.get('b')).toBeUndefined()
+    expect(cache.bytes).toBe(19)
+    release()
+    cache.get('c')
+    cache.get('d')
+    await cache.load('e', of(10))
+    expect(cache.get('a')).toBeUndefined()
+    expect(cache.bytes).toBe(19)
   })
 })

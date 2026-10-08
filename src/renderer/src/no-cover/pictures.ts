@@ -68,10 +68,12 @@ export function pictureKey(
   return `${artist ? 'artist:' : ''}${style}${detailOf(style, art, artist)}|${theme}|${bucket}|${colorsOf(art, theme)}|${art.seed}`
 }
 
-// a few thousand: a big library's whole Albums grid at one size
+// A few thousand: a big library's whole Albums grid at one size. The bytes
+// cap busy pictures (genre's blurs) drawn big on a sharp screen.
 const cache = new PictureCache(
   { create: (b) => URL.createObjectURL(b), revoke: (u) => URL.revokeObjectURL(u) },
-  4000
+  4000,
+  150 * 1024 * 1024
 )
 
 // When the page is idle between frames: drawing a tile takes 1-2ms, and a

@@ -300,8 +300,7 @@ export function loudCounts(plan: LoudPlan, store: LoudStore): { done: number; to
 
 // Puts the curves on the albums, and on loose songs' own pictures. An album
 // gets them once every song is read (one that could not be read has ''), so
-// the picture doesn't change while its songs come in. One whose songs all
-// failed gets all '' and draws flat bars, not rings forever. `cache` keeps each
+// the picture doesn't change while its songs come in. `cache` keeps each
 // curve's text, so a build doesn't make it again.
 export function addLoudness(
   data: LibraryData,
@@ -323,11 +322,11 @@ export function addLoudness(
   }
   for (const al of data.albums) {
     const all = al.trackIds.map(curveOf)
-    if (all.every((c) => c !== undefined)) al.loudness = all as string[]
+    if (all.every((c) => c !== undefined) && all.some((c) => c)) al.loudness = all as string[]
   }
   for (const t of data.tracks) {
     if (!t.art?.seed) continue
     const c = curveOf(t.id)
-    if (c !== undefined) t.art.loudness = [c]
+    if (c?.length) t.art.loudness = [c]
   }
 }

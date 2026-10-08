@@ -42,8 +42,8 @@ async function fontsFor(text: string): Promise<void> {
 }
 
 // Sound is drawn once the item's loudness is in. A song of a known length
-// that has none yet shows rings. A station (no length) gets flat bars, and
-// so does an item whose tracks all failed: main sends it all '' then.
+// that has none yet shows rings; a station (no length) and an item whose
+// tracks cannot be read (all '') get flat bars.
 export function styleFor(style: NoCover, art: PictureArt): NoCover {
   return style === 'sound' && !art.loudness && art.lengths?.length ? 'rings' : style
 }

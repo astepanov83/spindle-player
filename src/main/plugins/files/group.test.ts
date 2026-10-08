@@ -244,19 +244,14 @@ describe('buildLibrary', () => {
     expect(data.tracks.every((t) => t.art === undefined)).toBe(true)
   })
 
-  it('gives a loose song with no cover a picture of its own, from its id (103)', () => {
-    const { data } = build([entry('/m/Loose/memo.mp3', { duration: 15.4 })])
-    const t = data.tracks[0]
-    expect(t.art).toEqual({
-      palette: fallbackPalettes(t.id),
-      cover: '',
-      coverLarge: '',
-      seed: t.id,
-      lengths: [15],
-      title: 'memo',
-      artist: unknownArtist
-    })
-    expect(data.albums[0]).toMatchObject({ seed: data.albums[0].id, lengths: [15] })
+  it("shows a song with no album tag in its folder album's picture", () => {
+    // the album page and the player must draw the same picture in the same colors
+    const { data } = build([
+      entry('/m/Holosync/1.flac', { duration: 15.4 }),
+      entry('/m/Holosync/2.flac', { duration: 30 })
+    ])
+    expect(data.tracks.every((t) => t.art === undefined)).toBe(true)
+    expect(data.albums[0]).toMatchObject({ seed: data.albums[0].id, lengths: [15, 30] })
   })
 
   it('keeps a loose song with a folder image on the folder picture (103)', () => {

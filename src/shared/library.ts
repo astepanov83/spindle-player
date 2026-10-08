@@ -69,7 +69,7 @@ export interface ArtistCredit {
 // What a picture made for an item with no cover is drawn from (ticket 103).
 // The same seed always gives the same picture.
 export interface MadeArt {
-  // the album id, a loose song's id, the station id; not a name, which a
+  // the album id, the station id, an episode's id; not a name, which a
   // rename in artists.json would change
   seed?: string
   // track lengths in seconds, in disc order: an album's tracks, a song's

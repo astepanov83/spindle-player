@@ -5,7 +5,6 @@ import { artistKey, listArtists, namesOf } from '../../../shared/plugins/files/a
 import {
   coverUrls,
   type Album,
-  type Art,
   type ArtistPhoto,
   type LibraryData,
   type Track,
@@ -146,19 +145,6 @@ function paletteOf(ix: LibraryIndex, cover: string | undefined, id: string): The
 
 // whole seconds: enough for a ring's width, and less to send to the page
 const lengthOf = (duration: number): number => Math.max(0, Math.round(duration))
-
-// A song with no album and no cover is drawn from itself, in colors from its id.
-function looseArt(t: Track): Art {
-  return {
-    palette: fallbackPalettes(t.id),
-    cover: '',
-    coverLarge: '',
-    seed: t.id,
-    lengths: [lengthOf(t.duration)],
-    title: t.title,
-    artist: t.artist
-  }
-}
 
 function withoutTracks(al: Album & { tracks: Track[] }): Album {
   const out: Album & { tracks?: Track[] } = { ...al }
@@ -307,8 +293,6 @@ export function buildLibrary(
       if (e.sampleRate) t.rate = e.sampleRate
       if (e.cover && e.cover !== cover && hasCover(e.cover))
         t.art = { palette: paletteOf(ix, e.cover, id), ...coverUrls(e.cover) }
-      // a loose song (a folder with no album tags) and no cover: a picture of its own
-      else if (!first.album && !cover) t.art = looseArt(t)
       return t
     })
     albums.push({

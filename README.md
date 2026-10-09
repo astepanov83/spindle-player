@@ -149,11 +149,12 @@ Then open Settings (the gear), add your music folders under **Music files**, and
 | `npm run lint` | ESLint |
 | `npm test` | Unit tests (Vitest) |
 | `npm run package` | AppImage and .deb in `dist/` |
+| `npm run package:win` | Windows installer and .zip in `dist/` (run it on Windows) |
 
 <details>
 <summary><b>About ffmpeg</b></summary>
 
-`npm install` downloads a pinned static build of ffmpeg and ffprobe (7.0.2, Linux x64, about 58 MB) into `resources/ffmpeg/` and checks its sha256. If that fails (offline, another platform), the app still runs, but APE, ALAC, WMA, WavPack and AIFF won't play. `npm run fetch-ffmpeg` tries again; `npm run package` stops if the binaries are missing.
+`npm install` downloads a pinned static build of ffmpeg and ffprobe into `resources/ffmpeg/` and checks its sha256: 7.0.2 on Linux x64 (about 58 MB), or gyan.dev's 6.1.1 on Windows x64 (about 165 MB). If that fails (offline, another platform), the app still runs, but APE, ALAC, WMA, WavPack and AIFF won't play. `npm run fetch-ffmpeg` tries again; `npm run package` and `npm run package:win` stop if the binaries are missing.
 
 </details>
 

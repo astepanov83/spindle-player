@@ -37,6 +37,9 @@ window.addEventListener('drop', (e) => {
   if (dropped.length) dropOn(dropped)
 })
 
+// Without a GPU the page drops effects that are slow on the CPU (Node.svelte).
+window.win.onNoGpu((noGpu) => document.documentElement.classList.toggle('no-gpu', noGpu))
+
 // Settings and the plugins' data first, so the first paint already shows the
 // saved template and the albums. The window stays hidden until then, so the
 // wait doesn't show. A failed ask shows the app with defaults. Settings and

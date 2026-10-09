@@ -206,6 +206,12 @@
     bottom: 0;
     animation: driftC 26s ease-in-out infinite alternate;
   }
+  /* Moving blobs make the blur be drawn again every frame: on the CPU that
+     took Focus from 60 to 8 fps. Still, it is drawn once and kept.
+     After the blobs' own rules, which are as specific. */
+  :global(.no-gpu) .amb-bg i {
+    animation: none;
+  }
   @keyframes driftA {
     to {
       transform: translate(25%, 20%) scale(1.2);

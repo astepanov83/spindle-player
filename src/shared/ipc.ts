@@ -15,7 +15,8 @@ export const WinChannel = {
   maximized: 'win:maximized',
   askClose: 'win:ask-close',
   closeShown: 'win:close-shown',
-  closeAnswer: 'win:close-answer'
+  closeAnswer: 'win:close-answer',
+  noGpu: 'win:no-gpu'
 } as const
 
 export const SettingsChannel = {
@@ -37,6 +38,9 @@ export interface WinApi {
   onAskClose(listener: () => void): () => void
   closeShown(): void
   closeAnswer(action: 'minimize' | 'quit'): void
+  // true when the window is drawn without a GPU (a blocked driver, a virtual
+  // machine). The page then leaves out effects that are slow on the CPU.
+  onNoGpu(listener: (noGpu: boolean) => void): () => void
 }
 
 // What the preload exposes to the page as `window.settingsApi`.

@@ -81,6 +81,12 @@ export class MainWindow {
     const win = this.win
 
     win.on('ready-to-show', () => {
+      // Known only once the GPU process is up. Without a GPU, blurs and
+      // animations are drawn on the CPU, so the page leaves some out.
+      win.webContents.send(
+        WinChannel.noGpu,
+        !app.getGPUFeatureStatus().gpu_compositing.startsWith('enabled')
+      )
       setTimeout(() => {
         if (win.isDestroyed()) return
         // the window manager may change the size as the window is first shown

@@ -35,7 +35,9 @@ const win: WinApi = {
     return () => ipcRenderer.off(WinChannel.askClose, handler)
   },
   closeShown: () => send(WinChannel.closeShown),
-  closeAnswer: (action) => send(WinChannel.closeAnswer, action)
+  closeAnswer: (action) => send(WinChannel.closeAnswer, action),
+  // main says it once the window is ready, often before the page listens
+  onNoGpu: latest<boolean>(WinChannel.noGpu)
 }
 
 // Asked for now, while the page scripts are still loading, so the answer is

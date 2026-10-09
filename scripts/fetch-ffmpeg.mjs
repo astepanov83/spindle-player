@@ -1,6 +1,7 @@
 // Downloads the ffmpeg and ffprobe builds Spindle ships into resources/ffmpeg.
 // Pinned to one release, with sha256 checks, so every install gets the same bytes.
-// The builds are John Van Sickle's static ffmpeg 7.0.2, as republished by the
+// The builds are John Van Sickle's static ffmpeg 7.0.2 on Linux and gyan.dev's
+// static ffmpeg 6.1.1 "essentials" on Windows, as republished by the
 // ffmpeg-static project. They are GPL v3, a separate program from Spindle (MIT).
 //
 //   node scripts/fetch-ffmpeg.mjs          fetch if missing; warn and go on if it can't
@@ -36,6 +37,28 @@ const builds = {
       'README.txt',
       '72f4b1b06d419d22ace6e7cc75f06826f90737345aa0b1736158929f4aacc537',
       '72f4b1b06d419d22ace6e7cc75f06826f90737345aa0b1736158929f4aacc537'
+    ]
+  },
+  'win32-x64': {
+    'ffmpeg-win32-x64.gz': [
+      'ffmpeg.exe',
+      '8883a3dffbd0a16cf4ef95206ea05283f78908dbfb118f73c83f4951dcc06d77',
+      '04e1307997530f9cf2fe35cba2ca7e8875ca91da02f89d6c7243df819c94ad00'
+    ],
+    'ffprobe-win32-x64.gz': [
+      'ffprobe.exe',
+      'f309e6223ad89d2fe54bccd420a7709b66fd27540674e92309578ed491a43c8d',
+      '3a7e2dc003dc2cd1472827e4c7c4f056ae1ae0ae7c5bbc580c99b49827351ba4'
+    ],
+    'win32-x64.LICENSE': [
+      'LICENSE.txt',
+      '8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903',
+      '8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903'
+    ],
+    'win32-x64.README': [
+      'README.txt',
+      'a636a7183c58006351acbaf35303c0ed85c6e1320fd4e80de453ba6157de6311',
+      'a636a7183c58006351acbaf35303c0ed85c6e1320fd4e80de453ba6157de6311'
     ]
   }
 }

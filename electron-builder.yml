@@ -33,4 +33,12 @@ appImage:
   artifactName: ${name}-${version}.${ext}
 deb:
   artifactName: ${name}_${version}_${arch}.${ext}
+win:
+  target:
+    - nsis
+    - zip
+  # the zip's name; the installer sets its own below
+  artifactName: ${name}-${version}-win-${arch}.${ext}
+nsis:
+  artifactName: ${name}-setup-${version}.${ext}
 npmRebuild: false

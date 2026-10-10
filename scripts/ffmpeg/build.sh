@@ -42,7 +42,7 @@ set -- \
   --enable-demuxers --enable-parsers --enable-bsfs \
   --enable-decoder="$decoders" \
   --enable-encoder=pcm_s16le,pcm_s24le \
-  --enable-muxer=s16le,s24le \
+  --enable-muxer=pcm_s16le,pcm_s24le \
   --enable-filter=aresample \
   --extra-version=spindle
 
@@ -64,7 +64,13 @@ case $target in
     ;;
 esac
 
-./configure "$@" || { tail -50 ffbuild/config.log >&2; exit 1; }
+./configure "$@" >configure.log 2>&1 || { cat configure.log; tail -50 ffbuild/config.log >&2; exit 1; }
+cat configure.log
+# configure only warns about a name it doesn't know, and leaves that part out
+if grep -q 'did not match anything' configure.log; then
+  echo "build.sh: configure didn't know an option above" >&2
+  exit 1
+fi
 make -j"$(nproc)" ffmpeg$exe ffprobe$exe
 
 # Nothing linked at run time but the system: none on Linux, and only

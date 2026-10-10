@@ -1,14 +1,25 @@
-// Downloads the ffmpeg and ffprobe builds Spindle ships into resources/ffmpeg.
-// Pinned to one release, with sha256 checks, so every install gets the same bytes.
-// The builds are John Van Sickle's static ffmpeg 7.0.2 on Linux and gyan.dev's
-// static ffmpeg 6.1.1 "essentials" on Windows, as republished by the
-// ffmpeg-static project. They are GPL v3, a separate program from Spindle (MIT).
+// Puts ffmpeg and ffprobe into resources/ffmpeg. For working on Spindle it
+// downloads a ready-made build, pinned to one release, with sha256 checks, so
+// every install gets the same bytes: John Van Sickle's static ffmpeg 7.0.2 on
+// Linux and gyan.dev's static ffmpeg 6.1.1 "essentials" on Windows, as
+// republished by the ffmpeg-static project (GPL v3). Released packages carry
+// the release workflow's own build instead (see SPINDLE_FFMPEG_DIR below).
 //
 //   node scripts/fetch-ffmpeg.mjs          fetch if missing; warn and go on if it can't
 //   node scripts/fetch-ffmpeg.mjs --strict fail if the binaries can't be had (packaging)
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- plain JS, run by node */
 import { createHash } from 'crypto'
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import { gunzipSync } from 'zlib'
@@ -68,6 +79,21 @@ const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'resources', 'ff
 const key = `${process.platform}-${process.arch}`
 const files = builds[key]
 
+// The release workflow (.github/workflows/release.yml) builds its own ffmpeg
+// and ffprobe from source and hands them over in SPINDLE_FFMPEG_DIR, with their
+// license and source offer: those replace the folder, and nothing is fetched.
+const prebuilt = process.env.SPINDLE_FFMPEG_DIR
+if (prebuilt) {
+  rmSync(dir, { recursive: true, force: true })
+  mkdirSync(dir, { recursive: true })
+  for (const name of readdirSync(prebuilt)) {
+    copyFileSync(join(prebuilt, name), join(dir, name))
+    if (!name.endsWith('.txt')) chmodSync(join(dir, name), 0o755)
+  }
+  console.log(`fetch-ffmpeg: took ${readdirSync(dir).join(', ')} from ${prebuilt}`)
+  process.exit(0)
+}
+
 function fail(text) {
   if (strict) {
     console.error(`fetch-ffmpeg: ${text}`)
@@ -108,13 +134,3 @@ for (const [asset, [name, hash, fileHash]] of Object.entries(files)) {
   renameSync(tmp, join(dir, name))
   console.log(`fetch-ffmpeg: ${name} (${(out.length / 1e6).toFixed(1)} MB)`)
 }
-
-// The GPL source offer shipped next to the programs needs a real link before a
-// public release (see scripts/fetch-ffmpeg-source.mjs). Only a warning: a
-// local package for testing is fine without it.
-const offer = join(dir, 'SOURCE.txt')
-if (strict && (!existsSync(offer) || /<SOURCE ARCHIVE URL/.test(readFileSync(offer, 'utf8'))))
-  console.warn(
-    'fetch-ffmpeg: resources/ffmpeg/SOURCE.txt has no source archive link yet; ' +
-      'add it before publishing this package'
-  )

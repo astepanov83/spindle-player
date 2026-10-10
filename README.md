@@ -151,10 +151,12 @@ Then open Settings (the gear), add your music folders under **Music files**, and
 | `npm run package` | AppImage and .deb in `dist/` |
 | `npm run package:win` | Windows installer and .zip in `dist/` (run it on Windows) |
 
+Releases are built on GitHub: pushing a tag `v<version>` (the version in `package.json`, such as `v0.1.0`) runs `.github/workflows/release.yml`, which builds the Linux and Windows packages and publishes them as that release. It can also be run by hand from the Actions tab to build the packages without publishing them.
+
 <details>
 <summary><b>About ffmpeg</b></summary>
 
-`npm install` downloads a pinned static build of ffmpeg and ffprobe into `resources/ffmpeg/` and checks its sha256: 7.0.2 on Linux x64 (about 58 MB), or gyan.dev's 6.1.1 on Windows x64 (about 165 MB). If that fails (offline, another platform), the app still runs, but APE, ALAC, WMA, WavPack and AIFF won't play. `npm run fetch-ffmpeg` tries again; `npm run package` and `npm run package:win` stop if the binaries are missing.
+`npm install` downloads a pinned static build of ffmpeg and ffprobe into `resources/ffmpeg/` and checks its sha256: 7.0.2 on Linux x64 (about 58 MB), or gyan.dev's 6.1.1 on Windows x64 (about 165 MB). If that fails (offline, another platform), the app still runs, but APE, ALAC, WMA, WavPack and AIFF won't play. `npm run fetch-ffmpeg` tries again; `npm run package` and `npm run package:win` stop if the binaries are missing. These downloads are for working on Spindle: released packages are built by the Release workflow (see below).
 
 </details>
 
@@ -186,17 +188,6 @@ The installed .deb sets this up by itself. The AppImage turns the sandbox off wh
 
 Spindle is under the [MIT](LICENSE) license.
 
-The packaged app also ships ffmpeg and ffprobe as separate programs, which Spindle runs unmodified. They are not part of Spindle's code and are not under its MIT license: they are John Van Sickle's static build of [FFmpeg](https://ffmpeg.org) 7.0.2, licensed under the GNU GPL version 3 (see `resources/ffmpeg/LICENSE.txt` and `README.txt` after `npm install`, and `resources/app.asar.unpacked/resources/ffmpeg/` in the installed app). The build comes from the [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) release `b6.1.1`.
-
-<details>
-<summary><b>Source for ffmpeg and ffprobe</b></summary>
-
-The GPL asks that anyone who gets these programs can also get their source. [`resources/ffmpeg/SOURCE.txt`](resources/ffmpeg/SOURCE.txt), shipped next to the programs, says where it is: an archive published with each release, kept as long as that release is. It also has a written offer to provide that archive for at least three years. The archive is not the full Corresponding Source: the build's own scripts are not public, and a few linked libraries have no known version. `SOURCE.txt` says so.
-
-`node scripts/fetch-ffmpeg-source.mjs` makes that archive. It downloads the FFmpeg 7.0.2 source and the source of each library linked into the build whose version is known (about 100 MB, needs git and GNU tar), checks each file's sha256 and each git snapshot's commit, and packs them into `ffmpeg-source/ffmpeg-7.0.2-linux-x64-source.tar` (about 170 MB). `SOURCES.txt` in the archive lists what each file is, and what is missing.
-
-To publish: put the archive's release link in `SOURCE.txt`, then run the script again (the archive holds a copy of `SOURCE.txt`), and attach the new archive to the release.
-
-</details>
+The packaged app also ships ffmpeg and ffprobe as separate programs, which Spindle runs unmodified. They are not part of Spindle's code and are not under its MIT license: they are [FFmpeg](https://ffmpeg.org), built by the Release workflow from FFmpeg's source with only its own audio decoders and no outside libraries (`scripts/ffmpeg/build.sh`), and licensed under the GNU LGPL version 2.1 or later. In the installed app they are in `resources/app.asar.unpacked/resources/ffmpeg/`, with their license, build settings, and `SOURCE.txt`, which says where their source is.
 
 <p align="center"><sub>Made for listening to whole albums. 💿</sub></p>

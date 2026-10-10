@@ -17,17 +17,16 @@ Where to get the source
 The complete source of these two programs is
 
 - FFmpeg's source, ffmpeg-{VERSION}.tar.xz, with FFmpeg's signature of it
-  (ffmpeg-{VERSION}.tar.xz.asc), and
-- the script and settings they were built with: scripts/ffmpeg/build.sh
-  and .github/workflows/ffmpeg.yml in Spindle's repository, at the tag
-  {TAG}: {REPO}/tree/{TAG}
+  (ffmpeg-{VERSION}.tar.xz.asc), published with this Spindle release:
 
-The FFmpeg source is published next to the programs, at
+      {REPO}/releases/tag/{TAG}
 
-    {REPO}/releases/tag/{TAG}
+- the script and settings they were built with, scripts/ffmpeg/build.sh and
+  .github/workflows/release.yml in Spindle's repository at the same tag:
 
-with BUILD-linux-x64.txt and BUILD-win32-x64.txt, which give each build's
-configure line and compiler.
+      {REPO}/tree/{TAG}
+
+BUILD.txt in this folder gives the configure line and compiler.
 
 The programs also hold, linked in, the C library and compiler runtime they
 were built with: musl (https://musl.libc.org, MIT license) for Linux, and

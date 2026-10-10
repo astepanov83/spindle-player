@@ -1,0 +1,177 @@
+# Builds Spindle's packages: AppImage and .deb for Linux, installer and zip
+# for Windows. Pushing a tag v<version>, the version in package.json (such as
+# v0.1.0), also publishes them as that release.
+#
+# The ffmpeg and ffprobe inside the packages are built here too, from FFmpeg's
+# source, with only its audio decoders (scripts/ffmpeg/build.sh), and tested
+# with Spindle's own arguments before they go in. Their license (LGPL) asks
+# for their source to be offered, so FFmpeg's source goes into the release.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # FFmpeg's release tarball, checked against its signature when this was
+  # pinned (FFmpeg release signing key FCF986EA15E6E293A5644F10B4322F04D67658D8)
+  FFMPEG_VERSION: '9.0.2'
+  FFMPEG_SHA256: '8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e'
+
+jobs:
+  ffmpeg-source:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Download FFmpeg's source
+        run: |
+          curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
+          curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz.asc"
+          echo "$FFMPEG_SHA256  ffmpeg-$FFMPEG_VERSION.tar.xz" | sha256sum -c
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ffmpeg-source
+          path: ffmpeg-*.tar.xz*
+
+  ffmpeg:
+    needs: ffmpeg-source
+    runs-on: ubuntu-26.04
+    strategy:
+      matrix:
+        target: [linux-x64, win32-x64]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: ffmpeg-source
+      - name: Build for Linux, in Alpine (musl, so fully static)
+        if: matrix.target == 'linux-x64'
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w -e FFMPEG_VERSION alpine:3.24 sh -c '
+            apk add --no-cache build-base nasm tar xz &&
+            sh scripts/ffmpeg/build.sh linux-x64 "ffmpeg-$FFMPEG_VERSION.tar.xz" out'
+      - name: Build for Windows, with mingw-w64
+        if: matrix.target == 'win32-x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 nasm
+          sh scripts/ffmpeg/build.sh win32-x64 "ffmpeg-$FFMPEG_VERSION.tar.xz" out
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ffmpeg-${{ matrix.target }}
+          path: out/
+
+  package:
+    needs: ffmpeg
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-26.04
+            exe: ''
+            builder: --linux
+          - target: win32-x64
+            os: windows-2025
+            exe: .exe
+            builder: --win
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/download-artifact@v8
+        with:
+          name: ffmpeg-${{ matrix.target }}
+          path: ffmpeg-build
+      - uses: actions/download-artifact@v8
+        with:
+          name: ffmpeg-source
+          path: ffmpeg-build
+      - name: Test ffmpeg with Spindle's arguments
+        run: |
+          chmod +x ffmpeg-build/ff*
+          node scripts/ffmpeg/test-build.mjs \
+            "ffmpeg-build/ffmpeg-${{ matrix.target }}${{ matrix.exe }}" \
+            "ffmpeg-build/ffprobe-${{ matrix.target }}${{ matrix.exe }}" ffmpeg-samples
+      - name: Put ffmpeg together with its license and source offer
+        env:
+          REPO: ${{ github.server_url }}/${{ github.repository }}
+          T: ${{ matrix.target }}
+          X: ${{ matrix.exe }}
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          mkdir ffmpeg-app
+          cp "ffmpeg-build/ffmpeg-$T$X" "ffmpeg-app/ffmpeg$X"
+          cp "ffmpeg-build/ffprobe-$T$X" "ffmpeg-app/ffprobe$X"
+          cp "ffmpeg-build/BUILD-$T.txt" ffmpeg-app/BUILD.txt
+          tar -xJOf "ffmpeg-build/ffmpeg-$FFMPEG_VERSION.tar.xz" \
+            "ffmpeg-$FFMPEG_VERSION/COPYING.LGPLv2.1" > ffmpeg-app/LICENSE.txt
+          sed -e "s|{VERSION}|$FFMPEG_VERSION|g" -e "s|{TAG}|$tag|g" -e "s|{REPO}|$REPO|g" \
+            scripts/ffmpeg/SOURCE.txt > ffmpeg-app/SOURCE.txt
+          if grep -q '{[A-Z]*}' ffmpeg-app/SOURCE.txt; then
+            echo "SOURCE.txt has a placeholder left"
+            exit 1
+          fi
+          ls -l ffmpeg-app
+      - name: Install
+        run: npm ci
+        env:
+          SPINDLE_FFMPEG_DIR: ${{ github.workspace }}/ffmpeg-app
+      - name: Test
+        if: matrix.target == 'linux-x64'
+        run: npm test
+      - name: Build the packages
+        run: |
+          npm run build
+          npx electron-builder ${{ matrix.builder }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: spindle-${{ matrix.target }}
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.exe
+            dist/*.zip
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: spindle-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: ffmpeg-source
+          path: dist
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "v$version" ]; then
+            echo "The tag $TAG is not package.json's version, $version"
+            exit 1
+          fi
+          cd dist
+          ls -l
+          gh release create "$TAG" * --verify-tag --title "Spindle $version" --generate-notes

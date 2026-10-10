@@ -2,7 +2,7 @@
 # Builds the ffmpeg and ffprobe Spindle ships, from FFmpeg's own source. They
 # only read and decode audio, with FFmpeg's built-in decoders and no outside
 # libraries, so the build is LGPL and its whole source is the FFmpeg tarball
-# and this script. Run by .github/workflows/ffmpeg.yml: linux-x64 in Alpine
+# and this script. Run by .github/workflows/release.yml: linux-x64 in Alpine
 # (musl, so the programs are fully static), win32-x64 cross-compiled with
 # mingw-w64 on Ubuntu.
 #

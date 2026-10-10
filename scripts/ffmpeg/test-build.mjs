@@ -1,7 +1,7 @@
 // Checks that a build of ffmpeg and ffprobe (scripts/ffmpeg/build.sh) does
 // what Spindle asks of them, with the same arguments: ffprobe reads a file's
 // format and tags and counts its packets, and ffmpeg decodes, seeks, mixes and
-// resamples it to raw PCM. Run by .github/workflows/ffmpeg.yml on Linux and
+// resamples it to raw PCM. Run by .github/workflows/release.yml on Linux and
 // on Windows, against short samples from FFmpeg's own test suite.
 //
 //   node scripts/ffmpeg/test-build.mjs <ffmpeg> <ffprobe> <samples dir>

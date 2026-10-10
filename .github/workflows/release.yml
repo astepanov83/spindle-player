@@ -1,6 +1,7 @@
-# Builds Spindle's packages: AppImage and .deb for Linux, installer and zip
-# for Windows. Pushing a tag v<version>, the version in package.json (such as
-# v0.1.0), also publishes them as that release.
+# Builds Spindle's packages: the .deb for Linux and the installer for Windows,
+# each a plain file to download from the run (not zipped). Pushing a tag
+# v<version>, the version in package.json (such as v0.1.0), also publishes
+# them as that release.
 #
 # The ffmpeg and ffprobe inside the packages are built here too, from FFmpeg's
 # source, with only its audio decoders (scripts/ffmpeg/build.sh), and tested
@@ -73,11 +74,13 @@ jobs:
           - target: linux-x64
             os: ubuntu-26.04
             exe: ''
-            builder: --linux
+            builder: --linux deb
+            package: dist/*.deb
           - target: win32-x64
             os: windows-2025
             exe: .exe
-            builder: --win
+            builder: --win nsis
+            package: dist/*-setup-*.exe
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -137,14 +140,11 @@ jobs:
         env:
           SPINDLE_FFMPEG_DIR: ${{ github.workspace }}/ffmpeg-app
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # as the file itself, named as it is, rather than in a zip
       - uses: actions/upload-artifact@v7
         with:
-          name: spindle-${{ matrix.target }}
-          path: |
-            dist/*.AppImage
-            dist/*.deb
-            dist/*.exe
-            dist/*.zip
+          path: ${{ matrix.package }}
+          archive: false
           if-no-files-found: error
 
   release:
@@ -157,7 +157,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          pattern: spindle-*
+          pattern: spindle*
           path: dist
           merge-multiple: true
       - uses: actions/download-artifact@v8
@@ -175,5 +175,5 @@ jobs:
             exit 1
           fi
           cd dist
-          ls -l
-          gh release create "$TAG" * --verify-tag --title "Spindle $version" --generate-notes
+          ls -lR
+          gh release create "$TAG" $(find . -type f) --verify-tag --title "Spindle $version" --generate-notes

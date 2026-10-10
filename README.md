@@ -151,7 +151,7 @@ Then open Settings (the gear), add your music folders under **Music files**, and
 | `npm run package` | AppImage and .deb in `dist/` |
 | `npm run package:win` | Windows installer and .zip in `dist/` (run it on Windows) |
 
-Releases are built on GitHub: pushing a tag `v<version>` (the version in `package.json`, such as `v0.1.0`) runs `.github/workflows/release.yml`, which builds the Linux and Windows packages and publishes them as that release. It can also be run by hand from the Actions tab to build the packages without publishing them.
+Releases are built on GitHub: pushing a tag `v<version>` (the version in `package.json`, such as `v0.1.0`) runs `.github/workflows/release.yml`, which builds the .deb for Linux and the installer for Windows and publishes them as that release. It can also be run by hand from the Actions tab to build the packages without publishing them.
 
 <details>
 <summary><b>About ffmpeg</b></summary>

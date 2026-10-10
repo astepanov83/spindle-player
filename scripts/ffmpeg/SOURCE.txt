@@ -1,0 +1,47 @@
+Source code for ffmpeg and ffprobe
+==================================
+
+Spindle ships two programs it did not write: ffmpeg and ffprobe, in this
+folder. They are FFmpeg {VERSION} (https://ffmpeg.org), built for Spindle
+from FFmpeg's unmodified source, with only its own audio decoders and no
+outside libraries. Spindle runs them as separate programs.
+
+They are licensed under the GNU Lesser General Public License version 2.1
+or later (LICENSE.txt in this folder). Spindle itself is under the MIT
+license.
+
+
+Where to get the source
+-----------------------
+
+The complete source of these two programs is
+
+- FFmpeg's source, ffmpeg-{VERSION}.tar.xz, with FFmpeg's signature of it
+  (ffmpeg-{VERSION}.tar.xz.asc), and
+- the script and settings they were built with: scripts/ffmpeg/build.sh
+  and .github/workflows/ffmpeg.yml in Spindle's repository, at the tag
+  {TAG}: {REPO}/tree/{TAG}
+
+The FFmpeg source is published next to the programs, at
+
+    {REPO}/releases/tag/{TAG}
+
+with BUILD-linux-x64.txt and BUILD-win32-x64.txt, which give each build's
+configure line and compiler.
+
+The programs also hold, linked in, the C library and compiler runtime they
+were built with: musl (https://musl.libc.org, MIT license) for Linux, and
+mingw-w64's runtime (https://www.mingw-w64.org) and GCC's runtime library
+(under the GCC Runtime Library Exception) for Windows.
+
+
+Written offer
+-------------
+
+For at least three years after we last distribute a Spindle release that
+includes these programs, we will give anyone who has a copy of them the
+source above, at no charge, by download.
+
+To ask for it, open an issue at
+{REPO}/issues
+and say which Spindle version you have.

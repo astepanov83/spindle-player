@@ -1,0 +1,124 @@
+# Builds the ffmpeg and ffprobe Spindle ships, from FFmpeg's source
+# (scripts/ffmpeg/build.sh), for Linux and Windows, and tests them on both
+# (scripts/ffmpeg/test-build.mjs). Pushing a tag ffmpeg-<version>-<n>, such as
+# ffmpeg-9.0.2-1, also publishes them as a release of that name, with their
+# source, for scripts/fetch-ffmpeg.mjs to download.
+name: ffmpeg
+
+on:
+  push:
+    tags: ['ffmpeg-*']
+  pull_request:
+    paths: ['scripts/ffmpeg/**', '.github/workflows/ffmpeg.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # FFmpeg's release tarball, checked against its signature when this was
+  # pinned (FFmpeg release signing key FCF986EA15E6E293A5644F10B4322F04D67658D8)
+  FFMPEG_VERSION: '9.0.2'
+  FFMPEG_SHA256: '8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e'
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download FFmpeg's source
+        run: |
+          curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
+          curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz.asc"
+          echo "$FFMPEG_SHA256  ffmpeg-$FFMPEG_VERSION.tar.xz" | sha256sum -c
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: ffmpeg-*.tar.xz*
+
+  build:
+    needs: source
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        target: [linux-x64, win32-x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: source
+      - name: Build for Linux, in Alpine (musl, so fully static)
+        if: matrix.target == 'linux-x64'
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w -e FFMPEG_VERSION alpine:3.22 sh -c '
+            apk add --no-cache build-base nasm tar xz &&
+            sh scripts/ffmpeg/build.sh linux-x64 "ffmpeg-$FFMPEG_VERSION.tar.xz" out'
+      - name: Build for Windows, with mingw-w64
+        if: matrix.target == 'win32-x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 nasm
+          sh scripts/ffmpeg/build.sh win32-x64 "ffmpeg-$FFMPEG_VERSION.tar.xz" out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.target }}
+          path: out/
+
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            exe: ''
+          - target: win32-x64
+            os: windows-2025
+            exe: .exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-${{ matrix.target }}
+          path: out
+      - name: Test what Spindle asks of them
+        shell: bash
+        run: |
+          chmod +x out/ff*
+          node scripts/ffmpeg/test-build.mjs \
+            "out/ffmpeg-${{ matrix.target }}${{ matrix.exe }}" \
+            "out/ffprobe-${{ matrix.target }}${{ matrix.exe }}" samples
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/ffmpeg-')
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          case "$TAG" in
+            "ffmpeg-$FFMPEG_VERSION-"*) ;;
+            *) echo "The tag $TAG is not for FFmpeg $FFMPEG_VERSION (ffmpeg-$FFMPEG_VERSION-<n>)"; exit 1 ;;
+          esac
+          cd dist
+          tar -xJOf "ffmpeg-$FFMPEG_VERSION.tar.xz" "ffmpeg-$FFMPEG_VERSION/COPYING.LGPLv2.1" > LICENSE.txt
+          sed -e "s|{VERSION}|$FFMPEG_VERSION|g" -e "s|{TAG}|$TAG|g" -e "s|{REPO}|$REPO_URL|g" \
+            ../scripts/ffmpeg/SOURCE.txt > SOURCE.txt
+          if grep -q '{[A-Z]*}' SOURCE.txt; then echo "SOURCE.txt has a placeholder left"; exit 1; fi
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+          gh release create "$TAG" * --verify-tag --latest=false \
+            --title "ffmpeg $FFMPEG_VERSION for Spindle ($TAG)" \
+            --notes "ffmpeg and ffprobe $FFMPEG_VERSION, built from FFmpeg's source by .github/workflows/ffmpeg.yml at this tag, for Spindle to ship. Audio decoding only, LGPL. SOURCE.txt says where their source is; BUILD-*.txt has each build's configure line."

@@ -124,16 +124,18 @@ jobs:
           ls -l ffmpeg-app
       - name: Install
         run: npm ci
-        env:
-          SPINDLE_FFMPEG_DIR: ${{ github.workspace }}/ffmpeg-app
+      # with the ffmpeg npm ci fetched for working on Spindle: some tests use
+      # it to make test files, which the release's decode-only build can't
       - name: Test
         if: matrix.target == 'linux-x64'
         run: npm test
       - name: Build the packages
         run: |
+          node scripts/fetch-ffmpeg.mjs
           npm run build
           npx electron-builder ${{ matrix.builder }} --publish never
         env:
+          SPINDLE_FFMPEG_DIR: ${{ github.workspace }}/ffmpeg-app
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v7
         with:

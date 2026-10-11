@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-4cc3c9?style=for-the-badge"></a>
-  <img alt="Linux" src="https://img.shields.io/badge/Linux-AppImage%20%7C%20.deb-f7b733?style=for-the-badge&logo=linux&logoColor=white">
+  <img alt="Linux and Windows" src="https://img.shields.io/badge/runs_on-Linux%20%7C%20Windows-f7b733?style=for-the-badge">
   <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-b9a6ff?style=for-the-badge">
   <br>
   <img alt="Electron" src="https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron&logoColor=white">
@@ -129,9 +129,16 @@ Everything except the player, the queue, playlists, Settings and the look is a *
 ## 🚀 Run it
 
 > [!NOTE]
-> Spindle is early (version 0.1.0) and Linux only for now. There are no ready-made downloads yet, so build it from source.
+> Spindle is early (version 0.1.0). It runs on Linux and Windows, both x64.
 
-You need Node 22 or newer.
+Download it from the [latest release](https://github.com/astepanov83/spindle-player/releases/latest):
+
+| System | File | Install |
+|---|---|---|
+| Linux (Debian, Ubuntu and others) | `spindle_<version>_amd64.deb` | `sudo apt install ./spindle_<version>_amd64.deb` |
+| Windows | `spindle-setup-<version>.exe` | Run it. The installer isn't signed, so Windows may warn first: choose **More info**, then **Run anyway**. |
+
+To build it from source instead, you need Node 22 or newer.
 
 ```bash
 git clone https://github.com/astepanov83/spindle-player.git
@@ -156,7 +163,7 @@ Releases are built on GitHub: pushing a tag `v<version>` (the version in `packag
 <details>
 <summary><b>About ffmpeg</b></summary>
 
-`npm install` downloads a pinned static build of ffmpeg and ffprobe into `resources/ffmpeg/` and checks its sha256: 7.0.2 on Linux x64 (about 58 MB), or gyan.dev's 6.1.1 on Windows x64 (about 165 MB). If that fails (offline, another platform), the app still runs, but APE, ALAC, WMA, WavPack and AIFF won't play. `npm run fetch-ffmpeg` tries again; `npm run package` and `npm run package:win` stop if the binaries are missing. These downloads are for working on Spindle: released packages are built by the Release workflow (see below).
+`npm install` downloads a pinned static build of ffmpeg and ffprobe into `resources/ffmpeg/` and checks its sha256: 7.0.2 on Linux x64 (about 58 MB), or gyan.dev's 6.1.1 on Windows x64 (about 165 MB). If that fails (offline, another platform), the app still runs, but APE, ALAC, WMA, WavPack and AIFF won't play. `npm run fetch-ffmpeg` tries again; `npm run package` and `npm run package:win` stop if the binaries are missing. These downloads are for working on Spindle: released packages are built by the Release workflow (see above).
 
 </details>
 

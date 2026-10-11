@@ -5,7 +5,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-4cc3c9?style=for-the-badge"></a>
   <a href="https://github.com/astepanov83/spindle-player/releases/latest"><img alt="Linux and Windows" src="https://img.shields.io/badge/runs_on-Linux%20%7C%20Windows-f7b733?style=for-the-badge"></a>
-  <a href="https://github.com/astepanov83/spindle-player/releases/tag/v0.1.0"><img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-b9a6ff?style=for-the-badge"></a>
+  <a href="https://github.com/astepanov83/spindle-player/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/astepanov83/spindle-player?style=for-the-badge&label=version&color=b9a6ff"></a>
   <br>
   <a href="https://www.electronjs.org"><img alt="Electron" src="https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron&logoColor=white"></a>
   <a href="https://svelte.dev"><img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00?style=flat-square&logo=svelte&logoColor=white"></a>

@@ -129,7 +129,7 @@ Everything except the player, the queue, playlists, Settings and the look is a *
 ## 🚀 Run it
 
 > [!NOTE]
-> Spindle is early (version 0.1.0). It runs on Linux and Windows, both x64.
+> Spindle is early. It runs on Linux and Windows, both x64.
 
 Download it from the [latest release](https://github.com/astepanov83/spindle-player/releases/latest):
 

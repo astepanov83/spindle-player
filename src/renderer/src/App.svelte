@@ -267,12 +267,15 @@
   }
 </script>
 
-<!-- the last position goes to main before the window closes; the size picks
+<!-- the last position (and a long song's place) goes to main before the window closes; the size picks
      how a queue Column is drawn (layout/narrow.ts) and the wide layout (layout/wide.ts) -->
 <svelte:window
   {onkeydown}
   onmouseup={onSideButton}
-  onpagehide={() => queue.savePos()}
+  onpagehide={() => {
+    queue.savePos()
+    queue.keepPlace()
+  }}
   onresize={resized}
 />
 

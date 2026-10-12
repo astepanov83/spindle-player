@@ -136,3 +136,9 @@ export function statusTip(s: LiveStatus | undefined, now: number): string {
   if (s.until === undefined) return s.text
   return `${s.text} in ${Math.max(1, Math.ceil((s.until - now) / 1000))} s`
 }
+
+// The speed choice for a long song (ticket 114), next to its times.
+export const speeds = [0.75, 1, 1.25, 1.5, 1.75, 2]
+
+// 1.25 -> "1.25×"
+export const speedText = (rate: number): string => `${rate}×`

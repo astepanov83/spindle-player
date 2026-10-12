@@ -50,6 +50,7 @@ const coreTests = [
   'src/main/play-log.test.ts',
   'src/main/plugins/core-split.test.ts',
   'src/main/plugins/list.test.ts',
+  'src/main/positions-file.test.ts',
   'src/main/stores.test.ts',
   'src/renderer/src/blocks/page-play.test.ts',
   'src/renderer/src/blocks/play.test.ts',
@@ -82,6 +83,7 @@ const coreTests = [
   'src/shared/plays.test.ts',
   'src/shared/plugins.test.ts',
   'src/shared/plugins/items.test.ts',
+  'src/shared/positions.test.ts',
   'src/shared/saved-queue.test.ts',
   'src/shared/settings.test.ts'
 ]

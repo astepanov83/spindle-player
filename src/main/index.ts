@@ -10,6 +10,7 @@ import {
   LyricsChannel,
   PlaybackChannel,
   PlaylistChannel,
+  PositionsChannel,
   SettingsChannel,
   WinChannel
 } from '../shared/ipc'
@@ -35,6 +36,7 @@ import type { IdMoves } from '../shared/id-moves'
 import { PlaylistFile, QueueFile } from './page-files'
 import { PlaysStore } from './plays-file'
 import { LovedStore } from './loved-file'
+import { PositionsStore } from './positions-file'
 import { LyricsService } from './lyrics'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
@@ -49,6 +51,7 @@ let playlists: PlaylistFile
 let savedQueue: QueueFile
 let plays: PlaysStore
 let loved: LovedStore
+let positions: PositionsStore
 // the words of the song that starts: the plugins' own files, then other sources
 const lyrics = new LyricsService((text) => console.warn(text))
 // each plugin owns its files, requests and IPC; this file only loops over them
@@ -183,6 +186,8 @@ page.on(PlaybackChannel.played, (_, key, song) => plays.played(key, song))
 page.handle(PlaybackChannel.playStats, (_, raw) => plays.stats(parseStatsPeriod(raw) ?? 'all'))
 page.handle(LovedChannel.load, () => loved.get())
 page.on(LovedChannel.set, (_, keys, on) => loved.set(keys, on))
+page.handle(PositionsChannel.load, () => positions.get())
+page.on(PositionsChannel.set, (_, key, pos) => positions.set(key, pos))
 page.handle(LyricsChannel.get, (_, key, song) =>
   isItemKey(key) ? lyrics.get({ key, song: parseLyricsSong(song) }) : Promise.resolve(undefined)
 )
@@ -215,6 +220,7 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   savedQueue = new QueueFile(oldIds)
   plays = new PlaysStore()
   loved = new LovedStore()
+  positions = new PositionsStore()
   const userData = app.getPath('userData')
   const log = (text: string): void => console.warn(text)
   coverCache = new CoverCache(join(userData, 'covers'), join(__dirname, '../preload/covers.js'))
@@ -267,7 +273,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
         const queue = savedQueue.moveIds(p.id, moves)
         const counts = plays.moveIds(p.id, moves)
         const hearts = loved.moveIds(p.id, moves)
-        return lists && queue && counts && hearts
+        const places = positions.moveIds(p.id, moves)
+        return lists && queue && counts && hearts && places
       }
     })
   // the saved value, as the plugins have only seen the setting at start
@@ -305,6 +312,7 @@ app.on('will-quit', (e) => {
   savedQueue?.flushSync()
   plays?.flushSync()
   loved?.flushSync()
+  positions?.flushSync()
   for (const p of plugins) p.flushSync()
   const waits = plugins.flatMap((p) => p.flush?.() ?? [])
   if (!waits.length) return

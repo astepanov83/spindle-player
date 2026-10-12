@@ -9,6 +9,8 @@ import {
   loveNotice,
   sleepAction,
   sleepId,
+  speeds,
+  speedText,
   statusTip,
   type ChoiceAction
 } from './bar'
@@ -153,5 +155,14 @@ describe('loveNotice', () => {
     expect(loveNotice(true, 'Red Water')).toBe('Loved: "Red Water"')
     expect(loveNotice(false, 'Red Water')).toBe('Unloved: "Red Water"')
     expect(loveNotice(true, undefined)).toBe('Loved the song playing')
+  })
+})
+
+describe('the speed choice (ticket 114)', () => {
+  it('goes from 0.75x to 2x, 1x among them', () => {
+    expect(speeds[0]).toBe(0.75)
+    expect(speeds.at(-1)).toBe(2)
+    expect(speeds).toContain(1)
+    expect(speeds.map(speedText)).toEqual(['0.75×', '1×', '1.25×', '1.5×', '1.75×', '2×'])
   })
 })

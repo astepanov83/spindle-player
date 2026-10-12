@@ -77,7 +77,8 @@ const playbackApi: PlaybackApi = {
     return () => ipcRenderer.off(PlaybackChannel.control, handler)
   },
   loadPlays: () => plays,
-  played: (key) => send(PlaybackChannel.played, key)
+  played: (key, song) => send(PlaybackChannel.played, key, song),
+  playStats: (period) => invoke(PlaybackChannel.playStats, period)
 }
 
 // Asked for early like the settings; a state pushed before the page listens is kept.

@@ -45,6 +45,8 @@ const notPlugins = [
 const coreTests = [
   'src/main/convert-files.test.ts',
   'src/main/plays-file.test.ts',
+  'src/main/play-log.test.ts',
+  'src/main/play-stats.test.ts',
   'src/main/plugins/core-split.test.ts',
   'src/main/plugins/list.test.ts',
   'src/main/stores.test.ts',

@@ -12,6 +12,7 @@ import {
   WinChannel
 } from '../shared/ipc'
 import { plugins as pluginList } from '../shared/plugins'
+import { parseStatsPeriod } from '../shared/plays'
 import { pageSettings } from '../shared/settings'
 import { canOpenExternal } from '../shared/web-link'
 import { callbackServer } from './ai/callback-server'
@@ -154,7 +155,8 @@ page.on(PlaybackChannel.playing, (_, playing) => {
 })
 page.on(PlaybackChannel.state, (_, raw) => tray?.setState(parsePlayState(raw)))
 page.handle(PlaybackChannel.loadPlays, () => plays.get())
-page.on(PlaybackChannel.played, (_, key) => plays.played(key))
+page.on(PlaybackChannel.played, (_, key, song) => plays.played(key, song))
+page.handle(PlaybackChannel.playStats, (_, raw) => plays.stats(parseStatsPeriod(raw) ?? 'all'))
 page.on(PlaybackChannel.log, (_, text) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
 })

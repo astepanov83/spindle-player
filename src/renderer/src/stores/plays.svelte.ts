@@ -5,13 +5,14 @@ import type { IdMoves } from '../../../shared/id-moves'
 import { addPlay, countsPlays, movePlays, type Play, type Plays } from '../../../shared/plays'
 import type { PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
-import { PlayCounter } from '../library/plays'
+import { PlayCounter, playedSong } from '../library/plays'
+import { infoOf } from '../plugins'
 
 class PlaysStore {
   // a new object on every play, so what sorts by it sorts again
   all: Plays = $state.raw({})
 
-  #counter = new PlayCounter((key) => this.#played(key))
+  #counter = new PlayCounter((key, duration) => this.#played(key, duration))
 
   load(plays: Plays): void {
     this.all = plays
@@ -27,9 +28,10 @@ class PlaysStore {
     this.#counter.hear(countsPlays(key) ? key : undefined, pos, duration, sounding, Date.now())
   }
 
-  #played(key: ItemKey): void {
+  #played(key: ItemKey, duration: number): void {
     this.all = addPlay(this.all, key, Date.now())
-    window.playbackApi.played(key)
+    // a plain copy: the info may be a class with getters, which IPC drops
+    window.playbackApi.played(key, playedSong(infoOf(key), duration))
   }
 
   // Songs whose ids changed (see id-moves.ts); main moves its own copy.

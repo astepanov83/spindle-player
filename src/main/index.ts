@@ -7,6 +7,7 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import {
   AiChannel,
   LovedChannel,
+  LyricsChannel,
   PlaybackChannel,
   PlaylistChannel,
   SettingsChannel,
@@ -14,6 +15,8 @@ import {
 } from '../shared/ipc'
 import { plugins as pluginList } from '../shared/plugins'
 import { parseStatsPeriod } from '../shared/plays'
+import { parseLyricsSong } from '../shared/lyrics'
+import { isItemKey } from '../shared/plugins/items'
 import { pageSettings } from '../shared/settings'
 import { canOpenExternal } from '../shared/web-link'
 import { callbackServer } from './ai/callback-server'
@@ -32,6 +35,7 @@ import type { IdMoves } from '../shared/id-moves'
 import { PlaylistFile, QueueFile } from './page-files'
 import { PlaysStore } from './plays-file'
 import { LovedStore } from './loved-file'
+import { LyricsService } from './lyrics'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
 import { devRetryData, isDevRetry, takeLock } from './single-instance'
@@ -45,6 +49,8 @@ let playlists: PlaylistFile
 let savedQueue: QueueFile
 let plays: PlaysStore
 let loved: LovedStore
+// the words of the song that starts: the plugins' own files, then other sources
+const lyrics = new LyricsService((text) => console.warn(text))
 // each plugin owns its files, requests and IPC; this file only loops over them
 let plugins: MainPlugin[] = []
 let main: MainWindow | null = null
@@ -177,6 +183,9 @@ page.on(PlaybackChannel.played, (_, key, song) => plays.played(key, song))
 page.handle(PlaybackChannel.playStats, (_, raw) => plays.stats(parseStatsPeriod(raw) ?? 'all'))
 page.handle(LovedChannel.load, () => loved.get())
 page.on(LovedChannel.set, (_, keys, on) => loved.set(keys, on))
+page.handle(LyricsChannel.get, (_, key, song) =>
+  isItemKey(key) ? lyrics.get({ key, song: parseLyricsSong(song) }) : Promise.resolve(undefined)
+)
 page.on(PlaybackChannel.log, (_, text) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
 })
@@ -251,6 +260,7 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   for (const p of plugins)
     p.start({
       ...ctx,
+      lyrics: lyrics.providerFor(p.id),
       idsMoved: (moves: IdMoves) => {
         // all of them, even when one fails
         const lists = playlists.moveIds(p.id, moves)

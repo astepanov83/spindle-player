@@ -49,6 +49,7 @@ export class FilesPlugin implements MainPlugin {
       source: (hash) => library.coverSource(hash)
     })
     for (const [host, route] of Object.entries(libraryRoutes(library))) ctx.route(host, route)
+    ctx.lyrics.provide((id, signal) => library.lyrics(id, signal))
 
     const { page, settings } = ctx
     const window = (e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent): BrowserWindow | null =>

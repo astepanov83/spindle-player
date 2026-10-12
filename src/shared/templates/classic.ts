@@ -9,7 +9,11 @@ export const classic: Template = {
   layout: {
     col: [
       {
-        row: [{ part: 'library', opts: { nav: 'sidebar' }, size: '1fr' }, { queueColumn: '330px' }],
+        row: [
+          // the words cover the library's page while shown, as a page of their own
+          { part: 'library', opts: { nav: 'sidebar', lyrics: true }, size: '1fr' },
+          { queueColumn: '330px' }
+        ],
         size: '1fr',
         drawerHost: true
       },

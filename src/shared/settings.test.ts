@@ -46,6 +46,7 @@ describe('parseStoredSettings', () => {
       outputDeviceName: 'USB DAC',
       miniOnTop: false,
       bigTemplate: 'focus',
+      lyricsShown: { studio: true, classic: false, focus: false },
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowMaximized: { studio: true, focus: false },
       windowPlace: { x: -1200, y: 40 },
@@ -152,6 +153,7 @@ describe('parseStoredSettings with a base', () => {
     outputDeviceName: 'USB DAC',
     miniOnTop: false,
     bigTemplate: 'classic',
+    lyricsShown: { studio: true, classic: true, focus: false },
     windowSizes: { focus: { width: 500, height: 700 } },
     windowMaximized: { focus: true },
     windowPlace: { x: 40, y: 60 },
@@ -653,5 +655,27 @@ describe('Mini (ticket 110)', () => {
     expect(s.windowSizes.mini).toEqual({ width: 420, height: 70 })
     expect(isKnownSettingsFile({ windowSizes: { mini: { width: 420, height: 70 } } })).toBe(true)
     expect(isKnownSettingsFile({ windowSizes: { mini: { width: 420, height: 400 } } })).toBe(false)
+  })
+})
+
+describe('lyricsShown (ticket 120)', () => {
+  it('shows the words in Focus at first, not in Studio or Classic', () => {
+    const s = parseStoredSettings(undefined)
+    expect(s.lyricsShown).toEqual({ studio: false, classic: false, focus: true })
+    expect(pageSettings(s).lyricsShown).toEqual({ studio: false, classic: false, focus: true })
+  })
+
+  it('reads each layout on its own, and keeps none for Mini', () => {
+    const s = parseStoredSettings({ lyricsShown: { studio: true, focus: 'yes', mini: true } })
+    expect(s.lyricsShown).toEqual({ studio: true, classic: false, focus: true })
+    expect(parseStoredSettings({ lyricsShown: [] }).lyricsShown).toEqual({
+      studio: false,
+      classic: false,
+      focus: true
+    })
+    expect(isKnownSettingsFile({ lyricsShown: { classic: true } })).toBe(true)
+    expect(isKnownSettingsFile({ lyricsShown: { mini: true } })).toBe(false)
+    expect(isKnownSettingsFile({ lyricsShown: { focus: 1 } })).toBe(false)
+    expect(isKnownSettingsFile({ lyricsShown: true })).toBe(false)
   })
 })

@@ -11,6 +11,7 @@ import { parseChanges } from '../../../shared/plugins/files/artist-edit'
 import { artistGroupsTask } from '../../../shared/plugins/files/artists-file'
 import type { AiClient } from '../../../shared/ai'
 import type { CoverSource } from '../../../shared/settings'
+import type { Lyrics } from '../../../shared/lyrics'
 import { ffmpegTool } from '../../ffmpeg-path'
 import type { SettingsStore } from '../../settings-store'
 import type { CoverCache } from '../../covers/cover-cache'
@@ -325,6 +326,12 @@ export class LibraryService {
   async mediaInfo(id: string): Promise<MediaInfo | undefined> {
     if (!this.#on) return undefined
     return (await this.#client.ask({ type: 'find-track', id })).media
+  }
+
+  // A song's words from its .lrc or tags (ticket 120), by id like its audio.
+  async lyrics(id: string, signal?: AbortSignal): Promise<Lyrics | undefined> {
+    if (!this.#on) return undefined
+    return (await this.#client.ask({ type: 'lyrics', id }, signal)).lyrics
   }
 
   // A radio song's cover from the online lookup (ticket 032): the picture,

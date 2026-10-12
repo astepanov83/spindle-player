@@ -16,6 +16,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { emptyIndex, serializeIndex } from './merge'
 import { readerVersion, type WorkerIn, type WorkerOut, type WorkerStart } from './types'
 import { joinSystem } from './group-artists'
+import { flacWith } from './fixtures/flac'
+import { cueTrackId, shortHash } from '../../ids'
 
 let dir: string
 let music: string
@@ -840,6 +842,52 @@ describe('the library process', () => {
         expect(existsSync(oldOverrides())).toBe(false)
         expect(readFileSync(v1(oldOverrides()), 'utf8')).toBe(users)
       })
+    })
+  })
+
+  describe("a song's words (ticket 120)", () => {
+    async function words(id: string, req: number): Promise<unknown> {
+      send({ type: 'lyrics', req, id })
+      await until(() => heard.some((m) => m.type === 'reply' && m.req === req))
+      return (heard.find((m) => m.type === 'reply' && m.req === req) as { lyrics?: unknown }).lyrics
+    }
+
+    it('reads them when asked, and the scan reads and keeps none', async () => {
+      const song = join(music, '01 Song.flac')
+      writeFileSync(song, flacWith(['TITLE=Song', 'LYRICS=From the tag']))
+      writeFileSync(join(music, '01 Song.lrc'), '[00:01.00]From the file')
+      start(true)
+      scan(1)
+      await until(() => scanned(1))
+      send({ type: 'flush' })
+      const index = readFileSync(join(dir, 'library.json'), 'utf8')
+      expect(index).not.toContain('From the')
+      expect(index).not.toContain('.lrc')
+      expect(await words(shortHash(song), 2)).toEqual({ synced: [{ t: 1, text: 'From the file' }] })
+      expect(await words('nope', 3)).toBeUndefined()
+    })
+
+    it("reads a CUE track's from an .lrc named after it, never the image's tags", async () => {
+      const image = join(music, 'disc.flac')
+      writeFileSync(image, flacWith(['LYRICS=The whole disc']))
+      writeFileSync(
+        join(music, 'disc.cue'),
+        [
+          'FILE "disc.flac" WAVE',
+          '  TRACK 01 AUDIO',
+          '    TITLE "First"',
+          '    INDEX 01 00:00:00',
+          '  TRACK 02 AUDIO',
+          '    TITLE "Second"',
+          '    INDEX 01 00:05:00'
+        ].join('\n')
+      )
+      writeFileSync(join(music, '02 - Second.lrc'), 'Second words')
+      start(true)
+      scan(1)
+      await until(() => scanned(1))
+      expect(await words(cueTrackId(image, 2), 2)).toEqual({ plain: 'Second words' })
+      expect(await words(cueTrackId(image, 1), 3)).toBeUndefined()
     })
   })
 })

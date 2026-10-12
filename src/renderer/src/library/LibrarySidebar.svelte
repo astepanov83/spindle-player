@@ -22,6 +22,12 @@
   import { pageBlocks, playlistsEmpty, pluginTabs, typedIn } from '../plugins'
   import { tabsIn } from '../plugins/tabs'
   import { dropTarget, type DropTarget } from '../stores/song-drag.svelte'
+  import Lyrics from '../parts/Lyrics.svelte'
+  import { lyrics as words } from '../stores/lyrics.svelte'
+
+  // the song's words may cover the page (Classic, ticket 120)
+  let { lyrics = false }: { lyrics?: boolean } = $props()
+  const wordsOver = $derived(lyrics && words.showing)
 
   // the tabs of the plugins that are on (ticket 059); playlists are listed
   // under their own heading
@@ -66,6 +72,20 @@
   )
 
   libraryOnScreen()
+
+  // Another page or a search makes the words give way, so what was asked
+  // for shows; the sidebar's own buttons do too (below).
+  let seenView = JSON.stringify(libraryView())
+  $effect(() => {
+    const v = JSON.stringify(libraryView())
+    if (v === seenView) return
+    seenView = v
+    untrack(hideWords)
+  })
+  // only while they show: a song with none keeps the choice for the next
+  function hideWords(): void {
+    if (wordsOver) words.setShown(false)
+  }
 </script>
 
 {#snippet item(
@@ -76,7 +96,15 @@
   full = false,
   drop: DropTarget | undefined = undefined
 )}
-  <button class="sidebtn" aria-current={current} onclick={pick} use:dropTarget={drop}>
+  <button
+    class="sidebtn"
+    aria-current={current}
+    onclick={() => {
+      hideWords()
+      pick()
+    }}
+    use:dropTarget={drop}
+  >
     <Icon name={icon} size={18} /><span class="lbl" title={full ? label : undefined}>{label}</span>
   </button>
 {/snippet}
@@ -122,7 +150,7 @@
     {/if}
     <div class="foot"><ScanLine wrap /></div>
   </aside>
-  <div class="main" bind:this={scrollEl}>
+  <div class="main" bind:this={scrollEl} inert={wordsOver}>
     {#if !tabs.length}
       <div class="fill"><NoPlugins /></div>
     {:else if none}
@@ -139,18 +167,45 @@
       <StatsView nav="sidebar" />
     {/if}
   </div>
+  {#if wordsOver}
+    <div class="words"><Lyrics size="page" /></div>
+  {/if}
 </div>
 
 <style>
   .lib2 {
+    --side: 236px;
     flex: 1;
     display: flex;
     min-height: 0;
+    position: relative;
+  }
+  /* the words over the page, on the album's colors as in Studio's player */
+  .words {
+    position: absolute;
+    inset: 0 0 0 var(--side);
+    /* over the page's sticky heads, under the drawer's shade */
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 32px;
+    background: linear-gradient(
+      170deg,
+      color-mix(
+          in oklch,
+          oklch(from var(--c1) min(l, var(--tint-max-l)) c h) var(--tint),
+          var(--bg)
+        )
+        0%,
+      color-mix(in oklch, var(--c3) calc(var(--tint) / 2), var(--bg)) 55%,
+      var(--bg) 100%
+    );
+    border-left: 1px solid var(--edge);
   }
   /* 236px: with Back and Forward beside it, the search box still shows
      "Search stations" whole */
   .side {
-    width: 236px;
+    width: var(--side);
     flex: none;
     display: flex;
     flex-direction: column;

@@ -4,7 +4,7 @@
 // or a file that is not what its name says. So every read counts against a
 // budget, and durations come from the header or the last page instead.
 import { open, type FileHandle } from 'fs/promises'
-import { parseFromTokenizer, type IAudioMetadata } from 'music-metadata'
+import { parseFromTokenizer, type IAudioMetadata, type ILyricsTag } from 'music-metadata'
 import {
   AbstractTokenizer,
   EndOfStreamError,
@@ -99,8 +99,9 @@ class BudgetTokenizer extends AbstractTokenizer {
   }
 }
 
-// Tags as music-metadata gives them, or ffprobe (no pictures then).
-export type Meta = RawTags & { common: { picture?: Picture[] } }
+// Tags as music-metadata gives them, or ffprobe (no pictures or words then).
+// The scan keeps no words; they are read when a song starts (lyrics-files.ts).
+export type Meta = RawTags & { common: { picture?: Picture[]; lyrics?: ILyricsTag[] } }
 
 // Throws if the file can't be read, or can't be read cheaply (ReadLimitError),
 // and `probe` (ffprobe) can't read it either.

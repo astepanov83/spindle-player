@@ -8,7 +8,10 @@ export const focus: Template = {
   layout: {
     col: [
       {
-        queue: { with: { part: 'nowplaying', opts: { style: 'full' } }, label: 'Now playing' },
+        queue: {
+          with: { part: 'nowplaying', opts: { style: 'full', lyrics: true } },
+          label: 'Now playing'
+        },
         size: '1fr',
         drawerHost: true
       },
@@ -30,7 +33,7 @@ export const focus: Template = {
           col: [
             {
               queue: {
-                with: { part: 'nowplaying', opts: { style: 'full', show: 'text' } },
+                with: { part: 'nowplaying', opts: { style: 'full', show: 'text', lyrics: true } },
                 label: 'Now playing'
               },
               size: '1fr',

@@ -45,6 +45,7 @@ import { Pacer, scanSlow, Turns } from './pacer'
 import { decodeCue, parseCue } from './cue'
 import { probeTags } from './probe'
 import { readTags } from './read-tags'
+import { readLyrics, type LyricsFile } from './lyrics-files'
 import {
   dirOf,
   dropOutside,
@@ -1117,6 +1118,17 @@ function mediaInfo(id: string): MediaInfo | undefined {
   return { path: e.path, codec, duration, sampleRate, channels, bits }
 }
 
+// Where a song's words are (ticket 120): its own file, or for a CUE track the
+// disc image, with the track's number and title to name its .lrc.
+function lyricsFile(id: string): LyricsFile | undefined {
+  const real = !built.paths.has(id) && Object.hasOwn(aliases, id) ? aliases[id] : id
+  const path = built.paths.get(real)
+  if (path) return { path }
+  const t = built.data.tracks.find((x) => x.id === real)
+  const image = t?.part && built.paths.get(t.part.file)
+  return t && image ? { path: image, cue: { no: t.no, title: t.title } } : undefined
+}
+
 port.on('message', (e: Electron.MessageEvent) => {
   const m = e.data as WorkerIn
   switch (m.type) {
@@ -1221,6 +1233,18 @@ port.on('message', (e: Electron.MessageEvent) => {
         () => post({ type: 'reply', req: m.req, media: mediaInfo(m.id) }),
         () => post({ type: 'reply', req: m.req })
       )
+      break
+    case 'lyrics':
+      // read now, not in the scan's turns: the song is starting
+      ready
+        .then(() => {
+          const f = lyricsFile(m.id)
+          return f && readLyrics(f)
+        })
+        .then(
+          (lyrics) => post({ type: 'reply', req: m.req, lyrics }),
+          () => post({ type: 'reply', req: m.req })
+        )
       break
     case 'get-library':
       ready.then(

@@ -17,6 +17,7 @@ export type Ask =
   | { type: 'cover-source'; hash: string }
   | { type: 'get-library' }
   | { type: 'song-cover'; artist: string; song: string }
+  | { type: 'lyrics'; id: string }
 
 // What the page gets when the process can't give it a library.
 // No epoch a process makes, so a patch from a process that comes back later

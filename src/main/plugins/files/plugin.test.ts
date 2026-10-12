@@ -6,6 +6,7 @@ import { LibraryChannel } from '../../../shared/plugins/files/ipc'
 import type { CoverHelper, PluginContext } from '../types'
 import type { WorkerIn, WorkerOut } from './types'
 import type { AiClient } from '../../../shared/ai'
+import type { LocalLyrics } from '../../lyrics'
 
 // the library processes made, with what main sent each
 const children: { sent: WorkerIn[]; emit(m: WorkerOut): void }[] = []
@@ -15,6 +16,7 @@ function answer(m: WorkerIn): WorkerOut | undefined {
   if (!('req' in m) || m.type === 'cancel') return undefined
   if (m.type === 'get-library') return { type: 'reply', req: m.req, data: new Uint8Array([1]) }
   if (m.type === 'song-cover') return { type: 'reply', req: m.req, song: 'none' }
+  if (m.type === 'lyrics') return { type: 'reply', req: m.req, lyrics: { plain: 'words' } }
   return { type: 'reply', req: m.req }
 }
 
@@ -87,12 +89,14 @@ function setup(
   sent(): WorkerIn['type'][]
   folders: string[][]
   helper: CoverHelper
+  lyrics: LocalLyrics
 } {
   children.length = 0
   const handlers = new Map<string, Handler>()
   const routes = new Map<string, (req: Request, url: URL, parts: string[]) => unknown>()
   const folders: string[][] = []
   let helper: CoverHelper | undefined
+  let lyrics: LocalLyrics | undefined
   const settings = {
     folders: ['/music'],
     fetchCovers: true,
@@ -122,6 +126,7 @@ function setup(
       get: () => ({ cache: { dir: '/nowhere/covers' } }),
       provide: (h: CoverHelper) => (helper = h)
     },
+    lyrics: { provide: (read: LocalLyrics) => (lyrics = read) },
     ai: ai.client
   } as unknown as PluginContext
   const plugin = new FilesPlugin({ keptByOthers: () => [] })
@@ -137,7 +142,8 @@ function setup(
     },
     sent: () => child().sent.map((m) => m.type),
     folders,
-    helper: helper!
+    helper: helper!,
+    lyrics: lyrics!
   }
 }
 
@@ -184,6 +190,16 @@ describe('FilesPlugin', () => {
     expect(await s.helper.source('a'.repeat(40))).toBeUndefined()
     expect(s.sent()).not.toContain('find-track')
     expect(s.sent()).not.toContain('cover-source')
+  })
+
+  it("reads a song's words from the library process while on, and none while off", async () => {
+    const signal = new AbortController().signal
+    const on = setup(true)
+    expect(await on.lyrics('abc', signal)).toEqual({ plain: 'words' })
+    expect(children[0].sent.at(-1)).toMatchObject({ type: 'lyrics', id: 'abc' })
+    const off = setup(false)
+    expect(await off.lyrics('abc', signal)).toBeUndefined()
+    expect(off.sent()).not.toContain('lyrics')
   })
 
   it('looks up radio song covers while off', async () => {

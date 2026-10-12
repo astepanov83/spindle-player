@@ -1,16 +1,27 @@
 <script lang="ts">
+  import Lyrics from './Lyrics.svelte'
   import PlayingText from './PlayingText.svelte'
   import Cover from '../ui/Cover.svelte'
   import Stage from '../visualizer/Stage.svelte'
   import { layout } from '../stores/layout.svelte'
+  import { lyrics as words } from '../stores/lyrics.svelte'
   import { queues } from '../stores/queues.svelte'
   import { settings } from '../stores/settings.svelte'
   import { plugins } from '../../../shared/plugins'
   import { startHint } from './start-hint'
 
   // show: only the stage or only the words (Focus's wide layout); both when
-  // left out. 'line': a small cover and two lines, no stage (Mini)
-  let { style, show }: { style: 'panel' | 'full' | 'line'; show?: 'stage' | 'text' } = $props()
+  // left out. 'line': a small cover and two lines, no stage (Mini).
+  // lyrics: the song's words show here while turned on (ticket 120): in place
+  // of the stage in a panel, a few lines above the title when full, the
+  // room above the title beside the stage.
+  let {
+    style,
+    show,
+    lyrics = false
+  }: { style: 'panel' | 'full' | 'line'; show?: 'stage' | 'text'; lyrics?: boolean } = $props()
+
+  const withWords = $derived(lyrics && words.showing)
 
   const hint = $derived(
     startHint({
@@ -37,8 +48,14 @@
   </div>
 {:else}
   <div class="np {style}" class:only-text={show === 'text'}>
-    {#if show !== 'text'}
+    {#if withWords && style === 'panel'}
+      <Lyrics size="fill" />
+    {:else if show !== 'text'}
       <Stage />
+    {/if}
+    {#if withWords && style === 'full'}
+      <!-- beside the stage (wide Focus) the column has room for more -->
+      <Lyrics size={show === 'text' ? 'fill' : 'block'} />
     {/if}
     {#if show !== 'stage'}
       <div class="meta">
@@ -74,6 +91,23 @@
     flex: 1;
     margin: 0 -22px;
     min-height: 160px;
+  }
+  /* Focus: three lines of words in a short window, up to five in a tall one */
+  .full {
+    container-type: size;
+  }
+  .full > :global(.lyr) {
+    --lines: 3;
+  }
+  @container (min-height: 480px) {
+    .full > :global(.lyr) {
+      --lines: 4;
+    }
+  }
+  @container (min-height: 600px) {
+    .full > :global(.lyr) {
+      --lines: 5;
+    }
   }
   .meta {
     flex: none;

@@ -7,11 +7,16 @@ export type ShownQueue = QueueMode | 'none'
 export type Look = 'tint' | 'ambient'
 
 // A part never knows where it sits. Its options come from the template.
+// lyrics: the song's words show in this part while turned on (ticket 120);
+// a layout with no such part has no Lyrics button (Mini).
 export type PartNode =
-  | { part: 'library'; opts: { nav: 'chips' | 'sidebar' } }
+  | { part: 'library'; opts: { nav: 'chips' | 'sidebar'; lyrics?: true } }
   // show: only the stage or only the words; both when left out. 'line': a
   // small cover and two lines of text, no visualizer (Mini)
-  | { part: 'nowplaying'; opts: { style: 'panel' | 'full' | 'line'; show?: 'stage' | 'text' } }
+  | {
+      part: 'nowplaying'
+      opts: { style: 'panel' | 'full' | 'line'; show?: 'stage' | 'text'; lyrics?: true }
+    }
   | { part: 'controls'; opts: { style: 'stack' | 'bar' | 'compact' } }
 
 interface NodeBase {

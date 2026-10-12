@@ -2,6 +2,7 @@
 <script lang="ts">
   import IconButton from '../ui/IconButton.svelte'
   import { layout } from '../stores/layout.svelte'
+  import { lyrics } from '../stores/lyrics.svelte'
   import type { SlotButton, SlotName } from './build'
   import { queue } from '../stores/queue.svelte'
   import type { DropTarget } from '../stores/song-drag.svelte'
@@ -10,7 +11,12 @@
 
   function run(b: SlotButton): void {
     if (b.act === 'queue') layout.toggleQueue()
+    else lyrics.toggle()
   }
+
+  // the Lyrics button only while the song has words
+  const buttons = $derived(layout.slots[name].filter((b) => b.act !== 'lyrics' || !!lyrics.words))
+  const isOn = (b: SlotButton): boolean => (b.act === 'queue' ? layout.showQueue : lyrics.shown)
 
   // Songs dropped on the queue button go at the end (ticket 089); resting on
   // it opens the queue, to drop them at a place.
@@ -21,11 +27,12 @@
 </script>
 
 <span class="slot" data-slot={name}>
-  {#each layout.slots[name] as b (b.act)}
+  {#each buttons as b (b.act)}
     <IconButton
       icon={b.act}
       label={b.label}
-      on={b.act === 'queue' && layout.showQueue}
+      on={isOn(b)}
+      toggle={b.act === 'lyrics'}
       act={b.act}
       drop={b.act === 'queue' ? onQueue : undefined}
       onclick={() => run(b)}

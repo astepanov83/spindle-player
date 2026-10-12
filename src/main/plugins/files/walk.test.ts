@@ -55,6 +55,14 @@ describe('walk', () => {
     expect(out.skipped).toEqual([])
   })
 
+  it('lists no .lrc file: song words are read when a song starts, not in a scan', async () => {
+    file('A/01 Song.mp3')
+    file('A/01 Song.lrc')
+    const out = await run([root])
+    expect(out.files).toEqual([join(root, 'A/01 Song.mp3')])
+    expect(out.cues).toEqual([])
+  })
+
   it('takes the front from a scans folder for the folder above, unless it has a better image', async () => {
     file('A/01.flac')
     file('A/Scans/Back.jpg')

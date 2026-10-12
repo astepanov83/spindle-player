@@ -1,4 +1,12 @@
-import type { AiApi, LovedApi, PlaybackApi, PlaylistsApi, SettingsApi, WinApi } from '../shared/ipc'
+import type {
+  AiApi,
+  LovedApi,
+  LyricsApi,
+  PlaybackApi,
+  PlaylistsApi,
+  SettingsApi,
+  WinApi
+} from '../shared/ipc'
 import type { PluginApis } from '../shared/plugins'
 
 // The core's APIs, and the plugins' from the plugin list.
@@ -10,5 +18,6 @@ declare global {
     playlistsApi: PlaylistsApi
     playbackApi: PlaybackApi
     lovedApi: LovedApi
+    lyricsApi: LyricsApi
   }
 }

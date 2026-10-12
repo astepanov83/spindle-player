@@ -5,7 +5,7 @@ import type { Look, PartNode, ShownQueue, Template, TemplateNode } from '../../.
 export type SlotName = 'player.buttons'
 
 export interface SlotButton {
-  act: 'queue'
+  act: 'queue' | 'lyrics'
   label: string
 }
 
@@ -112,6 +112,9 @@ export function buildLayout(template: Template, queueMode: ShownQueue, wide = fa
   root.flex = '1 1 0'
 
   const slots: Slots = { 'player.buttons': [] }
+  // a part that shows the words owns their button (shown while the song has words)
+  if (partsOf(root).some((p) => 'lyrics' in p.opts && p.opts.lyrics))
+    slots['player.buttons'].push({ act: 'lyrics', label: 'Lyrics' })
   if (queueMode === 'drawer') {
     ;(host ?? root).drawer = fill ? 'fill' : 'side'
     // the drawer owns its toggle and asks for a place in the player's slot

@@ -2,6 +2,7 @@ import type { AiState } from './ai'
 import type { PluginChannels } from './plugins'
 import type { ItemKey } from './plugins/items'
 import type { Loved } from './loved'
+import type { Lyrics, LyricsSong } from './lyrics'
 import type { Playlist } from './playlists'
 import type { PlayedSong, Plays, PlayStats, StatsPeriod } from './plays'
 import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
@@ -161,6 +162,18 @@ export interface LovedApi {
   set(keys: ItemKey[], on: boolean): void
 }
 
+export const LyricsChannel = {
+  get: 'lyrics:get'
+} as const
+
+// What the preload exposes to the page as `window.lyricsApi` (ticket 120).
+export interface LyricsApi {
+  // The words of the song that starts, asked once per song: none when it has
+  // none, or when a newer song was asked meanwhile. `song` is what the page
+  // shows of it, for a lookup by name.
+  get(key: ItemKey, song?: LyricsSong): Promise<Lyrics | undefined>
+}
+
 export const AiChannel = {
   load: 'ai:load',
   // main to page: the whole AiState, at every change
@@ -217,6 +230,7 @@ export interface CoreChannels {
   [AiChannel.setProvider]: AiApi['setProvider']
   [LovedChannel.load]: LovedApi['load']
   [LovedChannel.set]: LovedApi['set']
+  [LyricsChannel.get]: LyricsApi['get']
 }
 
 export type PageChannels = CoreChannels & PluginChannels

@@ -5,6 +5,7 @@ import type { ArtistChanges } from '../../../shared/plugins/files/artist-edit'
 import type { Answer, JsonRequest } from '../../../shared/ai'
 import type { CoverSource } from '../../../shared/settings'
 import type { ThemePalettes } from '../../../shared/palette'
+import type { Lyrics } from '../../../shared/lyrics'
 import type { CueSheet } from './cue'
 
 // One audio file. Tags are already cleaned up (see tags.ts); a missing tag is left out.
@@ -203,6 +204,9 @@ export type WorkerIn =
   // artist-ai-cache.json.
   // Song cover lookups for the radio go on.
   | { type: 'set-on'; on: boolean }
+  // the words of a song that starts (ticket 120), from its .lrc or tags;
+  // answered with `lyrics`, none when it has none
+  | { type: 'lyrics'; req: number; id: string }
 
 // the library process to main
 export type WorkerOut =
@@ -219,6 +223,7 @@ export type WorkerOut =
       media?: MediaInfo
       data?: Uint8Array
       song?: 'found' | 'none' | 'later'
+      lyrics?: Lyrics
     }
   | { type: 'log'; text: string }
   | { type: 'flushed' }

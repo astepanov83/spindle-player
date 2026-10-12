@@ -45,6 +45,7 @@ const notPlugins = [
 const coreTests = [
   'src/main/convert-files.test.ts',
   'src/main/loved-file.test.ts',
+  'src/main/lyrics.test.ts',
   'src/main/plays-file.test.ts',
   'src/main/play-log.test.ts',
   'src/main/play-stats.test.ts',
@@ -66,6 +67,7 @@ const coreTests = [
   'src/renderer/src/stores/library.test.ts',
   'src/renderer/src/stores/library-version.svelte.test.ts',
   'src/renderer/src/stores/live-queue.test.ts',
+  'src/renderer/src/stores/lyrics.test.ts',
   'src/renderer/src/stores/playlists.test.ts',
   'src/renderer/src/stores/queues.test.ts',
   'src/renderer/src/stores/queue.test.ts',

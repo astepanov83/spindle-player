@@ -2,12 +2,14 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   AiChannel,
   LovedChannel,
+  LyricsChannel,
   PlaybackChannel,
   PlaylistChannel,
   SettingsChannel,
   WinChannel,
   type AiApi,
   type LovedApi,
+  type LyricsApi,
   type PlaybackApi,
   type PlayControl,
   type PlaylistsApi,
@@ -103,6 +105,10 @@ const lovedApi: LovedApi = {
   set: (keys, on) => send(LovedChannel.set, keys, on)
 }
 
+const lyricsApi: LyricsApi = {
+  get: (key, song) => invoke(LyricsChannel.get, key, song)
+}
+
 // Asked for early like the settings; a state pushed before the page listens is kept.
 const aiState = invoke(AiChannel.load)
 const onAiState = latest<AiState>(AiChannel.state)
@@ -121,4 +127,5 @@ contextBridge.exposeInMainWorld('playlistsApi', playlistsApi)
 contextBridge.exposeInMainWorld('playbackApi', playbackApi)
 contextBridge.exposeInMainWorld('settingsApi', settingsApi)
 contextBridge.exposeInMainWorld('lovedApi', lovedApi)
+contextBridge.exposeInMainWorld('lyricsApi', lyricsApi)
 for (const [name, api] of Object.entries(apis)) contextBridge.exposeInMainWorld(name, api)

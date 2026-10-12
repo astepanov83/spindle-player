@@ -3,6 +3,7 @@ import type { IdMoves } from '../../shared/id-moves'
 import type { PluginId } from '../../shared/plugins'
 import type { PageIpc } from '../page-ipc'
 import type { CoverCache } from '../covers/cover-cache'
+import type { LyricsProvider } from '../lyrics'
 import type { SettingsStore } from '../settings-store'
 
 // A request to spindle://<host>/...; `parts` are the path pieces.
@@ -60,6 +61,8 @@ export interface PluginContext {
   idsMoved(moves: IdMoves): boolean
   // asks a language model for its tasks (aiTasks in the plugin list)
   ai: AiClient
+  // where the plugin's own reader of song words goes (ticket 120)
+  lyrics: LyricsProvider
 }
 
 export interface CoverProvider {

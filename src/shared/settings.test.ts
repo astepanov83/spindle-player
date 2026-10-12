@@ -39,6 +39,8 @@ describe('parseStoredSettings', () => {
       viewLooks: { albums: 'list', artists: 'shelves', artistPage: 'column' },
       loudness: 'song',
       noCover: 'type',
+      outputDevice: 'c0ffee',
+      outputDeviceName: 'USB DAC',
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowMaximized: { studio: true, focus: false },
       windowPlace: { x: -1200, y: 40 },
@@ -141,6 +143,8 @@ describe('parseStoredSettings with a base', () => {
     viewLooks: { albums: 'list', artists: 'list', artistPage: 'albums' },
     loudness: 'off',
     noCover: 'record',
+    outputDevice: 'c0ffee',
+    outputDeviceName: 'USB DAC',
     windowSizes: { focus: { width: 500, height: 700 } },
     windowMaximized: { focus: true },
     windowPlace: { x: 40, y: 60 },
@@ -511,6 +515,34 @@ describe('no cover setting', () => {
 
   it('gives the page the field', () => {
     expect(pageSettings(parseStoredSettings({ noCover: 'type' })).noCover).toBe('type')
+  })
+})
+
+describe('sound output setting (ticket 112)', () => {
+  it('is the system default, also for an old file without it', () => {
+    expect(parseStoredSettings(undefined).outputDevice).toBe('')
+    expect(parseStoredSettings({ theme: 'dark' }).outputDeviceName).toBe('')
+  })
+
+  it('keeps a device id and its name, and falls back on a wrong one', () => {
+    const id = 'a'.repeat(64)
+    const s = parseStoredSettings({ outputDevice: id, outputDeviceName: 'USB DAC' })
+    expect([s.outputDevice, s.outputDeviceName]).toEqual([id, 'USB DAC'])
+    const base = { ...parseStoredSettings(undefined), outputDevice: 'x', outputDeviceName: 'X' }
+    const bad = parseStoredSettings({ outputDevice: 5, outputDeviceName: 'n'.repeat(501) }, base)
+    expect([bad.outputDevice, bad.outputDeviceName]).toEqual(['x', 'X'])
+  })
+
+  it('knows the fields in a file', () => {
+    expect(isKnownSettingsFile({ outputDevice: 'abc', outputDeviceName: 'Speakers' })).toBe(true)
+    expect(isKnownSettingsFile({ outputDevice: '' })).toBe(true)
+    expect(isKnownSettingsFile({ outputDevice: null })).toBe(false)
+    expect(isKnownSettingsFile({ outputDeviceName: 'n'.repeat(501) })).toBe(false)
+  })
+
+  it('gives the page the fields', () => {
+    const s = pageSettings(parseStoredSettings({ outputDevice: 'abc', outputDeviceName: 'DAC' }))
+    expect([s.outputDevice, s.outputDeviceName]).toEqual(['abc', 'DAC'])
   })
 })
 

@@ -5,6 +5,7 @@
   import CoverFetch from './CoverFetch.svelte'
   import KeyList from './KeyList.svelte'
   import NoCoverPick from './NoCoverPick.svelte'
+  import OutputPick from './OutputPick.svelte'
   import PluginSection from './PluginSection.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Seg from '../ui/Seg.svelte'
@@ -165,6 +166,7 @@
             />
           </div>
           <NoCoverPick />
+          <OutputPick />
           <div class="set">
             <span class="section-label">Even out loudness</span>
             <Seg

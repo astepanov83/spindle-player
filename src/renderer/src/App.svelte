@@ -32,6 +32,7 @@
   import { plays } from './stores/plays.svelte'
   import { queues } from './stores/queues.svelte'
   import { queue } from './stores/queue.svelte'
+  import { output } from './stores/output.svelte'
   import { settings, settingsState } from './stores/settings.svelte'
   import { sound, stepVolume, toggleMute } from './stores/sound.svelte'
   import { theme } from './stores/theme.svelte'
@@ -43,6 +44,7 @@
   const palette = $derived(palettes[theme.light ? 'light' : 'dark'])
 
   $effect(() => engine.setVolume(heard({ volume: settings.volume, muted: sound.muted })))
+  $effect(() => output.use(settings.outputDevice))
 
   // Shuffle or repeat changes the song that follows, which loads ahead.
   $effect(() => {

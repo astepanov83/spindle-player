@@ -15,6 +15,8 @@ import { plays } from './stores/plays.svelte'
 import { loved } from './stores/loved.svelte'
 import { queues } from './stores/queues.svelte'
 import { queue } from './stores/queue.svelte'
+import { layout } from './stores/layout.svelte'
+import { output } from './stores/output.svelte'
 import { loadSettings } from './stores/settings.svelte'
 import { dropOn, startPlugins, takesDrops } from './plugins'
 import { orFallback } from './start'
@@ -58,6 +60,9 @@ const [saved, lists, lastQueue, counts, hearts, started] = await Promise.all([
 loadSettings(saved.value, saved.ok)
 // not waited for: Settings shows the AI part when it arrives
 startAi(window.aiApi)
+// the sound outputs, for Settings and the device the songs play on; with
+// Settings open its choice says a device is gone, so no notice
+output.start(() => layout.settingsOpen)
 
 // Ids a plugin moved are renamed before the playlists and the queue load, so
 // the queue doesn't drop those songs.

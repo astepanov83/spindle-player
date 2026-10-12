@@ -68,4 +68,7 @@ export interface Template {
   // another layout for a window at least `ratio` times as wide as it is tall
   // and at least `minWidth` wide (layout/wide.ts)
   wide?: { ratio: number; minWidth: number; layout: TemplateNode }
+  // fades its tabs, controls and title bar while nobody uses it, when the
+  // focusHide setting is on (Focus, ticket 113)
+  idleHide?: true
 }

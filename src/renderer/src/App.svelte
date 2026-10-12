@@ -16,6 +16,7 @@
   import { escapeTarget, isTyping, keyAction, seekStep, usesArrows, type KeyAction } from './keys'
   import { goBack, goForward, onSideButton } from './library/side-buttons'
   import { drawerFocus, focusColumnQueue } from './layout/queue-focus'
+  import { IdleTimer, mayHide, pageKeeps } from './layout/idle'
   import { miniMenuItems, miniPick } from './layout/mini-menu'
   import { layout } from './stores/layout.svelte'
   import { menu } from './stores/menu.svelte'
@@ -164,6 +165,80 @@
     })
   )
 
+  // Focus fades its tabs, controls and title bar while nobody uses it
+  // (ticket 113). Any move, key or touch brings them back.
+  let idle = $state(false)
+  // what the pointer is on; left the window: null
+  let pointerAt: Element | null = null
+  let lastXY = ''
+  const idleTimer = new IdleTimer(
+    (h) => (idle = h),
+    () =>
+      pageKeeps({
+        pointerAt,
+        focused: document.activeElement,
+        windowFocused: document.hasFocus(),
+        dialogOpen: !!document.querySelector('dialog[open]')
+      })
+  )
+  $effect(() =>
+    idleTimer.allow(
+      mayHide({
+        on: layout.idleHides,
+        playing: player.playing,
+        open:
+          !!menu.open ||
+          layout.settingsOpen ||
+          layout.showQueue ||
+          (layout.queueMode === 'tab' && layout.tabSel !== 0)
+      })
+    )
+  )
+  $effect(() => () => idleTimer.stop())
+
+  function pointerMoved(e: PointerEvent): void {
+    pointerAt = e.target instanceof Element ? e.target : null
+    // Chromium sends a move when the page shifts under a still pointer
+    const xy = `${e.screenX},${e.screenY}`
+    if (xy === lastXY) return
+    lastXY = xy
+    idleTimer.poke()
+  }
+
+  // A tap's click lands where the controls are by the time it comes, so the
+  // tap that brings them back must not also press one.
+  let swallowTap = false
+
+  function pointerDown(e: PointerEvent): void {
+    pointerAt = e.target instanceof Element ? e.target : null
+    swallowTap = idleTimer.hidden && e.pointerType !== 'mouse'
+    idleTimer.poke()
+  }
+
+  // Enter on a button clicks with no pointer
+  function keyed(): void {
+    swallowTap = false
+    idleTimer.poke()
+  }
+
+  function clicked(e: MouseEvent): void {
+    if (!swallowTap) return
+    swallowTap = false
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  // Also when the controls come back under a still pointer: no move then
+  function pointerOver(e: PointerEvent): void {
+    pointerAt = e.target instanceof Element ? e.target : null
+  }
+
+  function pointerOut(e: PointerEvent): void {
+    if (e.relatedTarget) return
+    pointerAt = null
+    idleTimer.retry()
+  }
+
   // On Linux one right click comes both from main and as the page's own
   // event, and a second menu would close the first.
   let miniMenuOpen = false
@@ -271,6 +346,14 @@
      how a queue Column is drawn (layout/narrow.ts) and the wide layout (layout/wide.ts) -->
 <svelte:window
   {onkeydown}
+  onkeydowncapture={keyed}
+  onpointermovecapture={pointerMoved}
+  onpointerdowncapture={pointerDown}
+  onclickcapture={clicked}
+  onwheelcapture={() => idleTimer.poke()}
+  onpointerovercapture={pointerOver}
+  onpointerout={pointerOut}
+  onblur={() => idleTimer.retry()}
   onmouseup={onSideButton}
   onpagehide={() => queue.savePos()}
   onresize={resized}
@@ -280,6 +363,7 @@
   class="app vz-{settings.visualizer}"
   class:playing={player.playing}
   class:song-playing={queues.songPlaying}
+  class:idle
   style:--c1={palette[0]}
   style:--c2={palette[1]}
   style:--c3={palette[2]}
@@ -312,6 +396,24 @@
     position: relative;
     overflow: hidden;
     background: var(--bg);
+  }
+  /* Focus while nobody uses it: fades out, and comes back at once */
+  .app.idle :global([data-fades]) {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.6s;
+  }
+  /* the album's colors go on under the faded title bar, not a flat band */
+  .app.idle :global(.winbody > .look-ambient) {
+    overflow: visible;
+    clip-path: inset(-34px 0 0);
+  }
+  .app.idle :global(.winbody > .look-ambient > .amb-shade) {
+    top: -34px;
+  }
+  .app.idle,
+  .app.idle :global(*) {
+    cursor: none !important;
   }
   .winbody {
     flex: 1;

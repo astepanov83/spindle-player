@@ -9,6 +9,7 @@
   import PluginSection from './PluginSection.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Seg from '../ui/Seg.svelte'
+  import Switch from '../ui/Switch.svelte'
   import type { QueueMode, TemplateId } from '../../../shared/layout'
   import {
     closeActions,
@@ -154,6 +155,19 @@
               value={settings.visualizer}
               onchange={(v: VisualizerStyle) => layout.chooseVisualizer(v)}
             />
+          </div>
+          <div class="set">
+            <span class="section-label">Focus</span>
+            <Switch
+              label="Hide the controls while the music plays"
+              on={settings.focusHide}
+              onchange={(on) => (settings.focusHide = on)}
+            />
+            <p class="hint">
+              In Focus, after 3 seconds without the mouse or a key, the tabs, the controls and the
+              title bar fade out, and only the cover, the visualizer and the words stay. Move the
+              mouse or press a key to bring them back.
+            </p>
           </div>
         {:else if cur.id === keysSection}
           <KeyList />

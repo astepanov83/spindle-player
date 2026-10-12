@@ -58,7 +58,7 @@
 {:else if node.kind === 'tabs'}
   <div class="tabsbox" class:dhost={!!node.drawer} style:flex={node.flex}>
     <!-- Focus's notice sits under it (ui/Notice.svelte) -->
-    <div class="tabstrip" role="tablist" data-notice-under>
+    <div class="tabstrip" role="tablist" data-notice-under data-fades>
       {#each node.labels as label, i (i)}
         <button
           role="tab"

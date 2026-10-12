@@ -47,6 +47,7 @@ describe('parseStoredSettings', () => {
       miniOnTop: false,
       bigTemplate: 'focus',
       lyricsShown: { studio: true, classic: false, focus: false },
+      focusHide: true,
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowMaximized: { studio: true, focus: false },
       windowPlace: { x: -1200, y: 40 },
@@ -154,6 +155,7 @@ describe('parseStoredSettings with a base', () => {
     miniOnTop: false,
     bigTemplate: 'classic',
     lyricsShown: { studio: true, classic: true, focus: false },
+    focusHide: true,
     windowSizes: { focus: { width: 500, height: 700 } },
     windowMaximized: { focus: true },
     windowPlace: { x: 40, y: 60 },
@@ -677,5 +679,15 @@ describe('lyricsShown (ticket 120)', () => {
     expect(isKnownSettingsFile({ lyricsShown: { mini: true } })).toBe(false)
     expect(isKnownSettingsFile({ lyricsShown: { focus: 1 } })).toBe(false)
     expect(isKnownSettingsFile({ lyricsShown: true })).toBe(false)
+  })
+})
+
+describe('focusHide (ticket 113)', () => {
+  it('is off at first, and read when it is a true or false', () => {
+    expect(parseStoredSettings(undefined).focusHide).toBe(false)
+    expect(pageSettings(parseStoredSettings({ focusHide: true })).focusHide).toBe(true)
+    expect(parseStoredSettings({ focusHide: 'yes' }).focusHide).toBe(false)
+    expect(isKnownSettingsFile({ focusHide: false })).toBe(true)
+    expect(isKnownSettingsFile({ focusHide: 1 })).toBe(false)
   })
 })

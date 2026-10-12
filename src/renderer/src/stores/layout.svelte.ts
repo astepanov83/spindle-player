@@ -27,6 +27,9 @@ class LayoutStore {
   hasLibrary: boolean = $derived(partsOf(this.built.root).some((p) => p.part === 'library'))
   // Mini: no title bar, and no room for Settings or the close question
   bar: boolean = $derived(this.template.titleBar === false)
+  // Focus with the setting on: its tabs, controls and title bar fade while
+  // nobody uses it (layout/idle.ts)
+  idleHides: boolean = $derived(!!this.template.idleHide && settings.focusHide)
   get slots(): Slots {
     return this.built.slots
   }

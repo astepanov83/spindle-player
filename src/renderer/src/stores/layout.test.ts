@@ -179,3 +179,21 @@ describe('Mini (ticket 110)', () => {
     expect([settings.template, layout.settingsOpen]).toEqual(['mini', false])
   })
 })
+
+describe('Focus hides its controls (ticket 113)', () => {
+  it('only Focus, and only with the setting on', () => {
+    settings.focusHide = false
+    settings.template = 'focus'
+    expect(layout.idleHides).toBe(false)
+    settings.focusHide = true
+    expect(layout.idleHides).toBe(true)
+    layout.resized(1600, 600)
+    expect([layout.wide, layout.idleHides]).toEqual([true, true])
+    layout.resized(440, 680)
+    for (const id of ['studio', 'classic', 'mini'] as const) {
+      settings.template = id
+      expect(layout.idleHides).toBe(false)
+    }
+    settings.focusHide = false
+  })
+})

@@ -51,6 +51,8 @@ export interface Settings {
   miniOnTop: boolean
   // the layout Mini goes back to: the one it was left for
   bigTemplate: TemplateId
+  // song words shown, per layout (ticket 120); Mini has no room for them
+  lyricsShown: Partial<Record<TemplateId, boolean>>
 }
 
 export interface Size {
@@ -135,7 +137,9 @@ export function defaultSettings(): Settings {
     outputDevice: '',
     outputDeviceName: '',
     miniOnTop: true,
-    bigTemplate: 'studio'
+    bigTemplate: 'studio',
+    // Focus is the place for them; elsewhere they take the cover's or the library's place
+    lyricsShown: { studio: false, classic: false, focus: true }
   }
 }
 
@@ -263,6 +267,17 @@ function parseViewLooks(v: unknown, base: ViewLooks): ViewLooks {
 const maxDeviceText = 500
 const isDeviceText = (v: unknown): v is string => typeof v === 'string' && v.length <= maxDeviceText
 
+// Each layout on its own; one with no words (Mini) is not kept.
+function parseLyricsShown(v: unknown, base: Settings['lyricsShown']): Settings['lyricsShown'] {
+  const r = isObject(v) ? v : {}
+  const out: Settings['lyricsShown'] = {}
+  for (const id of bigTemplateIds) {
+    const on = typeof r[id] === 'boolean' ? r[id] : base[id]
+    if (on !== undefined) out[id] = on
+  }
+  return out
+}
+
 // Absolute on Linux and macOS, or with a drive letter on Windows.
 function isAbsolutePath(p: string): boolean {
   return p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\')
@@ -374,6 +389,7 @@ export function parseStoredSettings(
     outputDeviceName: isDeviceText(r.outputDeviceName) ? r.outputDeviceName : base.outputDeviceName,
     miniOnTop: typeof r.miniOnTop === 'boolean' ? r.miniOnTop : base.miniOnTop,
     bigTemplate: oneOf(r.bigTemplate, bigTemplateIds, base.bigTemplate),
+    lyricsShown: parseLyricsShown(r.lyricsShown, base.lyricsShown),
     windowSizes,
     windowMaximized:
       r.windowMaximized === undefined
@@ -488,6 +504,14 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('miniOnTop') && typeof raw.miniOnTop !== 'boolean') return false
   if (has('bigTemplate') && !bigTemplateIds.includes(raw.bigTemplate as TemplateId)) return false
   if (
+    has('lyricsShown') &&
+    (!isObject(raw.lyricsShown) ||
+      Object.entries(raw.lyricsShown).some(
+        ([k, v]) => !bigTemplateIds.includes(k as TemplateId) || typeof v !== 'boolean'
+      ))
+  )
+    return false
+  if (
     has('viewSorts') &&
     (!isObject(raw.viewSorts) ||
       Object.entries(raw.viewSorts).some(([k, v]) => !isSortWord(k) || !isSortWord(v)))
@@ -520,6 +544,7 @@ export function pageSettings(s: StoredSettings): Settings {
     outputDevice: s.outputDevice,
     outputDeviceName: s.outputDeviceName,
     miniOnTop: s.miniOnTop,
-    bigTemplate: s.bigTemplate
+    bigTemplate: s.bigTemplate,
+    lyricsShown: { ...s.lyricsShown }
   }
 }

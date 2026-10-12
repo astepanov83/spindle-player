@@ -47,7 +47,10 @@ describe('a Column in a narrow window (ticket 043)', () => {
     expect(layout.queueMode).toBe('drawer')
     expect(layout.queueSetting).toBe('col')
     expect(settings.queue.studio).toBe('col')
-    expect(layout.built.slots['player.buttons']).toEqual([{ act: 'queue', label: 'Show queue' }])
+    expect(layout.built.slots['player.buttons']).toEqual([
+      { act: 'lyrics', label: 'Lyrics' },
+      { act: 'queue', label: 'Show queue' }
+    ])
   })
 
   it('goes back to a Column when wide again, and an open drawer closes', () => {

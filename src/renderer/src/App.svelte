@@ -30,6 +30,7 @@
   import { playStateOf } from './stores/play-state'
   import { itemsVersion, navTabs } from './plugins'
   import { library } from './stores/library.svelte'
+  import { lyrics } from './stores/lyrics.svelte'
   import { player } from './stores/player.svelte'
   import { plays } from './stores/plays.svelte'
   import { queues } from './stores/queues.svelte'
@@ -97,6 +98,25 @@
   $effect(() => {
     const at = [queues.item, player.pos, player.duration, queues.songPlaying] as const
     untrack(() => plays.hear(...at))
+  })
+
+  // A song starts: its words are read (ticket 120). Only the key counts, so
+  // a library refresh doesn't read them again; a station has none.
+  $effect(() => {
+    const key = queues.item
+    untrack(() =>
+      lyrics.follow(key, () => {
+        const i = queues.info
+        return (
+          i && {
+            artist: i.mediaArtist ?? i.subtitle ?? '',
+            title: i.title,
+            album: i.group ?? '',
+            duration: i.length ?? 0
+          }
+        )
+      })
+    )
   })
 
   // The library scan slows down while a song plays, so the audio gets the disk first.

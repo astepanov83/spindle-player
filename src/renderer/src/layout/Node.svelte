@@ -94,9 +94,9 @@
     style:flex={node.flex}
   >
     {#if p.part === 'library'}
-      <Library nav={p.opts.nav} />
+      <Library nav={p.opts.nav} lyrics={p.opts.lyrics} />
     {:else if p.part === 'nowplaying'}
-      <NowPlaying style={p.opts.style} show={p.opts.show} />
+      <NowPlaying style={p.opts.style} show={p.opts.show} lyrics={p.opts.lyrics} />
     {:else if p.part === 'controls'}
       <Controls style={p.opts.style} />
     {:else}

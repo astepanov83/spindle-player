@@ -11,7 +11,10 @@ export const studio: Template = {
       {
         col: [
           {
-            queue: { with: { part: 'nowplaying', opts: { style: 'panel' } }, label: 'Now playing' },
+            queue: {
+              with: { part: 'nowplaying', opts: { style: 'panel', lyrics: true } },
+              label: 'Now playing'
+            },
             size: '1fr'
           },
           { part: 'controls', opts: { style: 'stack' } }

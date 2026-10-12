@@ -22,17 +22,20 @@ function find(node: BuiltNode, test: (n: BuiltNode) => boolean): BuiltNode[] {
 const drawerHosts = (root: BuiltNode): BuiltNode[] => find(root, (n) => !!n.drawer)
 const tabs = (root: BuiltNode): BuiltNode[] => find(root, (n) => n.kind === 'tabs')
 
+// every big layout has a place for the song's words (ticket 120)
+const lyricsButton = { act: 'lyrics', label: 'Lyrics' }
+
 describe('Studio', () => {
   const t = templates.studio
 
-  it('tab: now playing and queue share a tab strip, no slot buttons', () => {
+  it('tab: now playing and queue share a tab strip, only the Lyrics button', () => {
     const b = buildLayout(t, 'tab')
     expect(names(b.root)).toEqual(['library:chips', 'nowplaying:panel', 'queue', 'controls:stack'])
     const [tb] = tabs(b.root)
     expect(tb.kind === 'tabs' && tb.labels).toEqual(['Now playing', 'Queue'])
     expect(tb.flex).toBe('1 1 0')
     expect(drawerHosts(b.root)).toHaveLength(0)
-    expect(b.slots['player.buttons']).toEqual([])
+    expect(b.slots['player.buttons']).toEqual([lyricsButton])
   })
 
   it('drawer: the library part hosts it and the player slot gets a queue button', () => {
@@ -41,7 +44,7 @@ describe('Studio', () => {
     const hosts = drawerHosts(b.root)
     expect(hosts).toHaveLength(1)
     expect(hosts[0].kind === 'part' && hosts[0].part.part).toBe('library')
-    expect(b.slots['player.buttons']).toEqual([{ act: 'queue', label: 'Show queue' }])
+    expect(b.slots['player.buttons']).toEqual([lyricsButton, { act: 'queue', label: 'Show queue' }])
   })
 
   it('column: a queue pane with a header, sized from the template', () => {
@@ -58,7 +61,7 @@ describe('Studio', () => {
       '0 0 380px',
       '0 0 310px'
     ])
-    expect(b.slots['player.buttons']).toEqual([])
+    expect(b.slots['player.buttons']).toEqual([lyricsButton])
   })
 
   it('the player column is tinted and the root fills the window', () => {
@@ -77,7 +80,7 @@ describe('Classic', () => {
     expect(names(b.root)).toEqual(['library:sidebar', 'controls:bar'])
     const [host] = drawerHosts(b.root)
     expect(host.kind === 'box' && host.dir).toBe('row')
-    expect(b.slots['player.buttons']).toHaveLength(1)
+    expect(b.slots['player.buttons']).toEqual([lyricsButton, { act: 'queue', label: 'Show queue' }])
   })
 
   it('column: queue pane next to the library, bar is 96px', () => {
@@ -151,7 +154,10 @@ describe('Focus', () => {
       'text'
     )
     expect(host.drawer).toBe('fill')
-    expect(b.slots['player.buttons']).toEqual([{ act: 'queue', label: 'Show queue' }])
+    expect(b.slots['player.buttons']).toEqual([lyricsButton, { act: 'queue', label: 'Show queue' }])
+    // the words go in the text column, not on the stage
+    const np = partsOf(b.root).filter((p) => p.part === 'nowplaying')
+    expect(np.map((p) => 'lyrics' in p.opts && p.opts.lyrics)).toEqual([false, true])
   })
 
   it('a template with no wide layout ignores the ask', () => {
@@ -192,5 +198,11 @@ describe('queueModeFor', () => {
     expect(queueModeFor(templates.classic, 'tab')).toBe('drawer')
     expect(queueModeFor(templates.focus, 'col')).toBe('tab')
     expect(queueModeFor(templates.focus, undefined)).toBe('tab')
+  })
+})
+
+describe('Mini', () => {
+  it('has no place for the words, so no Lyrics button', () => {
+    expect(buildLayout(templates.mini, 'none').slots['player.buttons']).toEqual([])
   })
 })

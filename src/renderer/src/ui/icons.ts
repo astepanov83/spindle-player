@@ -37,6 +37,8 @@ export const icons = {
   back: 'M15.4 6 9.4 12l6 6-1.4 1.4L6.6 12 14 4.6z',
   forward: 'M8.6 6l6 6-6 6 1.4 1.4 7.4-7.4L10 4.6z',
   note: 'M9 3v10.6A4 4 0 1 0 11 17V7h8V3H9z',
+  // the stats page (ticket 116): columns on a baseline
+  chart: 'M3 19h18v2H3zM5 11h3v7H5zm5.5-6h3v13h-3zM16 8h3v10h-3z',
   disc: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 7a3 3 0 1 1 0 6 3 3 0 0 1 0-6z',
   person: 'M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2c-4 0-8 2-8 5v2h16v-2c0-3-4-5-8-5z',
   folder: 'M3 5h7l2 2h9v12H3z',

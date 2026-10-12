@@ -6,6 +6,8 @@
   import PlaylistView from './PlaylistView.svelte'
   import ScanLine from './ScanLine.svelte'
   import SearchBox from './SearchBox.svelte'
+  import StatsView from './StatsView.svelte'
+  import { statsTab } from '../stores/library.svelte'
   import NoPlugins from './NoPlugins.svelte'
   import { untrack } from 'svelte'
   import Icon from '../ui/Icon.svelte'
@@ -117,6 +119,8 @@
       {#key shown.id}
         <BlockPage {blocks} tab={shown.id} plugin={shown.plugin} {scrollEl} nav="sidebar" />
       {/key}
+    {:else if shown?.id === statsTab}
+      <StatsView nav="sidebar" />
     {/if}
   </div>
 </div>

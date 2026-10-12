@@ -7,11 +7,12 @@
   import PlaylistView from './PlaylistView.svelte'
   import ScanLine from './ScanLine.svelte'
   import SearchBox from './SearchBox.svelte'
+  import StatsView from './StatsView.svelte'
   import NoPlugins from './NoPlugins.svelte'
   import { untrack } from 'svelte'
   import { libraryOnScreen } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
-  import { library, playlistsTab } from '../stores/library.svelte'
+  import { library, playlistsTab, statsTab } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
   import { pageBlocks, playlistsEmpty, pluginTabs, typedIn } from '../plugins'
   import { tabsIn } from '../plugins/tabs'
@@ -22,11 +23,13 @@
   // the tabs of the plugins that are on (ticket 059)
   const tabs = $derived(tabsIn(pluginTabs(), 'chips'))
   const shown = $derived(tabs.find((t) => t.id === library.tab))
-  // its page, from its plugin; Playlists is the core's own
+  // its page, from its plugin; Playlists and Stats are the core's own
   const blocks = $derived(shown ? pageBlocks(shown) : [])
   // no songs yet: the Playlists chip says what it is for
   const none = $derived(
-    shown?.plugin === 'core' ? playlistsEmpty(!playlists.list.length) : undefined
+    shown?.plugin === 'core'
+      ? playlistsEmpty(shown.id === playlistsTab && !playlists.list.length)
+      : undefined
   )
   // untracked: a write while this block is drawn
   untrack(() => library.showIn('chips'))
@@ -82,6 +85,8 @@
       {#key shown.id}
         <BlockPage {blocks} tab={shown.id} plugin={shown.plugin} {scrollEl} nav="chips" />
       {/key}
+    {:else if shown?.id === statsTab}
+      <StatsView nav="chips" />
     {:else if shown?.plugin === 'core'}
       {#if library.openPlaylist}
         <PlaylistView id={library.openPlaylist} {scrollEl} nav="chips" back />

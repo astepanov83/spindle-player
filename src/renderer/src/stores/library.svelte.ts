@@ -66,6 +66,9 @@ export interface Step {
 
 const startNav = (): Nav => ({ tab: '', pages: {}, searchAll: null })
 
+// The core's listening stats (ticket 116): one page, no others.
+export const statsTab = 'stats'
+
 function samePages(a: Nav['pages'], b: Nav['pages']): boolean {
   const keys = Object.keys(a)
   return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k])

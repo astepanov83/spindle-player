@@ -11,29 +11,30 @@ const tab = (id: string, plugin: ShownTab['plugin'], only?: ShownTab['only']): S
   ...(only ? { only } : {})
 })
 
-const playlists = tab('playlists', 'core')
+const core = [tab('playlists', 'core'), tab('stats', 'core')]
 const files = [tab('songs', 'files', 'sidebar'), tab('albums', 'files')]
 const radio = [tab('radio', 'radio')]
 const ids = (t: ShownTab[]): string[] => t.map((t) => t.id)
 
 describe('the tab order', () => {
-  it('puts Playlists after the first plugin tabs', () => {
-    expect(ids(orderTabs([files, radio], playlists))).toEqual([
+  it('puts Playlists and Stats after the first plugin tabs', () => {
+    expect(ids(orderTabs([files, radio], core))).toEqual([
       'songs',
       'albums',
       'playlists',
+      'stats',
       'radio'
     ])
-    expect(ids(orderTabs([radio], playlists))).toEqual(['radio', 'playlists'])
+    expect(ids(orderTabs([radio], core))).toEqual(['radio', 'playlists', 'stats'])
   })
 
-  it('has no tabs, Playlists too, with no plugin on', () => {
-    expect(orderTabs([], playlists)).toEqual([])
+  it("has no tabs, the core's too, with no plugin on", () => {
+    expect(orderTabs([], core)).toEqual([])
   })
 
   it('leaves out a tab another library shows', () => {
-    const all = orderTabs([files, radio], playlists)
-    expect(ids(tabsIn(all, 'chips'))).toEqual(['albums', 'playlists', 'radio'])
+    const all = orderTabs([files, radio], core)
+    expect(ids(tabsIn(all, 'chips'))).toEqual(['albums', 'playlists', 'stats', 'radio'])
     expect(ids(tabsIn(all, 'sidebar'))).toEqual(ids(all))
   })
 })
@@ -44,7 +45,7 @@ describe('searching another tab (ticket 077)', () => {
     tab('songs', 'files', 'sidebar'),
     wide(tab('albums', 'files'), 'Search your library'),
     tab('artists', 'files'),
-    playlists,
+    core[0],
     wide(tab('radio', 'radio'), 'Search stations')
   ]
 

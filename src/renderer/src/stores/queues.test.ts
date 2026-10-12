@@ -176,7 +176,8 @@ describe('queue to radio', () => {
       at: 5,
       title: 'Holy Diver',
       subtitle: 'Dio',
-      now: true
+      now: true,
+      heart: { on: false, label: 'Save song', value: 'Dio - Holy Diver' }
     })
     // another station's titles are not its
     const n = queues.live.history.length

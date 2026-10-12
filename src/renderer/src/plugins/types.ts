@@ -395,9 +395,19 @@ export interface PageRow extends RowLook {
 // playing. act(the row's key, id) for its star and its menu, which opens on
 // a right click and from the row's "..." button.
 export interface ItemRow extends RowLook {
-  play: ItemKey
-  // a star button after the row: `on` filled; `label` is its tooltip
-  star?: { on: boolean; label: string }
+  // none: nothing to play (a song heard on radio that is not in the
+  // library), and a click opens the menu
+  play?: ItemKey
+  // What a click plays, from the row's item: these track items in order (the
+  // songs kept from the radio that are in the library). None: the item alone.
+  queue?: { items: ItemKey[]; from: string }
+  // never a page row's link, so the two sorts can't mix
+  to?: never
+  // a star button after the row: `on` filled; `label` is its tooltip. `heart`:
+  // a heart in its place (a song kept from the radio, ticket 119).
+  star?: { on: boolean; label: string; heart?: boolean }
+  // small buttons before the star: act(the row's key, id); `hint` is the tooltip
+  buttons?: { id: string; label: string; hint: string }[]
   // its right-click menu: "Move up", "Remove"
   menu?: { id: string; label: string }[]
 }
@@ -692,6 +702,9 @@ export interface PageHalf {
   // button turned on). Undefined: the Playable's. Live items use their handle.
   can?(id: string): Can | undefined
   actions?(id: string): Action[] | undefined
+  // A song of its own by artist and title, as a radio station names it: case,
+  // accents, "(Remastered)" and "feat." don't count (ticket 119). Its id.
+  findSong?(artist: string, title: string): string | undefined
 }
 
 // A plugin's start, once its asks are answered. `load` runs once the settings
@@ -713,6 +726,9 @@ export interface HistoryEntry {
   art?: Art
   // the newest entry is the title on air now (the core shows it while sound is wanted)
   now?: boolean
+  // A heart after the row (radio's songs kept, ticket 119): `on` filled,
+  // `label` its tooltip. A click acts on the live item with ('heart', value).
+  heart?: { on: boolean; label: string; value: string }
 }
 
 // How a live plugin tells the core about its item. Calls for an item that is

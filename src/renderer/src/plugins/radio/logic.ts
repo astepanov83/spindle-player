@@ -129,7 +129,11 @@ export function radioUrl(stationId: string, stream: number, connection: number):
 // The station's titles as the core's history (the Queue part's list): each
 // title's parts and the cover found for its song. The newest is on air when
 // it is `title`, the one playing now.
-export function historyEntries(history: HistoryEntry[], title: string): LiveEntry[] {
+export function historyEntries(
+  history: HistoryEntry[],
+  title: string,
+  kept: (title: string) => boolean = () => false
+): LiveEntry[] {
   // the file keeps a long title cut
   const playingNow = historyTitle(title)
   return history.map((e, i) => {
@@ -138,6 +142,13 @@ export function historyEntries(history: HistoryEntry[], title: string): LiveEntr
     if (t.artist) entry.subtitle = t.artist
     if (e.cover) entry.art = songArt(e.cover)
     if (i === history.length - 1 && e.title === playingNow) entry.now = true
+    // each one can be kept (ticket 119)
+    const on = kept(e.title)
+    entry.heart = {
+      on,
+      label: on ? 'Remove from Heard on radio' : 'Save song',
+      value: e.title
+    }
     return entry
   })
 }

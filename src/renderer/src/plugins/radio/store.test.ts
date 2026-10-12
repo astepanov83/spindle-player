@@ -12,6 +12,7 @@ import type {
 } from '../../../../shared/plugins/radio/ipc'
 import { fallbackPalettes } from '../../../../shared/palette'
 import type { HistoryEntry, Station } from '../../../../shared/plugins/radio/stations'
+import { heardSong, removeHeard, type HeardSong } from '../../../../shared/plugins/radio/heard'
 
 const fake = vi.hoisted(() => ({
   on: {} as Partial<EngineEvents>,
@@ -85,6 +86,17 @@ const move = vi.fn(async (id: string, to: number) => {
 let answer: LastAnswer | undefined
 const lastAnswer = vi.fn(async () => answer)
 const stop = vi.fn()
+// main keeps the songs (ticket 119)
+let kept: HeardSong[] = []
+const heardSave = vi.fn(async (id: string, title: string, name: string) => {
+  kept = [...kept, heardSong(title, { id, name }, 1)!]
+  return kept
+})
+const heardRemove = vi.fn(async (title: string) => (kept = removeHeard(kept, title)))
+const heardRestore = vi.fn(async (title: string) => {
+  kept = [...kept, heardSong(title, { id: 'a', name: 'A' }, 1)!]
+  return kept
+})
 let titleListener: ((t: RadioTitle) => void) | undefined
 let logoListener: ((l: RadioLogo) => void) | undefined
 let coverListener: ((c: RadioCover) => void) | undefined
@@ -101,6 +113,9 @@ vi.stubGlobal('window', {
     history,
     lastAnswer,
     stop,
+    heardSave,
+    heardRemove,
+    heardRestore,
     onTitle: (l: (t: RadioTitle) => void) => {
       titleListener = l
       return () => {}
@@ -122,6 +137,8 @@ const { queues } = await import('../../stores/queues.svelte')
 const { player } = await import('../../stores/player.svelte')
 const { notice } = await import('../../stores/notice.svelte')
 const { statusTip } = await import('../../queue/bar')
+const { heard } = await import('./heard.svelte')
+const { actOn } = await import('../index')
 type ChoiceAction = import('../../queue/bar').ChoiceAction
 
 // the bar's tooltip, from what radio told the core
@@ -168,6 +185,8 @@ beforeEach(async () => {
   lastAnswer.mockClear()
   mine = [st('a', [128]), st('b', [64, 128, 320]), st('c', [128])]
   radio.load(mine)
+  kept = []
+  heard.load([])
   radio.pause()
   notice.text = ''
   fake.calls = []
@@ -1033,5 +1052,102 @@ describe('streams a search added to My stations', () => {
     await start(found)
     radio.searched(mine)
     expect(radio.station).toEqual(found)
+  })
+})
+
+describe('the heart: songs kept from the radio (ticket 119)', () => {
+  const heartOf = (): unknown => queues.bar.buttons.find((b) => b.id === 'heart')
+  const on = (t: string, at = 5): void => titleListener!({ stationId: 'a', title: t, at })
+
+  it('shows on the bar once a song title comes, empty until it is kept', async () => {
+    await start(mine[0])
+    expect(heartOf()).toBeUndefined()
+    on('Dio - Holy Diver')
+    expect(heartOf()).toEqual({
+      id: 'heart',
+      kind: 'button',
+      label: 'Save song',
+      icon: 'heart',
+      hint: 'Save this song to Heard on radio',
+      on: false,
+      plain: true,
+      busy: false
+    })
+  })
+
+  it('keeps the song playing, says where it went, and fills', async () => {
+    await start(mine[0])
+    on('Dio - Holy Diver')
+    queues.act('heart')
+    expect(heartOf()).toMatchObject({ busy: true })
+    // a second click while main saves is not passed on
+    queues.act('heart')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(heardSave).toHaveBeenCalledOnce()
+    expect(heardSave).toHaveBeenCalledWith('a', 'Dio - Holy Diver', 'A')
+    expect(heartOf()).toMatchObject({ on: true, icon: 'heartOn', busy: false })
+    expect(notice.text).toBe('Saved Holy Diver to Heard on radio')
+    expect(notice.action?.label).toBe('Show')
+    // the same song in the recent songs has its heart on too
+    expect(queues.live.history.at(-1)?.heart).toMatchObject({ on: true })
+  })
+
+  it('a kept song lets go with a click, and Undo brings it back', async () => {
+    await start(mine[0])
+    on('Dio - Holy Diver')
+    queues.act('heart')
+    await vi.advanceTimersByTimeAsync(0)
+    queues.act('heart')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(heardRemove).toHaveBeenCalledWith('Dio - Holy Diver')
+    expect(heartOf()).toMatchObject({ on: false })
+    expect(notice.text).toBe('Removed Holy Diver')
+    notice.press()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(heardRestore).toHaveBeenCalledWith('Dio - Holy Diver')
+    expect(heartOf()).toMatchObject({ on: true })
+  })
+
+  it('follows the title: the next song is not kept, an older kept one is', async () => {
+    await start(mine[0])
+    on('Dio - Holy Diver')
+    queues.act('heart')
+    await vi.advanceTimersByTimeAsync(0)
+    on('Iron Maiden - Powerslave', 6)
+    expect(heartOf()).toMatchObject({ on: false })
+    on('DIO - Holy Diver (Remastered)', 7)
+    expect(heartOf()).toMatchObject({ on: true })
+  })
+
+  it("a recent song's heart keeps that song, not the one playing", async () => {
+    await start(mine[0])
+    await vi.advanceTimersByTimeAsync(0)
+    on('Dio - Holy Diver')
+    actOn(itemKey('radio', 'a'), 'heart', 'Old - Song')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(heardSave).toHaveBeenCalledWith('a', 'Old - Song', 'A')
+    const hearts = queues.live.history.map((e) => [e.title, e.heart?.on])
+    expect(hearts[0]).toEqual(['Song', true])
+    expect(hearts.at(-1)).toEqual(['Holy Diver', false])
+  })
+
+  it("a cover found after the song was kept goes on main's list copy", async () => {
+    await start(mine[0])
+    on('Dio - Holy Diver')
+    queues.act('heart')
+    await vi.advanceTimersByTimeAsync(0)
+    const cover = { hash: 'd'.repeat(40), palette: fallbackPalettes('x') }
+    coverListener!({ stationId: 'a', title: 'Dio - Holy Diver', cover })
+    expect(heard.songs[0].art).toEqual(cover)
+  })
+
+  it("says so when main didn't keep it", async () => {
+    await start(mine[0])
+    on('Dio - Holy Diver')
+    heardSave.mockImplementationOnce(async () => kept)
+    queues.act('heart')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(notice.text).toBe("Couldn't save the song")
+    expect(heartOf()).toMatchObject({ on: false })
   })
 })

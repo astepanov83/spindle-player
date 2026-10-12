@@ -1,13 +1,15 @@
 <!-- A rows block: a row each, only the rows on screen drawn. A row is made
      only when it is drawn. Page rows (Folders, MFP's episodes) open their
-     page; item rows (stations) play their item, with a star and a menu, and
-     in a block that says so can be dragged to another place. -->
+     page; item rows (stations, songs kept from the radio) play their item,
+     with buttons, a star and a menu, and in a block that says so can be
+     dragged to another place. -->
 <script lang="ts">
   import { tick } from 'svelte'
   import type { PluginId } from '../../../shared/plugins'
   import { openSongMenu } from '../library/song-menu'
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
+  import type { IconName } from '../ui/icons'
   import Thumb from '../ui/Thumb.svelte'
   import { dropIndex, dropSlot, edgeStep, rowShift } from '../ui/drag-rows'
   import { keepPlace } from '../ui/keep-place.svelte'
@@ -17,6 +19,7 @@
   import type { ItemRow, PageRow, Row, RowsBlock } from '../plugins/types'
   import { menu } from '../stores/menu.svelte'
   import { player } from '../stores/player.svelte'
+  import { queue } from '../stores/queue.svelte'
   import { queues } from '../stores/queues.svelte'
 
   let {
@@ -57,7 +60,10 @@
   const sounds = $derived(queues.active === 'live' ? liveState === 'live' : queues.songPlaying)
   const busy = $derived(!!liveState && liveState !== 'live')
 
-  const isItem = (r: Row): r is ItemRow => 'play' in r
+  const isItem = (r: Row): r is ItemRow => !('to' in r)
+  const isCur = (r: ItemRow): boolean => !!r.play && current === r.play
+  const starIcon = (s: NonNullable<ItemRow['star']>): IconName =>
+    s.heart ? (s.on ? 'heartOn' : 'heart') : s.on ? 'starOn' : 'star'
 
   // the row whose menu is open: its "..." stays shown meanwhile
   let menuKey = $state<string | null>(null)
@@ -198,12 +204,16 @@
     drag = null
   }
 
-  function play(r: ItemRow): void {
+  // A row with nothing to play opens its menu, under the pointer.
+  function play(e: MouseEvent, key: string, r: ItemRow): void {
     if (dragged) {
       dragged = false
       return
     }
-    void queues.playItem(r.play)
+    if (!r.play) return openMenu(e, key, r)
+    const at = r.queue ? r.queue.items.indexOf(r.play) : -1
+    if (r.queue && at >= 0) queue.playList(r.queue.items, at, r.queue.from)
+    else void queues.playItem(r.play)
   }
 
   const colsOf = (r: Row): string | undefined => {
@@ -249,7 +259,7 @@
     {@const cols = colsOf(r)}
     {#if isItem(r)}
       {@const key = b.key(x)}
-      {@const cur = current === r.play}
+      {@const cur = isCur(r)}
       <div
         class="row line"
         class:cur-row={cur}
@@ -269,10 +279,24 @@
           aria-current={cur ? 'true' : undefined}
           onkeydown={(e) => onmainkey(e, item.index)}
           onpointerdown={(e) => onrowdown(e, item.index)}
-          onclick={() => play(r)}
+          onclick={(e) => play(e, key, r)}
         >
           {@render look(r, cur)}
         </button>
+        {#if r.buttons?.length}
+          <!-- one width for every row, so the columns before it line up -->
+          <span class="rbs">
+            {#each r.buttons as btn (btn.id)}
+              <button
+                class="chip rb"
+                tabindex="-1"
+                title={btn.hint}
+                onkeydown={onrowkey}
+                onclick={() => actOnPage(plugin, key, btn.id)}>{btn.label}</button
+              >
+            {/each}
+          </span>
+        {/if}
         {#if r.star}
           {@const s = r.star}
           <button
@@ -283,7 +307,7 @@
             aria-pressed={s.on}
             title={s.label}
             onclick={() => actOnPage(plugin, key, 'star')}
-            ><Icon name={s.on ? 'starOn' : 'star'} size={20} /></button
+            ><Icon name={starIcon(s)} size={20} /></button
           >
         {/if}
         <!-- a row with no menu keeps the room, so the columns line up from list to list -->
@@ -331,7 +355,7 @@
     {@const x = items[drag.from]}
     {@const r = x === undefined ? undefined : b.row(x)}
     {#if r && isItem(r)}
-      {@const cur = current === r.play}
+      {@const cur = isCur(r)}
       <div
         class="row line ghost"
         class:cur-row={cur}
@@ -342,9 +366,7 @@
           {@render look(r, cur)}
         </div>
         {#if r.star}
-          <span class="star" class:on={r.star.on}
-            ><Icon name={r.star.on ? 'starOn' : 'star'} size={20} /></span
-          >
+          <span class="star" class:on={r.star.on}><Icon name={starIcon(r.star)} size={20} /></span>
         {/if}
         <span class="more"></span>
       </div>
@@ -413,6 +435,17 @@
   .line:focus-within .more,
   .more.open {
     opacity: 1;
+  }
+  .rbs {
+    flex: none;
+    width: 136px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  .rb {
+    padding: 4px 10px;
+    font-size: var(--text-xs);
   }
   .star:hover,
   .more:hover,

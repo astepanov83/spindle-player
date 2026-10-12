@@ -4,6 +4,7 @@ import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RadioChannel } from '../../../shared/plugins/radio/ipc'
 import { fallbackPalettes } from '../../../shared/palette'
+import type { HeardSong } from '../../../shared/plugins/radio/heard'
 import { stationsFile, type Station } from '../../../shared/plugins/radio/stations'
 import type { PluginContext } from '../types'
 
@@ -263,5 +264,85 @@ describe('RadioPlugin off', () => {
     r.plugin.setOn(true)
     r.plugin.flushSync()
     expect(readFileSync(join(dir, 'radio-covers.json'), 'utf8')).not.toContain('trooper')
+  })
+})
+
+describe('songs kept from the radio (ticket 119)', () => {
+  const raws = (list: unknown): string[] => (list as HeardSong[]).map((s) => s.raw)
+
+  it('keeps only a title the station played, with the time and name main has', async () => {
+    const r = setup()
+    r.plugin.setOn(true)
+    r.plugin.history.add('metal-only', 'Dio - Holy Diver', 100)
+    expect(await r.call(RadioChannel.heardSave, 'metal-only', 'Made Up - Song', 'X')).toEqual([])
+    expect(await r.call(RadioChannel.heardSave, 'rb-9', 'Dio - Holy Diver', 'X')).toEqual([])
+    const list = (await r.call(
+      RadioChannel.heardSave,
+      'metal-only',
+      'Dio - Holy Diver',
+      'Fake'
+    )) as HeardSong[]
+    expect(list).toEqual([
+      {
+        raw: 'Dio - Holy Diver',
+        artist: 'Dio',
+        song: 'Holy Diver',
+        station: 'Metal Only',
+        stationId: 'metal-only',
+        at: 100
+      }
+    ])
+    r.plugin.flushSync()
+    expect(readFileSync(join(dir, 'heard.json'), 'utf8')).toContain('Holy Diver')
+  })
+
+  it("takes the page's name for a station main doesn't know", async () => {
+    const r = setup()
+    r.plugin.setOn(true)
+    r.plugin.history.add('rb-9', 'A - One', Date.now())
+    const list = (await r.call(
+      RadioChannel.heardSave,
+      'rb-9',
+      'A - One',
+      '  Some FM '
+    )) as HeardSong[]
+    expect(list[0].station).toBe('Some FM')
+  })
+
+  it('removes and restores; off, it changes nothing but still lists', async () => {
+    const r = setup()
+    r.plugin.setOn(true)
+    r.plugin.history.add('metal-only', 'A - One', 1)
+    await r.call(RadioChannel.heardSave, 'metal-only', 'A - One', '')
+    expect(raws(await r.call(RadioChannel.heardRemove, 'A - One'))).toEqual([])
+    expect(raws(await r.call(RadioChannel.heardRestore, 'A - One'))).toEqual(['A - One'])
+    r.plugin.setOn(false)
+    expect(raws(await r.call(RadioChannel.heardRemove, 'A - One'))).toEqual(['A - One'])
+    r.plugin.history.add('metal-only', 'B - Two', 2)
+    expect(raws(await r.call(RadioChannel.heardSave, 'metal-only', 'B - Two', ''))).toEqual([
+      'A - One'
+    ])
+    expect(raws(await r.call(RadioChannel.heard))).toEqual(['A - One'])
+  })
+
+  it('keeps the cover a kept song had, for the list and the prune', async () => {
+    const hash = 'e'.repeat(40)
+    const cover = { hash, palette: fallbackPalettes('x') }
+    // the song left the recent songs long ago: only heard.json holds it
+    writeFileSync(
+      join(dir, 'heard.json'),
+      JSON.stringify({
+        version: 1,
+        songs: [{ raw: 'Dio - Holy Diver', stationId: 'metal-only', station: 'Metal Only', at: 1 }]
+      })
+    )
+    writeFileSync(
+      join(dir, 'radio-covers.json'),
+      JSON.stringify({ version: 1, songs: { 'dio\0holy diver': { cover, at: 1 } } })
+    )
+    const r = setup()
+    const list = (await r.call(RadioChannel.heard)) as HeardSong[]
+    expect(list[0].art).toEqual(cover)
+    expect(r.plugin.keptCovers()).toContain(hash)
   })
 })

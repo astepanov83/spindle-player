@@ -18,6 +18,7 @@ import {
 import type { EngineEvents } from '../../audio/engine'
 import { notice } from '../../stores/notice.svelte'
 import type { Action, ItemInfo, LiveHandle, PageAddress, Playable } from '../types'
+import { heard } from './heard.svelte'
 import {
   cantPlayFormat,
   firstStream,
@@ -80,8 +81,16 @@ class RadioStore {
   #stream = $state(-1)
   // My stations came from main: a station not in them is gone
   loaded = $state(false)
-  // the stream's title as it came, and its parts
-  title = $state('')
+  // the stream's title as it came, and its parts. The bar's heart keeps it,
+  // so the core hears each change.
+  get title(): string {
+    return this.#title
+  }
+  set title(t: string) {
+    this.#title = t
+    this.#tellActions()
+  }
+  #title = $state('')
   now = $derived(parseTitle(this.title))
   // the station's last titles, oldest first
   history: HistoryEntry[] = $state.raw([])
@@ -169,6 +178,11 @@ class RadioStore {
   // Heard from the start: main makes Metal Only's shipped logo at start, and
   // its event can come before the page has My stations.
   constructor() {
+    // the hearts follow the songs kept (ticket 119)
+    heard.changed = () => {
+      this.#tellActions()
+      this.#tell()
+    }
     window.radioApi.onTitle((t) => this.#heard(t))
     window.radioApi.onLogo((l) => this.#logo(l))
     window.radioApi.onCover((c) => this.#cover(c))
@@ -344,6 +358,13 @@ class RadioStore {
     this.#h?.load(this.#connection())
   }
 
+  // The heart, on the bar (the title playing) or on a recent song: keeps the
+  // song, or lets it go when it is kept (ticket 119).
+  heart(title: string = this.title): void {
+    const s = this.station
+    if (s && title) void heard.toggle(s.id, title, s.name)
+  }
+
   // A new try for the user: all counts start again.
   #start(): number {
     clearTimeout(this.#retryTimer)
@@ -393,12 +414,13 @@ class RadioStore {
     const s = this.station
     if (!this.#h || !s) return
     this.#h.info(this.#onAir(s))
-    this.#h.history(historyEntries(this.history, this.title))
+    this.#h.history(historyEntries(this.history, this.title, (t) => heard.has(t)))
   }
 
-  // The bar's actions: the stream picker, and Save while the station is not
-  // in My stations (none once it is, as before). Reads stations, station,
-  // stream and #saving: a new field read here must call #tellActions too.
+  // The bar's actions: the stream picker, the heart that keeps the song
+  // playing (ticket 119), and Save while the station is not in My stations
+  // (none once it is, as before). Reads stations, station, stream, title,
+  // #saving and the songs kept: a new field read here must call #tellActions too.
   #actions(s: Station): Action[] {
     const list: Action[] = []
     const choices = streamChoices(s.streams)
@@ -411,6 +433,19 @@ class RadioStore {
         short: picked?.short ?? '',
         options: choices.map((c) => ({ id: String(c.index), label: c.label })),
         picked: picked ? String(picked.index) : ''
+      })
+    }
+    if (this.now.track) {
+      const on = heard.has(this.title)
+      list.push({
+        id: 'heart',
+        kind: 'button',
+        label: on ? 'Remove from Heard on radio' : 'Save song',
+        icon: on ? 'heartOn' : 'heart',
+        hint: on ? 'Remove from Heard on radio' : 'Save this song to Heard on radio',
+        on,
+        plain: true,
+        busy: heard.busy(this.title)
       })
     }
     if (!this.saved) {
@@ -526,8 +561,10 @@ class RadioStore {
     this.#tell()
   }
 
-  // Only for the title playing: an answer for one that changed since is dropped.
+  // Only for the title playing: an answer for one that changed since is
+  // dropped. A song kept before its cover came takes it at once.
   #cover({ stationId, title, cover }: RadioCover): void {
+    heard.cover({ stationId, title, cover })
     if (stationId !== this.station?.id || title !== this.title) return
     const last = this.history.at(-1)
     if (last?.title !== historyTitle(title)) return

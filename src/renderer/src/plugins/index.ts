@@ -2,7 +2,7 @@
 // link opens. The page halves by plugin id; a plugin that is off is not asked.
 import { plugins, type PluginId } from '../../../shared/plugins'
 import type { IdMoves } from '../../../shared/id-moves'
-import type { ItemKey } from '../../../shared/plugins/items'
+import { itemKey, type ItemKey } from '../../../shared/plugins/items'
 import type { SettingBlock } from '../../../shared/setting-blocks'
 import { library, playlistsTab, type NavTab } from '../stores/library.svelte'
 import { pluginOn } from '../stores/settings.svelte'
@@ -304,4 +304,27 @@ export function pageLook(tab: string): string | undefined {
 // or off, or new data in one.
 export function itemsVersion(): string {
   return plugins.map((p) => (pluginOn(p.id) ? halves[p.id].version() : 'off')).join(',')
+}
+
+// A song in a plugin that is on, by the artist and title a radio station
+// gave (ticket 119): the first plugin that has it.
+export function findSong(artist: string, title: string): ItemKey | undefined {
+  for (const p of plugins) {
+    const find = pluginOn(p.id) ? halves[p.id].findSong : undefined
+    const id = find?.(artist, title)
+    if (id !== undefined) return itemKey(p.id, id)
+  }
+  return undefined
+}
+
+// The search box gets `text` and the tab that searches wide shows its
+// results (Albums', "Search your library"), as a step. False when no other
+// plugin that is on searches wide.
+export function searchFor(text: string, from: string): boolean {
+  const t = pluginTabs().find((x) => x.searchWide && x.id !== from)
+  if (!t) return false
+  library.searchIn(t.id)
+  library.query = text
+  typedIn(t.plugin, t.id, text, true)
+  return true
 }

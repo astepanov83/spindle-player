@@ -2,7 +2,7 @@
 // Strict on purpose: an album with no cover is fine, a wrong cover is not.
 
 import { various } from '../../../shared/library'
-import { cleanAlbum, cleanArtist } from '../../covers/clean-names'
+import { cleanAlbum, cleanArtist } from '../../../shared/clean-names'
 
 // An album with no picture of its own, to look up.
 export interface CoverQuery {

@@ -12,7 +12,7 @@ import type { RadioCover } from '../../../shared/plugins/radio/ipc'
 import { songQuery, type SongQuery } from '../../../shared/plugins/radio/radio-title'
 import type { SongCover } from '../../../shared/plugins/radio/stations'
 import { JsonFileWriter, readJsonFile, removeStrayTmp } from '../../json-file'
-import { cleanArtist, cleanSong } from '../../covers/clean-names'
+import { cleanArtist, cleanSong } from '../../../shared/clean-names'
 import { isCoverHash } from '../../covers/cover-names'
 import { makeCover, withNewColors, type LogoCache } from '../../covers/covers'
 

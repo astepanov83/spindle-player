@@ -4,6 +4,8 @@ import { stationArt, type Station } from '../../../../shared/plugins/radio/stati
 import type { ItemState, LivePlugin, PageHalf } from '../types'
 import { stationLine, stepStation } from './logic'
 import { actOnStation, radioBlocks, shownStation } from './page'
+import { actOnHeard, heardBlocks, isHeardRow } from './heard-page'
+import { heardPage } from './heard.svelte'
 import { radioPopular } from './popular.svelte'
 import { radioSearch } from './search.svelte'
 import { startRadio } from './start'
@@ -63,9 +65,12 @@ export const radioHalf: PageHalf = {
   tabs: () => [
     { id: 'radio', label: 'Radio', icon: 'radio', search: 'Search stations', searchWide: true }
   ],
-  tabOf: (page) => (page === '' ? 'radio' : undefined),
-  canOpen: (to) => to.page === '',
-  page: (_tab, _page, query) => radioBlocks(query),
+  tabOf: (page) => (page === '' || page === heardPage ? 'radio' : undefined),
+  canOpen: (to) => to.page === '' || to.page === heardPage,
+  // Heard on radio (ticket 119) is a page of the tab: while searching, the
+  // stations show over it, as Artists' grid does over an artist's page.
+  page: (_tab, page, query) =>
+    page === heardPage && !query.trim() ? heardBlocks() : radioBlocks(query),
   // Radio Browser is asked 400ms after typing stops, or at once on Enter.
   // Its popular stations are asked when the tab opens.
   typed: (_tab, query, enter) => {
@@ -76,10 +81,15 @@ export const radioHalf: PageHalf = {
   version: () => (radio.loaded ? 1 : 0),
   live,
   start: startRadio,
-  // The bar's actions are the playing station's (store.svelte.ts, #actions);
-  // the others, a row's star and menu (page.ts).
+  // The bar's actions are the playing station's (store.svelte.ts, #actions),
+  // and so is a recent song's heart; the others, a row's star and menu
+  // (page.ts), or a kept song's row (heard-page.ts).
   act: (id, actionId, value) => {
-    if (actionId === 'save') {
+    if (isHeardRow(id)) actOnHeard(id, actionId)
+    else if (actionId === 'heart') {
+      // the bar's heart is the title playing; a recent song's gives its own
+      if (id === radio.station?.id) radio.heart(value)
+    } else if (actionId === 'save') {
       if (id === radio.station?.id) void radio.save()
     } else if (actionId === 'stream') {
       if (id === radio.station?.id && value !== undefined) radio.choose(Number(value))

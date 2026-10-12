@@ -9,7 +9,10 @@ import {
   type RadioTitle
 } from '../../../shared/plugins/radio/ipc'
 import type { PluginId } from '../../../shared/plugins'
+import { heardSong } from '../../../shared/plugins/radio/heard'
+import { cleanName } from '../../../shared/playlists'
 import {
+  historyTitle,
   parseStation,
   type Station,
   type StationLogo
@@ -32,6 +35,7 @@ import { PlayedStations } from './play'
 import { RadioBrowser, resolveMirrors } from './radio-browser'
 import { ResultLogos } from './result-logos'
 import { fetchSiteLogo } from './site-icons'
+import { HeardStore } from './heard-file'
 import { foundHashes, openSongCovers, SongCovers } from './song-covers'
 import { RadioHistoryStore, StationsStore } from './stations-store'
 import { RadioStreams, radioStream } from './stream'
@@ -51,6 +55,8 @@ export class RadioPlugin implements MainPlugin {
   // My stations and the heard titles
   readonly stations: StationsStore
   readonly history: RadioHistoryStore
+  // the songs the user kept (ticket 119)
+  readonly heard: HeardStore
   // opened here, not in start: the library's first prune asks for these covers
   readonly #songFile: ReturnType<typeof openSongCovers>
   readonly #streams = new RadioStreams()
@@ -73,9 +79,11 @@ export class RadioPlugin implements MainPlugin {
       join(userData, 'radio-history.json'),
       (id) => !!this.stations.get(id)
     )
+    this.heard = new HeardStore(join(userData, 'heard.json'))
     this.#songFile = openSongCovers(
       join(userData, 'radio-covers.json'),
-      this.history.titles(),
+      // a kept song keeps its cover's entry too, so it is not looked up again
+      [...this.history.titles(), ...this.heard.titles()],
       (o.now ?? Date.now)(),
       o.log
     )
@@ -83,7 +91,7 @@ export class RadioPlugin implements MainPlugin {
 
   start(ctx: PluginContext): void {
     const { page, toPage, covers, settings, log, userAgent } = ctx
-    const { stations, history } = this
+    const { stations, history, heard } = this
     const radioFetch = ctx.fetch
     // logos, homepages and finding streams: each redirect checked, local
     // addresses only for a local station
@@ -149,7 +157,11 @@ export class RadioPlugin implements MainPlugin {
       map: this.#songFile.map,
       save: this.#songFile.save,
       kept: () => covers.kept(),
-      send: (c) => toPage(RadioChannel.cover, c satisfies RadioCover),
+      send: (c) => {
+        // a song kept before its cover came; the page puts it on its copy
+        if (heard.setCover(c.title, c.cover)) covers.kept()
+        toPage(RadioChannel.cover, c satisfies RadioCover)
+      },
       log,
       now: this.o.now ?? Date.now
     })
@@ -276,6 +288,44 @@ export class RadioPlugin implements MainPlugin {
     page.handle(RadioChannel.lastAnswer, (_, id) =>
       typeof id === 'string' ? streams.lastAnswer(id) : undefined
     )
+
+    // Songs kept from the radio (ticket 119). A cover found after the title
+    // went off air never came with radio:cover, so it is taken from the
+    // lookup's file here.
+    page.handle(RadioChannel.heard, () => {
+      let found = false
+      for (const s of heard.list()) {
+        const c = s.art ? undefined : songCovers.known(s.raw)
+        if (c && heard.setCover(s.raw, c)) found = true
+      }
+      if (found) covers.kept()
+      return heard.list()
+    })
+    page.handle(RadioChannel.heardSave, (_, id, title, name) => {
+      if (!this.#on || typeof id !== 'string' || typeof title !== 'string') return heard.list()
+      // only a title the station played: the page can't make one up
+      const t = historyTitle(title)
+      const e = history.get(id).findLast((x) => x.title === t)
+      if (!e) return heard.list()
+      const station = played.lookup(id)?.name ?? cleanName(typeof name === 'string' ? name : '', '')
+      const song = heardSong(e.title, { id, name: station }, e.at, songCovers.known(e.title))
+      if (!song) return heard.list()
+      const list = heard.save(song)
+      covers.kept()
+      return list
+    })
+    page.handle(RadioChannel.heardRemove, (_, title) => {
+      if (!this.#on) return heard.list()
+      const list = heard.remove(title)
+      covers.kept()
+      return list
+    })
+    page.handle(RadioChannel.heardRestore, (_, title) => {
+      if (!this.#on) return heard.list()
+      const list = heard.restore(title)
+      covers.kept()
+      return list
+    })
   }
 
   // Called with the saved value at start, then on each change.
@@ -310,7 +360,8 @@ export class RadioPlugin implements MainPlugin {
     const parts = this.#parts
     return [
       ...keptLogos(this.stations.list(), parts ? parts.logos.keptThisRun() : new Set()),
-      ...(parts ? parts.songCovers.hashes() : foundHashes(this.#songFile.map))
+      ...(parts ? parts.songCovers.hashes() : foundHashes(this.#songFile.map)),
+      ...this.heard.hashes()
     ]
   }
 
@@ -322,6 +373,7 @@ export class RadioPlugin implements MainPlugin {
   flushSync(): void {
     this.stations.flushSync()
     this.history.flushSync()
+    this.heard.flushSync()
     this.#songFile.flushSync()
   }
 }

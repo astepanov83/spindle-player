@@ -70,9 +70,15 @@ class FakeParam {
   setTargetAtTime(v: number, t: number): void {
     this.glide = [v, t]
   }
+  // the sleep timer's fade: from its first value to its last, from when, how long
+  curve: { from: number; to: number; at: number; long: number } | undefined
+  setValueCurveAtTime(c: Float32Array, at: number, long: number): void {
+    this.curve = { from: c[0], to: c[c.length - 1], at, long }
+  }
   cancelScheduledValues(): void {
     this.later = []
     this.glide = undefined
+    this.curve = undefined
   }
   // the value it ends up at
   get level(): number {
@@ -1057,5 +1063,80 @@ describe('the output device (ticket 112)', () => {
     expect(old.state).toBe('closed')
     old.dispatchEvent(new Event('error'))
     expect(got).toEqual([])
+  })
+})
+
+describe('the sleep timer’s fade (ticket 111)', () => {
+  const vol = (c = contexts[0]): FakeParam => c.gains[0]
+
+  beforeEach(() => {
+    worklet = 'fail'
+    e.setVolume(50)
+  })
+
+  it('takes the volume down to 0 over the time given, as its slider would', () => {
+    e.fadeOut(20)
+    expect(vol().later[0][0]).toBeCloseTo(0.25)
+    expect(vol().curve).toMatchObject({ to: 0, long: 20 })
+    expect(vol().curve!.from).toBeCloseTo(0.25)
+  })
+
+  it('a volume change in the fade goes on from where the fade is', () => {
+    e.fadeOut(20)
+    vi.advanceTimersByTime(10_000)
+    e.setVolume(100)
+    // half the slider left: a quarter of full
+    expect(vol().later[0][0]).toBeCloseTo(0.25)
+    expect(vol().curve).toMatchObject({ to: 0, long: 10 })
+    // muted: nothing to fade
+    e.setVolume(0)
+    expect(vol().later[0][0]).toBe(0)
+    expect(vol().curve).toBeUndefined()
+  })
+
+  it('stays at 0 once done, and comes back after the pause has gone quiet', () => {
+    e.fadeOut(20)
+    vi.advanceTimersByTime(21_000)
+    e.setVolume(50)
+    expect(vol().later).toEqual([[0, 0]])
+    e.unfade(0.5)
+    expect(vol().later).toEqual([
+      [0, 0],
+      [0.25, 0.5]
+    ])
+    // no fade now: a volume change is set at once
+    e.setVolume(100)
+    expect(vol().value).toBe(1)
+    expect(vol().later).toEqual([])
+  })
+
+  it('cancelled, glides back to the volume', () => {
+    e.fadeOut(20)
+    vi.advanceTimersByTime(5000)
+    e.unfade()
+    expect(vol().curve).toBeUndefined()
+    expect(vol().glide).toEqual([0.25, 0])
+    // only once
+    vol().glide = undefined
+    e.unfade()
+    expect(vol().glide).toBeUndefined()
+  })
+
+  it('reaches a graph made in the fade, and every graph that sounds', async () => {
+    e.load('spindle://media/a', 0, undefined, { rate: 44100 })
+    const a = e.el as unknown as FakeAudio
+    a.meta(100)
+    e.play()
+    await vi.advanceTimersByTimeAsync(0)
+    a.currentTime = 90
+    e.fadeOut(20)
+    e.setNext({ url: 'spindle://media/b', rate: 48000 })
+    const b = contexts.at(-1)!
+    expect(b).not.toBe(contexts[0])
+    expect(vol(b).curve).toMatchObject({ to: 0 })
+    expect(vol(b).later[0][0]).toBeCloseTo(0.25)
+    e.unfade()
+    expect(vol(contexts[0]).glide?.[0]).toBeCloseTo(0.25)
+    expect(vol(b).glide?.[0]).toBeCloseTo(0.25)
   })
 })

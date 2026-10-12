@@ -7,6 +7,8 @@ import {
   loveAction,
   loveId,
   loveNotice,
+  sleepAction,
+  sleepId,
   statusTip,
   type ChoiceAction
 } from './bar'
@@ -75,6 +77,27 @@ describe('barOf', () => {
     expect(on.buttons[0]).toMatchObject({ icon: 'heartOn', on: true, hint: 'Loved (L)' })
     // none said: no heart
     expect(barOf('track', { length: 200, can: all }, [save]).buttons).toEqual([save])
+  })
+
+  it('the sleep timer’s moon goes last, with the time left while set (ticket 111)', () => {
+    const off = barOf('track', { length: 200, can: all }, [save], undefined, false, {
+      on: false,
+      text: ''
+    })
+    expect(off.buttons.map((b) => b.id)).toEqual([loveId, 'save', sleepId])
+    expect(off.buttons[2]).toEqual(sleepAction(false, ''))
+    expect(off.buttons[2]).toMatchObject({ icon: 'moon', on: false, plain: true })
+    expect(off.buttons[2].text).toBeUndefined()
+    const on = barOf('live', undefined, [save], undefined, undefined, { on: true, text: '23m' })
+    expect(on.buttons.at(-1)).toMatchObject({
+      icon: 'moonOn',
+      on: true,
+      text: '23m',
+      hint: 'Sleep timer: 23m left'
+    })
+    expect(sleepAction(true, 'song').hint).toBe('Sleep timer: end of this song')
+    // none said: no moon
+    expect(barOf('track', undefined, []).buttons).toEqual([])
   })
 
   it('splits the actions into buttons and choices, in their order', () => {

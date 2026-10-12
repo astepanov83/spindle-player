@@ -4,6 +4,17 @@ export function gain(volume: number): number {
   return v * v
 }
 
+// The sleep timer's fade (ticket 111): the gain from `volume` (a gain factor)
+// as its slider moves down evenly from `share` of it to 0. Square, as gain().
+export function fadeCurve(volume: number, share: number, steps = 64): Float32Array {
+  const c = new Float32Array(steps)
+  for (let i = 0; i < steps; i++) {
+    const s = share * (1 - i / (steps - 1))
+    c[i] = volume * s * s
+  }
+  return c
+}
+
 // Mute keeps the volume, so unmuting goes back to it. Not saved: an app that
 // starts silent looks broken.
 export interface Sound {

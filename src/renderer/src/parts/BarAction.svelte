@@ -2,18 +2,26 @@
      button, or a choice that opens the app's menu with the picked option checked.
      `wide`: the bar has room for a button's word and wants a choice short
      ("320k"); the stack shows a button's icon alone and a choice whole. A
-     plain button (the heart) is its icon alone everywhere. -->
+     plain button (the heart) is its icon alone everywhere, with its few
+     letters after it (the sleep timer's "23m") unless `bare` (Mini). -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
   import { menu } from '../stores/menu.svelte'
   import { queues } from '../stores/queues.svelte'
   import type { Action } from '../plugins/types'
-  import { choiceView } from '../queue/bar'
+  import { choiceView, sleepId } from '../queue/bar'
+  import { openSleepMenu } from './sleep-menu'
 
-  let { action, wide }: { action: Action; wide: boolean } = $props()
+  let { action, wide, bare = false }: { action: Action; wide: boolean; bare?: boolean } = $props()
 
   const view = $derived(action.kind === 'choice' ? choiceView(action, wide) : undefined)
   const iconOnly = $derived(action.kind === 'button' && !wide && !!action.icon)
+
+  // the moon opens the core's sleep timer menu; any other button acts
+  function press(e: MouseEvent): void {
+    if (action.id === sleepId) void openSleepMenu(e)
+    else queues.act(action.id)
+  }
 
   function open(e: MouseEvent): void {
     if (action.kind !== 'choice') return
@@ -30,14 +38,19 @@
 </script>
 
 {#if action.kind === 'button' && action.plain && action.icon}
+  {@const text = bare ? undefined : action.text}
   <button
     class="plain"
     class:on={action.on}
+    class:text
     title={action.hint}
-    aria-label={action.label}
-    aria-pressed={action.on}
+    aria-label={action.id === sleepId ? action.hint : action.label}
+    aria-haspopup={action.id === sleepId ? 'menu' : undefined}
+    aria-pressed={action.id === sleepId ? undefined : action.on}
     aria-busy={action.busy || undefined}
-    onclick={() => queues.act(action.id)}><Icon name={action.icon} /></button
+    data-keep={(action.id === sleepId && action.on) || undefined}
+    onclick={press}
+    ><Icon name={action.icon} />{#if text}<span>{text}</span>{/if}</button
   >
 {:else if action.kind === 'button'}
   <button
@@ -80,6 +93,18 @@
       opacity 0.15s,
       background 0.15s,
       transform 0.1s;
+  }
+  /* the sleep timer's time left after its moon */
+  .plain.text {
+    width: auto;
+    gap: 4px;
+    display: inline-flex;
+    padding: 0 10px 0 7px;
+    border-radius: 999px;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   .plain:hover {
     opacity: 1;

@@ -132,6 +132,7 @@ Object.assign(fake.on, queue.events)
 const { player } = await import('./player.svelte')
 const { notice } = await import('./notice.svelte')
 const { settings } = await import('./settings.svelte')
+const { sleep } = await import('./sleep.svelte')
 
 // Albums of `n` songs, keys "<plugin>:<album><i>", titles "<ALBUM> <i>".
 function songs(album: string, n: number, of = 'files'): ItemKey[] {
@@ -1599,5 +1600,112 @@ describe('each song’s sample rate (ticket 091)', () => {
     playAlbum('a', 0)
     expect(fake.rate).toBeUndefined()
     expect(fake.nextRate).toBeUndefined()
+  })
+})
+
+describe('the sleep timer’s end of song and album (ticket 111)', () => {
+  // songs know their album page, as the library's do
+  function onAlbums(): void {
+    for (const [key, s] of plugin.songs) {
+      const id = key.slice(key.indexOf(':') + 1, -1)
+      s.info.groupTo = { plugin: 'files', page: `album/${id}` }
+    }
+  }
+
+  beforeEach(() => {
+    onAlbums()
+    sleep.replan = () => queue.planNext()
+    queue.planNext()
+    fake.reset()
+  })
+
+  afterEach(() => sleep.cancel())
+
+  it('end of song: the next song is no longer loaded ahead, so the join can’t start it', () => {
+    expect(fake.next).toBe('media/a1')
+    sleep.pick('song')
+    expect(fake.next).toBe('')
+  })
+
+  it('end of song stops at the end, the next song waiting at 0:00', () => {
+    sleep.pick('song')
+    player.pos = 100
+    fake.on.ended!()
+    expect(playing()).toBe('a1')
+    expect(player.playing).toBe(false)
+    expect(player.pos).toBe(0)
+    expect(fake.calls).toEqual(['pause', 'load media/a1'])
+    expect(queue.ended).toBe(false)
+    // used up: the next song loads ahead again
+    expect(sleep.set).toBeUndefined()
+    expect(fake.next).toBe('media/a2')
+  })
+
+  it('end of album plays on within the album and stops after its last queued song', () => {
+    queue.append(albums.b)
+    fake.reset()
+    sleep.pick('album')
+    expect(fake.next).toBe('media/a1')
+    fake.on.nextStarted!()
+    expect(playing()).toBe('a1')
+    fake.on.nextStarted!()
+    expect(playing()).toBe('a2')
+    // the next is of album b: none loaded ahead
+    expect(fake.next).toBe('')
+    fake.on.ended!()
+    expect(playing()).toBe('b0')
+    expect(player.playing).toBe(false)
+    expect(fake.calls).toEqual(['pause', 'load media/b0'])
+    expect(sleep.set).toBeUndefined()
+  })
+
+  it('at the end of the queue it stops as the queue runs out', () => {
+    queue.jump(2)
+    sleep.pick('album')
+    fake.reset()
+    fake.on.ended!()
+    expect(playing()).toBe('a2')
+    expect(fake.calls).toEqual(['pause', 'seek 0'])
+    expect(queue.ended).toBe(true)
+    expect(sleep.set).toBeUndefined()
+  })
+
+  it('with repeat, end of song stops rather than playing it again', () => {
+    player.repeat = true
+    sleep.pick('song')
+    expect(fake.next).toBe('')
+    fake.on.ended!()
+    expect(playing()).toBe('a0')
+    expect(fake.calls).toEqual(['pause', 'seek 0'])
+    expect(sleep.set).toBeUndefined()
+  })
+
+  it('Next and a click keep it; Cancel puts the next song back', () => {
+    sleep.pick('song')
+    queue.next()
+    queue.jump(0)
+    expect(sleep.set).toEqual({ pick: 'song' })
+    expect(fake.next).toBe('')
+    sleep.cancel()
+    expect(fake.next).toBe('media/a1')
+  })
+
+  it('a timed one leaves the next song alone', () => {
+    sleep.pick(30)
+    expect(fake.next).toBe('media/a1')
+    fake.on.nextStarted!()
+    expect(playing()).toBe('a1')
+  })
+
+  it('a disc image stops between its tracks, not running on into the next', () => {
+    imageSongs()
+    onAlbums()
+    playAlbum('c', 0)
+    sleep.pick('song')
+    fake.reset()
+    fake.on.ended!()
+    expect(playing()).toBe('c1')
+    expect(player.playing).toBe(false)
+    expect(fake.calls).toEqual(['pause', 'load media/img 100-250 at 0'])
   })
 })

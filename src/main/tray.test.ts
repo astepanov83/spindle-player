@@ -14,6 +14,7 @@ const {
   trayItems,
   trayTip
 } = await import('./tray')
+type TrayItem = import('./tray').TrayItem
 
 describe('hidesOnMinimize', () => {
   const host = (yes: boolean): (() => Promise<boolean>) => vi.fn(() => Promise.resolve(yes))
@@ -52,16 +53,22 @@ const song: PlayState = {
   previous: true
 }
 
-// the labels, with "-" for a line and "(off)" for a disabled item
-function labels(state: PlayState | undefined): string[] {
-  return trayItems(state).map((i) =>
+// the labels, with "-" for a line, "(off)" for a disabled item, "*" for a
+// ticked one and ">" for a submenu
+function labelsOf(items: TrayItem[]): string[] {
+  return items.map((i) =>
     i.kind === 'line'
       ? '-'
       : i.kind === 'text'
         ? `${i.label} (off)`
-        : i.label + (i.enabled ? '' : ' (off)')
+        : i.kind === 'sub'
+          ? `${i.label} >`
+          : i.kind === 'pick'
+            ? i.label + (i.checked ? ' *' : '')
+            : i.label + (i.enabled ? '' : ' (off)')
   )
 }
+const labels = (state: PlayState | undefined): string[] => labelsOf(trayItems(state))
 
 describe('trayItems', () => {
   it('has only Show and Quit before the page says what plays', () => {
@@ -74,6 +81,7 @@ describe('trayItems', () => {
       'Pause',
       'Next',
       'Previous',
+      'Sleep timer >',
       '-',
       'Show Spindle',
       '-',
@@ -97,6 +105,7 @@ describe('trayItems', () => {
     expect(labels({ ...radio, next: false, previous: false })).toEqual([
       'Deep Space One - Radio (off)',
       'Stop',
+      'Sleep timer >',
       '-',
       'Show Spindle',
       '-',
@@ -114,6 +123,48 @@ describe('trayItems', () => {
       'Next (off)',
       'Previous (off)'
     ])
+    expect(labels(none)).not.toContain('Sleep timer >')
+  })
+
+  // the sleep timer's submenu (ticket 111)
+  const sub = (state: PlayState): TrayItem[] => {
+    const s = trayItems(state).find((i) => i.kind === 'sub')
+    return s?.kind === 'sub' ? s.items : []
+  }
+
+  it('has the sleep timer choices, none ticked while off', () => {
+    expect(labelsOf(sub(song))).toEqual([
+      'End of this song',
+      'End of this album',
+      '15 minutes',
+      '30 minutes',
+      '45 minutes',
+      '60 minutes',
+      '90 minutes'
+    ])
+    expect(sub(song).flatMap((i) => (i.kind === 'pick' ? [i.action] : []))[2]).toEqual({
+      sleep: 15
+    })
+  })
+
+  it('ticks the timer set, says what is left, and offers Cancel', () => {
+    const set = { ...song, sleep: { pick: 30 as const, left: '23m' } }
+    expect(labels(set)).toContain('Sleep timer: 23m left >')
+    const items = sub(set)
+    expect(labelsOf(items).slice(3, 4)).toEqual(['30 minutes *'])
+    expect(labelsOf(items).slice(-2)).toEqual(['-', 'Cancel'])
+    expect(items.at(-1)).toMatchObject({ action: { sleep: null } })
+    // by the minute in the last one, so the menu is not rebuilt every second
+    expect(labels({ ...song, sleep: { pick: 15, left: '45s' } })).toContain(
+      'Sleep timer: 1m left >'
+    )
+    expect(labels({ ...song, sleep: { pick: 'album', left: 'album' } })).toContain(
+      'Sleep timer: end of this album >'
+    )
+  })
+
+  it('has no song or album end for a live item', () => {
+    expect(labelsOf(sub({ ...song, live: true }))[0]).toBe('15 minutes')
   })
 
   it('cuts a long song line to 40 characters', () => {
@@ -167,6 +218,13 @@ describe('menuLabel', () => {
 describe('parsePlayState', () => {
   it('reads a good state', () => {
     expect(parsePlayState(song)).toEqual(song)
+  })
+
+  it('reads the sleep timer, and drops a bad one', () => {
+    const set = { ...song, sleep: { pick: 45, left: '12m' } }
+    expect(parsePlayState(set)).toEqual(set)
+    expect(parsePlayState({ ...song, sleep: { pick: 7, left: '7m' } })).toEqual(song)
+    expect(parsePlayState({ ...song, sleep: { pick: 'song' } })).toEqual(song)
   })
 
   it('takes anything odd as nothing playing', () => {

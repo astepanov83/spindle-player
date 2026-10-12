@@ -7,6 +7,7 @@ import type { Playlist } from './playlists'
 import type { PlayedSong, Plays, PlayStats, StatsPeriod } from './plays'
 import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
 import type { Settings } from './settings'
+import type { SleepPick, SleepShown } from './sleep'
 
 // Channel names used by both main and preload, so a typo is a type error.
 export const WinChannel = {
@@ -117,9 +118,12 @@ export interface PlayState {
   // the bar shows Next and Previous
   next: boolean
   previous: boolean
+  // the sleep timer set (ticket 111); none when off
+  sleep?: SleepShown
 }
 
-export type PlayControl = 'toggle' | 'next' | 'previous'
+// null: cancel the sleep timer
+export type PlayControl = 'toggle' | 'next' | 'previous' | { sleep: SleepPick | null }
 
 // What the preload exposes to the page as `window.playbackApi`.
 export interface PlaybackApi {

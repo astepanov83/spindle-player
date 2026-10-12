@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { gain, heard, muteToggle, silent, volumeIcon, wheelStep } from './volume'
+import { fadeCurve, gain, heard, muteToggle, silent, volumeIcon, wheelStep } from './volume'
 
 describe('gain', () => {
   it('maps the slider to 0..1 on a curve', () => {
@@ -56,4 +56,15 @@ describe('wheelStep', () => {
     expect(wheelStep(-40, px(20))).toEqual({ step: 0, rest: 20 }))
   it('keeps what was left on a sideways move', () =>
     expect(wheelStep(-40, px(0))).toEqual({ step: 0, rest: -40 }))
+})
+
+describe('fadeCurve (ticket 111)', () => {
+  it('moves the slider down evenly, on the square curve, to 0', () => {
+    const c = fadeCurve(gain(80), 1, 5)
+    expect([...c].map((v) => +v.toFixed(4))).toEqual([0.64, 0.36, 0.16, 0.04, 0])
+  })
+  it('starts from the share of the slider left', () => {
+    const c = fadeCurve(1, 0.5, 3)
+    expect([...c].map((v) => +v.toFixed(4))).toEqual([0.25, 0.0625, 0])
+  })
 })

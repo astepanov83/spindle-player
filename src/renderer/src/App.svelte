@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte'
   import { defaultPalettes } from '../../shared/palette'
+  import { endsWithSong, isSleepPick } from '../../shared/sleep'
   import TitleBar from './components/TitleBar.svelte'
   import Settings from './components/Settings.svelte'
   import { keysSection } from './components/settings-sections'
@@ -38,6 +39,7 @@
   import { output } from './stores/output.svelte'
   import { settings, settingsState } from './stores/settings.svelte'
   import { sound, stepVolume, toggleMute } from './stores/sound.svelte'
+  import { sleep } from './stores/sleep.svelte'
   import { theme } from './stores/theme.svelte'
   import { barColors } from './visualizer/colors'
   import { setLook } from './visualizer/loop'
@@ -131,9 +133,11 @@
   $effect(() => showPositionInMediaSession(player.pos, player.duration))
 
   // The tray menu shows what plays and has Play, Next and Previous (ticket 088).
-  $effect(() => window.playbackApi.state(playStateOf(queues)))
+  $effect(() => window.playbackApi.state(playStateOf(queues, sleep.shown)))
   $effect(() =>
     window.playbackApi.onControl((c) => {
+      // the sleep timer's submenu (ticket 111)
+      if (typeof c === 'object') return pickSleep(c.sleep)
       // the menu can be a step behind the page
       if (queues.nothing) return
       if (c === 'toggle') queues.togglePlay()
@@ -141,6 +145,11 @@
       else if (c === 'previous') void queues.prev()
     })
   )
+
+  function pickSleep(p: unknown): void {
+    if (p === null) sleep.cancel()
+    else if (isSleepPick(p) && (queues.active === 'track' || !endsWithSong(p))) sleep.pick(p)
+  }
 
   // Mini (ticket 110): a double click on the bar asks main to maximize, which
   // goes back to the big layout; a right click opens its menu.

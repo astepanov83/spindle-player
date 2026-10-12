@@ -11,6 +11,7 @@ import type {
   RadioTitle
 } from '../../../../shared/plugins/radio/ipc'
 import { fallbackPalettes } from '../../../../shared/palette'
+import type { Action } from '../types'
 import type { HistoryEntry, Station } from '../../../../shared/plugins/radio/stations'
 import { heardSong, removeHeard, type HeardSong } from '../../../../shared/plugins/radio/heard'
 
@@ -136,7 +137,9 @@ const { radioSearch } = await import('./search.svelte')
 const { queues } = await import('../../stores/queues.svelte')
 const { player } = await import('../../stores/player.svelte')
 const { notice } = await import('../../stores/notice.svelte')
-const { statusTip } = await import('../../queue/bar')
+const { sleepId, statusTip } = await import('../../queue/bar')
+// the item's own buttons: the sleep timer's moon (ticket 111) is on every bar
+const ownButtons = (): Action[] => queues.bar.buttons.filter((b) => b.id !== sleepId)
 const { heard } = await import('./heard.svelte')
 const { actOn } = await import('../index')
 type ChoiceAction = import('../../queue/bar').ChoiceAction
@@ -885,7 +888,7 @@ describe('the bar, from what radio gives (ticket 058)', () => {
       picked: '2'
     })
     // a station of My stations offers no Save
-    expect(queues.bar.buttons).toEqual([])
+    expect(ownButtons()).toEqual([])
   })
 
   it('picking a stream through the bar connects to it and is picked', async () => {
@@ -902,7 +905,7 @@ describe('the bar, from what radio gives (ticket 058)', () => {
   it('Save for a station from search: busy while main saves, gone once saved', async () => {
     const found = st('rb-5', [128])
     await start(found)
-    expect(queues.bar.buttons).toEqual([
+    expect(ownButtons()).toEqual([
       {
         id: 'save',
         kind: 'button',
@@ -926,7 +929,7 @@ describe('the bar, from what radio gives (ticket 058)', () => {
     done()
     await vi.advanceTimersByTimeAsync(0)
     expect(radio.saved).toBe(true)
-    expect(queues.bar.buttons).toEqual([])
+    expect(ownButtons()).toEqual([])
   })
 
   it('one stream: its label, nothing to pick', async () => {

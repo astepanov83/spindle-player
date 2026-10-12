@@ -2,9 +2,10 @@
 // minimize hides the window to it (ticket 048).
 // See work/specs/window.md, "Tray".
 import { execFile } from 'child_process'
-import { app, Menu, nativeImage, Tray } from 'electron'
+import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
 import icon from '../../resources/icon.png?asset'
 import type { PlayControl, PlayState } from '../shared/ipc'
+import { endsWithSong, isSleepPick, sleepLabel, sleepPicks, type SleepShown } from '../shared/sleep'
 
 // The icon's size in points; a 2x copy is added for sharp screens.
 function iconSize(platform: NodeJS.Platform): number {
@@ -16,6 +17,9 @@ export type TrayAction = PlayControl | 'show' | 'quit'
 export type TrayItem =
   | { kind: 'text'; label: string }
   | { kind: 'do'; label: string; action: TrayAction; enabled: boolean }
+  // a ticked row of a few (the sleep timer's choices)
+  | { kind: 'pick'; label: string; action: TrayAction; checked: boolean }
+  | { kind: 'sub'; label: string; items: TrayItem[] }
   | { kind: 'line' }
 
 // About what fits a tray menu on a small screen.
@@ -58,7 +62,33 @@ export function trayItems(state: PlayState | undefined): TrayItem[] {
   if (state.next) items.push({ kind: 'do', label: 'Next', action: 'next', enabled: can })
   if (state.previous)
     items.push({ kind: 'do', label: 'Previous', action: 'previous', enabled: can })
+  if (can || state.sleep) items.push(sleepMenu(state))
   return [...items, { kind: 'line' }, ...end]
+}
+
+// The sleep timer's submenu (ticket 111), as the moon's menu on the bar. The
+// time left by the minute, so the menu is not built anew every second.
+function sleepMenu(state: PlayState): TrayItem {
+  const s = state.sleep
+  const items: TrayItem[] = sleepPicks
+    .filter((p) => !state.live || !endsWithSong(p))
+    .map((p) => ({
+      kind: 'pick',
+      label: sleepLabel(p),
+      action: { sleep: p },
+      checked: s?.pick === p
+    }))
+  if (s)
+    items.push(
+      { kind: 'line' },
+      { kind: 'do', label: 'Cancel', action: { sleep: null }, enabled: true }
+    )
+  return { kind: 'sub', label: s ? `Sleep timer: ${sleepLeft(s)}` : 'Sleep timer', items }
+}
+
+function sleepLeft(s: SleepShown): string {
+  if (endsWithSong(s.pick)) return `end of this ${s.pick}`
+  return `${s.left.endsWith('s') ? '1m' : s.left} left`
 }
 
 // The icon's tooltip: the song, or the app's name when nothing plays.
@@ -85,13 +115,29 @@ export function parsePlayState(raw: unknown): PlayState | undefined {
     live: flag(r.live),
     nothing: r.nothing !== false,
     next: flag(r.next),
-    previous: flag(r.previous)
+    previous: flag(r.previous),
+    ...parseSleep(r.sleep)
   }
+}
+
+function parseSleep(raw: unknown): { sleep?: SleepShown } {
+  const r = raw as Record<string, unknown> | undefined
+  if (!r || typeof r !== 'object' || !isSleepPick(r.pick) || typeof r.left !== 'string') return {}
+  return { sleep: { pick: r.pick, left: r.left.slice(0, 20) } }
 }
 
 export interface SpindleTray {
   // undefined: the page can't say what plays (crashed, closed)
   setState(state: PlayState | undefined): void
+}
+
+function menuItem(i: TrayItem, run: (a: TrayAction) => void): MenuItemConstructorOptions {
+  if (i.kind === 'line') return { type: 'separator' }
+  if (i.kind === 'text') return { label: menuLabel(i.label, process.platform), enabled: false }
+  if (i.kind === 'sub') return { label: i.label, submenu: i.items.map((s) => menuItem(s, run)) }
+  if (i.kind === 'pick')
+    return { label: i.label, type: 'checkbox', checked: i.checked, click: () => run(i.action) }
+  return { label: i.label, enabled: i.enabled, click: () => run(i.action) }
 }
 
 export function makeTray(show: () => void, control: (c: PlayControl) => void): SpindleTray {
@@ -118,17 +164,7 @@ export function makeTray(show: () => void, control: (c: PlayControl) => void): S
     shown = key
     tray.setToolTip(tip)
     // Built anew: Electron doesn't promise that a label changed in a built menu shows.
-    tray.setContextMenu(
-      Menu.buildFromTemplate(
-        items.map((i) =>
-          i.kind === 'line'
-            ? { type: 'separator' }
-            : i.kind === 'text'
-              ? { label: menuLabel(i.label, process.platform), enabled: false }
-              : { label: i.label, enabled: i.enabled, click: () => run(i.action) }
-        )
-      )
-    )
+    tray.setContextMenu(Menu.buildFromTemplate(items.map((i) => menuItem(i, run))))
   }
   setState(undefined)
   // on Linux an "activation", which may not be a left click

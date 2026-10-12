@@ -37,6 +37,12 @@ describe('playStateOf', () => {
     expect(s).toMatchObject({ title: '', artist: '', playing: false, nothing: true })
   })
 
+  it('has the sleep timer while one is set (ticket 111)', () => {
+    expect(playStateOf(now({})).sleep).toBeUndefined()
+    const sleep = { pick: 30 as const, left: '23m' }
+    expect(playStateOf(now({}), sleep).sleep).toEqual(sleep)
+  })
+
   it('follows the bar for a live item', () => {
     const bar = barOf('live', undefined, [])
     const s = playStateOf(now({ info: info({ title: 'Deep Space One', subtitle: 'Radio' }), bar }))

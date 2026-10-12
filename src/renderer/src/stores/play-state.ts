@@ -1,6 +1,7 @@
 // What plays, as the player bar shows it, for main's tray menu and tooltip
 // (ticket 088). Pure, so it is tested; App.svelte sends it on every change.
 import type { PlayState } from '../../../shared/ipc'
+import type { SleepShown } from '../../../shared/sleep'
 import type { ItemInfo } from '../plugins/types'
 import type { Bar } from '../queue/bar'
 
@@ -19,9 +20,10 @@ function names(info: ItemInfo): string {
   return info.names ? info.names.map((n) => n.name).join(', ') : (info.subtitle ?? '')
 }
 
-export function playStateOf(q: PlayingNow): PlayState {
+// `sleep`: the sleep timer set, for the tray's submenu (ticket 111).
+export function playStateOf(q: PlayingNow, sleep?: SleepShown): PlayState {
   const info = q.nothingPlaying ? undefined : q.info
-  return {
+  const s: PlayState = {
     title: info?.title ?? '',
     artist: info ? names(info) : '',
     playing: q.wantsSound,
@@ -30,4 +32,6 @@ export function playStateOf(q: PlayingNow): PlayState {
     next: q.bar.next,
     previous: q.bar.previous
   }
+  if (sleep) s.sleep = sleep
+  return s
 }

@@ -22,6 +22,17 @@ class LyricsStore {
     return this.shown && !!this.words
   }
 
+  // An online lookup said the song has no words (ticket 121): a quiet note
+  // in Focus. It takes no cover's or page's place, and has no button.
+  get instrumental(): boolean {
+    return !!this.words && 'instrumental' in this.words
+  }
+
+  // words to sing along to
+  get hasWords(): boolean {
+    return !!this.words && !this.instrumental
+  }
+
   setShown(on: boolean): void {
     if (on === this.shown) return
     settings.lyricsShown = { ...settings.lyricsShown, [settings.template]: on }

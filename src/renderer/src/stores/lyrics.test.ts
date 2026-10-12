@@ -39,6 +39,17 @@ describe('lyrics', () => {
     expect(lyrics.words).toBeUndefined()
   })
 
+  it('tells an instrumental song from one with words', async () => {
+    get.mockResolvedValueOnce({ instrumental: true })
+    await lyrics.follow('files:g', () => song)
+    expect(lyrics.instrumental).toBe(true)
+    expect(lyrics.hasWords).toBe(false)
+    get.mockResolvedValueOnce({ plain: 'w' })
+    await lyrics.follow('files:h', () => song)
+    expect(lyrics.instrumental).toBe(false)
+    expect(lyrics.hasWords).toBe(true)
+  })
+
   it('has none when the ask fails', async () => {
     get.mockRejectedValue(new Error('gone'))
     await lyrics.follow('files:c', () => song)

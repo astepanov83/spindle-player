@@ -14,7 +14,8 @@
   // left out. 'line': a small cover and two lines, no stage (Mini).
   // lyrics: the song's words show here while turned on (ticket 120): in place
   // of the stage in a panel, a few lines above the title when full, the
-  // room above the title beside the stage.
+  // room above the title beside the stage. An instrumental song keeps the
+  // stage in a panel (ticket 121).
   let {
     style,
     show,
@@ -48,7 +49,7 @@
   </div>
 {:else}
   <div class="np {style}" class:only-text={show === 'text'}>
-    {#if withWords && style === 'panel'}
+    {#if withWords && style === 'panel' && !words.instrumental}
       <Lyrics size="fill" />
     {:else if show !== 'text'}
       <Stage />

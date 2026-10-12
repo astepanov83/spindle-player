@@ -705,6 +705,10 @@ export interface PageHalf {
   // A song of its own by artist and title, as a radio station names it: case,
   // accents, "(Remastered)" and "feat." don't count (ticket 119). Its id.
   findSong?(artist: string, title: string): string | undefined
+  // Every song it has, in library order, with when it came in (ms, 0 when
+  // not known), for the lists that fill themselves (ticket 118). Only a
+  // plugin whose plays count gives them. The same array until its data changes.
+  songs?(): readonly { id: string; added: number }[]
 }
 
 // A plugin's start, once its asks are answered. `load` runs once the settings

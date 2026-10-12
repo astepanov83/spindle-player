@@ -55,6 +55,7 @@ const coreTests = [
   'src/renderer/src/blocks/play.test.ts',
   'src/renderer/src/library/groups.test.ts',
   'src/renderer/src/library/plays.test.ts',
+  'src/renderer/src/library/smart-lists.test.ts',
   'src/renderer/src/library/song-menu.test.ts',
   'src/renderer/src/library/views.test.ts',
   'src/renderer/src/plugins/index.test.ts',

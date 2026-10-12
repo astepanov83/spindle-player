@@ -32,7 +32,13 @@
   }
 </script>
 
-<ViewHead title="Playlists" count={fmtCount(playlists.list.length, 'playlist', 'playlists')} />
+<!-- only the user's own; no "0" over the made-for-you lists -->
+<ViewHead
+  title="Playlists"
+  count={playlists.list.length
+    ? fmtCount(playlists.list.length, 'playlist', 'playlists')
+    : undefined}
+/>
 {#if smartShown.length}
   <div class="pls lines" role="group" aria-labelledby="pls-auto">
     <div class="head section-label" id="pls-auto">

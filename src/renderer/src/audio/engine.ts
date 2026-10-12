@@ -28,6 +28,8 @@
 // before the join. A next song at another rate loads in a new graph at its
 // rate, and starts there as plainly as a timer can (no join across two
 // graphs). The old graph closes once its song has sounded out.
+//
+// Every graph plays on the output device picked in Settings (ticket 112).
 
 export type EngineError = {
   // MediaError code: 2 network, 3 decode, 4 format not supported
@@ -59,6 +61,9 @@ export interface EngineEvents {
   // the song given to setNext took over as this one ended; times and the
   // length are its own from now on
   nextStarted(): void
+  // The output device (setOutput) could not be used, or failed while in
+  // use (unplugged): the sound went to the system default.
+  outputFailed(id: string): void
 }
 
 export interface LoadOptions {
@@ -117,6 +122,8 @@ export class AudioEngine {
   #ahead: Graph | undefined
   // the volume's gain factor, for every graph
   #volume = 1
+  // the output device's id for every graph; '' is the system default
+  #sink = ''
   // the one that plays, or is loaded to play
   #deck: Deck
   #on: Partial<EngineEvents> = {}
@@ -179,7 +186,13 @@ export class AudioEngine {
   #build(rate: number, waits: boolean): Graph | undefined {
     let g: Graph
     try {
-      g = new Graph(rate, { volume: this.#volume, waits, joined: (g, m) => this.#joined(g, m) })
+      g = new Graph(rate, {
+        volume: this.#volume,
+        sink: this.#sink,
+        waits,
+        joined: (g, m) => this.#joined(g, m),
+        failed: (g) => this.#outputLost(g)
+      })
     } catch (e) {
       if (!waits) throw e
       console.error(`No audio graph at ${rate} Hz; the song plays in the one there is`, e)
@@ -653,6 +666,36 @@ export class AudioEngine {
   setVolume(volume: number): void {
     this.#volume = gain(volume)
     for (const g of this.#graphs()) g.volume.gain.value = this.#volume
+  }
+
+  // The output device's id, '' for the system default: every graph moves
+  // there, and each new one is made there.
+  setOutput(id: string): void {
+    if (id === this.#sink) return
+    this.#sink = id
+    for (const g of this.#graphs()) {
+      g.setSink(id).then(
+        // a context the device failed in is suspended: playing goes on
+        () => {
+          if (this.#wantPlay && g.context.state === 'suspended') void g.context.resume()
+        },
+        (e) => {
+          // a graph that closed meanwhile, or a newer device asked for
+          if (g.context.state === 'closed' || this.#sink !== id) return
+          console.error('The sound output could not be used; playing on the default', e)
+          this.#outputLost(g)
+        }
+      )
+    }
+  }
+
+  // The output device failed in a graph that may still sound: every graph
+  // goes back to the system default.
+  #outputLost(g: Graph): void {
+    const id = this.#sink
+    if (!id || !this.#graphs().includes(g)) return
+    this.setOutput('')
+    this.#on.outputFailed?.(id)
   }
 
   // A new level for the song playing (the setting changed): it glides there.

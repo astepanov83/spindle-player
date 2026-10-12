@@ -86,18 +86,28 @@ const params: FakeParam[] = []
 let worklet: 'hang' | 'fail' = 'hang'
 // every context made, in order: one per graph
 const contexts: FakeContext[] = []
-class FakeContext {
+// output devices setSinkId knows; any other id is refused as Chromium does
+const devices = new Set([''])
+class FakeContext extends EventTarget {
   destination = {}
   sampleRate: number
+  sinkId: string
   state = 'running'
   baseLatency = 0
   outputLatency = 0
   // this graph's gains (the volume, then each element's) and elements
   gains: FakeParam[] = []
   els: FakeAudio[] = []
-  constructor(o: { sampleRate: number }) {
+  constructor(o: { sampleRate: number; sinkId?: string }) {
+    super()
     this.sampleRate = o.sampleRate
+    this.sinkId = o.sinkId ?? ''
     contexts.push(this)
+  }
+  setSinkId = async (id: string): Promise<void> => {
+    if (!devices.has(id))
+      throw Object.assign(new Error(`${id} not found`), { name: 'NotFoundError' })
+    this.sinkId = id
   }
   createAnalyser = (): unknown => ({ ...(node() as object), fftSize: 0 })
   currentTime = 0
@@ -162,6 +172,8 @@ beforeEach(() => {
   params.length = 0
   contexts.length = 0
   worklet = 'hang'
+  devices.clear()
+  devices.add('')
   e = new AudioEngine()
   el = e.el as unknown as FakeAudio
   got = []
@@ -173,7 +185,8 @@ beforeEach(() => {
     duration: (d) => got.push(`duration ${d}`),
     ended: () => got.push('ended'),
     error: (x) => got.push(`error ${x.code}${x.gone ? ' gone' : ''}`),
-    nextStarted: () => got.push('next')
+    nextStarted: () => got.push('next'),
+    outputFailed: (id) => got.push(`output failed ${id}`)
   })
 })
 
@@ -944,5 +957,105 @@ describe('a graph per sample rate (ticket 091)', () => {
     e.load('spindle://media/c', 0, undefined, { rate: 96000, gain: 2 })
     expect(ctx().gains[0].value).toBe(0.25)
     expect(ctx().gains[1].value).toBe(2)
+  })
+})
+
+describe('the output device (ticket 112)', () => {
+  const ctx = (): FakeContext => contexts.at(-1)!
+  const playing = (): FakeAudio => e.el as unknown as FakeAudio
+  const sinks = (): string[] =>
+    contexts.filter((c) => c.state !== 'closed').map((c) => c.sinkId || 'default')
+
+  beforeEach(() => {
+    worklet = 'fail'
+    devices.add('dac')
+    devices.add('hdmi')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  async function playAt(rate: number, url = 'spindle://media/a'): Promise<void> {
+    e.load(url, 0, undefined, { rate })
+    playing().meta(100)
+    e.play()
+    await vi.advanceTimersByTimeAsync(0)
+    playing().currentTime = 90
+    got = []
+  }
+
+  it('moves the graph there, and back to the default', async () => {
+    e.setOutput('dac')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sinks()).toEqual(['dac'])
+    e.setOutput('')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sinks()).toEqual(['default'])
+    expect(got).toEqual([])
+  })
+
+  it('moves every graph that may still sound: the one playing and the one loaded ahead', async () => {
+    await playAt(44100)
+    e.setNext({ url: 'spindle://media/b', rate: 96000 })
+    expect(contexts).toHaveLength(2)
+    e.setOutput('hdmi')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sinks()).toEqual(['hdmi', 'hdmi'])
+  })
+
+  it('makes each new graph on the device: a song at another rate, and one loaded ahead', async () => {
+    e.setOutput('dac')
+    await playAt(48000)
+    expect(ctx().sampleRate).toBe(48000)
+    expect(ctx().sinkId).toBe('dac')
+    e.setNext({ url: 'spindle://media/b', rate: 96000 })
+    expect(ctx().sinkId).toBe('dac')
+  })
+
+  it('a device that is gone: every graph plays on the default, and it says so once', async () => {
+    await playAt(44100)
+    e.setNext({ url: 'spindle://media/b', rate: 48000 })
+    e.setOutput('usb')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sinks()).toEqual(['default', 'default'])
+    expect(got).toEqual(['output failed usb'])
+    // a new graph is made on the default too
+    e.load('spindle://media/c', 0, undefined, { rate: 96000 })
+    expect(ctx().sinkId).toBe('')
+    // asked again, once it is back
+    devices.add('usb')
+    e.setOutput('usb')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sinks()).toEqual(['usb'])
+  })
+
+  it('a device that fails while in use (unplugged): back to the default, and playing goes on', async () => {
+    e.setOutput('dac')
+    await playAt(44100)
+    const c = ctx()
+    c.state = 'suspended'
+    const resume = vi.spyOn(c, 'resume')
+    c.dispatchEvent(new Event('error'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(c.sinkId).toBe('')
+    expect(resume).toHaveBeenCalled()
+    expect(got).toEqual(['output failed dac'])
+    // the default failing is nothing to fall back from
+    c.dispatchEvent(new Event('error'))
+    expect(got).toEqual(['output failed dac'])
+  })
+
+  it('a newer choice wins over a device that failed on the way, and a closed graph is let go', async () => {
+    await playAt(44100)
+    e.setOutput('gone')
+    e.setOutput('dac')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sinks()).toEqual(['dac'])
+    expect(got).toEqual([])
+    // an error from a graph that closed is not this one's
+    const old = ctx()
+    e.load('spindle://media/b', 0, undefined, { rate: 96000 })
+    expect(old.state).toBe('closed')
+    old.dispatchEvent(new Event('error'))
+    expect(got).toEqual([])
   })
 })

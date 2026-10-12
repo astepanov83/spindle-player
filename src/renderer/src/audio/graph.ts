@@ -103,13 +103,21 @@ export class Deck {
 export interface GraphOptions {
   // the volume's gain factor
   volume: number
+  // the sound output's device id; '' is the system default (ticket 112)
+  sink: string
   // A graph made for a song to play now waits for its join before playing,
   // so the join is not put in while the song plays (a skip of 9 ms). The
   // first one does not: its join loads long before anyone can press Play.
   waits: boolean
   // the join let a next song through
   joined(g: Graph, m: JoinOut): void
+  // the output device failed (unplugged): Chromium suspends the context
+  failed(g: Graph): void
 }
+
+// Chromium's AudioContext picks its device; TypeScript's DOM types don't
+// have it yet.
+type SinkContext = AudioContext & { setSinkId(id: string): Promise<void> }
 
 export class Graph {
   readonly context: AudioContext
@@ -127,8 +135,11 @@ export class Graph {
   readonly joinLoaded: Promise<void>
 
   constructor(rate: number, o: GraphOptions) {
-    // Chromium takes the graph's sound to the device's rate in one go.
-    this.context = new AudioContext({ sampleRate: rate })
+    // Chromium takes the graph's sound to the device's rate in one go. Made
+    // on its device, so none of its sound goes to the default first.
+    const sink = o.sink ? { sinkId: o.sink } : {}
+    this.context = new AudioContext({ sampleRate: rate, ...sink } as AudioContextOptions)
+    this.context.addEventListener('error', () => o.failed(this))
     this.analyser = this.context.createAnalyser()
     this.analyser.fftSize = fftSizeFor(this.context.sampleRate)
     this.analyser.smoothingTimeConstant = 0.5
@@ -192,6 +203,11 @@ export class Graph {
     }
     join.connect(this.analyser)
     this.join = join
+  }
+
+  // Moves the sound to another device; '' is the system default.
+  setSink(id: string): Promise<void> {
+    return (this.context as SinkContext).setSinkId(id)
   }
 
   tell(m: JoinIn): void {

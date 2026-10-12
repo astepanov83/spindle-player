@@ -30,6 +30,9 @@
 // graphs). The old graph closes once its song has sounded out.
 //
 // Every graph plays on the output device picked in Settings (ticket 112).
+//
+// The sleep timer fades the volume of every graph out (ticket 111), apart
+// from the volume setting, which stays where it is.
 
 export type EngineError = {
   // MediaError code: 2 network, 3 decode, 4 format not supported
@@ -79,7 +82,7 @@ import { firstLead, learnLead, nextMove, plainLead, targetOverlap } from './gapl
 import { Graph, type Deck } from './graph'
 import type { JoinOut } from './join'
 import { crossLead, firstRate, rateFor } from './rate'
-import { gain } from './volume'
+import { fadeCurve, gain } from './volume'
 
 // True when main has no readable file for a song URL (404), or doesn't answer
 // within 5s (a NAS that dropped out). Any other answer counts as there: the
@@ -124,6 +127,9 @@ export class AudioEngine {
   #volume = 1
   // the output device's id for every graph; '' is the system default
   #sink = ''
+  // The sleep timer's fade: the volume goes down as its slider would, from
+  // `share` of it at `at` to none at `until` (Date.now ms).
+  #fade: { at: number; until: number; share: number } | undefined
   // the one that plays, or is loaded to play
   #deck: Deck
   #on: Partial<EngineEvents> = {}
@@ -187,7 +193,7 @@ export class AudioEngine {
     let g: Graph
     try {
       g = new Graph(rate, {
-        volume: this.#volume,
+        volume: this.#fade ? 0 : this.#volume,
         sink: this.#sink,
         waits,
         joined: (g, m) => this.#joined(g, m),
@@ -199,6 +205,7 @@ export class AudioEngine {
       return undefined
     }
     for (const d of g.decks) this.#listen(d)
+    if (this.#fade) this.#fadeOn(g)
     return g
   }
 
@@ -665,7 +672,63 @@ export class AudioEngine {
 
   setVolume(volume: number): void {
     this.#volume = gain(volume)
-    for (const g of this.#graphs()) g.volume.gain.value = this.#volume
+    for (const g of this.#graphs()) {
+      if (this.#fade) this.#fadeOn(g)
+      else {
+        // a volume coming back after a fade (unfade) is dropped too
+        g.volume.gain.cancelScheduledValues(0)
+        g.volume.gain.value = this.#volume
+      }
+    }
+  }
+
+  // The sleep timer (ticket 111): every graph's volume goes down to none
+  // over `seconds`, as if its slider moved down evenly. From where it is,
+  // when it is fading already.
+  fadeOut(seconds: number): void {
+    const now = Date.now()
+    this.#fade = { at: now, until: now + seconds * 1000, share: this.#fadeShare(now) }
+    for (const g of this.#graphs()) this.#fadeOn(g)
+  }
+
+  // The volume comes back: after `delay` seconds, so a pause has gone quiet
+  // first, or gliding there at once (the timer was cancelled).
+  unfade(delay = 0): void {
+    if (!this.#fade) return
+    const share = this.#fadeShare(Date.now())
+    this.#fade = undefined
+    for (const g of this.#graphs()) {
+      const p = g.volume.gain
+      const t = g.context.currentTime
+      p.cancelScheduledValues(0)
+      p.setValueAtTime(this.#volume * share * share, t)
+      if (delay > 0) p.setValueAtTime(this.#volume, t + delay)
+      else p.setTargetAtTime(this.#volume, t, 0.1)
+    }
+  }
+
+  // How much of the volume's slider is left in the fade at `now`; all of it
+  // with no fade.
+  #fadeShare(now: number): number {
+    const f = this.#fade
+    if (!f) return 1
+    if (now >= f.until) return 0
+    return (f.share * (f.until - now)) / (f.until - f.at)
+  }
+
+  // Sets the fade's rest on a graph: now, on a new graph or a new volume.
+  // The curve starts just after the value, as one may not overlap another.
+  #fadeOn(g: Graph): void {
+    const f = this.#fade!
+    const now = Date.now()
+    const share = this.#fadeShare(now)
+    const left = (f.until - now) / 1000
+    const p = g.volume.gain
+    const t = g.context.currentTime
+    p.cancelScheduledValues(0)
+    p.setValueAtTime(this.#volume * share * share, t)
+    if (this.#volume > 0 && share > 0 && left > 0.05)
+      p.setValueCurveAtTime(fadeCurve(this.#volume, share), t + 0.01, left)
   }
 
   // The output device's id, '' for the system default: every graph moves

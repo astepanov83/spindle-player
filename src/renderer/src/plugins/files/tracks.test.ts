@@ -100,3 +100,10 @@ describe('songs whose music folder was not found', () => {
     ).toEqual(['/m', '/m', '/m'])
   })
 })
+
+describe('a song’s info', () => {
+  it('has its album’s artist, for the play log', () => {
+    const s = tracks.trackState('far', () => true)
+    expect(s.state === 'ok' && s.info.groupArtist).toBe('Marina Vale')
+  })
+})

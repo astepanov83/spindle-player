@@ -531,6 +531,8 @@ export interface ItemInfo {
   subtitle?: string
   // the album; the episode
   group?: string
+  // the album's artist, for the play log (ticket 115)
+  groupArtist?: string
   // seconds; none for live
   length?: number
   art?: Art

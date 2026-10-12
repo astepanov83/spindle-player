@@ -70,7 +70,7 @@ export function openJsonFile(
   }
 }
 
-function keepCopy(path: string, to: string): boolean {
+export function keepCopy(path: string, to: string): boolean {
   try {
     copyFileSync(path, to)
     return true

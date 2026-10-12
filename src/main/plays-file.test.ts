@@ -57,7 +57,9 @@ describe('PlaysStore', () => {
       store.played('files:a')
       expect(readdirSync(dir)).toEqual([])
       await vi.advanceTimersByTimeAsync(2100)
-      await vi.waitFor(() => expect(readdirSync(dir)).toEqual(['plays.json']))
+      await vi.waitFor(() =>
+        expect(readdirSync(dir).sort()).toEqual(['plays-log.jsonl', 'plays.json'])
+      )
     } finally {
       vi.useRealTimers()
     }
@@ -77,7 +79,7 @@ describe('PlaysStore', () => {
     const store = new PlaysStore(path)
     store.played('files:a')
     store.flushSync()
-    expect(readdirSync(dir).sort()).toEqual(['plays.json', 'plays.json.unknown'])
+    expect(readdirSync(dir).sort()).toEqual(['plays-log.jsonl', 'plays.json', 'plays.json.unknown'])
     expect(readFileSync(`${path}.unknown`, 'utf8')).toBe('{"version":9,"plays":{}}')
   })
 
@@ -90,5 +92,42 @@ describe('PlaysStore', () => {
     expect(store.get()['files:a']?.n).toBe(1)
     expect(readdirSync(path)).toEqual([])
     expect(store.moveIds('files', { a: 'b' })).toBe(false)
+  })
+})
+
+describe('PlaysStore and the play log', () => {
+  const logPath = (): string => join(dir, 'plays-log.jsonl')
+  const logLines = (): unknown[] =>
+    readFileSync(logPath(), 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
+  const song = { title: 'Tide', artist: 'A', album: 'Blue', albumArtist: 'A', length: 200 }
+
+  it('logs each play it counts, with what the page showed', async () => {
+    const store = new PlaysStore(path, () => 5000)
+    store.played('files:a', song)
+    store.played('files:a', { title: 7 })
+    store.flushSync()
+    expect(logLines()).toEqual([
+      { version: 1 },
+      { k: 'files:a', t: 5000, d: 200, a: 'A', al: 'Blue', aa: 'A', ti: 'Tide' },
+      { k: 'files:a', t: 5000, d: 0, a: '', al: '', aa: '', ti: '' }
+    ])
+    expect((await store.stats('all')).plays).toBe(2)
+  })
+
+  it('logs no plays of radio or MFP', () => {
+    const store = new PlaysStore(path)
+    store.played('radio:rb-1', song)
+    store.played('mfp:e#1', song)
+    store.flushSync()
+    expect(readdirSync(dir)).toEqual([])
+  })
+
+  it('writes moved ids to the log, also of songs plays.json no longer has', () => {
+    const store = new PlaysStore(path)
+    expect(store.moveIds('files', { gone: 'x' })).toBe(true)
+    expect(logLines()).toEqual([{ version: 1 }, { moved: 'files', ids: { gone: 'x' } }])
   })
 })

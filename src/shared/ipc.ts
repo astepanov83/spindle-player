@@ -2,7 +2,7 @@ import type { AiState } from './ai'
 import type { PluginChannels } from './plugins'
 import type { ItemKey } from './plugins/items'
 import type { Playlist } from './playlists'
-import type { Plays } from './plays'
+import type { PlayedSong, Plays, PlayStats, StatsPeriod } from './plays'
 import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
 import type { Settings } from './settings'
 
@@ -78,7 +78,9 @@ export const PlaybackChannel = {
   control: 'playback:control',
   // play counts and when each song was last played (ticket 085)
   loadPlays: 'plays:load',
-  played: 'plays:played'
+  played: 'plays:played',
+  // the totals of the play log for a year or all time (tickets 115, 116)
+  playStats: 'plays:stats'
 } as const
 
 // What plays, as the player bar shows it, for the tray menu and its tooltip.
@@ -120,8 +122,11 @@ export interface PlaybackApi {
   onControl(listener: (control: PlayControl) => void): () => void
   // every song's plays, as they were when the page loaded
   loadPlays(): Promise<Plays>
-  // a song was heard long enough to count as played; main adds it
-  played(key: ItemKey): void
+  // a song was heard long enough to count as played; main adds it, and
+  // logs it with what the page shows of the song (ticket 115)
+  played(key: ItemKey, song: PlayedSong): void
+  // counted by main from the play log; never the log itself
+  playStats(period: StatsPeriod): Promise<PlayStats>
 }
 
 export const AiChannel = {
@@ -171,6 +176,7 @@ export interface CoreChannels {
   [PlaybackChannel.state]: PlaybackApi['state']
   [PlaybackChannel.loadPlays]: PlaybackApi['loadPlays']
   [PlaybackChannel.played]: PlaybackApi['played']
+  [PlaybackChannel.playStats]: PlaybackApi['playStats']
   [AiChannel.load]: AiApi['load']
   [AiChannel.act]: AiApi['act']
   [AiChannel.setTask]: AiApi['setTask']

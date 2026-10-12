@@ -16,6 +16,8 @@
   import Eq from '../ui/Eq.svelte'
   import { itemInfo } from '../plugins'
   import { queues } from '../stores/queues.svelte'
+  import { loved } from '../stores/loved.svelte'
+  import LovedMark from '../ui/LovedMark.svelte'
 
   let {
     key,
@@ -78,8 +80,10 @@
     >{#if cur && queues.songPlaying}<Eq />{:else if away}<span class="away mark">!</span
       >{:else if no}{no}{/if}</span
   >
-  <span class="nm" title={t?.title}
-    >{t?.title ?? ''}{#if away && !second}<span class="away">{dot}{away}</span>{/if}</span
+  <span class="title"
+    ><span class="nm" title={t?.title}
+      >{t?.title ?? ''}{#if away && !second}<span class="away">{dot}{away}</span>{/if}</span
+    >{#if loved.has(key)}<LovedMark />{/if}</span
   >
   {#if second === 'Album'}<span class="ar" class:away title={away ?? t?.group}
       >{away ?? t?.group ?? ''}</span
@@ -140,6 +144,13 @@
      row's fill stays, its words go as dim as a played queue row */
   .other > span {
     opacity: var(--past);
+  }
+  /* the title and its heart: the title is cut, the heart stays */
+  .title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
   }
   .nm,
   .ar {

@@ -6,6 +6,8 @@
   import Tiles from './Tiles.svelte'
   import Empty from '../library/Empty.svelte'
   import SongTable from '../library/SongTable.svelte'
+  import LovedMark from '../ui/LovedMark.svelte'
+  import { loved } from '../stores/loved.svelte'
   import { openSongMenu } from '../library/song-menu'
   import Eq from '../ui/Eq.svelte'
   import Icon from '../ui/Icon.svelte'
@@ -126,7 +128,7 @@
             <span class="nm"
               >{#if cur && queues.songPlaying}<Eq />{/if}<span title={t?.title}
                 >{t?.title ?? ''}</span
-              ></span
+              >{#if loved.has(key)}<LovedMark />{/if}</span
             >
           </span>
           <span class="o" class:away title={away ?? t?.subtitle}>{away ?? t?.subtitle ?? ''}</span>

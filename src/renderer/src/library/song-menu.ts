@@ -1,12 +1,14 @@
 // The menu for songs (spec "Pages and tabs", Song menu): the core's queue
 // part, then the item's links (Go to), then what the songs' plugin offers
-// (Show in file manager), then the core's playlists. Each part is a
+// (Show in file manager), then Love and Unlove, then the core's playlists. Each part is a
 // function; a new part is one more argument to `sections`. Songs come as
 // item keys.
+import { canLove } from '../../../shared/loved'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
 import { canOpen, infoOf, openPage } from '../plugins'
 import { layout } from '../stores/layout.svelte'
+import { loved } from '../stores/loved.svelte'
 import { menu, type MenuEntry, type MenuItem } from '../stores/menu.svelte'
 import { playlists } from '../stores/playlists.svelte'
 import { queue } from '../stores/queue.svelte'
@@ -67,6 +69,17 @@ function goToPart(keys: ItemKey[]): MenuEntry[] {
     }))
 }
 
+// Love when some of the songs are not loved, Unlove when some are: both
+// for a mix. Songs that can't be loved (a station, MFP) are left out.
+function lovePart(keys: ItemKey[]): MenuEntry[] {
+  const mine = keys.filter((k) => canLove(k))
+  const on = mine.filter((k) => loved.has(k)).length
+  const entries: MenuEntry[] = []
+  if (on < mine.length) entries.push({ label: 'Love', run: () => loved.set(mine, true) })
+  if (on > 0) entries.push({ label: 'Unlove', run: () => loved.set(mine, false) })
+  return entries
+}
+
 function playlistPart(keys: ItemKey[], o: SongMenuOptions): MenuEntry[] {
   const entries: MenuEntry[] = [{ heading: 'Add to playlist' }]
   for (const p of playlists.list) {
@@ -85,7 +98,13 @@ function playlistPart(keys: ItemKey[], o: SongMenuOptions): MenuEntry[] {
 }
 
 export function songMenu(keys: ItemKey[], o: SongMenuOptions = {}): MenuEntry[] {
-  return sections(queuePart(keys, o), goToPart(keys), o.actions ?? [], playlistPart(keys, o))
+  return sections(
+    queuePart(keys, o),
+    goToPart(keys),
+    o.actions ?? [],
+    lovePart(keys),
+    playlistPart(keys, o)
+  )
 }
 
 // Only the playlists, for the "Add to playlist" buttons on page headers.

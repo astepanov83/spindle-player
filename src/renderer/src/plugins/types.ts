@@ -594,6 +594,9 @@ export type Action =
       on?: boolean
       // at work: a click does nothing
       busy?: boolean
+      // its icon alone in a round button, never a word in a chip, also
+      // where the bar has room (the heart, ticket 117); `hint` names it
+      plain?: boolean
     }
   | {
       id: string

@@ -16,6 +16,8 @@
   import { drawerFocus, focusColumnQueue } from './layout/queue-focus'
   import { layout } from './stores/layout.svelte'
   import { menu } from './stores/menu.svelte'
+  import { notice } from './stores/notice.svelte'
+  import { loveNotice } from './queue/bar'
   import {
     setupMediaSession,
     showInMediaSession,
@@ -151,7 +153,14 @@
     else if (act === 'escape') escape()
     else if (act === 'visualizer') layout.cycleVisualizer()
     else if (act === 'queue') layout.toggleQueue()
+    else if (act === 'love') love()
     else if (act === 'studio' || act === 'classic' || act === 'focus') layout.chooseTemplate(act)
+  }
+
+  // the bar may be out of view (Focus, a small window), so it says what it did
+  function love(): void {
+    const on = queues.toggleLove()
+    if (on !== undefined) notice.show(loveNotice(on, queues.title))
   }
 
   function escape(): void {

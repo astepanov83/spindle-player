@@ -6,6 +6,7 @@ import { app, BrowserWindow, nativeTheme, net, safeStorage, session, shell } fro
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import {
   AiChannel,
+  LovedChannel,
   PlaybackChannel,
   PlaylistChannel,
   SettingsChannel,
@@ -30,6 +31,7 @@ import type { MainPlugin, Route } from './plugins/types'
 import type { IdMoves } from '../shared/id-moves'
 import { PlaylistFile, QueueFile } from './page-files'
 import { PlaysStore } from './plays-file'
+import { LovedStore } from './loved-file'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
 import { devRetryData, isDevRetry, takeLock } from './single-instance'
@@ -41,6 +43,7 @@ let store: SettingsStore
 let playlists: PlaylistFile
 let savedQueue: QueueFile
 let plays: PlaysStore
+let loved: LovedStore
 // each plugin owns its files, requests and IPC; this file only loops over them
 let plugins: MainPlugin[] = []
 let main: MainWindow | null = null
@@ -157,6 +160,8 @@ page.on(PlaybackChannel.state, (_, raw) => tray?.setState(parsePlayState(raw)))
 page.handle(PlaybackChannel.loadPlays, () => plays.get())
 page.on(PlaybackChannel.played, (_, key, song) => plays.played(key, song))
 page.handle(PlaybackChannel.playStats, (_, raw) => plays.stats(parseStatsPeriod(raw) ?? 'all'))
+page.handle(LovedChannel.load, () => loved.get())
+page.on(LovedChannel.set, (_, keys, on) => loved.set(keys, on))
 page.on(PlaybackChannel.log, (_, text) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
 })
@@ -185,6 +190,7 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   playlists = new PlaylistFile(oldIds)
   savedQueue = new QueueFile(oldIds)
   plays = new PlaysStore()
+  loved = new LovedStore()
   const userData = app.getPath('userData')
   const log = (text: string): void => console.warn(text)
   coverCache = new CoverCache(join(userData, 'covers'), join(__dirname, '../preload/covers.js'))
@@ -235,7 +241,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
         const lists = playlists.moveIds(p.id, moves)
         const queue = savedQueue.moveIds(p.id, moves)
         const counts = plays.moveIds(p.id, moves)
-        return lists && queue && counts
+        const hearts = loved.moveIds(p.id, moves)
+        return lists && queue && counts && hearts
       }
     })
   // the saved value, as the plugins have only seen the setting at start
@@ -272,6 +279,7 @@ app.on('will-quit', (e) => {
   playlists?.flushSync()
   savedQueue?.flushSync()
   plays?.flushSync()
+  loved?.flushSync()
   for (const p of plugins) p.flushSync()
   const waits = plugins.flatMap((p) => p.flush?.() ?? [])
   if (!waits.length) return

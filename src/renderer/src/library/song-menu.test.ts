@@ -40,6 +40,7 @@ vi.mock('../stores/queue.svelte', () => ({
 // radio's page half hears main from the start
 vi.stubGlobal('window', {
   playlistsApi: { save: vi.fn() },
+  lovedApi: { set: vi.fn() },
   radioApi: { onTitle: () => () => {}, onLogo: () => () => {}, onCover: () => () => {} }
 })
 
@@ -49,6 +50,7 @@ const { library } = await import('../stores/library.svelte')
 const { files } = await import('../plugins/files/store.svelte')
 const { layout } = await import('../stores/layout.svelte')
 const { settings } = await import('../stores/settings.svelte')
+const { loved } = await import('../stores/loved.svelte')
 
 const labels = (entries: MenuEntry[]): string[] =>
   entries.map((e) => (e === 'line' ? '---' : 'heading' in e ? `# ${e.heading}` : e.label))
@@ -63,6 +65,7 @@ beforeEach(() => {
   fake.index = 1
   fake.hasLibrary = true
   playlists.load([{ id: 'p1', name: 'Mix', items: [] }])
+  loved.load({})
 })
 
 describe('songMenu', () => {
@@ -70,6 +73,8 @@ describe('songMenu', () => {
     expect(labels(songMenu(['files:x']))).toEqual([
       'Play next',
       'Add to queue',
+      '---',
+      'Love',
       '---',
       '# Add to playlist',
       'Mix',
@@ -206,6 +211,8 @@ describe('Go to (ticket 040)', () => {
       'Go to album',
       'Go to artist',
       '---',
+      'Love',
+      '---',
       '# Add to playlist',
       'Mix',
       'New playlist'
@@ -284,5 +291,46 @@ describe("the songs' plugin's entries", () => {
 
   it('are left out when the block gives none', () => {
     expect(labels(songMenu(['files:a']))).not.toContain('Show in file manager')
+  })
+})
+
+describe('Love and Unlove (ticket 117)', () => {
+  const near = (entries: MenuEntry[]): string[] => {
+    const l = labels(entries)
+    return l.slice(l.indexOf('Add to queue') + 2, l.indexOf('# Add to playlist') - 1)
+  }
+
+  it('one song: Love, then Unlove once it is loved', () => {
+    const m = songMenu(['files:a'])
+    expect(near(m)).toEqual(['Love'])
+    pick(m, 'Love')
+    expect(loved.has('files:a')).toBe(true)
+    expect(window.lovedApi.set).toHaveBeenLastCalledWith(['files:a'], true)
+    const again = songMenu(['files:a'])
+    expect(near(again)).toEqual(['Unlove'])
+    pick(again, 'Unlove')
+    expect(loved.has('files:a')).toBe(false)
+  })
+
+  it('many songs: Love loves the rest, Unlove all of them; a mix offers both', () => {
+    loved.load({ 'files:a': 5 })
+    const m = songMenu(['files:a', 'files:b', 'files:c'])
+    expect(near(m)).toEqual(['Love', 'Unlove'])
+    pick(m, 'Love')
+    // the first time stays
+    expect(loved.all).toMatchObject({ 'files:a': 5, 'files:b': expect.any(Number) })
+    expect(Object.keys(loved.all).sort()).toEqual(['files:a', 'files:b', 'files:c'])
+    const all = songMenu(['files:a', 'files:b', 'files:c'])
+    expect(near(all)).toEqual(['Unlove'])
+    pick(all, 'Unlove')
+    expect(loved.all).toEqual({})
+  })
+
+  it('songs that cannot be loved get none, and are left out of a mix', () => {
+    expect(labels(songMenu(['radio:rb-1', 'mfp:e#1']))).not.toContain('Love')
+    const m = songMenu(['mfp:e#1', 'files:a'])
+    pick(m, 'Love')
+    expect(loved.all).toEqual({ 'files:a': expect.any(Number) })
+    expect(window.lovedApi.set).toHaveBeenLastCalledWith(['files:a'], true)
   })
 })

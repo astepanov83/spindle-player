@@ -2,6 +2,7 @@
 // says it can do (spec "The player bar"). The plugin gives data; Controls.svelte
 // (parts/) draws it in the core's style.
 import type { ItemKind } from '../../../shared/plugins'
+import { chordFor } from '../keys'
 import type { Action, Can, LiveStatus } from '../plugins/types'
 
 export type ButtonAction = Extract<Action, { kind: 'button' }>
@@ -26,22 +27,49 @@ export interface Bar {
 const trackCan: Can = { seek: true, pause: true, next: true, previous: true }
 const liveCan: Can = { seek: false, pause: true, next: false, previous: false }
 
+// The core's heart for a song that can be loved (ticket 117). Its id can't
+// be a plugin's: queues.act keeps it for the core.
+export const loveId = 'core:love'
+
+export function loveAction(on: boolean): ButtonAction {
+  const key = chordFor('love')
+  return {
+    id: loveId,
+    kind: 'button',
+    label: 'Love',
+    icon: on ? 'heartOn' : 'heart',
+    hint: `${on ? 'Loved' : 'Love'} (${key})`,
+    on,
+    plain: true
+  }
+}
+
+// What the L key did, as the bar may be out of view.
+export function loveNotice(on: boolean, title: string | undefined): string {
+  const word = on ? 'Loved' : 'Unloved'
+  return title ? `${word}: "${title}"` : `${word} the song playing`
+}
+
 // `now`: what the plugin says the item can do now, over the playable's.
+// `loved`: the song can be loved, and whether it is; none: no heart.
 export function barOf(
   kind: ItemKind,
   p: { length: number | 'live'; can: Can } | undefined,
   actions: Action[],
-  now?: Can
+  now?: Can,
+  loved?: boolean
 ): Bar {
   const live = p ? p.length === 'live' : kind === 'live'
   const can = now ?? p?.can ?? (kind === 'live' ? liveCan : trackCan)
+  const heart = loved === undefined ? [] : [loveAction(loved)]
   return {
     live,
     seek: !live && can.seek,
     next: can.next,
     previous: can.previous,
     order: kind === 'track',
-    buttons: actions.filter((a): a is ButtonAction => a.kind === 'button'),
+    // the heart first: next to the song's title on a bar
+    buttons: [...heart, ...actions.filter((a): a is ButtonAction => a.kind === 'button')],
     choices: actions.filter((a): a is ChoiceAction => a.kind === 'choice')
   }
 }

@@ -3,6 +3,7 @@ import {
   escapeTarget,
   isTyping,
   keyAction,
+  chordFor,
   layoutChord,
   type Chord,
   type KeyAction,
@@ -136,6 +137,15 @@ describe('keyAction', () => {
     expect(keyAction(press(' ', { code: 'Space' }), free)).toBe('toggle')
     expect(keyAction(press(' ', { code: 'Space', ctrlKey: true }), free)).toBe('block')
     expect(keyAction(press('v', { ctrlKey: true }), free)).toBe('none')
+  })
+  it('loves with L, once for a held key, not while typing or with Ctrl (ticket 117)', () => {
+    expect(keyAction(press('l'), free)).toBe('love')
+    expect(keyAction(press('l', { repeat: true }), free)).toBe('none')
+    expect(keyAction(press('l'), { ...free, typing: true })).toBe('none')
+    expect(keyAction(press('l', { ctrlKey: true }), free)).toBe('none')
+    // a focused list doesn't take it
+    expect(keyAction(press('l'), { ...free, arrows: true })).toBe('love')
+    expect(chordFor('love')).toBe('L')
   })
   it('mutes with M, once for a held key, not while typing or with Ctrl', () => {
     expect(keyAction(press('m'), free)).toBe('mute')
@@ -375,6 +385,7 @@ describe('shortcuts', () => {
       'escape',
       'visualizer',
       'queue',
+      'love',
       'studio',
       'classic',
       'focus'
@@ -406,6 +417,7 @@ describe('shortcuts', () => {
       'Esc',
       'V',
       'Q',
+      'L',
       'Ctrl+1 / Ctrl+2 / Ctrl+3'
     ])
     expect(keyText('Alt+ArrowUp')).toBe('Alt+↑')

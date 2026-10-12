@@ -155,13 +155,17 @@ vi.mock('../plugins', async () => {
 
 const savePlaying = vi.fn()
 const savePlace = vi.fn()
+const setLoved = vi.fn()
 vi.stubGlobal('window', {
-  playbackApi: { log: vi.fn(), saveQueue: vi.fn(), savePlace, savePlaying }
+  playbackApi: { log: vi.fn(), saveQueue: vi.fn(), savePlace, savePlaying },
+  lovedApi: { set: setLoved }
 })
 
 const { queues } = await import('./queues.svelte')
 const { queue } = await import('./queue.svelte')
 const { player } = await import('./player.svelte')
+const { loved } = await import('./loved.svelte')
+const { loveAction, loveId } = await import('../queue/bar')
 
 const one: ItemKey = 'radio:one'
 
@@ -512,7 +516,7 @@ describe('the player bar', () => {
   it('a song’s Next is hidden when it can’t; its actions are drawn and heard', () => {
     queue.playList(['files:a'], 0, '')
     expect(queues.bar).toMatchObject({ seek: true, next: false, previous: true, order: true })
-    expect(queues.bar.buttons.map((a) => a.id)).toEqual(['like'])
+    expect(queues.bar.buttons.map((a) => a.id)).toEqual([loveId, 'like'])
     live.calls = []
     queues.act('like')
     expect(live.calls).toEqual(['act files:a like'])
@@ -522,34 +526,74 @@ describe('the player bar', () => {
 describe('the player bar while a song changes (fix round 1)', () => {
   it('a clicked song on its way: the default bar, not the last song’s actions', async () => {
     queue.playList(['files:a', 'files:s0'], 0, '')
-    expect(queues.bar.buttons.map((a) => a.id)).toEqual(['like'])
+    expect(queues.bar.buttons.map((a) => a.id)).toEqual([loveId, 'like'])
     live.songsLater = true
     void queue.next()
     expect(queue.current).toBe('files:s0')
-    expect(queues.bar).toMatchObject({ seek: true, next: true, buttons: [] })
+    expect(queues.bar).toMatchObject({ seek: true, next: true, buttons: [loveAction(false)] })
     live.calls = []
     // the last song's action is not sent to the new one
     queues.act('like')
     expect(live.calls).toEqual([])
     await answer(() => undefined)
-    expect(queues.bar.buttons).toEqual([])
+    expect(queues.bar.buttons).toEqual([loveAction(false)])
   })
 
   it('a song whose id moved (a rescan) keeps its playable on the bar', () => {
     queue.playList(['files:a'], 0, '')
     queue.moveIds('files', { a: 'a2' })
     expect(queue.current).toBe('files:a2')
-    expect(queues.bar.buttons.map((x) => x.id)).toEqual(['like'])
+    expect(queues.bar.buttons.map((x) => x.id)).toEqual([loveId, 'like'])
   })
 
   it('a song’s can and actions are read as its plugin changes them', () => {
     live.reactive = true
     queue.playList(['files:a'], 0, '')
-    expect(queues.bar.buttons).toEqual([{ id: 'like', kind: 'button', label: 'Like', on: false }])
+    expect(queues.bar.buttons).toEqual([
+      loveAction(false),
+      { id: 'like', kind: 'button', label: 'Like', on: false }
+    ])
     queues.act('like')
     expect(live.calls).toContain('act files:a like')
-    expect(queues.bar.buttons[0]).toMatchObject({ id: 'like', on: true })
+    expect(queues.bar.buttons[1]).toMatchObject({ id: 'like', on: true })
     expect(queues.bar.previous).toBe(false)
+  })
+})
+
+describe('the heart on the bar (ticket 117)', () => {
+  it('a song that can be loved has it first; the core keeps it, the plugin never hears it', () => {
+    loved.load({})
+    setLoved.mockClear()
+    queue.playList(['files:a'], 0, '')
+    expect(queues.bar.buttons[0]).toEqual(loveAction(false))
+    live.calls = []
+    queues.act(loveId)
+    expect(loved.has('files:a')).toBe(true)
+    expect(setLoved).toHaveBeenLastCalledWith(['files:a'], true)
+    expect(queues.bar.buttons[0]).toMatchObject({ id: loveId, on: true, icon: 'heartOn' })
+    queues.act(loveId)
+    expect(loved.has('files:a')).toBe(false)
+    expect(queues.bar.buttons[0]).toMatchObject({ on: false, icon: 'heart' })
+    expect(live.calls).toEqual([])
+  })
+
+  it('the L key loves and unloves the song playing', () => {
+    loved.load({})
+    queue.playList(['files:a'], 0, '')
+    expect(queues.toggleLove()).toBe(true)
+    expect(loved.has('files:a')).toBe(true)
+    expect(queues.toggleLove()).toBe(false)
+    expect(loved.has('files:a')).toBe(false)
+  })
+
+  it('a live item has none, and the heart can’t be used on it', async () => {
+    loved.load({})
+    await playLive(one)
+    expect(queues.bar.buttons).toEqual([])
+    queues.act(loveId)
+    expect(queues.toggleLove()).toBeUndefined()
+    expect(loved.all).toEqual({})
+    expect(live.calls).not.toContain(`act ${one} ${loveId}`)
   })
 })
 

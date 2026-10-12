@@ -1,6 +1,7 @@
 import type { AiState } from './ai'
 import type { PluginChannels } from './plugins'
 import type { ItemKey } from './plugins/items'
+import type { Loved } from './loved'
 import type { Playlist } from './playlists'
 import type { PlayedSong, Plays, PlayStats, StatsPeriod } from './plays'
 import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
@@ -129,6 +130,20 @@ export interface PlaybackApi {
   playStats(period: StatsPeriod): Promise<PlayStats>
 }
 
+export const LovedChannel = {
+  load: 'loved:load',
+  set: 'loved:set'
+} as const
+
+// What the preload exposes to the page as `window.lovedApi` (ticket 117).
+// The page changes its own copy and tells main, which saves it.
+export interface LovedApi {
+  // every loved song and when, as it was when the page loaded
+  load(): Promise<Loved>
+  // songs loved (`on` true) or unloved
+  set(keys: ItemKey[], on: boolean): void
+}
+
 export const AiChannel = {
   load: 'ai:load',
   // main to page: the whole AiState, at every change
@@ -181,6 +196,8 @@ export interface CoreChannels {
   [AiChannel.act]: AiApi['act']
   [AiChannel.setTask]: AiApi['setTask']
   [AiChannel.setProvider]: AiApi['setProvider']
+  [LovedChannel.load]: LovedApi['load']
+  [LovedChannel.set]: LovedApi['set']
 }
 
 export type PageChannels = CoreChannels & PluginChannels

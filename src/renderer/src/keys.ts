@@ -54,6 +54,7 @@ export type KeyAction =
   | 'escape'
   | 'visualizer'
   | 'queue'
+  | 'love'
   // switch to that layout
   | TemplateId
 
@@ -152,6 +153,7 @@ export const shortcuts: Shortcut[] = [
     does: 'Queue: switch to its tab, or open or close the drawer',
     chords: [{ action: 'queue', key: 'q' }]
   },
+  { does: 'Love or unlove the song playing', chords: [{ action: 'love', key: 'l' }] },
   {
     does: 'Switch layout: Studio, Classic or Focus',
     chords: [
@@ -166,7 +168,12 @@ const chords = shortcuts.flatMap((s) => s.chords)
 
 // The chord that switches to a layout, for its button's tooltip.
 export function layoutChord(id: TemplateId): string {
-  const c = chords.find((c) => c.action === id)
+  return chordFor(id)
+}
+
+// The first chord of an action, for a tooltip: "L".
+export function chordFor(action: KeyAction): string {
+  const c = chords.find((c) => c.action === action)
   return c ? chordText(c) : ''
 }
 

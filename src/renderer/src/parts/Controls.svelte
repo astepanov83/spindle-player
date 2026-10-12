@@ -82,11 +82,9 @@
           </div>
         </div>
       {/if}
-      {#if bar.choices.length || bar.buttons.length}
+      {#if bar.choices.length}
         <div class="liverow">
           {#each bar.choices as a (a.id)}<BarAction action={a} wide={false} />{/each}
-          <span class="gap"></span>
-          {#each bar.buttons as a (a.id)}<BarAction action={a} wide={false} />{/each}
         </div>
       {/if}
     {/if}
@@ -94,6 +92,10 @@
     <div class="btnrow">
       <Volume />
       <div class="right">
+        <!-- a song's buttons (the heart) sit here, so the stack keeps its height -->
+        {#if !bar.live}
+          {#each bar.buttons as a (a.id)}<BarAction action={a} wide={false} />{/each}
+        {/if}
         <VizButton />
         <Slot name="player.buttons" />
       </div>

@@ -22,6 +22,8 @@
   import { isRemoveKey, rowAfterRemove } from '../keys'
   import { playlists } from '../stores/playlists.svelte'
   import { plays as playCounts } from '../stores/plays.svelte'
+  import { loved as lovedSongs } from '../stores/loved.svelte'
+  import LovedMark from '../ui/LovedMark.svelte'
   import { lastPlayedText } from './plays'
   import { rowSelection } from '../stores/selection.svelte'
   import { listRows } from '../ui/selection'
@@ -266,7 +268,10 @@
           <span class="tt">
             <Thumb src={t.art?.cover} art={t.art} size={36} radius={4} away={!!away} />
             <span class="words">
-              <span class="nm" title={t.title}>{t.title}</span>
+              <span class="line"
+                ><span class="nm" title={t.title}>{t.title}</span
+                >{#if lovedSongs.has(key)}<LovedMark />{/if}</span
+              >
               <!-- shown only when a narrow table drops the Artist column; why
                    it can't play shows always when there is no such column -->
               {#if artist}<span class="sub" class:away title={away ?? t.subtitle}
@@ -388,6 +393,13 @@
   .words {
     display: flex;
     flex-direction: column;
+    min-width: 0;
+  }
+  /* the title and its heart: the title is cut, the heart stays */
+  .line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     min-width: 0;
   }
   .nm,

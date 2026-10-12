@@ -1,15 +1,18 @@
 // Types for layout templates. See work/specs/layout-templates.md.
 
-export type TemplateId = 'studio' | 'classic' | 'focus'
+export type TemplateId = 'studio' | 'classic' | 'focus' | 'mini'
 export type QueueMode = 'tab' | 'drawer' | 'col'
+// what is drawn for the queue: 'none' in a template with no queue (Mini)
+export type ShownQueue = QueueMode | 'none'
 export type Look = 'tint' | 'ambient'
 
 // A part never knows where it sits. Its options come from the template.
 export type PartNode =
   | { part: 'library'; opts: { nav: 'chips' | 'sidebar' } }
-  // show: only the stage or only the words; both when left out
-  | { part: 'nowplaying'; opts: { style: 'panel' | 'full'; show?: 'stage' | 'text' } }
-  | { part: 'controls'; opts: { style: 'stack' | 'bar' } }
+  // show: only the stage or only the words; both when left out. 'line': a
+  // small cover and two lines of text, no visualizer (Mini)
+  | { part: 'nowplaying'; opts: { style: 'panel' | 'full' | 'line'; show?: 'stage' | 'text' } }
+  | { part: 'controls'; opts: { style: 'stack' | 'bar' | 'compact' } }
 
 interface NodeBase {
   // "1fr" or a fixed length like "380px"
@@ -41,6 +44,10 @@ export interface WindowSize {
   height: number
   minWidth: number
   minHeight: number
+  // a bar (Mini): it can't be pulled taller than this, nor maximized
+  maxHeight?: number
+  // kept above other windows while the user's pin is on (miniOnTop)
+  onTop?: true
 }
 
 export interface Template {
@@ -50,6 +57,9 @@ export interface Template {
   // what settings may offer; the first one is the default
   queueOptions: QueueMode[]
   layout: TemplateNode
+  // false: no title bar; the whole window drags, and a right click opens the
+  // window's menu (Mini)
+  titleBar?: false
   // another layout for a window at least `ratio` times as wide as it is tall
   // and at least `minWidth` wide (layout/wide.ts)
   wide?: { ratio: number; minWidth: number; layout: TemplateNode }

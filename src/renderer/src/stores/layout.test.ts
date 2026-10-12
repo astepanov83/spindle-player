@@ -136,3 +136,43 @@ describe('Focus on a wide window (ticket 079)', () => {
     expect(layout.built.wide).toBe(false)
   })
 })
+
+describe('Mini (ticket 110)', () => {
+  beforeEach(() => {
+    layout.closeSettings()
+    settings.bigTemplate = 'studio'
+  })
+
+  it('goes back to the layout it was left for', () => {
+    settings.template = 'focus'
+    layout.chooseTemplate('mini')
+    expect([settings.template, settings.bigTemplate, layout.bar]).toEqual(['mini', 'focus', true])
+    layout.toBig()
+    expect([settings.template, layout.bar]).toEqual(['focus', false])
+  })
+
+  it('keeps the way back when switching from Mini to Mini or by the key', () => {
+    settings.template = 'classic'
+    layout.chooseTemplate('mini')
+    layout.chooseTemplate('mini')
+    expect(settings.bigTemplate).toBe('classic')
+  })
+
+  it('has no queue, no drawer button and no title bar', () => {
+    settings.template = 'mini'
+    expect([layout.queueSetting, layout.queueMode]).toEqual(['none', 'none'])
+    expect(layout.slots['player.buttons']).toEqual([])
+    expect(layout.hasLibrary).toBe(false)
+    layout.toggleQueue()
+    expect([layout.showQueue, layout.tabSel]).toEqual([false, 0])
+  })
+
+  it('opens Settings in the big layout, and closes it on the way to Mini', () => {
+    settings.template = 'classic'
+    layout.chooseTemplate('mini')
+    layout.openSettings('keys')
+    expect([settings.template, layout.settingsAt]).toEqual(['classic', 'keys'])
+    layout.chooseTemplate('mini')
+    expect([settings.template, layout.settingsOpen]).toEqual(['mini', false])
+  })
+})

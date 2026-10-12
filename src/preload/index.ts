@@ -39,7 +39,19 @@ const win: WinApi = {
   closeShown: () => send(WinChannel.closeShown),
   closeAnswer: (action) => send(WinChannel.closeAnswer, action),
   // main says it once the window is ready, often before the page listens
-  onNoGpu: latest<boolean>(WinChannel.noGpu)
+  onNoGpu: latest<boolean>(WinChannel.noGpu),
+  onWantsBig: (listener) => {
+    const handler = (): void => listener()
+    ipcRenderer.on(WinChannel.wantsBig, handler)
+    return () => ipcRenderer.off(WinChannel.wantsBig, handler)
+  },
+  onContextMenu: (listener) => {
+    const handler = (): void => listener()
+    ipcRenderer.on(WinChannel.contextMenu, handler)
+    return () => ipcRenderer.off(WinChannel.contextMenu, handler)
+  },
+  popupMenu: (items) => invoke(WinChannel.popupMenu, items),
+  quit: () => send(WinChannel.quit)
 }
 
 // Asked for now, while the page scripts are still loading, so the answer is

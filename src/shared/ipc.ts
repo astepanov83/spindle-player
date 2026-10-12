@@ -17,8 +17,17 @@ export const WinChannel = {
   askClose: 'win:ask-close',
   closeShown: 'win:close-shown',
   closeAnswer: 'win:close-answer',
-  noGpu: 'win:no-gpu'
+  noGpu: 'win:no-gpu',
+  // Mini (ticket 110)
+  wantsBig: 'win:wants-big',
+  contextMenu: 'win:context-menu',
+  popupMenu: 'win:popup-menu',
+  quit: 'win:quit'
 } as const
+
+// A row of a menu main draws (WinApi.popupMenu): one that can go past the
+// window's edge, as in Mini.
+export type PopupItem = { id: string; label: string; checked?: boolean } | 'line'
 
 export const SettingsChannel = {
   load: 'settings:load',
@@ -42,6 +51,14 @@ export interface WinApi {
   // true when the window is drawn without a GPU (a blocked driver, a virtual
   // machine). The page then leaves out effects that are slow on the CPU.
   onNoGpu(listener: (noGpu: boolean) => void): () => void
+  // A bar (Mini) was asked to maximize (a double click, the window manager):
+  // the page goes to the big layout.
+  onWantsBig(listener: () => void): () => void
+  // A right click on a window with no title bar, where the page gets no click
+  onContextMenu(listener: () => void): () => void
+  // The menu at the pointer; the id of the row picked, or null
+  popupMenu(items: PopupItem[]): Promise<string | null>
+  quit(): void
 }
 
 // What the preload exposes to the page as `window.settingsApi`.
@@ -178,6 +195,8 @@ export interface CoreChannels {
   [WinChannel.isMaximized]: WinApi['isMaximized']
   [WinChannel.closeShown]: WinApi['closeShown']
   [WinChannel.closeAnswer]: WinApi['closeAnswer']
+  [WinChannel.popupMenu]: WinApi['popupMenu']
+  [WinChannel.quit]: WinApi['quit']
   [SettingsChannel.load]: SettingsApi['load']
   [SettingsChannel.save]: SettingsApi['save']
   [PlaylistChannel.load]: PlaylistsApi['load']

@@ -1,6 +1,6 @@
-import type { QueueMode, Template, TemplateId } from './layout'
+import type { QueueMode, ShownQueue, Template, TemplateId } from './layout'
 import { isPluginId, plugins, type PluginId } from './plugins'
-import { templateIds, templates } from './templates'
+import { bigTemplateIds, templateIds, templates } from './templates'
 
 export type VisualizerStyle = 'ring' | 'spectrum' | 'wave' | 'off'
 export type ThemeChoice = 'system' | 'dark' | 'light'
@@ -23,8 +23,8 @@ export type NoCover = 'record' | 'rings' | 'type'
 
 export interface Settings {
   template: TemplateId
-  // per template, so each keeps its own choice
-  queue: Record<TemplateId, QueueMode>
+  // per template, so each keeps its own choice; none for one with no queue (Mini)
+  queue: Partial<Record<TemplateId, QueueMode>>
   visualizer: VisualizerStyle
   theme: ThemeChoice
   // 0..100, as the slider shows it
@@ -47,6 +47,10 @@ export interface Settings {
   outputDevice: string
   // its name when it was picked, for when it is not plugged in
   outputDeviceName: string
+  // Mini stays above other windows; its pin turns it off (ticket 110)
+  miniOnTop: boolean
+  // the layout Mini goes back to: the one it was left for
+  bigTemplate: TemplateId
 }
 
 export interface Size {
@@ -129,13 +133,17 @@ export function defaultSettings(): Settings {
     loudness: 'album',
     noCover: 'rings',
     outputDevice: '',
-    outputDeviceName: ''
+    outputDeviceName: '',
+    miniOnTop: true,
+    bigTemplate: 'studio'
   }
 }
 
 // A saved choice the template does not offer falls back to its first option.
-export function queueModeFor(template: Template, saved: QueueMode | undefined): QueueMode {
-  return saved && template.queueOptions.includes(saved) ? saved : template.queueOptions[0]
+export function queueModeFor(template: Template, saved: QueueMode | undefined): ShownQueue {
+  return saved && template.queueOptions.includes(saved)
+    ? saved
+    : (template.queueOptions[0] ?? 'none')
 }
 
 // Larger than any screen, so a broken number can't make a huge window.
@@ -156,10 +164,11 @@ export function parseSize(v: unknown, template: Template): Size | undefined {
   const { width, height } = v
   if (typeof width !== 'number' || typeof height !== 'number') return undefined
   if (!Number.isFinite(width) || !Number.isFinite(height)) return undefined
-  const clamp = (n: number, min: number): number => Math.min(maxSide, Math.max(min, Math.round(n)))
+  const clamp = (n: number, min: number, max = maxSide): number =>
+    Math.min(max, Math.max(min, Math.round(n)))
   return {
     width: clamp(width, template.window.minWidth),
-    height: clamp(height, template.window.minHeight)
+    height: clamp(height, template.window.minHeight, template.window.maxHeight)
   }
 }
 
@@ -338,7 +347,9 @@ export function parseStoredSettings(
   const windowSizes: StoredSettings['windowSizes'] = rawSizes ? {} : { ...base.windowSizes }
   for (const id of templateIds) {
     const t = templates[id]
-    queue[id] = oneOf(rawQueue[id], t.queueOptions, base.queue[id])
+    // Mini has no queue, so nothing to keep
+    if (t.queueOptions.length)
+      queue[id] = oneOf(rawQueue[id], t.queueOptions, base.queue[id] ?? t.queueOptions[0])
     const size = rawSizes && parseSize(rawSizes[id], t)
     if (size) windowSizes[id] = size
   }
@@ -361,6 +372,8 @@ export function parseStoredSettings(
     noCover: oneOf(r.noCover, noCoverChoices, base.noCover),
     outputDevice: isDeviceText(r.outputDevice) ? r.outputDevice : base.outputDevice,
     outputDeviceName: isDeviceText(r.outputDeviceName) ? r.outputDeviceName : base.outputDeviceName,
+    miniOnTop: typeof r.miniOnTop === 'boolean' ? r.miniOnTop : base.miniOnTop,
+    bigTemplate: oneOf(r.bigTemplate, bigTemplateIds, base.bigTemplate),
     windowSizes,
     windowMaximized:
       r.windowMaximized === undefined
@@ -472,6 +485,8 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   if (has('ai') && !isKnownAi(raw.ai)) return false
   if (has('outputDevice') && !isDeviceText(raw.outputDevice)) return false
   if (has('outputDeviceName') && !isDeviceText(raw.outputDeviceName)) return false
+  if (has('miniOnTop') && typeof raw.miniOnTop !== 'boolean') return false
+  if (has('bigTemplate') && !bigTemplateIds.includes(raw.bigTemplate as TemplateId)) return false
   if (
     has('viewSorts') &&
     (!isObject(raw.viewSorts) ||
@@ -503,6 +518,8 @@ export function pageSettings(s: StoredSettings): Settings {
     loudness: s.loudness,
     noCover: s.noCover,
     outputDevice: s.outputDevice,
-    outputDeviceName: s.outputDeviceName
+    outputDeviceName: s.outputDeviceName,
+    miniOnTop: s.miniOnTop,
+    bigTemplate: s.bigTemplate
   }
 }

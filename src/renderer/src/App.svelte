@@ -5,6 +5,7 @@
   import Settings from './components/Settings.svelte'
   import { keysSection } from './components/settings-sections'
   import CloseAsk from './components/CloseAsk.svelte'
+  import MiniButtons from './components/MiniButtons.svelte'
   import Node from './layout/Node.svelte'
   import Menu from './ui/Menu.svelte'
   import Notice from './ui/Notice.svelte'
@@ -14,6 +15,7 @@
   import { escapeTarget, isTyping, keyAction, seekStep, usesArrows, type KeyAction } from './keys'
   import { goBack, goForward, onSideButton } from './library/side-buttons'
   import { drawerFocus, focusColumnQueue } from './layout/queue-focus'
+  import { miniMenuItems, miniPick } from './layout/mini-menu'
   import { layout } from './stores/layout.svelte'
   import { menu } from './stores/menu.svelte'
   import { notice } from './stores/notice.svelte'
@@ -120,6 +122,45 @@
     })
   )
 
+  // Mini (ticket 110): a double click on the bar asks main to maximize, which
+  // goes back to the big layout; a right click opens its menu.
+  $effect(() =>
+    window.win.onWantsBig(() => {
+      if (layout.bar) layout.toBig()
+    })
+  )
+  $effect(() =>
+    window.win.onContextMenu(() => {
+      if (layout.bar) void miniMenu()
+    })
+  )
+
+  // On Linux one right click comes both from main and as the page's own
+  // event, and a second menu would close the first.
+  let miniMenuOpen = false
+
+  async function miniMenu(): Promise<void> {
+    if (miniMenuOpen) return
+    miniMenuOpen = true
+    const id = await window.win
+      .popupMenu(miniMenuItems(settings.template, settings.miniOnTop))
+      .finally(() => (miniMenuOpen = false))
+    const pick = miniPick(id)
+    if (!pick) return
+    if (pick === 'pin') settings.miniOnTop = !settings.miniOnTop
+    else if (pick === 'settings') layout.openSettings()
+    else if (pick === 'minimize') window.win.minimize()
+    else if (pick === 'quit') window.win.quit()
+    else layout.chooseTemplate(pick.layout)
+  }
+
+  // The page gets the right click itself on a button, on Linux, and maybe on macOS.
+  function oncontextmenu(e: MouseEvent): void {
+    if (!layout.bar) return
+    e.preventDefault()
+    void miniMenu()
+  }
+
   // Every change goes to main, which saves it and applies the window size and
   // theme. Settings that failed to load are applied but not saved.
   $effect(() => {
@@ -156,7 +197,8 @@
     else if (act === 'visualizer') layout.cycleVisualizer()
     else if (act === 'queue') layout.toggleQueue()
     else if (act === 'love') love()
-    else if (act === 'studio' || act === 'classic' || act === 'focus') layout.chooseTemplate(act)
+    else if (act === 'studio' || act === 'classic' || act === 'focus' || act === 'mini')
+      layout.chooseTemplate(act)
   }
 
   // the bar may be out of view (Focus, a small window), so it says what it did
@@ -213,14 +255,18 @@
   style:--c2={palette[1]}
   style:--c3={palette[2]}
 >
-  <TitleBar
-    title="Spindle · {layout.template.name}"
-    settingsOpen={layout.settingsOpen}
-    onSettings={() => layout.toggleSettings()}
-  />
-  <!-- inert under the Settings page, so Tab and clicks stay on the page -->
-  <main class="winbody" inert={layout.settingsOpen}>
+  {#if !layout.bar}
+    <TitleBar
+      title="Spindle · {layout.template.name}"
+      settingsOpen={layout.settingsOpen}
+      onSettings={() => layout.toggleSettings()}
+    />
+  {/if}
+  <!-- inert under the Settings page, so Tab and clicks stay on the page.
+       Mini has no title bar: all of it drags the window but its buttons. -->
+  <main class="winbody" class:bar={layout.bar} inert={layout.settingsOpen} {oncontextmenu}>
     <Node node={layout.built.root} />
+    {#if layout.bar}<MiniButtons />{/if}
   </main>
   {#if layout.settingsOpen}<Settings />{/if}
   <Notice />
@@ -243,5 +289,16 @@
     display: flex;
     min-height: 0;
     position: relative;
+  }
+  .winbody.bar {
+    -webkit-app-region: drag;
+    user-select: none;
+  }
+  .winbody.bar :global(button) {
+    -webkit-app-region: no-drag;
+  }
+  /* room for Mini's own buttons at the right */
+  .winbody.bar > :global(.box) {
+    padding-right: 30px;
   }
 </style>

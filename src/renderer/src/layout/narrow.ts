@@ -1,6 +1,6 @@
 // A queue Column in a narrow window: the library would get too thin, so the
 // queue is drawn as a Drawer instead. The setting stays Column (ticket 043).
-import type { QueueMode, Template, TemplateNode } from '../../../shared/layout'
+import type { QueueMode, ShownQueue, Template, TemplateNode } from '../../../shared/layout'
 
 // Two album tiles side by side in Studio. Studio at its first size (1100px)
 // leaves 408px with a Column, so the Column still shows there.
@@ -53,7 +53,7 @@ export function libraryWidth(t: Template, queueMode: QueueMode, width: number): 
 }
 
 // What is drawn for the queue setting. width 0: not measured yet.
-export function shownQueueMode(t: Template, setting: QueueMode, width: number): QueueMode {
+export function shownQueueMode(t: Template, setting: ShownQueue, width: number): ShownQueue {
   if (setting !== 'col' || !width || !t.queueOptions.includes('drawer')) return setting
   const lib = libraryWidth(t, 'col', width)
   return lib !== null && lib < minLibraryWidth ? 'drawer' : 'col'

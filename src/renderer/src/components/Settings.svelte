@@ -123,27 +123,29 @@
               onchange={(id: TemplateId) => layout.chooseTemplate(id)}
             />
             <p class="hint">
-              The buttons left of the gear in the title bar switch it too, and so do Ctrl+1, Ctrl+2
-              and Ctrl+3.
+              The buttons left of the gear in the title bar switch it too, and so do Ctrl+1 to
+              Ctrl+4. Mini is a small bar that stays on top; right click it for its menu.
             </p>
           </div>
-          <div class="set">
-            <span class="section-label">Queue</span>
-            <Seg
-              label="Queue"
-              options={layout.template.queueOptions.map((q) => ({
-                value: q,
-                label: queueNames[q]
-              }))}
-              value={layout.queueSetting}
-              onchange={(q: QueueMode) => layout.chooseQueueMode(q)}
-            />
-            <p class="hint">
-              {layout.queueMode === layout.queueSetting
-                ? queueHints[layout.queueSetting]
-                : narrowHint}
-            </p>
-          </div>
+          <!-- Mini has no queue (and Settings never shows there) -->
+          {#if layout.queueSetting !== 'none'}
+            {@const setting = layout.queueSetting}
+            <div class="set">
+              <span class="section-label">Queue</span>
+              <Seg
+                label="Queue"
+                options={layout.template.queueOptions.map((q) => ({
+                  value: q,
+                  label: queueNames[q]
+                }))}
+                value={setting}
+                onchange={(q: QueueMode) => layout.chooseQueueMode(q)}
+              />
+              <p class="hint">
+                {layout.queueMode === setting ? queueHints[setting] : narrowHint}
+              </p>
+            </div>
+          {/if}
           <div class="set">
             <span class="section-label">Visualizer</span>
             <Seg

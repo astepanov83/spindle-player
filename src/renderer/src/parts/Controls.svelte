@@ -18,7 +18,7 @@
   import { player } from '../stores/player.svelte'
   import { queues } from '../stores/queues.svelte'
 
-  let { style }: { style: 'stack' | 'bar' } = $props()
+  let { style }: { style: 'stack' | 'bar' | 'compact' } = $props()
 
   const bar = $derived(queues.bar)
 </script>
@@ -62,6 +62,19 @@
       <Slot name="player.buttons" />
     </div>
   </div>
+{:else if style === 'compact'}
+  <!-- Mini: Previous, Play, Next, and the item's own buttons (the first one
+       always, the rest while there is room). No seek bar, volume or stage; a
+       live item shows only Stop. -->
+  <div class="ctl compact">
+    {#if bar.buttons.length}
+      <div class="acts">
+        {#each bar.buttons as a (a.id)}<BarAction action={a} wide={false} />{/each}
+      </div>
+    {/if}
+    <Transport order={false} />
+    <Slot name="player.buttons" />
+  </div>
 {:else}
   <div class="ctl stack">
     <TabLine />
@@ -104,6 +117,30 @@
 {/if}
 
 <style>
+  .compact {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px 0 4px;
+    --playbtn: 36px;
+    --playico: 20px;
+    --icobtn: 30px;
+  }
+  .compact > :global(.transport) {
+    gap: 2px;
+  }
+  .compact .acts {
+    display: flex;
+    align-items: center;
+  }
+  /* In a narrow Mini the first one stays (the heart, ticket 117); the rest
+     give the title their room. */
+  @media (max-width: 319px) {
+    .compact .acts > :global(:not(:first-child)) {
+      display: none;
+    }
+  }
   .stack {
     flex: none;
     display: flex;

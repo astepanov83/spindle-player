@@ -2,7 +2,7 @@
 import './pool-size'
 import { promises as dns } from 'dns'
 import { join } from 'path'
-import { app, BrowserWindow, nativeTheme, net, safeStorage, session, shell } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme, net, safeStorage, session, shell } from 'electron'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import {
   AiChannel,
@@ -36,6 +36,7 @@ import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
 import { devRetryData, isDevRetry, takeLock } from './single-instance'
 import { parseCloseAnswer } from './close-ask'
+import { parsePopupItems, popupTemplate } from './popup-menu'
 import { hasTrayHost, hidesOnMinimize, makeTray, parsePlayState, type SpindleTray } from './tray'
 import { currentBackground, MainWindow } from './window'
 
@@ -131,11 +132,25 @@ page.on(WinChannel.closeAnswer, (_, raw) => {
   if (action) main?.answerClose(action)
 })
 
+// Mini's menu (ticket 110). The close comes before or after the click,
+// depending on the platform, so a close waits a moment for one.
+page.handle(WinChannel.popupMenu, (e, raw) => {
+  const win = senderWindow(e)
+  const items = parsePopupItems(raw)
+  if (!win || !items) return Promise.resolve(null)
+  return new Promise<string | null>((resolve) => {
+    const menu = Menu.buildFromTemplate(popupTemplate(items, resolve))
+    menu.popup({ window: win, callback: () => setTimeout(() => resolve(null), 100) })
+  })
+})
+page.on(WinChannel.quit, () => app.quit())
+
 page.handle(SettingsChannel.load, () => pageSettings(store.get()))
 page.on(SettingsChannel.save, (_, raw, toFile) => {
   const { before, next } = store.setFromPage(raw, toFile !== false)
   if (next.theme !== before.theme) nativeTheme.themeSource = next.theme
   if (next.template !== before.template) main?.applyTemplate(before.template, next.template)
+  else if (next.miniOnTop !== before.miniOnTop) main?.applyOnTop()
   if (
     next.fetchCovers !== before.fetchCovers ||
     JSON.stringify(next.coverSources) !== JSON.stringify(before.coverSources)

@@ -11,6 +11,7 @@ import { rowsBlock, type Block, type ItemRow } from '../types'
 import { bitrateLine, searchRows, stationLine, stationMatches, stationTags } from './logic'
 import { radioPopular } from './popular.svelte'
 import { radioSearch } from './search.svelte'
+import { heard, heardPage } from './heard.svelte'
 import { radio } from './store.svelte'
 
 const note = (text: string): Block => ({ kind: 'empty', id: '', text })
@@ -21,6 +22,7 @@ const popularShown = 20
 export function radioBlocks(query: string): Block[] {
   const q = query.trim()
   const mine = radio.stations.filter((s) => stationMatches(s, q))
+  const kept = heard.songs.length
   const blocks: Block[] = [
     {
       kind: 'head',
@@ -28,7 +30,18 @@ export function radioBlocks(query: string): Block[] {
       id: '',
       title: 'Radio',
       count: fmtCount(radio.stations.length, 'station', 'stations'),
-      searchHint: 'Find stations with the search box'
+      // the songs kept from the radio (ticket 119), in place of the search
+      // hint: whoever kept one has found their way around
+      ...(kept
+        ? {
+            line: [
+              {
+                text: fmtCount(kept, 'song', 'songs') + ' heard on radio',
+                to: { plugin: 'radio', page: heardPage }
+              }
+            ]
+          }
+        : { searchHint: 'Find stations with the search box' })
     },
     { kind: 'text', text: 'My stations' },
     stationRows(mine, true, false, true)

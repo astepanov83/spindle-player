@@ -195,9 +195,28 @@ describe('recent songs (031)', () => {
       { at: 1, title: 'Dio - Holy Diver' },
       { at: 2, title: 'Iron Maiden - Powerslave * Blacky OnAir *' }
     ]
+    const off = (value: string): object => ({ heart: { on: false, label: 'Save song', value } })
     expect(historyEntries(history, 'Iron Maiden - Powerslave * Blacky OnAir * ')).toEqual([
-      { at: 1, title: 'Holy Diver', subtitle: 'Dio' },
-      { at: 2, title: 'Powerslave', subtitle: 'Iron Maiden', now: true }
+      { at: 1, title: 'Holy Diver', subtitle: 'Dio', ...off('Dio - Holy Diver') },
+      {
+        at: 2,
+        title: 'Powerslave',
+        subtitle: 'Iron Maiden',
+        now: true,
+        ...off('Iron Maiden - Powerslave * Blacky OnAir *')
+      }
+    ])
+  })
+
+  it('a kept song has its heart on, with the title as the file has it (ticket 119)', () => {
+    const history = [
+      { at: 1, title: 'Dio - Holy Diver' },
+      { at: 2, title: 'A - B' }
+    ]
+    const kept = (t: string): boolean => t === 'Dio - Holy Diver'
+    expect(historyEntries(history, '', kept).map((e) => e.heart)).toEqual([
+      { on: true, label: 'Remove from Heard on radio', value: 'Dio - Holy Diver' },
+      { on: false, label: 'Save song', value: 'A - B' }
     ])
   })
 
@@ -226,9 +245,10 @@ describe('recent songs (031)', () => {
   })
 
   it('a title with no dash is all song', () => {
-    expect(historyEntries([{ at: now, title: 'Station jingle' }], '')).toEqual([
+    expect(historyEntries([{ at: now, title: 'Station jingle' }], '')).toMatchObject([
       { at: now, title: 'Station jingle' }
     ])
+    expect(historyEntries([{ at: now, title: 'Station jingle' }], '')[0].subtitle).toBeUndefined()
   })
 })
 

@@ -1,6 +1,7 @@
 // Names made plain for comparing what a cover service found with ours: album,
 // artist and song names, as the album lookup and the radio's song covers both
 // match them (ticket 014, 032). Strict on purpose: a wrong cover is worse than none.
+// In shared/: the page matches a song heard on radio to the library by them (119).
 
 const edition =
   /\b(deluxe|remaster(ed)?|edition|bonus|expanded|anniversary|mono|stereo|mix|version|reissue)\b/i

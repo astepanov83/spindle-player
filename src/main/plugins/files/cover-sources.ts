@@ -1,6 +1,6 @@
 // Where each service is asked for a cover, and what its answer means (ticket 014).
 import type { CoverSource } from '../../../shared/settings'
-import { stripEdition } from '../../covers/clean-names'
+import { stripEdition } from '../../../shared/clean-names'
 import type { Candidate, CoverQuery, ReleaseKind } from './cover-match'
 
 export const caaGroupUrl = (id: string): string =>

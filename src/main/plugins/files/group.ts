@@ -12,7 +12,7 @@ import {
 } from '../../../shared/library'
 import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../../shared/palette'
 import { checksPerArtist, lookUpArtist, type ArtistCheck, type ArtistQuery } from './artist-photo'
-import { cleanAlbum, cleanArtist } from '../../covers/clean-names'
+import { cleanAlbum, cleanArtist } from '../../../shared/clean-names'
 import { searchKey, type CoverQuery } from './cover-match'
 import { cueTracks } from './cue-tracks'
 import { fetchedCover, type Fetched } from './fetched-store'

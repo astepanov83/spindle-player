@@ -10,7 +10,7 @@ import {
 import { defaultPalettes, fallbackPalettes } from '../../../shared/palette'
 import { emptyIndex } from './merge'
 import type { FileEntry, LibraryIndex } from './types'
-import { cleanArtist } from '../../covers/clean-names'
+import { cleanArtist } from '../../../shared/clean-names'
 import { searchKey } from './cover-match'
 import { artistKey } from '../../../shared/plugins/files/artists'
 import { convertOld, resolve } from '../../../shared/plugins/files/artists-file'

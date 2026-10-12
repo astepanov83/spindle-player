@@ -4,7 +4,7 @@
 // hold. Strict like album covers: the station's logo is fine, a wrong cover is not.
 import type { SongQuery } from '../types'
 import { BusyError, NetError, type CoverHttp } from './cover-http'
-import { cleanAlbum, cleanSong } from '../../covers/clean-names'
+import { cleanAlbum, cleanSong } from '../../../shared/clean-names'
 import { sameArtist, various } from './cover-match'
 import { answerError, term } from './cover-sources'
 

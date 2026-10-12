@@ -24,6 +24,8 @@ export interface PlaysFile {
 // are guessed times inside a mix.
 const counted = new Set<string>(plugins.filter((p) => p.countsPlays).map((p) => p.id))
 
+export const pluginCountsPlays = (plugin: PluginId): boolean => counted.has(plugin)
+
 export function countsPlays(key: unknown): key is ItemKey {
   if (typeof key !== 'string' || key.length > 5000) return false
   const k = splitKey(key)
@@ -86,4 +88,101 @@ export function movePlays(plays: Plays, plugin: PluginId, moves: IdMoves): Plays
     out[to] = there ? { n: there.n + p.n, last: Math.max(there.last, p.last) } : p
   }
   return out ?? plays
+}
+
+// What the page shows of a song when its play counts (ticket 115), kept in
+// plays-log.jsonl so the stats still read after the song leaves the library.
+export interface PlayedSong {
+  title: string
+  // as shown: after the names in artists.json
+  artist: string
+  // each name, only when the credit is several artists (a split)
+  artists?: string[]
+  album: string
+  albumArtist: string
+  // seconds; 0 when not known
+  length: number
+}
+
+// Long enough for any real tag; a longer one is cut.
+const nameMax = 1000
+
+const name = (v: unknown): string => (typeof v === 'string' ? v.slice(0, nameMax) : '')
+
+// From the page or a line of the log: what is wrong is left empty, so the
+// play still counts.
+export function parsePlayedSong(raw: unknown): PlayedSong {
+  const o = isObject(raw) ? raw : {}
+  const length = o.length
+  const out: PlayedSong = {
+    title: name(o.title),
+    artist: name(o.artist),
+    album: name(o.album),
+    albumArtist: name(o.albumArtist),
+    length: typeof length === 'number' && Number.isFinite(length) && length > 0 ? length : 0
+  }
+  if (Array.isArray(o.artists)) {
+    const names = o.artists.slice(0, 50).map(name).filter(Boolean)
+    if (names.length > 1) out.artists = names
+  }
+  return out
+}
+
+// The stats of a year (local time), or of all the log (ticket 116).
+export type StatsPeriod = number | 'all'
+
+export interface TopSong {
+  // after the id moves the log knows
+  key: ItemKey
+  title: string
+  artist: string
+  album: string
+  plays: number
+  // ms, the latest play in the period
+  last: number
+}
+
+// An artist or an album. `key`: its song played last, to find its page and
+// cover while that song is in the library.
+export interface TopGroup {
+  name: string
+  // an album's artist; '' for an artist
+  artist: string
+  key: ItemKey
+  plays: number
+  last: number
+}
+
+// How many of each the top lists hold.
+export const topCount = 10
+
+// What main answers the stats page: totals only, never the log.
+export interface PlayStats {
+  period: StatsPeriod
+  // the first play in the log, ms; none when the log is empty
+  since?: number
+  // the years with plays in the log, newest first
+  years: number[]
+  plays: number
+  // the songs' full lengths added up
+  seconds: number
+  songs: number
+  artists: number
+  albums: number
+  // most played first; a tie goes to the one played last
+  topSongs: TopSong[]
+  topArtists: TopGroup[]
+  topAlbums: TopGroup[]
+  // plays per month, "2026-10": a year's twelve, or all time's from the
+  // log's first month to now
+  months: { month: string; plays: number }[]
+  // plays per day of the week, Monday first
+  days: number[]
+}
+
+export function parseStatsPeriod(raw: unknown): StatsPeriod | undefined {
+  if (raw === 'all') return raw
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 1970 && raw <= 9999
+    ? raw
+    : undefined
 }

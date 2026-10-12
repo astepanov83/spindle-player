@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ItemKey } from '../../../shared/plugins/items'
-import { lastPlayedText, PlayCounter, playNeeds, playsOf } from './plays'
+import { lastPlayedText, PlayCounter, playedSong, playNeeds, playsOf } from './plays'
 
 const a: ItemKey = 'files:a'
 const b: ItemKey = 'files:b'
@@ -143,5 +143,51 @@ describe('playsOf', () => {
     const of = (k: ItemKey): { n: number; last: number } | undefined => plays[k]
     expect(playsOf([a, b, 'files:c'], of)).toEqual({ n: 5, last: 10 })
     expect(playsOf(['files:c'], of)).toBeUndefined()
+  })
+})
+
+describe('playedSong', () => {
+  it('is what the page shows of the song', () => {
+    const info = {
+      title: 'Tide',
+      subtitle: 'Amber Fields',
+      group: 'Blue',
+      groupArtist: 'Various Artists',
+      length: 200,
+      names: [{ name: 'Amber Fields' }]
+    }
+    expect(playedSong(info, 199)).toEqual({
+      title: 'Tide',
+      artist: 'Amber Fields',
+      album: 'Blue',
+      albumArtist: 'Various Artists',
+      length: 200
+    })
+  })
+
+  it('keeps each name of a split credit', () => {
+    const info = { title: 'T', subtitle: 'A, B', names: [{ name: 'A' }, { name: 'B' }] }
+    expect(playedSong(info, 0).artists).toEqual(['A', 'B'])
+  })
+
+  it("takes the player's length when the plugin has none, and empty names when gone", () => {
+    expect(playedSong(undefined, 180)).toEqual({
+      title: '',
+      artist: '',
+      album: '',
+      albumArtist: '',
+      length: 180
+    })
+    expect(playedSong(undefined, NaN).length).toBe(0)
+  })
+})
+
+describe('PlayCounter', () => {
+  it("hands over the player's length with the play", () => {
+    const got: [ItemKey, number][] = []
+    const c = new PlayCounter((k, d) => got.push([k, d]))
+    c.hear(a, 0, 10, true, 0)
+    c.hear(a, 5, 10, true, 5000)
+    expect(got).toEqual([[a, 10]])
   })
 })

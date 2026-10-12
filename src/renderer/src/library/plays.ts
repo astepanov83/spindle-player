@@ -1,6 +1,7 @@
 // When a song counts as played (ticket 085), and how a play shows. No DOM.
-import type { Play } from '../../../shared/plays'
+import type { Play, PlayedSong } from '../../../shared/plays'
 import type { ItemKey } from '../../../shared/plugins/items'
+import type { ItemInfo } from '../plugins/types'
 import { heardAt } from '../queue/history'
 
 // The scrobble rule: half the song or 4 minutes, whichever comes first. A
@@ -30,7 +31,8 @@ export class PlayCounter {
   #heard = 0
   #counted = false
 
-  constructor(readonly count: (key: ItemKey) => void) {}
+  // `duration`: the song's length as the player had it
+  constructor(readonly count: (key: ItemKey, duration: number) => void) {}
 
   // `now` in ms
   hear(
@@ -58,9 +60,24 @@ export class PlayCounter {
     this.#sounding = sounding
     if (key && !this.#counted && this.#heard >= playNeeds(duration)) {
       this.#counted = true
-      this.count(key)
+      this.count(key, duration)
     }
   }
+}
+
+// What the play log keeps of a song (ticket 115): what the page shows of it.
+// The player's length when the plugin has none.
+export function playedSong(info: ItemInfo | undefined, duration: number): PlayedSong {
+  const names = info?.names?.map((n) => n.name) ?? []
+  const out: PlayedSong = {
+    title: info?.title ?? '',
+    artist: info?.subtitle ?? '',
+    album: info?.group ?? '',
+    albumArtist: info?.groupArtist ?? '',
+    length: info?.length || (Number.isFinite(duration) && duration > 0 ? duration : 0)
+  }
+  if (names.length > 1) out.artists = names
+  return out
 }
 
 // "21:14" today, "28 Sep" this year, "28 Sep 2024" before.

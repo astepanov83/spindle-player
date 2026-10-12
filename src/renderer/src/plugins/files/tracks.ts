@@ -61,6 +61,10 @@ class TrackInfo implements ItemInfo {
     return root && `Folder not found: ${rootName(root)}`
   }
 
+  get groupArtist(): string | undefined {
+    return files.findAlbum(this.#t.albumId)?.artist
+  }
+
   get groupTo(): PageAddress {
     return { plugin: 'files', page: `album/${this.#t.albumId}` }
   }

@@ -30,7 +30,7 @@
 
 <!-- Double-click to maximize comes from the drag area itself, no handler needed. -->
 <!-- The window buttons are left out of Tab order: the window manager has keys for them. -->
-<header class="titlebar">
+<header class="titlebar" data-fades>
   <span class="title">{title}</span>
   <div class="right">
     <div class="layouts" role="group" aria-label="Layout">

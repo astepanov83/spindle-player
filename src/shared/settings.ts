@@ -53,6 +53,8 @@ export interface Settings {
   bigTemplate: TemplateId
   // song words shown, per layout (ticket 120); Mini has no room for them
   lyricsShown: Partial<Record<TemplateId, boolean>>
+  // Focus fades its tabs and controls while nobody uses it (ticket 113)
+  focusHide: boolean
 }
 
 export interface Size {
@@ -139,7 +141,8 @@ export function defaultSettings(): Settings {
     miniOnTop: true,
     bigTemplate: 'studio',
     // Focus is the place for them; elsewhere they take the cover's or the library's place
-    lyricsShown: { studio: false, classic: false, focus: true }
+    lyricsShown: { studio: false, classic: false, focus: true },
+    focusHide: false
   }
 }
 
@@ -390,6 +393,7 @@ export function parseStoredSettings(
     miniOnTop: typeof r.miniOnTop === 'boolean' ? r.miniOnTop : base.miniOnTop,
     bigTemplate: oneOf(r.bigTemplate, bigTemplateIds, base.bigTemplate),
     lyricsShown: parseLyricsShown(r.lyricsShown, base.lyricsShown),
+    focusHide: typeof r.focusHide === 'boolean' ? r.focusHide : base.focusHide,
     windowSizes,
     windowMaximized:
       r.windowMaximized === undefined
@@ -511,6 +515,7 @@ export function isKnownSettingsFile(raw: unknown): boolean {
       ))
   )
     return false
+  if (has('focusHide') && typeof raw.focusHide !== 'boolean') return false
   if (
     has('viewSorts') &&
     (!isObject(raw.viewSorts) ||
@@ -545,6 +550,7 @@ export function pageSettings(s: StoredSettings): Settings {
     outputDeviceName: s.outputDeviceName,
     miniOnTop: s.miniOnTop,
     bigTemplate: s.bigTemplate,
-    lyricsShown: { ...s.lyricsShown }
+    lyricsShown: { ...s.lyricsShown },
+    focusHide: s.focusHide
   }
 }

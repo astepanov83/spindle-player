@@ -5,6 +5,7 @@ export const focus: Template = {
   name: 'Focus',
   window: { width: 440, height: 680, minWidth: 380, minHeight: 560 },
   queueOptions: ['tab', 'drawer'],
+  idleHide: true,
   layout: {
     col: [
       {

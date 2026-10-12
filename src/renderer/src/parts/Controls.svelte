@@ -86,7 +86,8 @@
     <Slot name="player.buttons" />
   </div>
 {:else}
-  <div class="ctl stack">
+  <!-- fades in Focus while nobody uses it (layout/idle.ts) -->
+  <div class="ctl stack" data-fades>
     <TabLine />
     {#if bar.live}
       <!-- no item name: NowPlaying shows it right above, or TabLine while the Queue tab hides it -->

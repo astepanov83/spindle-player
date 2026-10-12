@@ -38,6 +38,10 @@ export function radioPreload(): RadioApi {
       const handler = (_: Electron.IpcRendererEvent, cover: RadioCover): void => listener(cover)
       ipcRenderer.on(RadioChannel.cover, handler)
       return () => ipcRenderer.off(RadioChannel.cover, handler)
-    }
+    },
+    heard: () => invoke(RadioChannel.heard),
+    heardSave: (stationId, title, name) => invoke(RadioChannel.heardSave, stationId, title, name),
+    heardRemove: (title) => invoke(RadioChannel.heardRemove, title),
+    heardRestore: (title) => invoke(RadioChannel.heardRestore, title)
   }
 }

@@ -1,4 +1,5 @@
 // Radio's messages between main, the preload and its page half.
+import type { HeardSong } from './heard'
 import type { HistoryEntry, SongCover, Station, StationLogo } from './stations'
 
 export const RadioChannel = {
@@ -19,7 +20,12 @@ export const RadioChannel = {
   // main to page: main made or dropped a station's logo (ticket 030)
   logo: 'radio:logo',
   // main to page: the cover of the song playing, found online (ticket 032)
-  cover: 'radio:cover'
+  cover: 'radio:cover',
+  // songs heard on radio that the user kept (ticket 119)
+  heard: 'radio:heard',
+  heardSave: 'radio:heard-save',
+  heardRemove: 'radio:heard-remove',
+  heardRestore: 'radio:heard-restore'
 } as const
 
 // A title read from the stream's ICY metadata, as main heard it.
@@ -96,6 +102,18 @@ export interface RadioApi {
   onLogo(listener: (logo: RadioLogo) => void): () => void
   // A song's cover, when "Find missing covers online" found one.
   onCover(listener: (cover: RadioCover) => void): () => void
+  // The songs kept from the radio (ticket 119), oldest first. Each change
+  // answers with the list as it is now.
+  heard(): Promise<HeardSong[]>
+  // A title the station played, as its recent songs have it: main takes the
+  // time and the cover from what it heard, and the station's name from what
+  // it knows (`name` only for a station it doesn't: one from search, picked
+  // again after a restart).
+  heardSave(stationId: string, title: string, name: string): Promise<HeardSong[]>
+  // by the title: the same song, as heardKey says
+  heardRemove(title: string): Promise<HeardSong[]>
+  // Undo of remove
+  heardRestore(title: string): Promise<HeardSong[]>
 }
 
 // Which API method each of its page-to-main channels carries (see PageChannels).
@@ -112,4 +130,8 @@ export interface RadioChannels {
   [RadioChannel.stop]: RadioApi['stop']
   [RadioChannel.search]: RadioApi['search']
   [RadioChannel.popular]: RadioApi['popular']
+  [RadioChannel.heard]: RadioApi['heard']
+  [RadioChannel.heardSave]: RadioApi['heardSave']
+  [RadioChannel.heardRemove]: RadioApi['heardRemove']
+  [RadioChannel.heardRestore]: RadioApi['heardRestore']
 }

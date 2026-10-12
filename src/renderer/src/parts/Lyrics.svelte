@@ -1,6 +1,7 @@
 <!-- The song's words (ticket 120). Synced words: the line being sung bright
      and larger, kept in the middle as the song goes; a click on a line goes
-     there. Plain words: one block to scroll, nothing lit.
+     there. Plain words: one block to scroll, nothing lit. Instrumental (the
+     online lookup says so, ticket 121): one quiet line.
      size: 'block' a few lines (Focus), 'fill' all the room it gets (Studio's
      player column, beside wide Focus's stage), 'page' large type over the library (Classic). -->
 <script lang="ts">
@@ -74,6 +75,10 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div class="lyr plain {size}" role="region" aria-label="Lyrics" tabindex="0">
     {words.plain}
+  </div>
+{:else if words && 'instrumental' in words}
+  <div class="lyr instrumental {size}" role="region" aria-label="Lyrics">
+    <p>♪ Instrumental</p>
   </div>
 {/if}
 
@@ -165,6 +170,18 @@
     outline: 2px solid var(--focus);
     outline-offset: -2px;
     border-radius: 6px;
+  }
+  .instrumental {
+    display: grid;
+    place-items: center;
+  }
+  .instrumental.block {
+    flex: none;
+    height: calc(2 * var(--line));
+  }
+  .instrumental p {
+    cursor: default;
+    opacity: 0.7;
   }
   @media (prefers-reduced-motion: reduce) {
     .lines,

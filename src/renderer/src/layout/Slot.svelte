@@ -15,7 +15,7 @@
   }
 
   // the Lyrics button only while the song has words
-  const buttons = $derived(layout.slots[name].filter((b) => b.act !== 'lyrics' || !!lyrics.words))
+  const buttons = $derived(layout.slots[name].filter((b) => b.act !== 'lyrics' || lyrics.hasWords))
   const isOn = (b: SlotButton): boolean => (b.act === 'queue' ? layout.showQueue : lyrics.shown)
 
   // Songs dropped on the queue button go at the end (ticket 089); resting on

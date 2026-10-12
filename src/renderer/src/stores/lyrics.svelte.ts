@@ -11,6 +11,8 @@ class LyricsStore {
   words: Lyrics | undefined = $state.raw()
   // counts asks, so words that come late for an older song are dropped
   #asks = 0
+  // the song was asked with its names
+  #named = false
 
   // turned on in this layout
   get shown(): boolean {
@@ -20,6 +22,17 @@ class LyricsStore {
   // on and there are words to show
   get showing(): boolean {
     return this.shown && !!this.words
+  }
+
+  // An online lookup said the song has no words (ticket 121): a quiet note
+  // in Focus. It takes no cover's or page's place, and has no button.
+  get instrumental(): boolean {
+    return !!this.words && 'instrumental' in this.words
+  }
+
+  // words to sing along to
+  get hasWords(): boolean {
+    return !!this.words && !this.instrumental
   }
 
   setShown(on: boolean): void {
@@ -32,14 +45,20 @@ class LyricsStore {
   }
 
   // A new song: its words are asked for, the last one's go at once. `song`
-  // is read only then, so a library refresh doesn't ask again.
+  // is read only then, so a library refresh doesn't ask again. A song whose
+  // names were not known yet (the queue kept from last time, before the
+  // library is in) is asked again once they are, for the online lookup (121).
   async follow(key: ItemKey | undefined, song: () => LyricsSong | undefined): Promise<void> {
-    if (key === this.#key) return
+    const same = key === this.#key
+    if (same && this.#named) return
+    const s = key ? song() : undefined
+    if (same && !s) return
     this.#key = key
-    this.words = undefined
+    this.#named = !!s
+    if (!same) this.words = undefined
     const n = ++this.#asks
     if (!key) return
-    const got = await window.lyricsApi.get(key, song()).catch(() => undefined)
+    const got = await window.lyricsApi.get(key, s).catch(() => undefined)
     if (n === this.#asks) this.words = got
   }
 }

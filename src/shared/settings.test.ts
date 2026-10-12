@@ -48,6 +48,7 @@ describe('parseStoredSettings', () => {
       bigTemplate: 'focus',
       lyricsShown: { studio: true, classic: false, focus: false },
       focusHide: true,
+      fetchLyrics: false,
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowMaximized: { studio: true, focus: false },
       windowPlace: { x: -1200, y: 40 },
@@ -156,6 +157,7 @@ describe('parseStoredSettings with a base', () => {
     bigTemplate: 'classic',
     lyricsShown: { studio: true, classic: true, focus: false },
     focusHide: true,
+    fetchLyrics: false,
     windowSizes: { focus: { width: 500, height: 700 } },
     windowMaximized: { focus: true },
     windowPlace: { x: 40, y: 60 },
@@ -689,5 +691,16 @@ describe('focusHide (ticket 113)', () => {
     expect(parseStoredSettings({ focusHide: 'yes' }).focusHide).toBe(false)
     expect(isKnownSettingsFile({ focusHide: false })).toBe(true)
     expect(isKnownSettingsFile({ focusHide: 1 })).toBe(false)
+  })
+})
+
+describe('fetchLyrics (ticket 121)', () => {
+  it('is on at first, like the cover lookup; a saved off stays off', () => {
+    expect(parseStoredSettings(undefined).fetchLyrics).toBe(true)
+    expect(pageSettings(parseStoredSettings(undefined)).fetchLyrics).toBe(true)
+    expect(parseStoredSettings({ fetchLyrics: false }).fetchLyrics).toBe(false)
+    expect(parseStoredSettings({ fetchLyrics: 'no' }).fetchLyrics).toBe(true)
+    expect(isKnownSettingsFile({ fetchLyrics: false })).toBe(true)
+    expect(isKnownSettingsFile({ fetchLyrics: 0 })).toBe(false)
   })
 })

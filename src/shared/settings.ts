@@ -55,6 +55,8 @@ export interface Settings {
   lyricsShown: Partial<Record<TemplateId, boolean>>
   // Focus fades its tabs and controls while nobody uses it (ticket 113)
   focusHide: boolean
+  // look up song words online when the files have none (ticket 121); off, nothing is sent
+  fetchLyrics: boolean
 }
 
 export interface Size {
@@ -142,7 +144,8 @@ export function defaultSettings(): Settings {
     bigTemplate: 'studio',
     // Focus is the place for them; elsewhere they take the cover's or the library's place
     lyricsShown: { studio: false, classic: false, focus: true },
-    focusHide: false
+    focusHide: false,
+    fetchLyrics: true
   }
 }
 
@@ -394,6 +397,7 @@ export function parseStoredSettings(
     bigTemplate: oneOf(r.bigTemplate, bigTemplateIds, base.bigTemplate),
     lyricsShown: parseLyricsShown(r.lyricsShown, base.lyricsShown),
     focusHide: typeof r.focusHide === 'boolean' ? r.focusHide : base.focusHide,
+    fetchLyrics: typeof r.fetchLyrics === 'boolean' ? r.fetchLyrics : base.fetchLyrics,
     windowSizes,
     windowMaximized:
       r.windowMaximized === undefined
@@ -516,6 +520,7 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   )
     return false
   if (has('focusHide') && typeof raw.focusHide !== 'boolean') return false
+  if (has('fetchLyrics') && typeof raw.fetchLyrics !== 'boolean') return false
   if (
     has('viewSorts') &&
     (!isObject(raw.viewSorts) ||
@@ -551,6 +556,7 @@ export function pageSettings(s: StoredSettings): Settings {
     miniOnTop: s.miniOnTop,
     bigTemplate: s.bigTemplate,
     lyricsShown: { ...s.lyricsShown },
-    focusHide: s.focusHide
+    focusHide: s.focusHide,
+    fetchLyrics: s.fetchLyrics
   }
 }

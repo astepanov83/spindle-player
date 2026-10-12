@@ -25,9 +25,10 @@
   import Lyrics from '../parts/Lyrics.svelte'
   import { lyrics as words } from '../stores/lyrics.svelte'
 
-  // the song's words may cover the page (Classic, ticket 120)
+  // the song's words may cover the page (Classic, ticket 120); "instrumental"
+  // alone doesn't (121)
   let { lyrics = false }: { lyrics?: boolean } = $props()
-  const wordsOver = $derived(lyrics && words.showing)
+  const wordsOver = $derived(lyrics && words.showing && !words.instrumental)
 
   // the tabs of the plugins that are on (ticket 059); playlists are listed
   // under their own heading

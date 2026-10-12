@@ -9,8 +9,9 @@ export interface LyricLine {
 }
 
 // Synced: lines with times, the one being sung is lit. Plain: words with no
-// times, shown as one block.
-export type Lyrics = { synced: LyricLine[] } | { plain: string }
+// times, shown as one block. Instrumental: an online lookup said the song has
+// no words (ticket 121).
+export type Lyrics = { synced: LyricLine[] } | { plain: string } | { instrumental: true }
 
 // What the page knows of the song that starts: for a lookup by name (ticket 121).
 export interface LyricsSong {

@@ -9,6 +9,7 @@
   import PluginSection from './PluginSection.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Seg from '../ui/Seg.svelte'
+  import Switch from '../ui/Switch.svelte'
   import type { QueueMode, TemplateId } from '../../../shared/layout'
   import {
     closeActions,
@@ -190,6 +191,20 @@
             <p class="hint">{closeHints[settings.closeAction]}</p>
           </div>
           <CoverFetch />
+          <div class="set">
+            <span class="section-label">Lyrics</span>
+            <Switch
+              label="Find lyrics online"
+              on={settings.fetchLyrics}
+              onchange={(on) => (settings.fetchLyrics = on)}
+            />
+            {#if settings.fetchLyrics}
+              <p class="hint">
+                For a song with no lyrics in its files, sends its artist, title and length to LRCLIB
+                (lrclib.net) when it starts to play. Each song is asked once.
+              </p>
+            {/if}
+          </div>
         {/if}
       {/if}
     </section>

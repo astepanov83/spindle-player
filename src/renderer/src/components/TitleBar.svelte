@@ -18,7 +18,8 @@
   const layoutIcons: Record<TemplateId, IconName> = {
     studio: 'layoutStudio',
     classic: 'layoutClassic',
-    focus: 'layoutFocus'
+    focus: 'layoutFocus',
+    mini: 'layoutMini'
   }
 
   $effect(() => {

@@ -18,10 +18,12 @@ export function sizeFor(template: Template, saved: StoredSettings['windowSizes']
 }
 
 // Keeps the old center, then pushes the window back onto the work area.
-// A size larger than the work area is cut down, but never below the template minimum.
+// A size larger than the work area is cut down, but never below the template
+// minimum. A bar (Mini) is never taller than its most.
 export function placeCentered(old: Rect, size: Size, area: Rect, template: Template): Rect {
-  const width = Math.max(template.window.minWidth, Math.min(size.width, area.width))
-  const height = Math.max(template.window.minHeight, Math.min(size.height, area.height))
+  const { minWidth, minHeight, maxHeight = Infinity } = template.window
+  const width = Math.max(minWidth, Math.min(size.width, area.width))
+  const height = Math.max(minHeight, Math.min(size.height, area.height, maxHeight))
   const cx = old.x + old.width / 2
   const cy = old.y + old.height / 2
   let x = Math.round(cx - width / 2)
@@ -93,4 +95,27 @@ export class AppliedSize {
     this.#size = undefined
     return size
   }
+}
+
+// The parts of a BrowserWindow a template sets besides its size.
+export interface KindWindow {
+  setMinimumSize(width: number, height: number): void
+  setMaximumSize(width: number, height: number): void
+  setAlwaysOnTop(flag: boolean): void
+}
+
+// Wider than any screen: a most size of 0 wide would be no most size at all
+// on Linux (X11 drops a maximum with a 0 side).
+export const anyWidth = 16384
+
+// What a template asks of the window: its minimum, a bar's most height (0 x 0
+// is no limit), and staying above other windows while the user's pin is on.
+// Leaving Mini clears both. Call before setting the size, or an old limit
+// blocks it.
+export function applyWindowKind(win: KindWindow, template: Template, miniOnTop: boolean): void {
+  const w = template.window
+  win.setMinimumSize(w.minWidth, w.minHeight)
+  if (w.maxHeight) win.setMaximumSize(anyWidth, w.maxHeight)
+  else win.setMaximumSize(0, 0)
+  win.setAlwaysOnTop(!!w.onTop && miniOnTop)
 }

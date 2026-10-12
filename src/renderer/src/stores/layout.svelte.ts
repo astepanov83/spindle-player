@@ -1,6 +1,6 @@
 // The built layout plus what is open in it. Rebuilds only when the template
 // or the queue that is drawn changes; track changes only update the parts.
-import type { QueueMode, TemplateId } from '../../../shared/layout'
+import type { QueueMode, ShownQueue, TemplateId } from '../../../shared/layout'
 import { queueModeFor, visualizerStyles, type VisualizerStyle } from '../../../shared/settings'
 import { templates } from '../../../shared/templates'
 import { buildLayout, partsOf, type BuiltLayout, type Slots } from '../layout/build'
@@ -15,14 +15,18 @@ class LayoutStore {
   width = $state(typeof window === 'undefined' ? 0 : window.innerWidth)
   height = $state(typeof window === 'undefined' ? 0 : window.innerHeight)
   // what Settings shows and saves
-  queueSetting: QueueMode = $derived(queueModeFor(this.template, settings.queue[settings.template]))
+  queueSetting: ShownQueue = $derived(
+    queueModeFor(this.template, settings.queue[settings.template])
+  )
   // what is drawn: a Column is a Drawer while the window is too narrow for it
-  queueMode: QueueMode = $derived(shownQueueMode(this.template, this.queueSetting, this.width))
+  queueMode: ShownQueue = $derived(shownQueueMode(this.template, this.queueSetting, this.width))
   // a wide, short window: the template's wide layout, if it has one
   wide: boolean = $derived(isWide(this.template, this.width, this.height))
   built: BuiltLayout = $derived(buildLayout(this.template, this.queueMode, this.wide))
   // Focus has none: links to an album or artist are plain text there (ticket 040)
   hasLibrary: boolean = $derived(partsOf(this.built.root).some((p) => p.part === 'library'))
+  // Mini: no title bar, and no room for Settings or the close question
+  bar: boolean = $derived(this.template.titleBar === false)
   get slots(): Slots {
     return this.built.slots
   }
@@ -53,6 +57,8 @@ class LayoutStore {
 
   // `section`: where the opener knows to go, else where it was last
   openSettings(section?: string): void {
+    // Mini has no room for it: Settings opens in the big layout
+    if (this.bar) this.toBig()
     if (!this.settingsOpen && typeof document !== 'undefined') {
       const at = document.activeElement
       this.settingsOpener = at instanceof HTMLElement && at !== document.body ? at : null
@@ -73,8 +79,17 @@ class LayoutStore {
   // The library keeps its place, search text and history (library.showIn).
   chooseTemplate(id: TemplateId): void {
     if (id === settings.template) return
+    // Mini goes back to the layout it was left for
+    if (templates[id].titleBar === false && !this.bar) settings.bigTemplate = settings.template
+    // the Settings page has no room in Mini
+    if (templates[id].titleBar === false) this.closeSettings()
     settings.template = id
     this.#reset()
+  }
+
+  // Mini's button, a double click on it, and its menu's Settings
+  toBig(): void {
+    this.chooseTemplate(settings.bigTemplate)
   }
 
   chooseQueueMode(mode: QueueMode): void {

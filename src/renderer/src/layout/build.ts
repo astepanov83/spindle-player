@@ -1,6 +1,6 @@
 // Turns template data into a tree the Layout component renders.
 // Same job as build() in prototype/index.html, but with no DOM, so it can be tested.
-import type { Look, PartNode, QueueMode, Template, TemplateNode } from '../../../shared/layout'
+import type { Look, PartNode, ShownQueue, Template, TemplateNode } from '../../../shared/layout'
 
 export type SlotName = 'player.buttons'
 
@@ -36,7 +36,7 @@ export type BuiltNode = BuiltBase &
 
 export interface BuiltLayout {
   root: BuiltNode
-  queueMode: QueueMode
+  queueMode: ShownQueue
   // built from the template's wide layout
   wide: boolean
   slots: Slots
@@ -56,7 +56,7 @@ function queuePart(header: boolean, close: boolean): BuiltNode {
   }
 }
 
-export function buildLayout(template: Template, queueMode: QueueMode, wide = false): BuiltLayout {
+export function buildLayout(template: Template, queueMode: ShownQueue, wide = false): BuiltLayout {
   const tree = (wide && template.wide?.layout) || template.layout
   let host: BuiltNode | null = null
   let fill = false

@@ -11,7 +11,15 @@ import type { SettingsStore } from './settings-store'
 import { closeStep } from './close-ask'
 import { RestartBudget } from './restart'
 import { blockNavigation, canOpenExternal } from './web-guard'
-import { AppliedSize, placeCentered, placeSaved, settleMs, sizeFor } from './window-place'
+import {
+  AppliedSize,
+  anyWidth,
+  applyWindowKind,
+  placeCentered,
+  placeSaved,
+  settleMs,
+  sizeFor
+} from './window-place'
 
 export function currentBackground(): string {
   return nativeTheme.shouldUseDarkColors ? windowBackground.dark : windowBackground.light
@@ -67,6 +75,8 @@ export class MainWindow {
       ...bounds,
       minWidth: t.window.minWidth,
       minHeight: t.window.minHeight,
+      ...(t.window.maxHeight ? { maxWidth: anyWidth, maxHeight: t.window.maxHeight } : {}),
+      alwaysOnTop: !!t.window.onTop && s.miniOnTop,
       frame: false,
       show: false,
       backgroundColor: currentBackground(),
@@ -92,7 +102,7 @@ export class MainWindow {
         // the window manager may change the size as the window is first shown
         this.#applied.settle(Date.now())
         // bounds above are the normal size, so un-maximizing goes back to them
-        if (s.windowMaximized[s.template]) win.maximize()
+        if (s.windowMaximized[s.template] && !t.window.maxHeight) win.maximize()
         win.show()
       }, this.showDelay())
     })
@@ -105,11 +115,19 @@ export class MainWindow {
       else console.error('The app page stopped too often; not loading it again')
     })
     win.on('maximize', () => {
+      // A bar (Mini) is never maximized: a double click on it, or the window
+      // manager's maximize, asks for the big layout instead.
+      if (this.#isBar()) {
+        win.unmaximize()
+        if (!this.#switching()) win.webContents.send(WinChannel.wantsBig)
+        return
+      }
       win.webContents.send(WinChannel.maximized, true)
       this.#rememberMaximized(true)
       this.#rememberPlace()
     })
     win.on('unmaximize', () => {
+      if (this.#isBar()) return
       win.webContents.send(WinChannel.maximized, false)
       this.#rememberMaximized(false)
       this.#rememberPlace()
@@ -135,6 +153,13 @@ export class MainWindow {
         // a resize from the left or top edge moves the corner too
         this.#rememberPlace()
       }, resizeQuietMs)
+    })
+    // A right click on a drag area. Mini has no title bar, so the whole bar is
+    // one, and the page shows its own menu there (Windows and Linux).
+    win.on('system-context-menu', (e) => {
+      if (templates[this.store.live().template].titleBar !== false) return
+      e.preventDefault()
+      win.webContents.send(WinChannel.contextMenu)
     })
     // Windows logging off closes windows with no quit first
     win.on('session-end', () => (this.#closeNow = true))
@@ -220,6 +245,16 @@ export class MainWindow {
     if (size) this.store.setWindowSize(id, size)
   }
 
+  #isBar(): boolean {
+    return !!templates[this.store.live().template].window.maxHeight
+  }
+
+  // The pin in Mini, from the page's settings.
+  applyOnTop(): void {
+    const s = this.store.live()
+    if (!this.win.isDestroyed()) applyWindowKind(this.win, templates[s.template], s.miniOnTop)
+  }
+
   #switching(): boolean {
     return Date.now() < this.#switchedUntil
   }
@@ -246,19 +281,21 @@ export class MainWindow {
     const win = this.win
     const t = templates[to]
     const maximized = win.isMaximized()
-    // right after a switch the window may not have its new state yet
-    if (!this.#switching()) this.store.setWindowMaximized(from, maximized)
+    // right after a switch the window may not have its new state yet; a bar
+    // is never maximized
+    if (!this.#switching() && !templates[from].window.maxHeight)
+      this.store.setWindowMaximized(from, maximized)
     // setBounds is ignored while maximized, so go back to the normal size first.
     const old = maximized ? win.getNormalBounds() : win.getBounds()
     if (maximized) win.unmaximize()
     const area = screen.getDisplayMatching(old).workArea
     const bounds = placeCentered(old, sizeFor(t, this.store.get().windowSizes), area, t)
     this.#applied.set(bounds, Date.now())
-    // Minimum first, or a larger old minimum blocks shrinking.
-    win.setMinimumSize(t.window.minWidth, t.window.minHeight)
+    // Limits first, or an old minimum blocks shrinking and Mini's most height growing.
+    applyWindowKind(win, t, this.store.live().miniOnTop)
     win.setBounds(bounds)
     this.#switchedUntil = Date.now() + settleMs
     // after setBounds, so un-maximizing goes back to this template's size
-    if (this.store.get().windowMaximized[to]) win.maximize()
+    if (this.store.get().windowMaximized[to] && !t.window.maxHeight) win.maximize()
   }
 }

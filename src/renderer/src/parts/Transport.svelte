@@ -7,12 +7,16 @@
   import { player } from '../stores/player.svelte'
   import { queues } from '../stores/queues.svelte'
 
+  // false: no Shuffle and Repeat, only what plays now (Mini)
+  let { order = true }: { order?: boolean } = $props()
+
   const bar = $derived(queues.bar)
+  const showOrder = $derived(order && bar.order)
   const pauseWord = $derived(bar.live ? 'Stop' : 'Pause')
 </script>
 
-<div class="transport" class:alone={!bar.order && !bar.previous && !bar.next}>
-  {#if bar.order}
+<div class="transport" class:alone={!showOrder && !bar.previous && !bar.next}>
+  {#if showOrder}
     <IconButton
       icon="shuffle"
       label="Shuffle"
@@ -38,7 +42,7 @@
   {#if bar.next}
     <IconButton icon="next" label="Next" disabled={queues.nothing} onclick={() => queues.next()} />
   {/if}
-  {#if bar.order}
+  {#if showOrder}
     <IconButton
       icon="repeat"
       label="Repeat"

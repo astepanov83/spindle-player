@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { templates } from './templates'
 import {
   defaultSettings,
   isKnownSettingsFile,
   pageSettings,
+  parseSize,
   parseStoredSettings,
+  queueModeFor,
   type StoredSettings
 } from './settings'
 
@@ -39,6 +42,8 @@ describe('parseStoredSettings', () => {
       viewLooks: { albums: 'list', artists: 'shelves', artistPage: 'column' },
       loudness: 'song',
       noCover: 'type',
+      miniOnTop: false,
+      bigTemplate: 'focus',
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowMaximized: { studio: true, focus: false },
       windowPlace: { x: -1200, y: 40 },
@@ -50,7 +55,7 @@ describe('parseStoredSettings', () => {
 
   it('replaces only the wrong fields', () => {
     const s = parseStoredSettings({
-      template: 'mini',
+      template: 'tiny',
       queue: { studio: 'col', classic: 'tab', focus: 7 },
       visualizer: 'spectrum',
       theme: 'blue'
@@ -63,7 +68,7 @@ describe('parseStoredSettings', () => {
   })
 
   it('fills in a missing queue entry and ignores unknown keys', () => {
-    const s = parseStoredSettings({ queue: { focus: 'drawer', mini: 'tab' }, extra: 1 })
+    const s = parseStoredSettings({ queue: { focus: 'drawer', tiny: 'tab' }, extra: 1 })
     expect(s.queue).toEqual({ studio: 'tab', classic: 'drawer', focus: 'drawer' })
     expect(s).not.toHaveProperty('extra')
   })
@@ -74,7 +79,7 @@ describe('parseStoredSettings', () => {
         studio: { width: '1200', height: 700 },
         classic: { width: NaN, height: 700 },
         focus: { width: 450.6, height: 690.2 },
-        mini: { width: 300, height: 300 }
+        tiny: { width: 300, height: 300 }
       }
     })
     expect(s.windowSizes).toEqual({ focus: { width: 451, height: 690 } })
@@ -141,6 +146,8 @@ describe('parseStoredSettings with a base', () => {
     viewLooks: { albums: 'list', artists: 'list', artistPage: 'albums' },
     loudness: 'off',
     noCover: 'record',
+    miniOnTop: false,
+    bigTemplate: 'classic',
     windowSizes: { focus: { width: 500, height: 700 } },
     windowMaximized: { focus: true },
     windowPlace: { x: 40, y: 60 },
@@ -151,7 +158,7 @@ describe('parseStoredSettings with a base', () => {
   it('keeps the current value of each bad field, not the default', () => {
     const s = parseStoredSettings(
       {
-        template: 'mini',
+        template: 'tiny',
         queue: { studio: 'tab', focus: 9 },
         visualizer: 1,
         theme: 'dark',
@@ -180,7 +187,7 @@ describe('isKnownSettingsFile', () => {
       'x',
       null,
       { theme: 'blue' },
-      { template: 'mini' },
+      { template: 'tiny' },
       { visualizer: 'bars' },
       { volume: '50' },
       { queue: [] },
@@ -220,8 +227,8 @@ describe('isKnownSettingsFile', () => {
     expect(isKnownSettingsFile({ queue: { studio: 'col', classic: 'drawer', focus: 'tab' } })).toBe(
       true
     )
-    // classic does not offer tab; mini is no template; 7 is no mode
-    for (const queue of [{ classic: 'tab' }, { mini: 'tab' }, { studio: 7 }])
+    // classic does not offer tab; tiny is no template; 7 is no mode
+    for (const queue of [{ classic: 'tab' }, { tiny: 'tab' }, { studio: 7 }])
       expect(isKnownSettingsFile({ queue })).toBe(false)
   })
 
@@ -234,7 +241,7 @@ describe('isKnownSettingsFile', () => {
       { focus: { width: '500', height: 700 } },
       { focus: { width: 500, height: 700, x: 3 } },
       { focus: [500, 700] },
-      { mini: { width: 500, height: 700 } }
+      { tiny: { width: 500, height: 700 } }
     ])
       expect(isKnownSettingsFile({ windowSizes })).toBe(false)
   })
@@ -271,7 +278,7 @@ describe('window place', () => {
 
 describe('window maximized', () => {
   it('keeps true and false per known template', () => {
-    const s = parseStoredSettings({ windowMaximized: { studio: true, focus: 'yes', mini: true } })
+    const s = parseStoredSettings({ windowMaximized: { studio: true, focus: 'yes', tiny: true } })
     expect(s.windowMaximized).toEqual({ studio: true })
   })
 
@@ -295,7 +302,7 @@ describe('window maximized', () => {
 
   it('checks windowMaximized in the file', () => {
     expect(isKnownSettingsFile({ windowMaximized: { studio: true, focus: false } })).toBe(true)
-    for (const windowMaximized of [{ mini: true }, { studio: 1 }, [true], 'yes'])
+    for (const windowMaximized of [{ tiny: true }, { studio: 1 }, [true], 'yes'])
       expect(isKnownSettingsFile({ windowMaximized })).toBe(false)
   })
 })
@@ -563,5 +570,56 @@ describe('AI setting', () => {
 
   it('is not given to the page', () => {
     expect(pageSettings(parseStoredSettings(undefined))).not.toHaveProperty('ai')
+  })
+})
+
+describe('Mini (ticket 110)', () => {
+  it('stays on top and goes back to Studio at first', () => {
+    const s = parseStoredSettings(undefined)
+    expect(s.miniOnTop).toBe(true)
+    expect(s.bigTemplate).toBe('studio')
+    expect(pageSettings(s)).toMatchObject({ miniOnTop: true, bigTemplate: 'studio' })
+  })
+
+  it('reads the pin and the layout to go back to', () => {
+    const s = parseStoredSettings({ template: 'mini', miniOnTop: false, bigTemplate: 'focus' })
+    expect(s).toMatchObject({ template: 'mini', miniOnTop: false, bigTemplate: 'focus' })
+    expect(isKnownSettingsFile({ template: 'mini', miniOnTop: false, bigTemplate: 'focus' })).toBe(
+      true
+    )
+  })
+
+  it('never goes back to Mini itself', () => {
+    expect(parseStoredSettings({ bigTemplate: 'mini' }).bigTemplate).toBe('studio')
+    expect(parseStoredSettings({ miniOnTop: 'yes' }).miniOnTop).toBe(true)
+    expect(isKnownSettingsFile({ bigTemplate: 'mini' })).toBe(false)
+    expect(isKnownSettingsFile({ miniOnTop: 1 })).toBe(false)
+  })
+
+  it('has no queue to keep', () => {
+    expect(parseStoredSettings(undefined).queue).not.toHaveProperty('mini')
+    expect(parseStoredSettings({ queue: { mini: 'drawer' } }).queue).not.toHaveProperty('mini')
+    expect(queueModeFor(templates.mini, undefined)).toBe('none')
+    expect(queueModeFor(templates.mini, 'tab')).toBe('none')
+    expect(isKnownSettingsFile({ queue: { mini: 'drawer' } })).toBe(false)
+  })
+
+  it('keeps its size a bar: between the minimum and the most height', () => {
+    expect(parseSize({ width: 400, height: 80 }, templates.mini)).toEqual({
+      width: 400,
+      height: 80
+    })
+    expect(parseSize({ width: 100, height: 900 }, templates.mini)).toEqual({
+      width: 280,
+      height: 96
+    })
+    expect(parseSize({ width: 300, height: 10 }, templates.mini)).toEqual({
+      width: 300,
+      height: 64
+    })
+    const s = parseStoredSettings({ windowSizes: { mini: { width: 420, height: 70 } } })
+    expect(s.windowSizes.mini).toEqual({ width: 420, height: 70 })
+    expect(isKnownSettingsFile({ windowSizes: { mini: { width: 420, height: 70 } } })).toBe(true)
+    expect(isKnownSettingsFile({ windowSizes: { mini: { width: 420, height: 400 } } })).toBe(false)
   })
 })

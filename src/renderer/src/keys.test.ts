@@ -330,11 +330,12 @@ describe('shortcuts', () => {
     expect(keyAction(press('v', { repeat: true }), free)).toBe('none')
   })
   // by the key's place: Ctrl+2 on AZERTY gives key "é"
-  it('switches layout with Ctrl+1, Ctrl+2 and Ctrl+3, also in a text field', () => {
+  it('switches layout with Ctrl+1 to Ctrl+4, also in a text field', () => {
     expect(keyAction(press('1', { code: 'Digit1', ctrlKey: true }), free)).toBe('studio')
     expect(keyAction(press('é', { code: 'Digit2', ctrlKey: true }), free)).toBe('classic')
     const typing = { ...free, typing: true }
     expect(keyAction(press('3', { code: 'Digit3', ctrlKey: true }), typing)).toBe('focus')
+    expect(keyAction(press('4', { code: 'Digit4', ctrlKey: true }), free)).toBe('mini')
     expect(keyAction(press('2', { code: 'Digit2' }), free)).toBe('none')
     expect(keyAction(press('2', { code: 'Digit2', ctrlKey: true, altKey: true }), free)).toBe(
       'none'
@@ -348,6 +349,7 @@ describe('shortcuts', () => {
     expect(layoutChord('studio')).toBe('Ctrl+1')
     expect(layoutChord('classic')).toBe('Ctrl+2')
     expect(layoutChord('focus')).toBe('Ctrl+3')
+    expect(layoutChord('mini')).toBe('Ctrl+4')
   })
   it('joins chords of one line that do different things with the same keys held', () => {
     const c = (action: KeyAction, key: string, ctrl = false): Chord => ({ action, key, ctrl })
@@ -377,7 +379,8 @@ describe('shortcuts', () => {
       'queue',
       'studio',
       'classic',
-      'focus'
+      'focus',
+      'mini'
     ]
     expect([...listed].sort()).toEqual(all.sort())
   })
@@ -406,7 +409,7 @@ describe('shortcuts', () => {
       'Esc',
       'V',
       'Q',
-      'Ctrl+1 / Ctrl+2 / Ctrl+3'
+      'Ctrl+1 / Ctrl+2 / Ctrl+3 / Ctrl+4'
     ])
     expect(keyText('Alt+ArrowUp')).toBe('Alt+↑')
     expect(keyText('Shift+ArrowDown')).toBe('Shift+↓')

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { templates } from '../shared/templates'
-import { AppliedSize, placeCentered, placeSaved, settleMs, sizeFor } from './window-place'
+import {
+  AppliedSize,
+  applyWindowKind,
+  placeCentered,
+  placeSaved,
+  settleMs,
+  sizeFor,
+  type KindWindow
+} from './window-place'
 
 const area = { x: 0, y: 0, width: 1920, height: 1080 }
 
@@ -144,5 +152,63 @@ describe('placeSaved', () => {
 
   it('gives none when its screen is gone', () => {
     expect(placeSaved({ x: -1500, y: 100 }, size, [area], templates.studio)).toBeUndefined()
+  })
+})
+
+describe('Mini (ticket 110)', () => {
+  it('opens as a bar the first time, then at its saved size', () => {
+    expect(sizeFor(templates.mini, {})).toEqual({ width: 360, height: 72 })
+    expect(sizeFor(templates.mini, { mini: { width: 500, height: 80 } })).toEqual({
+      width: 500,
+      height: 80
+    })
+  })
+
+  it('keeps the center of the big window and stays a bar', () => {
+    const studio = { x: 410, y: 200, width: 1100, height: 680 }
+    const mini = placeCentered(studio, { width: 360, height: 72 }, area, templates.mini)
+    expect(mini).toEqual({ x: 780, y: 504, width: 360, height: 72 })
+    // a size too tall (a hand-edited file) is cut to the bar's most
+    expect(placeCentered(studio, { width: 360, height: 400 }, area, templates.mini).height).toBe(96)
+    // and back to Studio around the bar's center
+    expect(placeCentered(mini, { width: 1100, height: 680 }, area, templates.studio)).toEqual(
+      studio
+    )
+  })
+
+  function fakeWindow(): KindWindow & { calls: string[]; onTop: boolean } {
+    const w = {
+      calls: [] as string[],
+      onTop: false,
+      setMinimumSize: (a: number, b: number) => w.calls.push(`min ${a}x${b}`),
+      setMaximumSize: (a: number, b: number) => w.calls.push(`max ${a}x${b}`),
+      setAlwaysOnTop: (on: boolean) => {
+        w.onTop = on
+        w.calls.push(`top ${on}`)
+      }
+    }
+    return w
+  }
+
+  it('puts Mini on top and takes it off when leaving', () => {
+    const win = fakeWindow()
+    applyWindowKind(win, templates.mini, true)
+    expect(win.calls).toEqual(['min 280x64', 'max 16384x96', 'top true'])
+    win.calls = []
+    applyWindowKind(win, templates.studio, true)
+    expect(win.calls).toEqual(['min 860x560', 'max 0x0', 'top false'])
+  })
+
+  it('keeps Mini under other windows while the pin is off', () => {
+    const win = fakeWindow()
+    applyWindowKind(win, templates.mini, false)
+    expect(win.onTop).toBe(false)
+    applyWindowKind(win, templates.mini, true)
+    expect(win.onTop).toBe(true)
+    // the pin is Mini's: the big layouts never stay on top
+    for (const id of ['studio', 'classic', 'focus'] as const) {
+      applyWindowKind(win, templates[id], true)
+      expect(win.onTop).toBe(false)
+    }
   })
 })

@@ -58,6 +58,15 @@ export const icons = {
   layoutStudio: 'M3 5h18v14H3zm2 2v10h7V7zm9 0v10h5V7zm1 2h3v3h-3z',
   layoutClassic: 'M3 5h18v14H3zm2 2v6h3V7zm5 0v6h9V7zm-5 8v2h14v-2z',
   layoutFocus: 'M7 3h10v18H7zm2 2v14h6V5zm1 2h4v5h-4zm0 7h4v2h-4z',
+  // Mini: a short bar with a cover and a line
+  layoutMini: 'M2 8h20v8H2zm2 2v4h16v-4zm1 1h3v2H5zm5 .5h8v1h-8z',
+  // Mini's pin: kept on top (filled) or not (outline)
+  pinOn:
+    'M16 9V4h1a1 1 0 0 0 0-2H7a1 1 0 0 0 0 2h1v5a3 3 0 0 1-3 3v2h5.97v7l1 1 1-1v-7H19v-2a3 3 0 0 1-3-3z',
+  pinOff:
+    'M14 4v5c0 1.12.37 2.16 1 3H9c.65-.86 1-1.9 1-3V4h4m3-2H7a1 1 0 0 0 0 2h1v5a3 3 0 0 1-3 3v2h5.97v7l1 1 1-1v-7H19v-2a3 3 0 0 1-3-3V4h1a1 1 0 0 0 0-2z',
+  // Mini back to the big layout
+  bigger: 'M21 11V3h-8l3.29 3.29-10 10L3 13v8h8l-3.29-3.29 10-10z',
   gear: 'M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z'
 } as const
 

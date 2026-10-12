@@ -23,6 +23,8 @@ import {
 // The core's own tab (spec "Pages and tabs"): its pages are "playlist/<id>".
 export const playlistsTab = 'playlists'
 export const playlistPage = (id: string): string => `playlist/${id}`
+// the lists that fill themselves (ticket 118) are pages of it too: "smart/<id>"
+export const smartPage = (id: string): string => `smart/${id}`
 
 // Where the library is: the tab shown (a chip in Studio, a section in
 // Classic) and the page open in each tab. Each tab keeps its page while
@@ -234,6 +236,12 @@ class LibraryStore {
     return p.startsWith('playlist/') ? p.slice('playlist/'.length) : null
   }
 
+  // the list that fills itself shown (ticket 118), in either library
+  get openSmart(): string | null {
+    const p = this.page(playlistsTab)
+    return p.startsWith('smart/') ? p.slice('smart/'.length) : null
+  }
+
   // The search text. Typing never closes the open page: a view shows its
   // results over it, and clearing the text shows the page again. Typing is
   // not a step of history.
@@ -371,6 +379,15 @@ class LibraryStore {
 
   showPlaylist(id: string): void {
     this.link(playlistsTab, playlistPage(id))
+  }
+
+  // Studio's page of a list that fills itself; null is the list of playlists
+  openSmartPage(id: string | null): void {
+    this.openPage(playlistsTab, id ? smartPage(id) : '')
+  }
+
+  showSmart(id: string): void {
+    this.link(playlistsTab, smartPage(id))
   }
 
   playlistSort(id: string): Sort | null {

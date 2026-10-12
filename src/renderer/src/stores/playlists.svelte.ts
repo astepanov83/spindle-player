@@ -51,6 +51,16 @@ class PlaylistStore {
     return id
   }
 
+  // A copy of songs under a name of their own ("Most played", ticket 118),
+  // with a number when it is taken. Its notice offers to open it.
+  saveAs(keys: ItemKey[], name: string, open: (id: string) => void): string {
+    const id = crypto.randomUUID()
+    const named = ops.newName(this.list, name)
+    this.#set(ops.create(this.list, id, named, keys))
+    notice.show(`Saved ${songs(keys.length)} as ${named}`, { label: 'Open', run: () => open(id) })
+    return id
+  }
+
   rename(id: string, name: string): void {
     this.#set(ops.rename(this.list, id, name))
   }

@@ -6,6 +6,7 @@ import {
   emptyQueues,
   isKnownQueueFile,
   linkTarget,
+  parseLink,
   parseSavedQueue,
   parseSavedQueues,
   queueLink,
@@ -130,6 +131,9 @@ describe('links', () => {
     expect(queueLink('album', 'al1')).toEqual({ plugin: 'files', page: 'album/al1' })
     expect(queueLink('episode', 'al2')).toEqual({ plugin: 'mfp', page: 'episode/al2' })
     expect(queueLink('playlist', 'p1')).toEqual({ plugin: 'core', page: 'playlist/p1' })
+    expect(queueLink('smart', 'loved')).toEqual({ plugin: 'core', page: 'smart/loved' })
+    expect(parseLink({ plugin: 'core', page: 'smart/most' })).toEqual(queueLink('smart', 'most'))
+    expect(parseLink({ plugin: 'files', page: 'smart/most' })).toBeUndefined()
     // a folder key is a path, with slashes of its own
     expect(linkTarget(queueLink('folder', '/m/a'))).toEqual({ kind: 'folder', id: '/m/a' })
   })

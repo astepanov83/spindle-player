@@ -5,6 +5,7 @@
   import HistoryButtons from './HistoryButtons.svelte'
   import PlaylistList from './PlaylistList.svelte'
   import PlaylistView from './PlaylistView.svelte'
+  import SmartListView from './SmartListView.svelte'
   import ScanLine from './ScanLine.svelte'
   import SearchBox from './SearchBox.svelte'
   import NoPlugins from './NoPlugins.svelte'
@@ -85,6 +86,8 @@
     {:else if shown?.plugin === 'core'}
       {#if library.openPlaylist}
         <PlaylistView id={library.openPlaylist} {scrollEl} nav="chips" back />
+      {:else if library.openSmart}
+        <SmartListView id={library.openSmart} {scrollEl} nav="chips" back />
       {:else}
         <PlaylistList />
       {/if}

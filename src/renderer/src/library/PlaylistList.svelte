@@ -1,4 +1,5 @@
-<!-- Studio's Playlists chip: the playlists, and a button to make one. -->
+<!-- Studio's Playlists chip: the lists that fill themselves (ticket 118),
+     then the user's playlists and a button to make one. -->
 <script lang="ts">
   import Empty from './Empty.svelte'
   import SearchButtons from '../blocks/SearchButtons.svelte'
@@ -9,8 +10,13 @@
   import { filterPlaylists } from './views'
   import { library, playlistsTab } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
+  import { smart } from '../stores/smart-lists.svelte'
+  import { smartLists } from './smart-lists'
 
   const shown = $derived(filterPlaylists(playlists.list, library.query))
+  // none while no plugin that is on gives songs
+  const smartShown = $derived(smart.shown ? filterPlaylists([...smartLists], library.query) : [])
+  const songCount = (n: number): string => `${n.toLocaleString()} ${n === 1 ? 'song' : 'songs'}`
   // the other tabs to search, while there is text (ticket 077); Studio only
   const wider = $derived(widerTabs(playlistsTab, 'chips'))
 
@@ -27,7 +33,22 @@
 </script>
 
 <ViewHead title="Playlists" count={fmtCount(playlists.list.length, 'playlist', 'playlists')} />
-<div class="pls lines">
+{#if smartShown.length}
+  <div class="pls lines" role="group" aria-labelledby="pls-auto">
+    <div class="head section-label" id="pls-auto">
+      <Icon name="auto" size={14} />Made for you
+    </div>
+    {#each smartShown as l (l.id)}
+      <button class="row auto" onclick={() => library.openSmartPage(l.id)}>
+        <span class="ic"><Icon name={l.icon} size={20} /></span>
+        <span class="nm" title={l.name}>{l.name}</span>
+        <span class="n">{songCount(smart.items(l.id).length)}</span>
+      </button>
+    {/each}
+  </div>
+{/if}
+<div class="pls lines" role="group" aria-labelledby={smartShown.length ? 'pls-own' : undefined}>
+  {#if smartShown.length}<div class="head section-label" id="pls-own">Your playlists</div>{/if}
   <button class="row new" onclick={create}>
     <span class="ic"><Icon name="plus" size={20} /></span>
     <span class="nm">New playlist</span>
@@ -36,10 +57,10 @@
     <button class="row" onclick={() => open(p.id)}>
       <span class="ic"><Icon name="list" size={20} /></span>
       <span class="nm" title={p.name}>{p.name}</span>
-      <span class="n">{p.items.length} {p.items.length === 1 ? 'song' : 'songs'}</span>
+      <span class="n">{songCount(p.items.length)}</span>
     </button>
   {/each}
-  {#if playlists.list.length && !shown.length}
+  {#if playlists.list.length && !shown.length && !smartShown.length}
     {#if wider.length}
       <Empty title="No matches" text="No playlist has that in its name."
         ><SearchButtons tabs={wider} /></Empty
@@ -53,7 +74,9 @@
     </p>
   {/if}
 </div>
-{#if wider.length && (shown.length || !playlists.list.length)}<div class="wider">
+{#if wider.length && (shown.length || smartShown.length || !playlists.list.length)}<div
+    class="wider"
+  >
     <SearchButtons tabs={wider} />
   </div>{/if}
 
@@ -62,6 +85,19 @@
     display: flex;
     flex-direction: column;
     padding-top: 4px;
+  }
+  .pls + .pls {
+    margin-top: 14px;
+  }
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px 4px;
+  }
+  /* the lists that fill themselves: their picture in the accent */
+  .auto .ic {
+    color: var(--c2);
   }
   .row {
     display: grid;

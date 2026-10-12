@@ -334,3 +334,17 @@ describe('Love and Unlove (ticket 117)', () => {
     expect(window.lovedApi.set).toHaveBeenLastCalledWith(['files:a'], true)
   })
 })
+
+describe('a list that fills itself (ticket 118)', () => {
+  it('is read only: no Remove, never offered to add to; Unlove takes a song out of Loved', () => {
+    loved.load({ 'files:a': 1 })
+    const m = songMenu(['files:a'], { from: 'Loved', link: queueLink('smart', 'loved') })
+    expect(labels(m)).not.toContain('Remove from this playlist')
+    expect(labels(m)).not.toContain('Loved')
+    expect(labels(m)).toContain('Unlove')
+    pick(m, 'Play next')
+    expect(fake.calls).toEqual(['next files:a Loved core:smart/loved'])
+    pick(m, 'Unlove')
+    expect(loved.has('files:a')).toBe(false)
+  })
+})

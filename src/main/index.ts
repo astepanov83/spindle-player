@@ -36,6 +36,7 @@ import { PlaylistFile, QueueFile } from './page-files'
 import { PlaysStore } from './plays-file'
 import { LovedStore } from './loved-file'
 import { LyricsService } from './lyrics'
+import { LyricsFetch } from './lyrics-fetch'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
 import { devRetryData, isDevRetry, takeLock } from './single-instance'
@@ -221,6 +222,19 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   const covers = new Covers(coverCache)
   const routes = new Map<string, Route>([['cover', coverRoute(covers)]])
   const netFetch = ((url, init) => net.fetch(url as string, init)) as typeof fetch
+  // Song words from LRCLIB when the song's files have none (ticket 121).
+  // Node's fetch, not net.fetch: Chromium uses the DNS record that turns on
+  // Encrypted Client Hello for LRCLIB's host, and where networks block that
+  // its requests hang until the timeout.
+  lyrics.add(
+    new LyricsFetch({
+      dir: join(userData, 'fetched-lyrics'),
+      on: () => store.get().fetchLyrics,
+      fetch: (url, init) => fetch(url, init),
+      userAgent: `Spindle/${app.getVersion()} (https://github.com/astepanov83/spindle-player)`,
+      log
+    }).source
+  )
   ai = createAiService({
     providers: createProviders(),
     tasks: pluginList.flatMap((p) => p.aiTasks ?? []),

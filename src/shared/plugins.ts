@@ -30,6 +30,8 @@ export interface PluginInfo {
   aiTasks?: AiTaskInfo[]
   // its songs' plays are counted in plays.json (ticket 085)
   countsPlays?: boolean
+  // its songs can be loved, kept in loved.json (ticket 117)
+  canLove?: boolean
 }
 
 // Also the order of the switches and tabs.
@@ -43,6 +45,7 @@ export const plugins: PluginInfo[] = [
     offText: 'Music files are off',
     linkKinds: ['album', 'artist', 'folder'],
     countsPlays: true,
+    canLove: true,
     aiTasks: [
       {
         id: artistGroupsTask,

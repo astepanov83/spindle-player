@@ -1,11 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   AiChannel,
+  LovedChannel,
   PlaybackChannel,
   PlaylistChannel,
   SettingsChannel,
   WinChannel,
   type AiApi,
+  type LovedApi,
   type PlaybackApi,
   type PlayControl,
   type PlaylistsApi,
@@ -80,6 +82,14 @@ const playbackApi: PlaybackApi = {
   played: (key) => send(PlaybackChannel.played, key)
 }
 
+// Asked for early too, so the first paint has the hearts (ticket 117).
+const loved = invoke(LovedChannel.load)
+
+const lovedApi: LovedApi = {
+  load: () => loved,
+  set: (keys, on) => send(LovedChannel.set, keys, on)
+}
+
 // Asked for early like the settings; a state pushed before the page listens is kept.
 const aiState = invoke(AiChannel.load)
 const onAiState = latest<AiState>(AiChannel.state)
@@ -97,4 +107,5 @@ contextBridge.exposeInMainWorld('aiApi', aiApi)
 contextBridge.exposeInMainWorld('playlistsApi', playlistsApi)
 contextBridge.exposeInMainWorld('playbackApi', playbackApi)
 contextBridge.exposeInMainWorld('settingsApi', settingsApi)
+contextBridge.exposeInMainWorld('lovedApi', lovedApi)
 for (const [name, api] of Object.entries(apis)) contextBridge.exposeInMainWorld(name, api)

@@ -44,6 +44,7 @@ const notPlugins = [
 // code; a test in a plugin's folder is checked for imports of another plugin.
 const coreTests = [
   'src/main/convert-files.test.ts',
+  'src/main/loved-file.test.ts',
   'src/main/plays-file.test.ts',
   'src/main/plugins/core-split.test.ts',
   'src/main/plugins/list.test.ts',
@@ -70,6 +71,7 @@ const coreTests = [
   'src/renderer/src/ui/scroll-look.svelte.test.ts',
   'src/renderer/src/ui/scroll-top.svelte.test.ts',
   'src/shared/id-moves.test.ts',
+  'src/shared/loved.test.ts',
   'src/shared/playlists.test.ts',
   'src/shared/plays.test.ts',
   'src/shared/plugins.test.ts',

@@ -9,6 +9,7 @@
   import LiveStatus from './LiveStatus.svelte'
   import PlayingText from './PlayingText.svelte'
   import Seek from './Seek.svelte'
+  import Speed from './Speed.svelte'
   import TabLine from './TabLine.svelte'
   import Transport from './Transport.svelte'
   import VizButton from './VizButton.svelte'
@@ -57,7 +58,9 @@
         </div>
       {:else if bar.seek}
         <div class="seekrow">
-          <span>{fmtTime(player.pos)}</span><Seek /><span>{fmtTime(player.duration)}</span>
+          <!-- a long song's speed (ticket 114) after its length: the bar's
+               ends are full, and the times' row has room -->
+          <span>{fmtTime(player.pos)}</span><Seek /><span>{fmtTime(player.duration)}</span><Speed />
         </div>
       {/if}
     </div>
@@ -98,7 +101,8 @@
         <div>
           <Seek />
           <div class="times">
-            <span>{fmtTime(player.pos)}</span><span>{fmtTime(player.duration)}</span>
+            <!-- a long song's speed (ticket 114) between the times -->
+            <span>{fmtTime(player.pos)}</span><Speed /><span>{fmtTime(player.duration)}</span>
           </div>
         </div>
       {/if}

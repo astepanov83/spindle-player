@@ -17,10 +17,16 @@
   import { layout } from '../stores/layout.svelte'
   import { player } from '../stores/player.svelte'
   import { queues } from '../stores/queues.svelte'
+  import { sleepId } from '../queue/bar'
 
   let { style }: { style: 'stack' | 'bar' | 'compact' } = $props()
 
   const bar = $derived(queues.bar)
+  // The sleep timer's moon (ticket 111) is not about the item: on the bar it
+  // sits on the right, with the volume, so the title keeps its room; in the
+  // stack a live item's row has no room for it, so it goes in the row under.
+  const own = $derived(bar.buttons.filter((a) => a.id !== sleepId))
+  const moon = $derived(bar.buttons.find((a) => a.id === sleepId))
 </script>
 
 {#if style === 'bar'}
@@ -40,7 +46,7 @@
       {#if !bar.live}
         {#each bar.choices as a (a.id)}<BarAction action={a} wide />{/each}
       {/if}
-      {#each bar.buttons as a (a.id)}<BarAction action={a} wide />{/each}
+      {#each own as a (a.id)}<BarAction action={a} wide />{/each}
     </div>
     <div class="bc" class:live={bar.live}>
       <Transport />
@@ -57,6 +63,7 @@
     </div>
     <div class="br">
       <Stage cover={false} onclick={() => layout.cycleVisualizer()} />
+      {#if moon}<BarAction action={moon} wide />{/if}
       <Volume width={80} pop />
       <VizButton />
       <Slot name="player.buttons" />
@@ -69,7 +76,7 @@
   <div class="ctl compact">
     {#if bar.buttons.length}
       <div class="acts">
-        {#each bar.buttons as a (a.id)}<BarAction action={a} wide={false} />{/each}
+        {#each bar.buttons as a (a.id)}<BarAction action={a} wide={false} bare />{/each}
       </div>
     {/if}
     <Transport order={false} />
@@ -84,7 +91,7 @@
         <LiveStatus />
         <span class="gap"></span>
         {#each bar.choices as a (a.id)}<BarAction action={a} wide={false} />{/each}
-        {#each bar.buttons as a (a.id)}<BarAction action={a} wide={false} />{/each}
+        {#each own as a (a.id)}<BarAction action={a} wide={false} />{/each}
       </div>
     {:else}
       {#if bar.seek}
@@ -108,6 +115,8 @@
         <!-- a song's buttons (the heart) sit here, so the stack keeps its height -->
         {#if !bar.live}
           {#each bar.buttons as a (a.id)}<BarAction action={a} wide={false} />{/each}
+        {:else if moon}
+          <BarAction action={moon} wide={false} />
         {/if}
         <VizButton />
         <Slot name="player.buttons" />
@@ -134,11 +143,18 @@
     display: flex;
     align-items: center;
   }
-  /* In a narrow Mini the first one stays (the heart, ticket 117); the rest
-     give the title their room. */
+  /* In a narrow Mini only one stays: the first (the heart, ticket 117), or
+     the moon while a sleep timer is set (ticket 111), so it still shows that
+     the sound will stop. The rest give the title their room. */
   @media (max-width: 319px) {
     .compact .acts > :global(:not(:first-child)) {
       display: none;
+    }
+    .compact .acts:has(:global([data-keep])) > :global(:not([data-keep])) {
+      display: none;
+    }
+    .compact .acts > :global([data-keep]) {
+      display: grid;
     }
   }
   .stack {

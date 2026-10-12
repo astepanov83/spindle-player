@@ -607,6 +607,9 @@ export type Action =
       // its icon alone in a round button, never a word in a chip, also
       // where the bar has room (the heart, ticket 117); `hint` names it
       plain?: boolean
+      // a few letters after a plain button's icon: the sleep timer's time
+      // left (ticket 111)
+      text?: string
     }
   | {
       id: string

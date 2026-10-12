@@ -36,11 +36,13 @@ import {
   type QueueState,
   type Walk
 } from '../queue/logic'
+import { stopsAfter } from '../queue/sleep'
 import { infoOf, itemInfo, playItem } from '../plugins'
 import type { ItemAnswer, ItemInfo, Playable } from '../plugins/types'
 import { notice, type NoticeAction } from './notice.svelte'
 import { play, player, seek as seekSong } from './player.svelte'
 import { settings } from './settings.svelte'
+import { sleep } from './sleep.svelte'
 
 // The position goes to main this often while playing (plus on pause, seek and quit).
 const savePosEverySec = 5
@@ -401,7 +403,7 @@ class TrackQueue {
     if (!this.active || !l || l.key !== this.current || l.p.length === 'live')
       return send(undefined)
     const step = this.#nextStep()
-    if (step.kind === 'stop') return send(undefined)
+    if (step.kind === 'stop' || this.#sleepsAfter(step)) return send(undefined)
     if (step.kind === 'replay') return send({ step, key: l.key, p: l.p })
     const key = step.state.items[step.state.index]
     const use = (p: Playable | undefined): void =>
@@ -629,7 +631,8 @@ class TrackQueue {
   #ended(): void {
     const step = this.#nextStep()
     this.#picked = undefined
-    if (step.kind === 'replay') {
+    if (this.#sleepsAfter(step)) this.#sleepStop(step)
+    else if (step.kind === 'replay') {
       engine.seek(0)
       play()
     } else if (step.kind === 'play') {
@@ -640,6 +643,31 @@ class TrackQueue {
       if (p && !(p instanceof Promise) && follows(before?.p, p)) this.#carryOn(key, p)
       else this.#start()
     } else this.#stopAtEnd()
+  }
+
+  // The sleep timer ends with the song playing (End of song or album,
+  // ticket 111): no song is loaded ahead for gapless, and it stops there.
+  #sleepsAfter(step: EndStep): boolean {
+    return !!this.current && stopsAfter(sleep.set, step, this.current, albumOf)
+  }
+
+  // Sound stops as the song ends. The song that would have played waits at
+  // 0:00, so Play goes on from there; at the end of the queue it stops as
+  // the queue runs out.
+  #sleepStop(step: EndStep): void {
+    if (step.kind === 'stop') this.#stopAtEnd()
+    else {
+      this.#stop()
+      if (step.kind === 'play') {
+        this.#set(step.state)
+        this.#start(false)
+      } else {
+        engine.seek(0)
+        player.pos = 0
+        this.savePos()
+      }
+    }
+    sleep.done()
   }
 
   // The next song, past songs whose plugin is off or whose folder was not

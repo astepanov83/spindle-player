@@ -44,6 +44,26 @@ export function loveAction(on: boolean): ButtonAction {
   }
 }
 
+// The core's sleep timer (ticket 111): a moon that opens the timer's menu,
+// with the time left next to it while set ("23m", "song").
+export const sleepId = 'core:sleep'
+
+const sleepHint = (text: string): string =>
+  text === 'song' || text === 'album' ? `end of this ${text}` : `${text} left`
+
+export function sleepAction(on: boolean, text: string): ButtonAction {
+  return {
+    id: sleepId,
+    kind: 'button',
+    label: 'Sleep timer',
+    icon: on ? 'moonOn' : 'moon',
+    hint: on ? `Sleep timer: ${sleepHint(text)}` : 'Sleep timer',
+    on,
+    plain: true,
+    ...(on && { text })
+  }
+}
+
 // What the L key did, as the bar may be out of view.
 export function loveNotice(on: boolean, title: string | undefined): string {
   const word = on ? 'Loved' : 'Unloved'
@@ -52,24 +72,28 @@ export function loveNotice(on: boolean, title: string | undefined): string {
 
 // `now`: what the plugin says the item can do now, over the playable's.
 // `loved`: the song can be loved, and whether it is; none: no heart.
+// `sleep`: the sleep timer's moon, whether set and its time left; none: no moon.
 export function barOf(
   kind: ItemKind,
   p: { length: number | 'live'; can: Can } | undefined,
   actions: Action[],
   now?: Can,
-  loved?: boolean
+  loved?: boolean,
+  sleep?: { on: boolean; text: string }
 ): Bar {
   const live = p ? p.length === 'live' : kind === 'live'
   const can = now ?? p?.can ?? (kind === 'live' ? liveCan : trackCan)
   const heart = loved === undefined ? [] : [loveAction(loved)]
+  const moon = sleep ? [sleepAction(sleep.on, sleep.text)] : []
   return {
     live,
     seek: !live && can.seek,
     next: can.next,
     previous: can.previous,
     order: kind === 'track',
-    // the heart first: next to the song's title on a bar
-    buttons: [...heart, ...actions.filter((a): a is ButtonAction => a.kind === 'button')],
+    // the heart first: next to the song's title on a bar; the moon last, as
+    // it is not about the song
+    buttons: [...heart, ...actions.filter((a): a is ButtonAction => a.kind === 'button'), ...moon],
     choices: actions.filter((a): a is ChoiceAction => a.kind === 'choice')
   }
 }

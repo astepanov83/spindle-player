@@ -21,6 +21,7 @@ import type {
 import { loved } from './loved.svelte'
 import { player, togglePlay as toggleSong } from './player.svelte'
 import { queue } from './queue.svelte'
+import { sleep } from './sleep.svelte'
 
 export type Active = 'track' | 'live'
 
@@ -170,10 +171,20 @@ class Queues {
     }
     engine.on(route)
     queue.takeOver = () => this.#toTrack()
+    sleep.pause = () => this.pause()
+    sleep.replan = () => queue.planNext()
+  }
+
+  // The sleep timer's moon (ticket 111): while something is picked, or a
+  // timer is set.
+  #moon(): { on: boolean; text: string } | undefined {
+    const s = sleep.shown
+    if (s) return { on: true, text: s.left }
+    return this.nothing ? undefined : { on: false, text: '' }
   }
 
   #liveBar(): Bar {
-    return barOf('live', this.live.playable, this.live.actions)
+    return barOf('live', this.live.playable, this.live.actions, undefined, undefined, this.#moon())
   }
 
   // the song's plugin may change what it can do while it plays
@@ -182,7 +193,7 @@ class Queues {
     const p = queue.playable
     const actions = (key && actionsOf(key)) ?? p?.actions ?? []
     const heart = key && canLove(key) ? loved.has(key) : undefined
-    return barOf('track', p, actions, key && canOf(key), heart)
+    return barOf('track', p, actions, key && canOf(key), heart, this.#moon())
   }
 
   #liveEvents(): Partial<EngineEvents> {
@@ -211,6 +222,7 @@ class Queues {
       if (old && old.plugin !== l.plugin) old.plugin.pause(old.id)
     }
     this.active = 'live'
+    sleep.liveStarted()
     this.#setCurrent(key)
     this.#save({ active: 'live', current: key })
     await this.#open(key, () => l.plugin.play(l.id, this.#handle(key)))

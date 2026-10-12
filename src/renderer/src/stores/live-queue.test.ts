@@ -165,7 +165,10 @@ const { queues } = await import('./queues.svelte')
 const { queue } = await import('./queue.svelte')
 const { player } = await import('./player.svelte')
 const { loved } = await import('./loved.svelte')
-const { loveAction, loveId } = await import('../queue/bar')
+const { sleepId, loveAction, loveId } = await import('../queue/bar')
+const { sleep } = await import('./sleep.svelte')
+// the item's own buttons: the sleep timer's moon (ticket 111) is on every bar
+const ownButtons = (): Action[] => queues.bar.buttons.filter((b) => b.id !== sleepId)
 
 const one: ItemKey = 'radio:one'
 
@@ -467,14 +470,14 @@ describe('the player bar', () => {
 
   it('draws the actions the plugin gives, and follows their changes', async () => {
     await playLive(one)
-    expect(queues.bar.buttons).toEqual([])
+    expect(ownButtons()).toEqual([])
     live.handle!.actions([stream, save])
     expect(queues.bar.choices).toEqual([stream])
-    expect(queues.bar.buttons).toEqual([save])
+    expect(ownButtons()).toEqual([save])
     // saved: the plugin gives Save no more
     live.handle!.actions([{ ...stream, picked: '1' }])
     expect(queues.bar.choices[0].kind === 'choice' && queues.bar.choices[0].picked).toBe('1')
-    expect(queues.bar.buttons).toEqual([])
+    expect(ownButtons()).toEqual([])
   })
 
   it('act tells the item’s plugin the action and the option picked', async () => {
@@ -500,9 +503,9 @@ describe('the player bar', () => {
     const old = live.handle!
     old.actions([save])
     await playLive('radio:two')
-    expect(queues.bar.buttons).toEqual([])
+    expect(ownButtons()).toEqual([])
     old.actions([save])
-    expect(queues.bar.buttons).toEqual([])
+    expect(ownButtons()).toEqual([])
   })
 
   it('a song: seek bar, Shuffle and Repeat, Next and Previous, also while it is on its way', async () => {
@@ -516,7 +519,7 @@ describe('the player bar', () => {
   it('a song’s Next is hidden when it can’t; its actions are drawn and heard', () => {
     queue.playList(['files:a'], 0, '')
     expect(queues.bar).toMatchObject({ seek: true, next: false, previous: true, order: true })
-    expect(queues.bar.buttons.map((a) => a.id)).toEqual([loveId, 'like'])
+    expect(ownButtons().map((a) => a.id)).toEqual([loveId, 'like'])
     live.calls = []
     queues.act('like')
     expect(live.calls).toEqual(['act files:a like'])
@@ -526,30 +529,31 @@ describe('the player bar', () => {
 describe('the player bar while a song changes (fix round 1)', () => {
   it('a clicked song on its way: the default bar, not the last song’s actions', async () => {
     queue.playList(['files:a', 'files:s0'], 0, '')
-    expect(queues.bar.buttons.map((a) => a.id)).toEqual([loveId, 'like'])
+    expect(ownButtons().map((a) => a.id)).toEqual([loveId, 'like'])
     live.songsLater = true
     void queue.next()
     expect(queue.current).toBe('files:s0')
-    expect(queues.bar).toMatchObject({ seek: true, next: true, buttons: [loveAction(false)] })
+    expect(queues.bar).toMatchObject({ seek: true, next: true })
+    expect(ownButtons()).toEqual([loveAction(false)])
     live.calls = []
     // the last song's action is not sent to the new one
     queues.act('like')
     expect(live.calls).toEqual([])
     await answer(() => undefined)
-    expect(queues.bar.buttons).toEqual([loveAction(false)])
+    expect(ownButtons()).toEqual([loveAction(false)])
   })
 
   it('a song whose id moved (a rescan) keeps its playable on the bar', () => {
     queue.playList(['files:a'], 0, '')
     queue.moveIds('files', { a: 'a2' })
     expect(queue.current).toBe('files:a2')
-    expect(queues.bar.buttons.map((x) => x.id)).toEqual([loveId, 'like'])
+    expect(ownButtons().map((x) => x.id)).toEqual([loveId, 'like'])
   })
 
   it('a song’s can and actions are read as its plugin changes them', () => {
     live.reactive = true
     queue.playList(['files:a'], 0, '')
-    expect(queues.bar.buttons).toEqual([
+    expect(ownButtons()).toEqual([
       loveAction(false),
       { id: 'like', kind: 'button', label: 'Like', on: false }
     ])
@@ -589,7 +593,7 @@ describe('the heart on the bar (ticket 117)', () => {
   it('a live item has none, and the heart can’t be used on it', async () => {
     loved.load({})
     await playLive(one)
-    expect(queues.bar.buttons).toEqual([])
+    expect(ownButtons()).toEqual([])
     queues.act(loveId)
     expect(queues.toggleLove()).toBeUndefined()
     expect(loved.all).toEqual({})
@@ -653,5 +657,41 @@ describe('the time listened to a live item', () => {
     expect(at()).toBe(5)
     await playLive(one)
     expect(at()).toBe(0)
+  })
+})
+
+describe('the sleep timer (ticket 111)', () => {
+  const moon = (): Action | undefined => queues.bar.buttons.find((b) => b.id === sleepId)
+
+  afterEach(() => sleep.cancel())
+
+  it('is on the bar of a song and of a live item, last', async () => {
+    expect(queues.bar.buttons.at(-1)).toMatchObject({ id: sleepId, on: false })
+    await playLive(one)
+    expect(queues.bar.buttons.at(-1)).toMatchObject({ id: sleepId, on: false })
+  })
+
+  it('shows the time left while set', () => {
+    sleep.pick(30)
+    expect(moon()).toMatchObject({ on: true, icon: 'moonOn', text: '30m' })
+    sleep.pick('album')
+    expect(moon()).toMatchObject({ on: true, text: 'album' })
+  })
+
+  it('a live item drops End of song and album, not a timed one', async () => {
+    sleep.pick('song')
+    await playLive(one)
+    expect(sleep.set).toBeUndefined()
+    queues.backToQueue()
+    sleep.pick(15)
+    await playLive(one)
+    expect(sleep.set).toMatchObject({ pick: 15 })
+  })
+
+  it('pauses what plays when it ends', async () => {
+    await playLive(one)
+    expect(player.playing).toBe(true)
+    sleep.pause()
+    expect(player.playing).toBe(false)
   })
 })

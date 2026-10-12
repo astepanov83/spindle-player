@@ -43,6 +43,10 @@ export interface Settings {
   viewLooks: ViewLooks
   loudness: Loudness
   noCover: NoCover
+  // the sound output's device id (ticket 112); '' is the system default
+  outputDevice: string
+  // its name when it was picked, for when it is not plugged in
+  outputDeviceName: string
 }
 
 export interface Size {
@@ -123,7 +127,9 @@ export function defaultSettings(): Settings {
     artistsShown: 'album',
     viewLooks: { albums: 'grid', artists: 'grid', artistPage: 'sections' },
     loudness: 'album',
-    noCover: 'rings'
+    noCover: 'rings',
+    outputDevice: '',
+    outputDeviceName: ''
   }
 }
 
@@ -244,6 +250,10 @@ function parseViewLooks(v: unknown, base: ViewLooks): ViewLooks {
   }
 }
 
+// A device id or name: Chromium's ids are 64 characters, names short.
+const maxDeviceText = 500
+const isDeviceText = (v: unknown): v is string => typeof v === 'string' && v.length <= maxDeviceText
+
 // Absolute on Linux and macOS, or with a drive letter on Windows.
 function isAbsolutePath(p: string): boolean {
   return p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\')
@@ -349,6 +359,8 @@ export function parseStoredSettings(
     viewLooks: parseViewLooks(r.viewLooks, base.viewLooks),
     loudness: oneOf(r.loudness, loudnessChoices, base.loudness),
     noCover: oneOf(r.noCover, noCoverChoices, base.noCover),
+    outputDevice: isDeviceText(r.outputDevice) ? r.outputDevice : base.outputDevice,
+    outputDeviceName: isDeviceText(r.outputDeviceName) ? r.outputDeviceName : base.outputDeviceName,
     windowSizes,
     windowMaximized:
       r.windowMaximized === undefined
@@ -458,6 +470,8 @@ export function isKnownSettingsFile(raw: unknown): boolean {
   )
     return false
   if (has('ai') && !isKnownAi(raw.ai)) return false
+  if (has('outputDevice') && !isDeviceText(raw.outputDevice)) return false
+  if (has('outputDeviceName') && !isDeviceText(raw.outputDeviceName)) return false
   if (
     has('viewSorts') &&
     (!isObject(raw.viewSorts) ||
@@ -487,6 +501,8 @@ export function pageSettings(s: StoredSettings): Settings {
     artistsShown: s.artistsShown,
     viewLooks: { ...s.viewLooks },
     loudness: s.loudness,
-    noCover: s.noCover
+    noCover: s.noCover,
+    outputDevice: s.outputDevice,
+    outputDeviceName: s.outputDeviceName
   }
 }

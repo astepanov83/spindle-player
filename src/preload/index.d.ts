@@ -4,6 +4,7 @@ import type {
   LyricsApi,
   PlaybackApi,
   PlaylistsApi,
+  PositionsApi,
   SettingsApi,
   WinApi
 } from '../shared/ipc'
@@ -19,5 +20,6 @@ declare global {
     playbackApi: PlaybackApi
     lovedApi: LovedApi
     lyricsApi: LyricsApi
+    positionsApi: PositionsApi
   }
 }

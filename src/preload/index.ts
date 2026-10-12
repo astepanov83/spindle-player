@@ -5,6 +5,7 @@ import {
   LyricsChannel,
   PlaybackChannel,
   PlaylistChannel,
+  PositionsChannel,
   SettingsChannel,
   WinChannel,
   type AiApi,
@@ -13,6 +14,7 @@ import {
   type PlaybackApi,
   type PlayControl,
   type PlaylistsApi,
+  type PositionsApi,
   type SettingsApi,
   type WinApi
 } from '../shared/ipc'
@@ -105,6 +107,14 @@ const lovedApi: LovedApi = {
   set: (keys, on) => send(LovedChannel.set, keys, on)
 }
 
+// Asked for early too, so the queue's first song can start at its place (ticket 114).
+const positions = invoke(PositionsChannel.load)
+
+const positionsApi: PositionsApi = {
+  load: () => positions,
+  set: (key, pos) => send(PositionsChannel.set, key, pos)
+}
+
 const lyricsApi: LyricsApi = {
   get: (key, song) => invoke(LyricsChannel.get, key, song)
 }
@@ -128,4 +138,5 @@ contextBridge.exposeInMainWorld('playbackApi', playbackApi)
 contextBridge.exposeInMainWorld('settingsApi', settingsApi)
 contextBridge.exposeInMainWorld('lovedApi', lovedApi)
 contextBridge.exposeInMainWorld('lyricsApi', lyricsApi)
+contextBridge.exposeInMainWorld('positionsApi', positionsApi)
 for (const [name, api] of Object.entries(apis)) contextBridge.exposeInMainWorld(name, api)

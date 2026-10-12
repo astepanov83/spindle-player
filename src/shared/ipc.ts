@@ -5,6 +5,7 @@ import type { Loved } from './loved'
 import type { Lyrics, LyricsSong } from './lyrics'
 import type { Playlist } from './playlists'
 import type { PlayedSong, Plays, PlayStats, StatsPeriod } from './plays'
+import type { Positions } from './positions'
 import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
 import type { Settings } from './settings'
 import type { SleepPick, SleepShown } from './sleep'
@@ -178,6 +179,20 @@ export interface LyricsApi {
   get(key: ItemKey, song?: LyricsSong): Promise<Lyrics | undefined>
 }
 
+export const PositionsChannel = {
+  load: 'positions:load',
+  set: 'positions:set'
+} as const
+
+// What the preload exposes to the page as `window.positionsApi` (ticket 114).
+// The page keeps its own copy and tells main, which saves it.
+export interface PositionsApi {
+  // where each long song was left, as it was when the page loaded
+  load(): Promise<Positions>
+  // a song's place in seconds, or null to forget it
+  set(key: ItemKey, pos: number | null): void
+}
+
 export const AiChannel = {
   load: 'ai:load',
   // main to page: the whole AiState, at every change
@@ -235,6 +250,8 @@ export interface CoreChannels {
   [LovedChannel.load]: LovedApi['load']
   [LovedChannel.set]: LovedApi['set']
   [LyricsChannel.get]: LyricsApi['get']
+  [PositionsChannel.load]: PositionsApi['load']
+  [PositionsChannel.set]: PositionsApi['set']
 }
 
 export type PageChannels = CoreChannels & PluginChannels

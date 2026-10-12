@@ -32,6 +32,8 @@ export interface PluginInfo {
   countsPlays?: boolean
   // its songs can be loved, kept in loved.json (ticket 117)
   canLove?: boolean
+  // its long songs start where they were left, kept in positions.json (ticket 114)
+  keepsPlace?: boolean
 }
 
 // Also the order of the switches and tabs.
@@ -46,6 +48,7 @@ export const plugins: PluginInfo[] = [
     linkKinds: ['album', 'artist', 'folder'],
     countsPlays: true,
     canLove: true,
+    keepsPlace: true,
     aiTasks: [
       {
         id: artistGroupsTask,

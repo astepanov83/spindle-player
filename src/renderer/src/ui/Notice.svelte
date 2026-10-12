@@ -1,9 +1,11 @@
 <!-- The short notice. With a library it sits at the bottom middle of the
      library part: above Classic's bar, below Studio's search box, and away
      from every player control. Focus has no library: it sits under the tabs,
-     over the cover. A plain one lets clicks through. -->
+     over the cover. Mini: over the middle of the bar. A plain one lets clicks
+     through. -->
 <script lang="ts">
   import { notice } from '../stores/notice.svelte'
+  import { layout } from '../stores/layout.svelte'
 
   let el: HTMLDivElement | undefined = $state()
   // where it goes, in px from the app's box; measured each time it shows
@@ -41,6 +43,11 @@
       return
     }
     const tabs = document.querySelector('[data-notice-under]')
+    // Mini: over the middle of the bar, which has no title bar to sit under
+    if (layout.bar) {
+      place = { x: a.width / 2, y: Math.max(0, (a.height - 40) / 2), bottom: false, width: a.width }
+      return
+    }
     if (!tabs) {
       place = { x: a.width / 2, y: 46, bottom: false, width: a.width }
       return

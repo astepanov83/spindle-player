@@ -2,6 +2,7 @@
      (ticket 049). Main asks; see MainWindow.askClose. -->
 <script lang="ts">
   import { flushSync } from 'svelte'
+  import { layout } from '../stores/layout.svelte'
   import { settings } from '../stores/settings.svelte'
 
   let el: HTMLDialogElement | undefined = $state()
@@ -37,20 +38,24 @@
 
 <!-- Keys stay in the box: Space presses a button here, and Escape (the
      dialog's own cancel) must not also close Settings behind it. -->
+<!-- In Mini it fills the bar: one row, without the hints. -->
 <dialog
   bind:this={el}
+  class:bar={layout.bar}
   aria-labelledby="close-ask-title"
   {onclick}
   onkeydown={(e) => e.stopPropagation()}
 >
   <div class="box">
-    <h3 id="close-ask-title">Close Spindle?</h3>
-    <p class="hint">Minimize keeps the music playing.</p>
-    <label class="check">
-      <input type="checkbox" bind:checked={remember} />
-      Remember my choice
-    </label>
-    {#if remember}<p class="hint">You can change this in Settings.</p>{/if}
+    <div class="ask">
+      <h3 id="close-ask-title">Close Spindle?</h3>
+      {#if !layout.bar}<p class="hint">Minimize keeps the music playing.</p>{/if}
+      <label class="check">
+        <input type="checkbox" bind:checked={remember} />
+        {layout.bar ? 'Remember' : 'Remember my choice'}
+      </label>
+      {#if remember && !layout.bar}<p class="hint">You can change this in Settings.</p>{/if}
+    </div>
     <div class="acts">
       <button class="pill" bind:this={minimizeBtn} onclick={() => answer('minimize')}>
         Minimize
@@ -127,5 +132,50 @@
     gap: 8px;
     flex-wrap: wrap;
     margin-top: 4px;
+  }
+  /* its rows are the box's own, but in Mini */
+  .ask {
+    display: contents;
+  }
+  dialog.bar {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+    -webkit-app-region: no-drag;
+  }
+  .bar .box {
+    height: 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px 0 14px;
+  }
+  .bar .ask {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+  }
+  .bar h3 {
+    font-size: var(--text-m);
+    white-space: nowrap;
+  }
+  .bar .check {
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+  .bar .acts {
+    flex-wrap: nowrap;
+    gap: 4px;
+    margin: 0;
+  }
+  .bar .acts .pill {
+    padding: 5px 10px;
+    font-size: var(--text-s);
   }
 </style>

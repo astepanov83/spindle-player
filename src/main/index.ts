@@ -223,9 +223,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   const routes = new Map<string, Route>([['cover', coverRoute(covers)]])
   const netFetch = ((url, init) => net.fetch(url as string, init)) as typeof fetch
   // Song words from LRCLIB when the song's files have none (ticket 121).
-  // Node's fetch, not net.fetch: Chromium uses the DNS record that turns on
-  // Encrypted Client Hello for LRCLIB's host, and where networks block that
-  // its requests hang until the timeout.
+  // Node's fetch, not net.fetch: Chromium reads the host's HTTPS DNS record
+  // (Cloudflare's), and on some networks its requests to it then hang.
   lyrics.add(
     new LyricsFetch({
       dir: join(userData, 'fetched-lyrics'),

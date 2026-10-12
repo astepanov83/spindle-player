@@ -1,5 +1,5 @@
 <!-- The title row over a list view (Albums, Artists, Songs, Playlists,
-     Radio), on one line: the title, its count, then at the right the look
+     Radio, Stats), on one line: the title, its count, then at the right the look
      switch (icon segments) and a choice: a few options as segments, more (a
      sort) as a button that opens a menu. Where they don't fit beside the
      title (Studio's narrowest library), both go into one menu button
@@ -27,8 +27,8 @@
     onlook
   }: {
     title: string
-    // "8 albums": the row shows the number
-    count: string
+    // "8 albums": the row shows the number; none for a page that is no list (Stats)
+    count?: string
     // a line under the title
     hint?: string
     // a line of links under the title, in place of `hint`
@@ -42,14 +42,14 @@
     onlook?: (value: string) => void
   } = $props()
 
-  const number = $derived(count.split(' ')[0])
+  const number = $derived(count?.split(' ')[0])
 
   // The widths the switch and the choice need, measured also while they are
   // hidden, so the row knows when they fit again.
   let rowW = $state(0)
   let leadW = $state(0)
   let sideW = $state(0)
-  const fits = $derived(!looks || leadW + 10 + sideW <= rowW)
+  const fits = $derived((!looks && !choice) || leadW + 10 + sideW <= rowW)
   const picked = $derived(choice?.options.find((o) => o.value === choice.value)?.label ?? '')
 
   const entries = (c: Choice, run: (v: string) => void): MenuEntry[] => [
@@ -84,7 +84,7 @@
     aria-label="{label}: {now}"
     title={label}
     onclick={(e) => open(e, withLooks)}
-    >{#if choice?.menu}<span class="prefix">{choice.menu.prefix}</span>
+    >{#if choice?.menu?.prefix}<span class="prefix">{choice.menu.prefix}</span>
     {/if}{now}<span class="arrow">▾</span></button
   >
 {/snippet}
@@ -93,10 +93,12 @@
      look switch stay in reach; a line under it scrolls away. -->
 <div class="vhead" class:tight={!!below || !!hint} data-sticky-top>
   <div class="titlerow" bind:clientWidth={rowW}>
-    <div class="lead" class:fixed={!!looks} bind:clientWidth={leadW}>
+    <div class="lead" class:fixed={!!looks || !!choice} bind:clientWidth={leadW}>
       <h2 class="page-title" {title}>{title}</h2>
-      <span class="n" aria-hidden="true" title={count}>{number}</span>
-      <span class="sr">{count}</span>
+      {#if count}
+        <span class="n" aria-hidden="true" title={count}>{number}</span>
+        <span class="sr">{count}</span>
+      {/if}
     </div>
     {#if looks || choice}
       <div class="side" class:out={!fits} bind:clientWidth={sideW}>

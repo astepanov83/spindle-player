@@ -37,15 +37,21 @@ import {
   type Walk
 } from '../queue/logic'
 import { stopsAfter } from '../queue/sleep'
+import { fmtTime } from '../format'
 import { infoOf, itemInfo, playItem } from '../plugins'
 import type { ItemAnswer, ItemInfo, Playable } from '../plugins/types'
 import { notice, type NoticeAction } from './notice.svelte'
 import { play, player, seek as seekSong } from './player.svelte'
+import { positions } from './positions'
 import { settings } from './settings.svelte'
 import { sleep } from './sleep.svelte'
 
 // The position goes to main this often while playing (plus on pause, seek and quit).
 const savePosEverySec = 5
+// A long song's place is kept this often while it plays (ticket 114).
+const keepPlaceEverySec = 10
+// "Resumed at 41:20 · Start over" stays this long
+const resumedMs = 5000
 
 // The last Clear or Remove, while its notice offers Undo. `after` is the
 // queue it left; `at` the row removed (none for Clear). `pos` is where the
@@ -122,6 +128,13 @@ class TrackQueue {
 
   #fails = 0
   #savedPos = 0
+  // The song last heard while this queue had the player, and where: a long
+  // one keeps its place from it (ticket 114). Not player.pos, which is the
+  // next song's once it starts, or a live item's.
+  #heard: { key: ItemKey; pos: number; length: number } | undefined
+  #keptPos = 0
+  // How fast the song playing goes (ticket 114): 1 for each new song. Not saved.
+  speed = $state(1)
   #undo: Undo | undefined
   // what the engine has: the song and how it plays, for the gapless carry-on
   // and the player bar
@@ -139,14 +152,14 @@ class TrackQueue {
   #waitingNow: { andPlay: boolean; at: number } | undefined
   // The current song's playable is on its way (its plugin asks first). Play
   // or Pause pressed meanwhile decides whether it plays when it comes.
-  get #pending(): { andPlay: boolean } | undefined {
+  get #pending(): { andPlay: boolean; at: number } | undefined {
     return this.#pendingNow
   }
-  set #pending(p: { andPlay: boolean } | undefined) {
+  set #pending(p: { andPlay: boolean; at: number } | undefined) {
     this.#pendingNow = p
     this.#wish()
   }
-  #pendingNow: { andPlay: boolean } | undefined
+  #pendingNow: { andPlay: boolean; at: number } | undefined
   // The song waits (above) and is to play once it loads: the play button
   // shows Pause then, so pressing it says "not now".
   wantsPlay = $state(false)
@@ -178,7 +191,9 @@ class TrackQueue {
   readonly events: Partial<EngineEvents> = {
     time: (t) => {
       player.pos = t
+      this.#hear()
       if (Math.abs(t - this.#savedPos) >= savePosEverySec) this.savePos()
+      if (Math.abs(t - this.#keptPos) >= keepPlaceEverySec) this.#keepPlace()
     },
     duration: (d) => (player.duration = d),
     ended: () => this.#ended(),
@@ -192,12 +207,16 @@ class TrackQueue {
     paused: () => {
       player.playing = false
       this.savePos()
+      this.keepPlace()
     },
     refused: (message) => {
       window.playbackApi.log(`Playback refused: ${message}`)
       player.playing = false
     },
-    seeked: () => this.savePos(),
+    seeked: () => {
+      this.savePos()
+      this.keepPlace()
+    },
     error: (e) => this.#failed(e)
   }
 
@@ -234,10 +253,17 @@ class TrackQueue {
     if (this.#loaded?.key === this.current) this.planNext()
   }
 
-  // Loads the current song at `at` seconds, and plays it if `andPlay`.
+  // Loads the current song at `at` seconds, and plays it if `andPlay`. A
+  // long song started from the top that was left before starts at its place
+  // (ticket 114), but not the song that was loaded: that one starts over.
   #start(andPlay = true, at = 0): void {
     const key = this.current
     const s = key && itemInfo(key)
+    const again = !!key && this.#loaded?.key === key
+    // the song left keeps its place
+    this.#keepPlace()
+    const resumed = !!key && at === 0 && !again && s?.state === 'ok' && !s.info.unavailable
+    if (resumed) at = positions.startOf(key, s.info.length)
     this.starts++
     this.ended = false
     this.#waiting = undefined
@@ -250,6 +276,7 @@ class TrackQueue {
       return
     }
     if (!key || !s) return this.#unload()
+    if (resumed && at > 0) this.#sayResumed(key, at)
     if (s.state === 'off') return andPlay ? this.#passOver(at) : this.#hold(at)
     // the row and the player say why; nothing to try, so no notice
     if (s.state === 'ok' && s.info.unavailable) return this.#hold(at)
@@ -261,7 +288,7 @@ class TrackQueue {
     } else if (p instanceof Promise) {
       const n = this.#loads
       this.#unload()
-      const pending = { andPlay }
+      const pending = { andPlay, at }
       this.#pending = pending
       // the live queue may have taken the player meanwhile
       const still = (): boolean => n === this.#loads && this.active
@@ -269,14 +296,14 @@ class TrackQueue {
         (r) => {
           if (!still()) return
           this.#pending = undefined
-          if (r) this.#load(key, r, at, pending.andPlay)
-          else this.#waiting = { andPlay: pending.andPlay, at }
+          if (r) this.#load(key, r, pending.at, pending.andPlay)
+          else this.#waiting = { andPlay: pending.andPlay, at: pending.at }
         },
         (e) => {
           window.playbackApi.log(`Could not get ${key} to play: ${e}`)
           if (!still()) return
           this.#pending = undefined
-          this.#waiting = { andPlay: pending.andPlay, at }
+          this.#waiting = { andPlay: pending.andPlay, at: pending.at }
         }
       )
     } else this.#load(key, p, at, andPlay)
@@ -286,6 +313,7 @@ class TrackQueue {
     this.#loaded = { key, p }
     player.duration = typeof p.length === 'number' ? p.length : 0
     engine.load(p.url, at, p.part, { gain: gainIn(p, this.#state()), rate: p.rate })
+    this.speed = 1
     if (andPlay) play()
     else player.playing = false
     this.planNext()
@@ -293,6 +321,7 @@ class TrackQueue {
 
   #unload(): void {
     this.#loaded = undefined
+    this.#heard = undefined
     this.#sent = undefined
     this.#plans++
     player.playing = false
@@ -349,6 +378,9 @@ class TrackQueue {
     this.#sent = undefined
     this.#picked = undefined
     if (!s) return
+    this.#heardToEnd()
+    // the engine starts every next song at 1x
+    this.speed = 1
     this.#fails = 0
     if (s.step.kind === 'play') {
       this.#set(s.step.state)
@@ -366,6 +398,7 @@ class TrackQueue {
     this.#loads++
     this.#pending = undefined
     this.#loaded = { key, p }
+    this.speed = 1
     player.pos = 0
     player.duration = typeof p.length === 'number' ? p.length : 0
   }
@@ -406,8 +439,13 @@ class TrackQueue {
     if (step.kind === 'stop' || this.#sleepsAfter(step)) return send(undefined)
     if (step.kind === 'replay') return send({ step, key: l.key, p: l.p })
     const key = step.state.items[step.state.index]
+    // a long song with a place starts there when its turn comes, not at 0:00
     const use = (p: Playable | undefined): void =>
-      send(p && p.length !== 'live' && !follows(l.p, p) ? { step, key, p } : undefined)
+      send(
+        p && p.length !== 'live' && !follows(l.p, p) && !this.#resumes(key)
+          ? { step, key, p }
+          : undefined
+      )
     const p = playItem(key)
     if (!(p instanceof Promise)) return use(p)
     send(undefined)
@@ -629,6 +667,7 @@ class TrackQueue {
   // The song ended with no next song started for it (none was ready, or it
   // is the next part of the same file): the picked one plays the usual way.
   #ended(): void {
+    this.#heardToEnd()
     const step = this.#nextStep()
     this.#picked = undefined
     if (this.#sleepsAfter(step)) this.#sleepStop(step)
@@ -640,7 +679,8 @@ class TrackQueue {
       this.#set(step.state)
       const key = this.current!
       const p = player.playing && before ? playItem(key) : undefined
-      if (p && !(p instanceof Promise) && follows(before?.p, p)) this.#carryOn(key, p)
+      const on = p && !(p instanceof Promise) && follows(before?.p, p) && !this.#resumes(key)
+      if (on) this.#carryOn(key, p)
       else this.#start()
     } else this.#stopAtEnd()
   }
@@ -807,6 +847,8 @@ class TrackQueue {
     // the loaded song keeps its new key, so the bar still reads its playable
     const l = this.#loaded
     if (l) this.#loaded = { ...l, key: moveKeys([l.key], plugin, moves)[0] }
+    const h = this.#heard
+    if (h) this.#heard = { ...h, key: moveKeys([h.key], plugin, moves)[0] }
     // an Undo on offer puts back the same songs, by their new ids
     const u = this.#undo
     if (u && u.after.items === this.items) {
@@ -849,6 +891,67 @@ class TrackQueue {
     const s = this.#state()
     delete s.shuffle
     window.playbackApi.saveQueue({ ...s, pos: player.pos })
+  }
+
+  // Where the loaded song is, while this queue has the player.
+  #hear(): void {
+    const l = this.#loaded
+    if (this.active && l && l.key === this.current)
+      this.#heard = { key: l.key, pos: player.pos, length: player.duration }
+  }
+
+  // A long song's place goes to main: on pause, a seek, a song change, quit
+  // (App.svelte) and when a live item takes the player (queues.svelte.ts).
+  keepPlace(): void {
+    this.#hear()
+    this.#keepPlace()
+  }
+
+  #keepPlace(): void {
+    const h = this.#heard
+    if (!h) return
+    this.#keptPos = h.pos
+    positions.keep(h.key, h.pos, h.length)
+  }
+
+  // The song heard last played to its end: next time it starts at 0:00.
+  #heardToEnd(): void {
+    const l = this.#loaded
+    if (l) positions.forget(l.key)
+    this.#heard = undefined
+  }
+
+  // The song would start at a kept place, not at 0:00.
+  #resumes(key: ItemKey): boolean {
+    return positions.startOf(key, infoOf(key)?.length) > 0
+  }
+
+  #sayResumed(key: ItemKey, at: number): void {
+    notice.show(
+      `Resumed at ${fmtTime(at)}`,
+      { label: 'Start over', run: () => this.#startOver(key) },
+      resumedMs
+    )
+  }
+
+  // "Start over" on the notice: the song goes back to 0:00 and its place is
+  // forgotten. Nothing more if another song is current by now.
+  #startOver(key: ItemKey): void {
+    positions.forget(key)
+    // heard from 0:00 on now, not where it was
+    if (this.#heard?.key === key) this.#heard = undefined
+    if (this.current !== key) return
+    const w = this.#waiting ?? this.#pending
+    if (w) w.at = 0
+    else if (this.#loaded?.key === key) this.seek(0)
+  }
+
+  // The speed choice on the player bar, for a long song (ticket 114).
+  setSpeed(rate: number): void {
+    const l = this.#loaded
+    if (!this.active || !l || l.key !== this.current) return
+    engine.setSpeed(rate)
+    this.speed = rate
   }
 
   // The current song and position, without the list.

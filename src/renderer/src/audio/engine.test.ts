@@ -13,6 +13,7 @@ class FakeAudio extends EventTarget {
   seeking = false
   readyState = 0
   playbackRate = 1
+  preservesPitch = false
   error: { code: number; message: string } | null = null
   #src: string | null = null
   loads: string[] = []
@@ -1138,5 +1139,30 @@ describe('the sleep timer’s fade (ticket 111)', () => {
     e.unfade()
     expect(vol(contexts[0]).glide?.[0]).toBeCloseTo(0.25)
     expect(vol(b).glide?.[0]).toBeCloseTo(0.25)
+  })
+})
+
+describe('the speed of a long song (ticket 114)', () => {
+  it('plays faster or slower with its pitch kept, and the end timer counts at that speed', () => {
+    playPart()
+    e.setSpeed(2)
+    expect(el.playbackRate).toBe(2)
+    expect(el.preservesPitch).toBe(true)
+    el.currentTime = 158
+    el.fire('timeupdate')
+    // 2 s of the part left at 2x: the end comes in 1 s, not 2
+    el.currentTime = 160
+    vi.advanceTimersByTime(1000)
+    expect(got).toContain('ended')
+  })
+
+  it('goes back to 1x for the next part of the file and another part of it', () => {
+    playPart()
+    e.setSpeed(1.5)
+    e.continueWith({ start: 160, end: 200 })
+    expect(el.playbackRate).toBe(1)
+    e.setSpeed(0.75)
+    e.load('spindle://media/img', 0, { start: 0, end: 100 })
+    expect(el.playbackRate).toBe(1)
   })
 })

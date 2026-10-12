@@ -13,6 +13,7 @@ import { startAi } from './ai.svelte'
 import { playlists } from './stores/playlists.svelte'
 import { plays } from './stores/plays.svelte'
 import { loved } from './stores/loved.svelte'
+import { positions } from './stores/positions'
 import { queues } from './stores/queues.svelte'
 import { queue } from './stores/queue.svelte'
 import { layout } from './stores/layout.svelte'
@@ -23,6 +24,7 @@ import { orFallback } from './start'
 import { moveQueue, movePlaylists } from '../../shared/id-moves'
 import { movePlays } from '../../shared/plays'
 import { moveLoved } from '../../shared/loved'
+import { movePositions } from '../../shared/positions'
 import { emptyQueues } from '../../shared/saved-queue'
 import { defaultSettings } from '../../shared/settings'
 
@@ -49,12 +51,13 @@ window.win.onNoGpu((noGpu) => document.documentElement.classList.toggle('no-gpu'
 // wait doesn't show. A failed ask shows the app with defaults. Settings and
 // playlists that failed to load are not saved this run, so the defaults can't
 // replace the user's files.
-const [saved, lists, lastQueue, counts, hearts, started] = await Promise.all([
+const [saved, lists, lastQueue, counts, hearts, places, started] = await Promise.all([
   orFallback(() => window.settingsApi.load(), defaultSettings(), 'the settings'),
   orFallback(() => window.playlistsApi.load(), [], 'the playlists'),
   orFallback(() => window.playbackApi.loadQueue(), emptyQueues(), 'the queue'),
   orFallback(() => window.playbackApi.loadPlays(), {}, 'the play counts'),
   orFallback(() => window.lovedApi.load(), {}, 'the loved songs'),
+  orFallback(() => window.positionsApi.load(), {}, 'the places in long songs'),
   startPlugins()
 ])
 loadSettings(saved.value, saved.ok)
@@ -70,15 +73,18 @@ let startLists = lists.value
 let startQueue = lastQueue.value
 let startPlays = counts.value
 let startLoved = hearts.value
+let startPlaces = places.value
 for (const { plugin, moves } of started.load()) {
   startLists = movePlaylists(startLists, plugin, moves)
   startQueue = moveQueue(startQueue, plugin, moves)
   startPlays = movePlays(startPlays, plugin, moves)
   startLoved = moveLoved(startLoved, plugin, moves)
+  startPlaces = movePositions(startPlaces, plugin, moves)
 }
 playlists.load(startLists, lists.ok)
 plays.load(startPlays)
 loved.load(startLoved)
+positions.load(startPlaces)
 // paused where it was; songs their plugin says are gone leave the queue.
 // A live item (a station) comes back picked, paused.
 queues.restore(startQueue)
@@ -87,6 +93,7 @@ started.listen((plugin, moves) => {
   playlists.moveIds(plugin, moves)
   plays.moveIds(plugin, moves)
   loved.moveIds(plugin, moves)
+  positions.moveIds(plugin, moves)
 })
 
 const app = mount(App, {

@@ -215,6 +215,7 @@ class Queues {
     const was = this.live.current
     if (this.active === 'track') {
       queue.savePos()
+      queue.keepPlace()
       queue.active = false
     } else if (was && was !== key) {
       // another live plugin's item stops; one plugin switches items itself

@@ -13,10 +13,14 @@ class NoticeStore {
   action: NoticeAction | undefined = $state.raw()
   #timer: ReturnType<typeof setTimeout> | undefined
   #held = false
+  // a time of its own, for as long as its button is there
+  #ms: number | undefined
 
-  show(text: string, action?: NoticeAction): void {
+  // `ms`: how long it stays, when not the usual
+  show(text: string, action?: NoticeAction, ms?: number): void {
     this.text = text
     this.action = action
+    this.#ms = ms
     this.#wait()
   }
 
@@ -40,6 +44,7 @@ class NoticeStore {
   drop(action: NoticeAction): void {
     if (this.action !== action) return
     this.action = undefined
+    this.#ms = undefined
     this.#wait()
   }
 
@@ -57,7 +62,7 @@ class NoticeStore {
   #wait(): void {
     clearTimeout(this.#timer)
     if (this.#held) return
-    this.#timer = setTimeout(() => this.hide(), this.action ? actionMs : plainMs)
+    this.#timer = setTimeout(() => this.hide(), this.#ms ?? (this.action ? actionMs : plainMs))
   }
 }
 

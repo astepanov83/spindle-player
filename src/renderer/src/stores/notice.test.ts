@@ -72,4 +72,16 @@ describe('notice', () => {
     vi.advanceTimersByTime(4000)
     expect(notice.text).toBe('')
   })
+
+  it('stays as long as asked: Resumed at, with Start over, 5 s (ticket 114)', () => {
+    notice.show('Resumed at 41:20', { label: 'Start over', run: vi.fn() }, 5000)
+    vi.advanceTimersByTime(4900)
+    expect(notice.text).toBe('Resumed at 41:20')
+    vi.advanceTimersByTime(100)
+    expect(notice.text).toBe('')
+    // the next one has the usual time again
+    notice.show('Cleared the queue', { label: 'Undo', run: vi.fn() })
+    vi.advanceTimersByTime(5000)
+    expect(notice.text).toBe('Cleared the queue')
+  })
 })

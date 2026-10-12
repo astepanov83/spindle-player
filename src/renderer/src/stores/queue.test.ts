@@ -21,6 +21,8 @@ const fake = vi.hoisted(() => ({
   // the sample rates last given (ticket 091): the song loaded, the next song
   rate: undefined as number | undefined,
   nextRate: undefined as number | undefined,
+  // where the song last loaded starts
+  at: 0,
   reset() {
     this.calls = []
   }
@@ -39,6 +41,7 @@ vi.mock('../audio/engine', () => ({
       opts?: { gain?: number; rate?: number }
     ) => {
       fake.loaded = true
+      fake.at = at
       fake.gain = opts?.gain ?? 1
       fake.rate = opts?.rate
       fake.calls.push(`load ${url}` + (part ? ` ${part.start}-${part.end ?? 'end'} at ${at}` : ''))
@@ -66,7 +69,8 @@ vi.mock('../audio/engine', () => ({
       fake.next = ''
       fake.calls.push('clear')
     },
-    setVolume: () => {}
+    setVolume: () => {},
+    setSpeed: (r: number) => fake.calls.push(`speed ${r}`)
   }
 }))
 
@@ -124,7 +128,11 @@ vi.mock('../plugins', () => {
 const log = vi.fn()
 const saveQueue = vi.fn()
 const savePlace = vi.fn()
-vi.stubGlobal('window', { playbackApi: { log, saveQueue, savePlace } })
+const setPosition = vi.fn()
+vi.stubGlobal('window', {
+  playbackApi: { log, saveQueue, savePlace },
+  positionsApi: { set: setPosition }
+})
 
 const { queue } = await import('./queue.svelte')
 // queues.svelte.ts passes the engine's events on; here they go to the queue straight
@@ -133,6 +141,7 @@ const { player } = await import('./player.svelte')
 const { notice } = await import('./notice.svelte')
 const { settings } = await import('./settings.svelte')
 const { sleep } = await import('./sleep.svelte')
+const { positions } = await import('./positions')
 
 // Albums of `n` songs, keys "<plugin>:<album><i>", titles "<ALBUM> <i>".
 function songs(album: string, n: number, of = 'files'): ItemKey[] {
@@ -1707,5 +1716,187 @@ describe('the sleep timer’s end of song and album (ticket 111)', () => {
     expect(playing()).toBe('c1')
     expect(player.playing).toBe(false)
     expect(fake.calls).toEqual(['pause', 'load media/img 100-250 at 0'])
+  })
+})
+
+describe('long songs keep their place (ticket 114)', () => {
+  const hour = 3600
+  // album l: two songs of an hour; album a (beforeEach) has short ones
+  beforeEach(() => {
+    albums.l = songs('l', 2)
+    for (const key of albums.l) plugin.songs.get(key)!.info.length = hour
+    positions.load({})
+    setPosition.mockClear()
+  })
+
+  afterEach(() => sleep.cancel())
+
+  const kept = (pos: number): Record<ItemKey, { pos: number; last: number }> => ({
+    'files:l0': { pos, last: 1 }
+  })
+
+  it('played to 2:00, another song, then back: it starts 5 s before, with Start over', () => {
+    playAlbum('l', 0)
+    fake.on.time!(120)
+    expect(setPosition).toHaveBeenLastCalledWith('files:l0', 120)
+    playAlbum('a', 0)
+    expect(player.pos).toBe(0)
+    playAlbum('l', 0)
+    expect(player.pos).toBe(115)
+    expect(notice.text).toBe('Resumed at 1:55')
+    expect(notice.action?.label).toBe('Start over')
+    fake.reset()
+    notice.press()
+    expect(fake.calls).toEqual(['seek 0'])
+    expect(player.pos).toBe(0)
+    expect(setPosition).toHaveBeenLastCalledWith('files:l0', null)
+    // the place is gone: the next start is from the top
+    playAlbum('a', 0)
+    playAlbum('l', 0)
+    expect(player.pos).toBe(0)
+  })
+
+  it('a song under 20 minutes starts at 0 and keeps no place', () => {
+    fake.on.time!(60)
+    fake.on.paused!()
+    playAlbum('b', 0)
+    playAlbum('a', 0)
+    expect(player.pos).toBe(0)
+    expect(setPosition).not.toHaveBeenCalled()
+    expect(notice.text).toBe('')
+  })
+
+  it('is kept every 10 s while playing, on pause and on a seek', () => {
+    playAlbum('l', 0)
+    fake.on.time!(120)
+    fake.on.time!(125)
+    expect(setPosition.mock.calls).toEqual([['files:l0', 120]])
+    fake.on.time!(130)
+    expect(setPosition).toHaveBeenLastCalledWith('files:l0', 130)
+    player.pos = 133
+    fake.on.paused!()
+    expect(setPosition).toHaveBeenLastCalledWith('files:l0', 133)
+    player.pos = 1500
+    fake.on.seeked!()
+    expect(setPosition).toHaveBeenLastCalledWith('files:l0', 1500)
+  })
+
+  it('is kept on a song change and on quit, from where it was heard', () => {
+    playAlbum('l', 0)
+    fake.on.time!(120)
+    fake.on.time!(124.5)
+    queue.next()
+    expect(setPosition).toHaveBeenLastCalledWith('files:l0', 124.5)
+    fake.on.time!(300)
+    // the page goes before the next 10 s
+    fake.on.time!(304)
+    queue.keepPlace()
+    expect(setPosition).toHaveBeenLastCalledWith('files:l1', 304)
+  })
+
+  it('is forgotten when the song ends, or plays in its last 30 s', () => {
+    playAlbum('l', 0)
+    fake.on.time!(120)
+    fake.on.ended!()
+    expect(setPosition).toHaveBeenLastCalledWith('files:l0', null)
+    expect(playing()).toBe('l1')
+    fake.on.time!(600)
+    fake.on.time!(hour - 25)
+    expect(setPosition).toHaveBeenLastCalledWith('files:l1', null)
+  })
+
+  it('is forgotten when the song ends into the next one loaded ahead', () => {
+    positions.load(kept(600))
+    queue.playList(['files:l0', 'files:b0'], 0, '')
+    expect(player.pos).toBe(595)
+    fake.on.time!(700)
+    expect(setPosition).toHaveBeenLastCalledWith('files:l0', 700)
+    expect(fake.next).toBe('media/b0')
+    fake.on.nextStarted!()
+    expect(playing()).toBe('b0')
+    expect(setPosition).toHaveBeenLastCalledWith('files:l0', null)
+  })
+
+  it('a song with a place is not loaded ahead: it starts at its place when its turn comes', () => {
+    positions.load({ 'files:l1': { pos: 900, last: 1 } })
+    playAlbum('l', 0)
+    expect(fake.next).toBe('')
+    fake.reset()
+    fake.on.ended!()
+    expect(playing()).toBe('l1')
+    expect(player.pos).toBe(895)
+    expect(fake.calls).toEqual(['load media/l1', 'play'])
+    expect(notice.text).toBe('Resumed at 14:55')
+  })
+
+  it('a click on the song playing starts it over', () => {
+    positions.load(kept(600))
+    playAlbum('l', 0)
+    expect(player.pos).toBe(595)
+    notice.hide()
+    queue.jump(0)
+    expect(player.pos).toBe(0)
+    expect(notice.text).toBe('')
+  })
+
+  it('the queue’s own place after a restart comes first', () => {
+    positions.load(kept(600))
+    queue.restore({ items: albums.l, index: 0, from: 'Album l', pos: 300 })
+    expect(player.pos).toBe(300)
+    expect(notice.text).toBe('')
+  })
+
+  it('Start over after another song started only forgets the place', () => {
+    positions.load(kept(600))
+    playAlbum('l', 0)
+    queue.next()
+    fake.reset()
+    notice.press()
+    expect(playing()).toBe('l1')
+    expect(fake.calls).toEqual([])
+    expect(setPosition).toHaveBeenLastCalledWith('files:l0', null)
+  })
+
+  it('Start over while the song is on its way starts it at 0:00 when it comes', async () => {
+    positions.load(kept(600))
+    plugin.later = true
+    playAlbum('l', 0)
+    expect(notice.text).toBe('Resumed at 9:55')
+    notice.press()
+    fake.reset()
+    for (const done of plugin.pending) done()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(fake.calls).toEqual(['load media/l0', 'play'])
+    expect(fake.at).toBe(0)
+  })
+
+  it('End of song stops a resumed song at its end; the next long one waits at its place', () => {
+    positions.load({ 'files:l0': { pos: 600, last: 1 }, 'files:l1': { pos: 900, last: 1 } })
+    playAlbum('l', 0)
+    expect(player.pos).toBe(595)
+    sleep.pick('song')
+    expect(fake.next).toBe('')
+    fake.reset()
+    fake.on.ended!()
+    expect(playing()).toBe('l1')
+    expect(player.playing).toBe(false)
+    expect(player.pos).toBe(895)
+    expect(fake.calls).toEqual(['pause', 'load media/l1'])
+    expect(sleep.set).toBeUndefined()
+  })
+
+  it('a speed for the song playing, back to 1x for the next song', () => {
+    playAlbum('l', 0)
+    queue.setSpeed(1.5)
+    expect(fake.calls).toContain('speed 1.5')
+    expect(queue.speed).toBe(1.5)
+    queue.next()
+    expect(queue.speed).toBe(1)
+    queue.jump(0)
+    queue.setSpeed(2)
+    expect(fake.next).toBe('media/l1')
+    fake.on.nextStarted!()
+    expect(queue.speed).toBe(1)
   })
 })

@@ -463,6 +463,7 @@ export class AudioEngine {
     this.#next = undefined
     this.#nextLoaded = false
     this.#skew = 0
+    to.el.playbackRate = 1
     this.#playElement()
     this.#finish(from, Math.max(0, left), cut, sounding)
     this.#on.nextStarted?.()
@@ -561,6 +562,7 @@ export class AudioEngine {
         } else d.clear()
         o.setGain(gain)
       } else this.#deck.glideGain(gain)
+      this.el.playbackRate = 1
       this.#sendDuration()
       this.seek(at)
       this.#on.time?.(at)
@@ -571,6 +573,7 @@ export class AudioEngine {
     // a stream's rate is not known: it plays in the graph there is
     const rate = live ? this.#graph.rate : rateFor(opts.rate, this.#graph.rate)
     if (rate !== this.#graph.rate) this.#moveTo(rate)
+    // a new source plays at the element's default rate, 1
     this.#deck.load(url, part.start + at, live, gain)
   }
 
@@ -579,6 +582,7 @@ export class AudioEngine {
   // `gain` is the new part's level.
   continueWith(part: Part, gain = 1): void {
     this.#deck.glideGain(gain)
+    this.el.playbackRate = 1
     this.#part = part
     this.#endSent = false
     this.#sendDuration()
@@ -668,6 +672,16 @@ export class AudioEngine {
     this.#endSent = false
     clearTimeout(this.#nextTimer)
     this.#deck.seek(this.#part.start + pos)
+  }
+
+  // How fast the song playing goes (ticket 114), keeping its pitch. Each
+  // new song, part or next song starts at 1 again.
+  setSpeed(rate: number): void {
+    this.el.preservesPitch = true
+    this.el.playbackRate = rate
+    // its end comes sooner or later now
+    this.#watchEnd()
+    this.#plan()
   }
 
   setVolume(volume: number): void {

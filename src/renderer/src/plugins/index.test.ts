@@ -291,10 +291,19 @@ describe('tabs', () => {
   const ids = (): string[] => p.pluginTabs().map((t) => t.id)
 
   it('come from the plugins that are on, with Playlists after the first one', () => {
-    expect(ids()).toEqual(['songs', 'albums', 'artists', 'folders', 'playlists', 'radio', 'mfp'])
+    expect(ids()).toEqual([
+      'songs',
+      'albums',
+      'artists',
+      'folders',
+      'playlists',
+      'stats',
+      'radio',
+      'mfp'
+    ])
     settings.plugins.radio = false
     settings.plugins.mfp = false
-    expect(ids()).toEqual(['songs', 'albums', 'artists', 'folders', 'playlists'])
+    expect(ids()).toEqual(['songs', 'albums', 'artists', 'folders', 'playlists', 'stats'])
     settings.plugins.files = false
     expect(ids()).toEqual([])
   })
@@ -562,18 +571,55 @@ describe('typedIn (carried from ticket 062)', () => {
   })
 })
 
+describe('the Stats tab (ticket 116)', () => {
+  it('sends the text to the library on Enter, as it has nothing to search', () => {
+    files.load(lib())
+    library.setTabs(p.navTabs())
+    library.pickTab('stats')
+    library.query = 'vale'
+    p.typedIn('core', 'stats', 'vale')
+    expect(library.tab).toBe('stats')
+    p.typedIn('core', 'stats', 'vale', true)
+    expect(library.tab).toBe('albums')
+    expect(library.query).toBe('vale')
+  })
+
+  it("has no scroll place of a playlist's", () => {
+    library.openPlaylistPage('p1')
+    expect(p.pagePath('playlists')).toEqual(['pl:p1'])
+    expect(p.pagePath('stats')).toEqual([])
+  })
+
+  it('finds the tile of an album or artist page while its plugin is on', () => {
+    files.load(lib())
+    expect(p.tileAt({ plugin: 'files', page: 'album/al' })?.title).toBe('Album al')
+    expect(p.tileAt({ plugin: 'files', page: 'album/gone' })).toBeUndefined()
+    settings.plugins.files = false
+    expect(p.tileAt({ plugin: 'files', page: 'album/al' })).toBeUndefined()
+  })
+})
+
 describe('music files turned off (ticket 063)', () => {
   const ids = (): string[] => p.pluginTabs().map((t) => t.id)
 
   it('takes its tabs and gives them back, and the library starts on the first tab on', () => {
     files.load(lib())
     settings.plugins.files = false
-    expect(ids()).toEqual(['radio', 'playlists', 'mfp'])
+    expect(ids()).toEqual(['radio', 'playlists', 'stats', 'mfp'])
     library.setTabs(p.navTabs())
     library.showIn('chips')
     expect(library.tab).toBe('radio')
     settings.plugins.files = true
-    expect(ids()).toEqual(['songs', 'albums', 'artists', 'folders', 'playlists', 'radio', 'mfp'])
+    expect(ids()).toEqual([
+      'songs',
+      'albums',
+      'artists',
+      'folders',
+      'playlists',
+      'stats',
+      'radio',
+      'mfp'
+    ])
     // on again, its pages are there
     library.setTabs(p.navTabs())
     p.openPage({ plugin: 'files', page: 'album/al' })

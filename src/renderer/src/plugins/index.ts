@@ -4,7 +4,7 @@ import { plugins, type PluginId } from '../../../shared/plugins'
 import type { IdMoves } from '../../../shared/id-moves'
 import { itemKey, type ItemKey } from '../../../shared/plugins/items'
 import type { SettingBlock } from '../../../shared/setting-blocks'
-import { library, playlistsTab, type NavTab } from '../stores/library.svelte'
+import { library, playlistsTab, statsTab, type NavTab } from '../stores/library.svelte'
 import { pluginOn } from '../stores/settings.svelte'
 import { filesHalf } from './files'
 import { mfpHalf } from './mfp'
@@ -22,7 +22,8 @@ import type {
   NavKind,
   PageAddress,
   PageHalf,
-  Playable
+  Playable,
+  Tile
 } from './types'
 
 const halves: Record<PluginId, PageHalf> = { files: filesHalf, radio: radioHalf, mfp: mfpHalf }
@@ -108,8 +109,8 @@ export function openPage(to: PageAddress): void {
   if (tab) library.link(tab, to.page, to.item ?? null)
 }
 
-// A tab's open page as blocks, from its plugin. The core's Playlists has none:
-// it draws its own. A page of search results gets every plugin's groups.
+// A tab's open page as blocks, from its plugin. The core's Playlists and
+// Stats have none: they draw their own. A page of search results gets every plugin's groups.
 export function pageBlocks(tab: ShownTab): Block[] {
   if (tab.plugin === 'core') return []
   const blocks = halves[tab.plugin].page(tab.id, library.page(tab.id), library.query)
@@ -119,14 +120,17 @@ export function pageBlocks(tab: ShownTab): Block[] {
 }
 
 // The search box's text, to the plugin of the tab shown: as it changes, and
-// on Enter. Not while its plugin is off.
+// on Enter. Not while its plugin is off. Enter on Stats, which has nothing
+// to search, searches the library.
 export function typedIn(
   plugin: PluginId | 'core',
   tab: string,
   query: string,
   enter = false
 ): void {
-  if (plugin !== 'core' && pluginOn(plugin)) halves[plugin].typed?.(tab, query, enter)
+  if (plugin === 'core') {
+    if (enter && tab === statsTab && query.trim()) searchFor(query, tab)
+  } else if (pluginOn(plugin)) halves[plugin].typed?.(tab, query, enter)
 }
 
 // What the plugins that are on find for the search text, in plugin order.
@@ -250,12 +254,23 @@ function playlists(): ShownTab {
   }
 }
 
+// The core's listening stats (ticket 116): a chip after Playlists, a
+// section in Classic.
+const stats: ShownTab = {
+  id: statsTab,
+  label: 'Stats',
+  icon: 'chart',
+  search: 'Search your library',
+  searchShort: 'Search library',
+  plugin: 'core'
+}
+
 // The tabs of the plugins that are on, in order (tabs.ts).
 export function pluginTabs(): ShownTab[] {
   const on = plugins.filter((p) => pluginOn(p.id))
   return orderTabs(
     on.map((p) => halves[p.id].tabs().map((t) => ({ ...t, plugin: p.id }))),
-    playlists()
+    [playlists(), stats]
   )
 }
 
@@ -288,6 +303,8 @@ export function navTabs(): NavTab[] {
 // The open page's place under its tab, for the scroll places (ticket 042).
 export function pagePath(tab: string): string[] {
   const t = pluginTabs().find((t) => t.id === tab)
+  // one page, nothing under it
+  if (tab === statsTab) return []
   const page = library.page(tab)
   if (!t) return []
   if (t.plugin === 'core') {
@@ -311,6 +328,12 @@ export function pageLook(tab: string): string | undefined {
 // or off, or new data in one.
 export function itemsVersion(): string {
   return plugins.map((p) => (pluginOn(p.id) ? halves[p.id].version() : 'off')).join(',')
+}
+
+// The tile of an album or artist page (its picture, its songs), for the
+// stats page's top lists. None while its plugin is off or the page is gone.
+export function tileAt(to: PageAddress): Tile | undefined {
+  return canOpen(to) ? halves[to.plugin].tileOf?.(to.page) : undefined
 }
 
 // A song in a plugin that is on, by the artist and title a radio station

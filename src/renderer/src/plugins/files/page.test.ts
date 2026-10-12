@@ -1102,3 +1102,24 @@ describe('name fixes with none', () => {
     expect(e?.hint).toContain("Type another artist's name to join them.")
   })
 })
+
+describe('a page as a tile (the stats page, ticket 116)', () => {
+  beforeEach(() => files.load(lib()))
+
+  it('gives the tile of an album or an artist, as the grids draw it', () => {
+    const al = page.filesTile('album/a')
+    expect(al).toMatchObject({ title: 'Album a', to: at('album/a'), from: 'Album a' })
+    expect(al?.songs()).toEqual(['files:a1', 'files:a2', 'files:a3'])
+    const ar = page.filesTile('artist/junopark')
+    expect(ar).toMatchObject({ title: 'Juno Park', to: at('artist/junopark') })
+    expect(ar?.songs()).toEqual(['files:b1'])
+  })
+
+  it('gives none for a page that is gone or no album or artist', () => {
+    expect(page.filesTile('album/zz')).toBeUndefined()
+    expect(page.filesTile('artist/nobody')).toBeUndefined()
+    expect(page.filesTile('album/a/artist/marinavale')).toBeUndefined()
+    expect(page.filesTile('folder/1')).toBeUndefined()
+    expect(page.filesTile('')).toBeUndefined()
+  })
+})

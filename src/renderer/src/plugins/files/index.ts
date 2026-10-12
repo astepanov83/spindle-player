@@ -2,7 +2,7 @@
 import { files } from './store.svelte'
 import type { PageHalf } from '../types'
 import { canOpenFiles, filesLook, filesPath, filesTabs, keepFiles } from './nav'
-import { filesAct, filesEmptyPlaylists, filesPage, filesSearch } from './page'
+import { filesAct, filesEmptyPlaylists, filesPage, filesSearch, filesTile } from './page'
 import { filesDrop } from './drop'
 import { startFiles } from './start'
 import { filesTabOf } from './pages'
@@ -43,6 +43,7 @@ export const filesHalf: PageHalf = {
   look: filesLook,
   page: filesPage,
   search: filesSearch,
+  tileOf: filesTile,
   emptyPlaylists: filesEmptyPlaylists,
   act: filesAct,
   settings: filesSettings,

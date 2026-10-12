@@ -337,6 +337,18 @@ const artistTile = (a: Artist): Tile => ({
   actions: [{ id: 'edit', label: 'Edit artist' }]
 })
 
+// The tile of an album or artist page, for the stats page (ticket 116).
+export function filesTile(page: string): Tile | undefined {
+  const p = parsePage(page)
+  if (p?.kind === 'album') {
+    const al = files.findAlbum(p.id)
+    return al && albumTile(al)
+  }
+  if (p?.kind !== 'artist' || p.album) return undefined
+  const a = files.getArtist(p.key)
+  return a && artistTile(a)
+}
+
 function artistTiles(artists: Artist[], groups?: TileGroups<Artist>): TilesBlock {
   return tilesBlock<Artist>({
     items: artists,

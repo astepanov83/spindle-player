@@ -39,6 +39,32 @@ describe('lyrics', () => {
     expect(lyrics.words).toBeUndefined()
   })
 
+  it('asks again once the names are known, then not on a refresh', async () => {
+    get.mockResolvedValue(undefined)
+    await lyrics.follow('files:e', () => undefined)
+    expect(get).toHaveBeenLastCalledWith('files:e', undefined)
+    await lyrics.follow('files:e', () => undefined)
+    expect(get).toHaveBeenCalledTimes(1)
+    get.mockResolvedValue({ plain: 'online' })
+    await lyrics.follow('files:e', () => song)
+    expect(get).toHaveBeenLastCalledWith('files:e', song)
+    expect(lyrics.words).toEqual({ plain: 'online' })
+    await lyrics.follow('files:e', () => song)
+    expect(get).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the words while the same song is asked again', async () => {
+    let answer: (l: Lyrics) => void = () => {}
+    get.mockResolvedValueOnce({ plain: 'local' })
+    get.mockReturnValueOnce(new Promise((r) => (answer = r)))
+    await lyrics.follow('files:f', () => undefined)
+    const again = lyrics.follow('files:f', () => song)
+    expect(lyrics.words).toEqual({ plain: 'local' })
+    answer({ plain: 'local' })
+    await again
+    expect(lyrics.words).toEqual({ plain: 'local' })
+  })
+
   it('tells an instrumental song from one with words', async () => {
     get.mockResolvedValueOnce({ instrumental: true })
     await lyrics.follow('files:g', () => song)

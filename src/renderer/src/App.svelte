@@ -103,9 +103,11 @@
   })
 
   // A song starts: its words are read (ticket 120). Only the key counts, so
-  // a library refresh doesn't read them again; a station has none.
+  // a library refresh doesn't read them again; a station has none. Its info
+  // is followed too, for a song asked before its names were known (121).
   $effect(() => {
     const key = queues.item
+    void queues.info
     untrack(() =>
       lyrics.follow(key, () => {
         const i = queues.info

@@ -30,6 +30,8 @@ export interface HistoryRow {
   now: boolean
   // the song's small cover, or ''
   cover: string
+  // the plugin's heart for the song (radio's songs kept, ticket 119)
+  heart?: HistoryEntry['heart']
 }
 
 // Newest first. `playing`: sound is wanted, so the entry on air is marked.
@@ -41,7 +43,8 @@ export function historyRows(list: HistoryEntry[], playing: boolean, now: number)
       title: e.title,
       subtitle: e.subtitle ?? '',
       now: playing && !!e.now,
-      cover: e.art?.cover ?? ''
+      cover: e.art?.cover ?? '',
+      ...(e.heart ? { heart: e.heart } : {})
     }))
     .reverse()
 }

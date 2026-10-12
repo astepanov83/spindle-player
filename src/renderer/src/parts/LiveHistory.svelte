@@ -1,11 +1,12 @@
 <!-- The Queue part while a live item plays: the songs its plugin heard,
      newest first, under a row that gives the player back to the queue
      (decision 147). Drawn from the live queue's data; nothing can be moved,
-     removed or played. -->
+     removed or played. A song can have a heart, which keeps it (radio,
+     ticket 119). -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
   import Thumb from '../ui/Thumb.svelte'
-  import { infoOf } from '../plugins'
+  import { actOn, infoOf } from '../plugins'
   import { player } from '../stores/player.svelte'
   import { queue } from '../stores/queue.svelte'
   import { queues } from '../stores/queues.svelte'
@@ -32,6 +33,12 @@
   // a song with no cover (a jingle, a miss) shows the item's own picture (a
   // station's logo), or one made from it
   const itemArt = $derived(infoOf(queues.live.current ?? undefined)?.art)
+
+  // the plugin keeps the song, or lets it go
+  function heart(value: string): void {
+    const key = queues.live.current
+    if (key) actOn(key, 'heart', value)
+  }
 </script>
 
 <div class="body">
@@ -53,7 +60,21 @@
         <span class="nm" title={r.title}>{r.title}</span>
         {#if r.subtitle}<span class="ar" title={r.subtitle}>{r.subtitle}</span>{/if}
       </span>
-      {#if r.now}<span class="now">Now</span>{/if}
+      <span class="end">
+        {#if r.now}<span class="now">Now</span>{/if}
+        {#if r.heart}
+          {@const h = r.heart}
+          <button
+            class="heart"
+            class:on={h.on}
+            aria-pressed={h.on}
+            aria-label="{h.label}: {r.title}"
+            title={h.label}
+            onclick={() => heart(h.value)}
+            ><Icon name={h.on ? 'heartOn' : 'heart'} size={18} /></button
+          >
+        {/if}
+      </span>
     </div>
   {/each}
 </div>
@@ -132,5 +153,34 @@
   .now {
     font-size: var(--text-xs);
     color: var(--ink-2);
+  }
+  .end {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .heart {
+    width: 32px;
+    height: 32px;
+    margin-right: -8px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--ink-3);
+    opacity: 0;
+  }
+  /* an empty heart shows on the row under the pointer or with focus; a kept
+     song's always */
+  .rrow:hover .heart,
+  .heart:focus-visible,
+  .heart.on {
+    opacity: 1;
+  }
+  .heart:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .heart.on {
+    color: var(--c2);
   }
 </style>

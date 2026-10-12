@@ -1,7 +1,8 @@
 <!-- One of the item's actions on the player bar, drawn in the core's style: a
      button, or a choice that opens the app's menu with the picked option checked.
      `wide`: the bar has room for a button's word and wants a choice short
-     ("320k"); the stack shows a button's icon alone and a choice whole. -->
+     ("320k"); the stack shows a button's icon alone and a choice whole. A
+     plain button (the heart) is its icon alone everywhere. -->
 <script lang="ts">
   import Icon from '../ui/Icon.svelte'
   import { menu } from '../stores/menu.svelte'
@@ -28,7 +29,17 @@
   }
 </script>
 
-{#if action.kind === 'button'}
+{#if action.kind === 'button' && action.plain && action.icon}
+  <button
+    class="plain"
+    class:on={action.on}
+    title={action.hint}
+    aria-label={action.label}
+    aria-pressed={action.on}
+    aria-busy={action.busy || undefined}
+    onclick={() => queues.act(action.id)}><Icon name={action.icon} /></button
+  >
+{:else if action.kind === 'button'}
   <button
     class="act chip"
     class:icon={iconOnly}
@@ -56,6 +67,33 @@
 {/if}
 
 <style>
+  /* as the bar's other round buttons (ui/IconButton.svelte) */
+  .plain {
+    width: var(--icobtn, 38px);
+    height: var(--icobtn, 38px);
+    display: grid;
+    place-items: center;
+    flex: none;
+    border-radius: 50%;
+    opacity: 0.8;
+    transition:
+      opacity 0.15s,
+      background 0.15s,
+      transform 0.1s;
+  }
+  .plain:hover {
+    opacity: 1;
+    background: var(--active);
+  }
+  .plain:active {
+    transform: scale(0.92);
+  }
+  /* on in the album accent, fitted to 3:1 like Shuffle's; the filled icon
+     says it too */
+  .plain.on {
+    opacity: 1;
+    color: var(--c2);
+  }
   .act {
     display: inline-flex;
     align-items: center;

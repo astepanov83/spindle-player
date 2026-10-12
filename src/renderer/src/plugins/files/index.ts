@@ -8,9 +8,19 @@ import { startFiles } from './start'
 import { filesTabOf } from './pages'
 import { filesActSetting, filesCoverLines, filesSettings, filesStatusLine } from './settings'
 import { trackPlayable, trackState } from './tracks'
+import { findIn, songIndex } from './find-song'
 
 // before the first library, or the first scan of an empty index, a song is on its way, not gone
 const complete = (): boolean => files.loaded && !files.partial
+
+// made again after each library or patch, when first asked
+let songs: { revision: number; index: Map<string, string> } | undefined
+function findSong(artist: string, title: string): string | undefined {
+  const revision = files.revision
+  if (songs?.revision !== revision)
+    songs = { revision, index: songIndex(files.albums, (id) => files.track(id)) }
+  return findIn(songs.index, artist, title)
+}
 
 export const filesHalf: PageHalf = {
   info: (id) => trackState(id, complete),
@@ -31,5 +41,6 @@ export const filesHalf: PageHalf = {
   statusLine: filesStatusLine,
   coverLines: filesCoverLines,
   drop: filesDrop,
-  start: startFiles
+  start: startFiles,
+  findSong
 }

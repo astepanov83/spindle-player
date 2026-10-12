@@ -1,6 +1,6 @@
 // The stats page's totals, counted from the play log's lines.
 import { describe, expect, it } from 'vitest'
-import type { ItemKey } from '../shared/plugins/items'
+import type { ItemKey } from './plugins/items'
 import { parseLogLine, StatsCounter, type LogLine, type PlayLine } from './play-stats'
 
 // local time, as the page shows it
@@ -177,6 +177,24 @@ describe('StatsCounter', () => {
       ['Hits', 'Various Artists', 2],
       ['Hits', 'Z', 1]
     ])
+  })
+
+  it('counts several plays of a song at once, at its last play', () => {
+    const c = new StatsCounter('all', at(2026, 10, 13))
+    c.line(play('files:a', at(2026, 9, 1)), 4)
+    c.line(play('files:b', at(2026, 9, 2), { a: 'Red Hill', al: 'Red', aa: '' }), 4)
+    const s = c.result()
+    expect(s.plays).toBe(8)
+    expect(s.seconds).toBe(1600)
+    expect(s.topSongs.map((t) => [t.key, t.plays])).toEqual([
+      ['files:b', 4],
+      ['files:a', 4]
+    ])
+    expect(s.topArtists.map((a) => [a.name, a.plays])).toEqual([
+      ['Red Hill', 4],
+      ['Amber Fields', 4]
+    ])
+    expect(s.months.find((m) => m.month === '2026-09')?.plays).toBe(8)
   })
 
   it('moves the plays above a move line to the new ids, adding up', () => {

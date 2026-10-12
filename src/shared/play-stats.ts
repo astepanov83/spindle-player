@@ -1,6 +1,6 @@
 // Counts the lines of plays-log.jsonl (ticket 115) into what the stats page
 // shows (ticket 116), one line at a time, so the log is never held whole.
-import type { IdMoves } from '../shared/id-moves'
+import type { IdMoves } from './id-moves'
 import {
   countsPlays,
   parsePlayedSong,
@@ -9,9 +9,9 @@ import {
   type StatsPeriod,
   type TopGroup,
   type TopSong
-} from '../shared/plays'
-import { isPluginId, type PluginId } from '../shared/plugins'
-import { itemKey, splitKey, type ItemKey } from '../shared/plugins/items'
+} from './plays'
+import { isPluginId, type PluginId } from './plugins'
+import { itemKey, splitKey, type ItemKey } from './plugins/items'
 
 // One play, as the log keeps it. Short names: there is a line per play.
 export interface PlayLine {
@@ -93,7 +93,8 @@ interface GroupCount extends Counted {
 }
 
 // Names that differ only by case or spacing are one, as in the Artists view.
-const fold = (name: string): string => name.normalize('NFC').toLowerCase().replace(/\s+/g, '')
+export const foldName = (name: string): string =>
+  name.normalize('NFC').toLowerCase().replace(/\s+/g, '')
 
 // Most played first; a tie goes to the one played last, then by name.
 function top<T extends Counted>(m: Map<string, T>, name: (v: T) => string): T[] {
@@ -135,46 +136,66 @@ export class StatsCounter {
     readonly now: number
   ) {}
 
-  line(line: LogLine): void {
+  // `times`: plays.json's count of a song, all at its last play (the stats
+  // page's top lists before the log began)
+  line(line: LogLine, times = 1): void {
     if ('moved' in line) this.#move(line)
-    else this.#play(line)
+    else this.#play(line, times)
   }
 
-  #play(p: PlayLine): void {
+  #play(p: PlayLine, n: number): void {
     const date = new Date(p.t)
     const year = date.getFullYear()
     this.#since = Math.min(this.#since ?? p.t, p.t)
     this.#latest = Math.max(this.#latest, p.t)
     this.#years.add(year)
     if (this.period !== 'all' && year !== this.period) return
-    this.#plays++
-    this.#seconds += p.d
+    this.#plays += n
+    this.#seconds += p.d * n
     const song = this.#songs.get(p.k)
     if (!song)
-      this.#songs.set(p.k, { key: p.k, title: p.ti, artist: p.a, album: p.al, plays: 1, last: p.t })
+      this.#songs.set(p.k, { key: p.k, title: p.ti, artist: p.a, album: p.al, plays: n, last: p.t })
     else
-      this.#count(song, p.t, () => Object.assign(song, { title: p.ti, artist: p.a, album: p.al }))
-    for (const name of p.as ?? [p.a]) if (name) this.#group(this.#artists, fold(name), name, '', p)
+      this.#count(song, n, p.t, () =>
+        Object.assign(song, { title: p.ti, artist: p.a, album: p.al })
+      )
+    for (const name of p.as ?? [p.a])
+      if (name) this.#group(this.#artists, foldName(name), name, '', p, n)
     const albumArtist = p.aa || p.a
-    if (p.al) this.#group(this.#albums, `${fold(albumArtist)}\n${fold(p.al)}`, p.al, albumArtist, p)
+    if (p.al)
+      this.#group(
+        this.#albums,
+        `${foldName(albumArtist)}\n${foldName(p.al)}`,
+        p.al,
+        albumArtist,
+        p,
+        n
+      )
     const month = monthOf(date)
-    this.#months.set(month, (this.#months.get(month) ?? 0) + 1)
-    this.#days[(date.getDay() + 6) % 7]++
+    this.#months.set(month, (this.#months.get(month) ?? 0) + n)
+    this.#days[(date.getDay() + 6) % 7] += n
   }
 
-  // One more play; the names of the latest play are the ones shown.
-  #count(c: Counted, t: number, newer: () => void): void {
-    c.plays++
+  // More plays; the names of the latest play are the ones shown.
+  #count(c: Counted, n: number, t: number, newer: () => void): void {
+    c.plays += n
     if (t >= c.last) {
       c.last = t
       newer()
     }
   }
 
-  #group(m: Map<string, GroupCount>, id: string, name: string, artist: string, p: PlayLine): void {
+  #group(
+    m: Map<string, GroupCount>,
+    id: string,
+    name: string,
+    artist: string,
+    p: PlayLine,
+    n: number
+  ): void {
     const g = m.get(id)
-    if (!g) m.set(id, { name, artist, key: p.k, plays: 1, last: p.t })
-    else this.#count(g, p.t, () => Object.assign(g, { name, artist, key: p.k }))
+    if (!g) m.set(id, { name, artist, key: p.k, plays: n, last: p.t })
+    else this.#count(g, n, p.t, () => Object.assign(g, { name, artist, key: p.k }))
   }
 
   // Plays read so far move to the new ids, and add up with any already there.

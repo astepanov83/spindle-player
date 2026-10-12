@@ -18,7 +18,7 @@ import type { PlayedSong, PlayStats, StatsPeriod } from '../shared/plays'
 import type { PluginId } from '../shared/plugins'
 import type { ItemKey } from '../shared/plugins/items'
 import { keepCopy } from './json-file'
-import { parseLogLine, StatsCounter, type MoveLine, type PlayLine } from './play-stats'
+import { parseLogLine, StatsCounter, type MoveLine, type PlayLine } from '../shared/play-stats'
 
 // The first line. A file that starts with any other version is left as it is.
 const header = { version: 1 }

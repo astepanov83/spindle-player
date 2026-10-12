@@ -20,6 +20,7 @@
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from '../library/song-menu'
   import { linkTarget } from '../../../shared/saved-queue'
+  import { smartList } from '../library/smart-lists'
   import type { ItemKey } from '../../../shared/plugins/items'
   import type { ItemAnswer } from '../plugins/types'
   import { canOpen, infoOf, itemInfo, openPage } from '../plugins'
@@ -140,8 +141,10 @@
     let show: () => void
     if (link.plugin === 'core') {
       const to = linkTarget(link)
-      if (to?.kind !== 'playlist' || !playlists.get(to.id)) return undefined
-      show = () => library.showPlaylist(to.id)
+      if (to?.kind === 'smart' && smartList(to.id)) show = () => library.showSmart(to.id)
+      else if (to?.kind === 'playlist' && playlists.get(to.id))
+        show = () => library.showPlaylist(to.id)
+      else return undefined
     } else {
       const to = { plugin: link.plugin, page: link.page }
       if (!canOpen(to)) return undefined

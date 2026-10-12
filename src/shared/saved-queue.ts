@@ -9,16 +9,17 @@ import { isKeyOfKind, splitKey, type ItemKey } from './plugins/items'
 export interface QueueLink {
   plugin: PluginId | 'core'
   // "album/<id>", "artist/<key>", "folder/<path key>" (files), "episode/<album id>"
-  // (mfp), "playlist/<id>" (core)
+  // (mfp), "playlist/<id>", "smart/<id>" (core; a list that fills itself, ticket 118)
   page: string
 }
 
-export type LinkKind = 'album' | 'artist' | 'folder' | 'episode' | 'playlist'
+export type LinkKind = 'album' | 'artist' | 'folder' | 'episode' | 'playlist' | 'smart'
 
-// Each kind's plugin, from the plugin list (`linkKinds`); a playlist is the core's.
+// Each kind's plugin, from the plugin list (`linkKinds`); playlists are the core's.
 const linkOwners = new Map<string, QueueLink['plugin']>([
   ...plugins.flatMap((p) => p.linkKinds.map((k) => [k, p.id] as const)),
-  ['playlist', 'core']
+  ['playlist', 'core'],
+  ['smart', 'core']
 ])
 
 export function queueLink(kind: LinkKind, id: string): QueueLink {

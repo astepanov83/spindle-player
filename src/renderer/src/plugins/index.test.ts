@@ -624,3 +624,36 @@ describe('music files turned off (ticket 063)', () => {
     expect(addDropped).toHaveBeenCalledWith(dropped)
   })
 })
+
+describe('librarySongs (ticket 118)', () => {
+  it("gives the songs of the plugins that count plays, with their album's time", () => {
+    files.load({
+      ...lib(),
+      albums: [album('al', ['s1'], { added: 5 }), album('img', ['c1', 'c2'])]
+    })
+    loadMfp()
+    expect(p.librarySongs()).toEqual([
+      { key: 'files:s1', added: 5 },
+      { key: 'files:c1', added: 0 },
+      { key: 'files:c2', added: 0 }
+    ])
+  })
+
+  it('the same list until an album changes', async () => {
+    files.load(lib())
+    const half = (await import('./files')).filesHalf
+    expect(half.songs!()).toBe(half.songs!())
+    files.load(lib())
+    expect(half.songs!()).toEqual([
+      { id: 's1', added: 0 },
+      { id: 'c1', added: 0 },
+      { id: 'c2', added: 0 }
+    ])
+  })
+
+  it('none while music files are off: no lists then', () => {
+    files.load(lib())
+    settings.plugins.files = false
+    expect(p.librarySongs()).toBeUndefined()
+  })
+})

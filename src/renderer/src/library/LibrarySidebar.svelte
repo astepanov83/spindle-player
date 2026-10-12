@@ -4,6 +4,7 @@
   import Nothing from '../blocks/Nothing.svelte'
   import HistoryButtons from './HistoryButtons.svelte'
   import PlaylistView from './PlaylistView.svelte'
+  import SmartListView from './SmartListView.svelte'
   import ScanLine from './ScanLine.svelte'
   import SearchBox from './SearchBox.svelte'
   import NoPlugins from './NoPlugins.svelte'
@@ -12,8 +13,10 @@
   import type { IconName } from '../ui/icons'
   import { libraryOnScreen } from './side-buttons'
   import { libraryView, scrollTopOnChange } from '../ui/scroll-top.svelte'
-  import { library, playlistPage, playlistsTab } from '../stores/library.svelte'
+  import { library, playlistPage, playlistsTab, smartPage } from '../stores/library.svelte'
   import { playlists } from '../stores/playlists.svelte'
+  import { smart } from '../stores/smart-lists.svelte'
+  import { smartList, smartLists } from './smart-lists'
   import { pageBlocks, playlistsEmpty, pluginTabs, typedIn } from '../plugins'
   import { tabsIn } from '../plugins/tabs'
   import { dropTarget, type DropTarget } from '../stores/song-drag.svelte'
@@ -36,10 +39,15 @@
       ? playlists.get(library.openPlaylist)
       : undefined
   )
+  // a list that fills itself (ticket 118)
+  const smartShown = $derived(
+    library.tab === playlistsTab && library.openSmart ? smartList(library.openSmart) : undefined
+  )
   // no songs yet: a playlist shows that instead
   const none = $derived(shown?.plugin === 'core' ? playlistsEmpty(false) : undefined)
 
   const pickPlaylist = (id: string): void => library.pickTab(playlistsTab, playlistPage(id))
+  const pickSmart = (id: string): void => library.pickTab(playlistsTab, smartPage(id))
 
   function create(): void {
     const id = playlists.create()
@@ -84,6 +92,12 @@
     {#each sections as t (t.id)}
       {@render item(library.tab === t.id, () => library.pickTab(t.id), t.icon, t.label)}
     {/each}
+    {#if hasPlaylists && smart.shown}
+      <div class="sidehead section-label">Made for you</div>
+      {#each smartLists as l (l.id)}
+        {@render item(smartShown?.id === l.id, () => pickSmart(l.id), l.icon, l.name)}
+      {/each}
+    {/if}
     {#if hasPlaylists}
       <div class="sidehead section-label">
         Playlists
@@ -113,6 +127,8 @@
       <div class="fill"><Nothing block={none.block} plugin={none.plugin} /></div>
     {:else if playlist}
       <PlaylistView id={playlist.id} {scrollEl} nav="sidebar" />
+    {:else if smartShown}
+      <SmartListView id={smartShown.id} {scrollEl} nav="sidebar" />
     {:else if shown && shown.plugin !== 'core'}
       {#key shown.id}
         <BlockPage {blocks} tab={shown.id} plugin={shown.plugin} {scrollEl} nav="sidebar" />

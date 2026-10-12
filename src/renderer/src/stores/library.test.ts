@@ -819,6 +819,27 @@ describe('tabs from the plugins that are on (ticket 059)', () => {
     expect(library.tab).toBe('albums')
   })
 
+  it('shows a list that fills itself in both, under Playlists (ticket 118)', () => {
+    library.openSmartPage('loved')
+    expect([library.tab, library.openSmart, library.openPlaylist]).toEqual([
+      'playlists',
+      'loved',
+      null
+    ])
+    expect(p.pagePath('playlists')).toEqual(['smart:loved'])
+    expect(p.pluginTabs().find((t) => t.id === 'playlists')?.search).toBe('Search this list')
+    library.showIn('sidebar')
+    expect([library.tab, library.openSmart]).toEqual(['playlists', 'loved'])
+    library.pickTab('songs')
+    library.pickTab('playlists', 'smart/most')
+    expect(library.openSmart).toBe('most')
+    library.back()
+    expect(library.tab).toBe('songs')
+    library.showIn('chips')
+    library.openSmartPage(null)
+    expect([library.openSmart, library.page('playlists')]).toEqual([null, ''])
+  })
+
   it('starts on the first tab of the library drawn', async () => {
     vi.resetModules()
     library = (await import('./library.svelte')).library

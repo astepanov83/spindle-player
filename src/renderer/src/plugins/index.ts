@@ -241,7 +241,11 @@ function playlists(): ShownTab {
     id: playlistsTab,
     label: 'Playlists',
     icon: 'list',
-    search: open ? 'Search this playlist' : 'Search playlists',
+    search: open
+      ? 'Search this playlist'
+      : library.openSmart
+        ? 'Search this list'
+        : 'Search playlists',
     plugin: 'core'
   }
 }
@@ -286,7 +290,10 @@ export function pagePath(tab: string): string[] {
   const t = pluginTabs().find((t) => t.id === tab)
   const page = library.page(tab)
   if (!t) return []
-  if (t.plugin === 'core') return library.openPlaylist ? [`pl:${library.openPlaylist}`] : []
+  if (t.plugin === 'core') {
+    if (library.openPlaylist) return [`pl:${library.openPlaylist}`]
+    return library.openSmart ? [`smart:${library.openSmart}`] : []
+  }
   const path = halves[t.plugin].path
   const out = path ? path(tab, page) : page ? [page] : []
   // one group of the search results shown whole is a view below them
@@ -315,6 +322,20 @@ export function findSong(artist: string, title: string): ItemKey | undefined {
     if (id !== undefined) return itemKey(p.id, id)
   }
   return undefined
+}
+
+// Every song of the plugins that are on and give them (files), as item
+// keys in plugin and library order, with when each came in (ticket 118).
+// None: no plugin that is on has songs to give, so there are no such lists.
+export function librarySongs(): { key: ItemKey; added: number }[] | undefined {
+  let out: { key: ItemKey; added: number }[] | undefined
+  for (const p of plugins) {
+    const songs = pluginOn(p.id) ? halves[p.id].songs : undefined
+    if (!songs) continue
+    out ??= []
+    for (const s of songs()) out.push({ key: itemKey(p.id, s.id), added: s.added })
+  }
+  return out
 }
 
 // The search box gets `text` and the tab that searches wide shows its

@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Album, Track } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
+import type { ItemKey } from '../../../shared/plugins/items'
 
 // radio's page half hears main from the start
 vi.stubGlobal('window', {
@@ -226,5 +227,22 @@ describe('moving songs in a playlist (ticket 089)', () => {
     // the same order saves nothing
     playlists.move('m', ['files:s2', 'files:s1'])
     expect(save).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Save as playlist (ticket 118)', () => {
+  it('copies the songs under the list name, numbered when taken, with Open', () => {
+    const open = vi.fn()
+    const keys: ItemKey[] = ['files:s1', 'files:s2']
+    const a = playlists.saveAs(keys, 'Most played', open)
+    expect(playlists.get(a)).toMatchObject({ name: 'Most played', items: keys })
+    expect(notice.text).toBe('Saved 2 songs as Most played')
+    notice.press()
+    expect(open).toHaveBeenCalledWith(a)
+    const b = playlists.saveAs(['files:s1'], 'Most played', open)
+    expect(playlists.get(b)?.name).toBe('Most played 2')
+    // a copy: the list given can change after
+    keys.push('files:s3')
+    expect(playlists.get(a)?.items).toEqual(['files:s1', 'files:s2'])
   })
 })

@@ -104,6 +104,7 @@ Every key is decided in `src/renderer/src/keys.ts` (plain functions with tests);
 | Esc | close the menu, then Settings, then the queue drawer; in the search box: clear, then leave |
 | V | next visualizer style |
 | Q | switch to the queue tab, or open / close the drawer |
+| L | love / unlove the song playing (music files only), with a notice that says which |
 | Ctrl+1 / Ctrl+2 / Ctrl+3 | switch to Studio, Classic or Focus, like the title bar's layout buttons |
 
 - A text field keeps its keys. Only Ctrl+F, Ctrl+, and Ctrl+1 to Ctrl+3 work there.

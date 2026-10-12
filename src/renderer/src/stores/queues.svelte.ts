@@ -3,10 +3,11 @@
 // that plays. NowPlaying, the controls, the media session and the app colors
 // read title, sub and art here, from the ItemInfo of what plays.
 import type { Art } from '../../../shared/library'
+import { canLove } from '../../../shared/loved'
 import { itemKey, splitKey, type ItemKey } from '../../../shared/plugins/items'
 import type { SavedPlaying, SavedQueues } from '../../../shared/saved-queue'
 import { engine, type EngineEvents } from '../audio/engine'
-import { barOf, type Bar } from '../queue/bar'
+import { barOf, loveId, type Bar } from '../queue/bar'
 import { actOn, actionsOf, canOf, infoOf, isLive, itemInfo, liveOf } from '../plugins'
 import type {
   Action,
@@ -17,6 +18,7 @@ import type {
   LiveStatus,
   Playable
 } from '../plugins/types'
+import { loved } from './loved.svelte'
 import { player, togglePlay as toggleSong } from './player.svelte'
 import { queue } from './queue.svelte'
 
@@ -179,7 +181,8 @@ class Queues {
     const key = queue.current
     const p = queue.playable
     const actions = (key && actionsOf(key)) ?? p?.actions ?? []
-    return barOf('track', p, actions, key && canOf(key))
+    const heart = key && canLove(key) ? loved.has(key) : undefined
+    return barOf('track', p, actions, key && canOf(key), heart)
   }
 
   #liveEvents(): Partial<EngineEvents> {
@@ -296,7 +299,17 @@ class Queues {
     const key = this.active === 'live' ? this.live.current : queue.current
     const a = [...this.bar.buttons, ...this.bar.choices].find((x) => x.id === actionId)
     if (!key || !a || (a.kind === 'button' && a.busy)) return
-    actOn(key, actionId, value)
+    // the heart is the core's, for any song that can be loved
+    if (actionId === loveId) loved.toggle(key)
+    else actOn(key, actionId, value)
+  }
+
+  // The L key: the bar's heart. Whether the song is loved now, or undefined
+  // when the bar has no heart (nothing plays, a station, an MFP song).
+  toggleLove(): boolean | undefined {
+    const key = this.active === 'track' ? queue.current : undefined
+    if (!key || !this.bar.buttons.some((a) => a.id === loveId)) return undefined
+    return loved.toggle(key)
   }
 
   // "Back to queue": the queue's song, loaded paused at its place.

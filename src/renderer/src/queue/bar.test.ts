@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { Action, Can } from '../plugins/types'
-import { barOf, choiceView, liveWord, statusTip, type ChoiceAction } from './bar'
+import {
+  barOf,
+  choiceView,
+  liveWord,
+  loveAction,
+  loveId,
+  loveNotice,
+  statusTip,
+  type ChoiceAction
+} from './bar'
 
 const all: Can = { seek: true, pause: true, next: true, previous: true }
 const save: Action = { id: 'save', kind: 'button', label: 'Save' }
@@ -51,6 +60,23 @@ describe('barOf', () => {
     expect(barOf('live', undefined, [])).toMatchObject({ live: true, seek: false, next: false })
   })
 
+  it('a song that can be loved gets the heart first, on when loved (ticket 117)', () => {
+    const off = barOf('track', { length: 200, can: all }, [stream, save], undefined, false)
+    expect(off.buttons).toEqual([loveAction(false), save])
+    expect(off.buttons[0]).toMatchObject({
+      id: loveId,
+      icon: 'heart',
+      on: false,
+      plain: true,
+      hint: 'Love (L)'
+    })
+    const on = barOf('track', { length: 200, can: all }, [], undefined, true)
+    expect(on.buttons).toEqual([loveAction(true)])
+    expect(on.buttons[0]).toMatchObject({ icon: 'heartOn', on: true, hint: 'Loved (L)' })
+    // none said: no heart
+    expect(barOf('track', { length: 200, can: all }, [save]).buttons).toEqual([save])
+  })
+
   it('splits the actions into buttons and choices, in their order', () => {
     const bar = barOf('live', undefined, [stream, save])
     expect(bar.buttons).toEqual([save])
@@ -96,5 +122,13 @@ describe('the live status', () => {
     expect(statusTip(s, 7_500)).toBe('Retry 1 of 3 in 3 s')
     expect(statusTip(s, 11_000)).toBe('Retry 1 of 3 in 1 s')
     expect(statusTip({ state: 'live', text: 'Live on 320 kbps' }, 0)).toBe('Live on 320 kbps')
+  })
+})
+
+describe('loveNotice', () => {
+  it('says what the L key did, with the title when there is one', () => {
+    expect(loveNotice(true, 'Red Water')).toBe('Loved: "Red Water"')
+    expect(loveNotice(false, 'Red Water')).toBe('Unloved: "Red Water"')
+    expect(loveNotice(true, undefined)).toBe('Loved the song playing')
   })
 })

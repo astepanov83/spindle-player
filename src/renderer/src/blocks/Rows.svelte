@@ -283,15 +283,20 @@
         >
           {@render look(r, cur)}
         </button>
-        {#each r.buttons ?? [] as btn (btn.id)}
-          <button
-            class="chip rb"
-            tabindex="-1"
-            title={btn.hint}
-            onkeydown={onrowkey}
-            onclick={() => actOnPage(plugin, key, btn.id)}>{btn.label}</button
-          >
-        {/each}
+        {#if r.buttons?.length}
+          <!-- one width for every row, so the columns before it line up -->
+          <span class="rbs">
+            {#each r.buttons as btn (btn.id)}
+              <button
+                class="chip rb"
+                tabindex="-1"
+                title={btn.hint}
+                onkeydown={onrowkey}
+                onclick={() => actOnPage(plugin, key, btn.id)}>{btn.label}</button
+              >
+            {/each}
+          </span>
+        {/if}
         {#if r.star}
           {@const s = r.star}
           <button
@@ -431,9 +436,14 @@
   .more.open {
     opacity: 1;
   }
-  .rb {
+  .rbs {
     flex: none;
-    margin-left: 6px;
+    width: 136px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  .rb {
     padding: 4px 10px;
     font-size: var(--text-xs);
   }

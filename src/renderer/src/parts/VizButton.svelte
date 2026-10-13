@@ -6,15 +6,18 @@
 
   // Off has its own crossed-out icon, so it doesn't rest on the on dot alone.
   const off = $derived(settings.visualizer === 'off')
-  // not lit while the words cover the stage: it isn't seen then
-  const hidden = $derived(layout.wordsOverStage)
+  // not lit while the queue or the words cover the stage: it isn't seen then
+  const queued = $derived(layout.hides('stage'))
+  const hidden = $derived(queued || layout.wordsOverStage)
 </script>
 
 <IconButton
   icon={off ? 'vizOff' : 'viz'}
-  label={hidden
-    ? 'Show the visualizer in place of the lyrics'
-    : `${vzLabel(settings.visualizer)}. Press to change.`}
+  label={queued
+    ? 'Show the visualizer'
+    : hidden
+      ? 'Show the visualizer in place of the lyrics'
+      : `${vzLabel(settings.visualizer)}. Press to change.`}
   on={!off && !hidden}
   onclick={() => layout.pressVisualizer()}
 />

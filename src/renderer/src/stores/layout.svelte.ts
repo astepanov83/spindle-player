@@ -3,7 +3,15 @@
 import type { QueueMode, ShownQueue, TemplateId } from '../../../shared/layout'
 import { queueModeFor, visualizerStyles, type VisualizerStyle } from '../../../shared/settings'
 import { templates } from '../../../shared/templates'
-import { buildLayout, partsOf, type BuiltLayout, type Slots } from '../layout/build'
+import {
+  buildLayout,
+  partsOf,
+  placesOf,
+  type BuiltLayout,
+  type Place,
+  type Shown,
+  type Slots
+} from '../layout/build'
 import { shownQueueMode } from '../layout/narrow'
 import { isWide } from '../layout/wide'
 import { lyrics } from './lyrics.svelte'
@@ -136,12 +144,39 @@ class LayoutStore {
     this.chooseVisualizer(visualizerStyles[(i + 1) % visualizerStyles.length])
   }
 
-  // The visualizer button and the V key. While the words cover the stage
-  // the first press brings the stage back, so it shows something; the next
-  // ones change the style.
+  // The visualizer button and the V key. While the queue or the words cover
+  // the stage the first press brings it back, so it shows something; the
+  // next ones change the style.
   pressVisualizer(): void {
+    const revealed = this.#reveal('stage')
     if (this.wordsOverStage) lyrics.setShown(false)
-    else this.cycleVisualizer()
+    else if (!revealed) this.cycleVisualizer()
+  }
+
+  // The Lyrics button. Words the queue hides come into view, on, and stay on.
+  pressLyrics(): void {
+    if (this.#reveal('lyrics')) lyrics.setShown(true)
+    else lyrics.toggle()
+  }
+
+  #seen(p: Place): boolean {
+    return !(p.tab && this.tabSel === 1) && !(p.drawer && this.showQueue)
+  }
+
+  // The queue hides every place `what` is drawn (the Queue tab, an open
+  // drawer): a change there would not be seen.
+  hides(what: Shown): boolean {
+    const places = placesOf(this.built.root, what)
+    return places.length > 0 && !places.some((p) => this.#seen(p))
+  }
+
+  // Shows the first place the queue hides; false when one is in view already.
+  #reveal(what: Shown): boolean {
+    if (!this.hides(what)) return false
+    const p = placesOf(this.built.root, what)[0]
+    if (p.tab) this.tabSel = 0
+    if (p.drawer) this.showQueue = false
+    return true
   }
 
   // Q key and the slot button: Tab switches tabs, Drawer opens or closes

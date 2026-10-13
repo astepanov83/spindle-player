@@ -123,6 +123,29 @@ export function buildLayout(template: Template, queueMode: ShownQueue, wide = fa
   return { root, queueMode, wide: tree !== template.layout, slots }
 }
 
+// What a button shows: the visualizer's stage, or the song's words
+export type Shown = 'stage' | 'lyrics'
+
+// Each place `what` is drawn, and whether the queue can hide it there: the
+// Queue tab (`tab`) or the open drawer over it (`drawer`).
+export interface Place {
+  tab: boolean
+  drawer: boolean
+}
+
+function shows(p: BuiltPart, what: Shown): boolean {
+  if (what === 'lyrics') return 'lyrics' in p.opts && !!p.opts.lyrics
+  if (p.part === 'controls') return p.opts.style === 'bar'
+  return p.part === 'nowplaying' && p.opts.style !== 'line' && p.opts.show !== 'text'
+}
+
+export function placesOf(node: BuiltNode, what: Shown, tab = false, drawer = false): Place[] {
+  const under = drawer || node.drawer !== false
+  if (node.kind === 'part') return shows(node.part, what) ? [{ tab, drawer: under }] : []
+  if (node.kind === 'tabs') return placesOf(node.panes[0], what, true, under)
+  return node.children.flatMap((c) => placesOf(c, what, tab, under))
+}
+
 // All parts in the tree, in order. Handy for tests and checks.
 export function partsOf(node: BuiltNode): BuiltPart[] {
   if (node.kind === 'part') return [node.part]

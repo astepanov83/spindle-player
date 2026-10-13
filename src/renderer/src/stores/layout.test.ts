@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 const { layout } = await import('./layout.svelte')
 const { library } = await import('./library.svelte')
+const { lyrics } = await import('./lyrics.svelte')
 const { settings } = await import('./settings.svelte')
 
 // The library keeps its place, search text and history; Studio and Classic
@@ -195,5 +196,40 @@ describe('Focus hides its controls (ticket 113)', () => {
       expect(layout.idleHides).toBe(false)
     }
     settings.focusHide = false
+  })
+})
+
+// Studio's words take the stage's place (ticket 120): a new style would not
+// be seen, so the button brings the stage back first.
+describe('the visualizer button over the words', () => {
+  beforeEach(() => {
+    settings.template = 'studio'
+    settings.visualizer = 'ring'
+    lyrics.words = { synced: [{ t: 0, text: 'One' }] }
+    lyrics.setShown(true)
+  })
+
+  it('hides the words first, then changes the style', () => {
+    expect(layout.wordsOverStage).toBe(true)
+    layout.pressVisualizer()
+    expect([lyrics.shown, settings.visualizer]).toEqual([false, 'ring'])
+    expect(layout.wordsOverStage).toBe(false)
+    layout.pressVisualizer()
+    expect(settings.visualizer).not.toBe('ring')
+  })
+
+  it('changes the style where the words leave the stage in view', () => {
+    settings.template = 'focus'
+    lyrics.setShown(true)
+    expect(layout.wordsOverStage).toBe(false)
+    layout.pressVisualizer()
+    expect([lyrics.shown, settings.visualizer]).toEqual([true, expect.not.stringMatching('ring')])
+  })
+
+  it('changes the style for a song with no words', () => {
+    lyrics.words = undefined
+    expect(layout.wordsOverStage).toBe(false)
+    layout.pressVisualizer()
+    expect(settings.visualizer).not.toBe('ring')
   })
 })

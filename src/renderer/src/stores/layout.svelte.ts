@@ -6,6 +6,7 @@ import { templates } from '../../../shared/templates'
 import { buildLayout, partsOf, type BuiltLayout, type Slots } from '../layout/build'
 import { shownQueueMode } from '../layout/narrow'
 import { isWide } from '../layout/wide'
+import { lyrics } from './lyrics.svelte'
 import { settings } from './settings.svelte'
 
 class LayoutStore {
@@ -25,6 +26,15 @@ class LayoutStore {
   built: BuiltLayout = $derived(buildLayout(this.template, this.queueMode, this.wide))
   // Focus has none: links to an album or artist are plain text there (ticket 040)
   hasLibrary: boolean = $derived(partsOf(this.built.root).some((p) => p.part === 'library'))
+  // The song's words are shown in the stage's place (Studio's panel, ticket
+  // 120), so a new visualizer style would not be seen.
+  wordsOverStage: boolean = $derived(
+    lyrics.showing &&
+      lyrics.hasWords &&
+      partsOf(this.built.root).some(
+        (p) => p.part === 'nowplaying' && p.opts.style === 'panel' && !!p.opts.lyrics
+      )
+  )
   // Mini: no title bar, and no room for Settings or the close question
   bar: boolean = $derived(this.template.titleBar === false)
   // Mini shows its controls in place of the song's text while the pointer is
@@ -124,6 +134,14 @@ class LayoutStore {
   cycleVisualizer(): void {
     const i = visualizerStyles.indexOf(settings.visualizer)
     this.chooseVisualizer(visualizerStyles[(i + 1) % visualizerStyles.length])
+  }
+
+  // The visualizer button and the V key. While the words cover the stage
+  // the first press brings the stage back, so it shows something; the next
+  // ones change the style.
+  pressVisualizer(): void {
+    if (this.wordsOverStage) lyrics.setShown(false)
+    else this.cycleVisualizer()
   }
 
   // Q key and the slot button: Tab switches tabs, Drawer opens or closes

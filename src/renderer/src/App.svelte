@@ -321,7 +321,7 @@
     else if (act === 'settings') layout.toggleSettings()
     else if (act === 'keys') toggleKeys()
     else if (act === 'escape') escape()
-    else if (act === 'visualizer') layout.cycleVisualizer()
+    else if (act === 'visualizer') layout.pressVisualizer()
     else if (act === 'queue') layout.toggleQueue()
     else if (act === 'love') love()
     else if (act === 'studio' || act === 'classic' || act === 'focus' || act === 'mini')

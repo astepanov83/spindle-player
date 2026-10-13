@@ -9,7 +9,7 @@
   const big = $derived(templates[settings.bigTemplate].name)
 </script>
 
-<div class="minibtns">
+<div class="minibtns mini-hot">
   <button
     aria-label="Back to {big}"
     title="Back to {big} (or double click the bar)"

@@ -5,6 +5,7 @@ import {
   applyWindowKind,
   placeCentered,
   placeSaved,
+  pointerOver,
   settleMs,
   sizeFor,
   type KindWindow
@@ -210,5 +211,17 @@ describe('Mini (ticket 110)', () => {
       applyWindowKind(win, templates[id], true)
       expect(win.onTop).toBe(false)
     }
+  })
+})
+
+describe('pointerOver', () => {
+  const bar = { x: 100, y: 50, width: 360, height: 72 }
+  it('is on the bar from its top-left corner up to, not on, its far edges', () => {
+    expect(pointerOver({ x: 100, y: 50 }, bar)).toBe(true)
+    expect(pointerOver({ x: 459, y: 121 }, bar)).toBe(true)
+    expect(pointerOver({ x: 460, y: 80 }, bar)).toBe(false)
+    expect(pointerOver({ x: 200, y: 122 }, bar)).toBe(false)
+    expect(pointerOver({ x: 99, y: 80 }, bar)).toBe(false)
+    expect(pointerOver({ x: 200, y: 49 }, bar)).toBe(false)
   })
 })

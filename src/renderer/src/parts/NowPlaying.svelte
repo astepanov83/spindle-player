@@ -2,11 +2,14 @@
   import Lyrics from './Lyrics.svelte'
   import PlayingText from './PlayingText.svelte'
   import Cover from '../ui/Cover.svelte'
+  import Icon from '../ui/Icon.svelte'
+  import Marquee from '../ui/Marquee.svelte'
   import Stage from '../visualizer/Stage.svelte'
   import { layout } from '../stores/layout.svelte'
   import { lyrics as words } from '../stores/lyrics.svelte'
   import { queues } from '../stores/queues.svelte'
   import { settings } from '../stores/settings.svelte'
+  import { sleep } from '../stores/sleep.svelte'
   import { plugins } from '../../../shared/plugins'
   import { startHint } from './start-hint'
 
@@ -36,16 +39,28 @@
 {#if style === 'line'}
   <div class="np-line">
     <div class="cv"><Cover src={queues.art?.cover} art={queues.art} /></div>
-    <div class="line-meta">
+    <!-- the whole bar's width: Controls.svelte draws over it while the
+         pointer is on the bar. Too long, it scrolls. -->
+    <div class="line-meta mini-rest">
       {#if queues.title}
-        <div class="song-title" title={queues.title}><PlayingText line="title" /></div>
-        <div class="song-sub" title={queues.sub}><PlayingText line="sub" /></div>
+        <div class="song-title">
+          <Marquee run={!layout.barHot}><PlayingText line="title" /></Marquee>
+        </div>
+        <div class="song-sub">
+          <Marquee run={!layout.barHot}><PlayingText line="sub" /></Marquee>
+        </div>
       {:else}
         <div class="song-title">Nothing playing</div>
         <!-- no room for its button: Settings is in the menu -->
-        <div class="song-sub" title={hint.text}>{hint.text}</div>
+        <div class="song-sub"><Marquee run={!layout.barHot}>{hint.text}</Marquee></div>
       {/if}
     </div>
+    {#if sleep.shown}
+      <!-- the controls are out of sight: the sound will stop, so say so -->
+      <span class="line-moon mini-rest" title="Sleep timer set"
+        ><Icon name="moonOn" size={14} /></span
+      >
+    {/if}
   </div>
 {:else}
   <div class="np {style}" class:only-text={show === 'text'}>
@@ -140,7 +155,7 @@
     gap: 10px;
     min-width: 0;
     min-height: 0;
-    padding: 8px 0 8px 8px;
+    padding: 8px 12px 8px 8px;
   }
   /* as tall as the bar lets it be */
   .cv {
@@ -161,5 +176,16 @@
   }
   .line-meta .song-sub {
     font-size: var(--text-s);
+  }
+  /* Marquee cuts and scrolls a long line itself, and its edge fade starts
+     a little left of the line */
+  .line-meta :is(.song-title, .song-sub) {
+    overflow: visible;
+  }
+  .line-moon {
+    flex: none;
+    align-self: flex-start;
+    margin-top: 4px;
+    color: var(--c2);
   }
 </style>

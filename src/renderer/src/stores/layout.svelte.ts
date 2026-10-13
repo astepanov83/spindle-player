@@ -27,6 +27,9 @@ class LayoutStore {
   hasLibrary: boolean = $derived(partsOf(this.built.root).some((p) => p.part === 'library'))
   // Mini: no title bar, and no room for Settings or the close question
   bar: boolean = $derived(this.template.titleBar === false)
+  // Mini shows its controls in place of the song's text while the pointer is
+  // on it (main says, see App.svelte) or a key moved the focus into it
+  barHot = $state(false)
   // Focus with the setting on: its tabs, controls and title bar fade while
   // nobody uses it (layout/idle.ts)
   idleHides: boolean = $derived(!!this.template.idleHide && settings.focusHide)

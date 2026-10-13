@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte'
   import { defaultPalettes } from '../../shared/palette'
-  import { endsWithSong, isSleepPick } from '../../shared/sleep'
+  import { isSleepPick, sleepPicksFor } from '../../shared/sleep'
   import TitleBar from './components/TitleBar.svelte'
   import Settings from './components/Settings.svelte'
   import { keysSection } from './components/settings-sections'
@@ -57,6 +57,9 @@
     void player.shuffle
     void player.repeat
     untrack(() => queue.planNext())
+  })
+  $effect(() => {
+    if (player.shuffle) untrack(() => sleep.shuffleStarted())
   })
 
   // a new loudness setting is heard on the song playing, not only the next
@@ -136,7 +139,7 @@
   $effect(() => showPositionInMediaSession(player.pos, player.duration))
 
   // The tray menu shows what plays and has Play, Next and Previous (ticket 088).
-  $effect(() => window.playbackApi.state(playStateOf(queues, sleep.shown)))
+  $effect(() => window.playbackApi.state(playStateOf(queues, player.shuffle, sleep.shown)))
   $effect(() =>
     window.playbackApi.onControl((c) => {
       // the sleep timer's submenu (ticket 111)
@@ -151,7 +154,11 @@
 
   function pickSleep(p: unknown): void {
     if (p === null) sleep.cancel()
-    else if (isSleepPick(p) && (queues.active === 'track' || !endsWithSong(p))) sleep.pick(p)
+    else if (
+      isSleepPick(p) &&
+      sleepPicksFor({ live: queues.active === 'live', shuffle: player.shuffle }).includes(p)
+    )
+      sleep.pick(p)
   }
 
   // Mini (ticket 110): a double click on the bar asks main to maximize, which

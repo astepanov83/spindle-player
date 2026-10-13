@@ -1,7 +1,13 @@
 // The sleep timer's rules (ticket 111), pure so they are tested. The timer
 // itself is stores/sleep.svelte.ts; the queue asks stopsAfter at each end.
 import type { ItemKey } from '../../../shared/plugins/items'
-import { sleepLabel, sleepPicks, type SleepPick, type SleepShown } from '../../../shared/sleep'
+import {
+  sleepLabel,
+  sleepPicks,
+  sleepPicksFor,
+  type SleepPick,
+  type SleepShown
+} from '../../../shared/sleep'
 import type { EndStep } from './logic'
 
 // A timed one fades out over this many seconds before it ends.
@@ -52,11 +58,13 @@ export function stopsAfter(
 // One row of the timer's menu; `id` is what pickOf reads back.
 export type SleepRow = { id: string; label: string; checked?: boolean } | 'line'
 
-// The choices, the one set checked, and Cancel while one is set. A live
-// item has no song or album end.
-export function sleepRows(s: SleepSet | undefined, live: boolean): SleepRow[] {
-  const picks = sleepPicks.filter((p) => !live || typeof p === 'number')
-  const rows: SleepRow[] = picks.map((p) => ({
+// The choices that can be picked now (sleepPicksFor), the one set checked,
+// and Cancel while one is set.
+export function sleepRows(
+  s: SleepSet | undefined,
+  now: { live: boolean; shuffle: boolean }
+): SleepRow[] {
+  const rows: SleepRow[] = sleepPicksFor(now).map((p) => ({
     id: `sleep:${p}`,
     label: sleepLabel(p),
     checked: s?.pick === p

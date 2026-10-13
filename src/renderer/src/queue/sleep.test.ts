@@ -9,7 +9,8 @@ import {
   sleepHeading,
   sleepRows,
   stopsAfter,
-  timedStep
+  timedStep,
+  type SleepRow
 } from './sleep'
 
 const min = 60_000
@@ -80,9 +81,11 @@ describe('stopsAfter', () => {
   })
 })
 
+const idOf = (r: SleepRow): string => (r === 'line' ? r : r.id)
+
 describe('the menu', () => {
   it('has every choice, and Cancel only while set', () => {
-    expect(sleepRows(undefined, false)).toEqual([
+    expect(sleepRows(undefined, { live: false, shuffle: false })).toEqual([
       { id: 'sleep:song', label: 'End of this song', checked: false },
       { id: 'sleep:album', label: 'End of this album', checked: false },
       { id: 'sleep:15', label: '15 minutes', checked: false },
@@ -91,13 +94,25 @@ describe('the menu', () => {
       { id: 'sleep:60', label: '60 minutes', checked: false },
       { id: 'sleep:90', label: '90 minutes', checked: false }
     ])
-    const rows = sleepRows(setAt(45, 0), false)
+    const rows = sleepRows(setAt(45, 0), { live: false, shuffle: false })
     expect(rows[4]).toMatchObject({ label: '45 minutes', checked: true })
     expect(rows.slice(-2)).toEqual(['line', { id: 'sleep:off', label: 'Cancel' }])
   })
 
   it('has no song or album end for a live item', () => {
-    expect(sleepRows(undefined, true).map((r) => (r === 'line' ? r : r.id))).toEqual([
+    expect(sleepRows(undefined, { live: true, shuffle: false }).map(idOf)).toEqual([
+      'sleep:15',
+      'sleep:30',
+      'sleep:45',
+      'sleep:60',
+      'sleep:90'
+    ])
+    expect(sleepRows(undefined, { live: true, shuffle: true }).map(idOf)[0]).toBe('sleep:15')
+  })
+
+  it('has no album end with shuffle, which picks the next song at random', () => {
+    expect(sleepRows(undefined, { live: false, shuffle: true }).map(idOf)).toEqual([
+      'sleep:song',
       'sleep:15',
       'sleep:30',
       'sleep:45',

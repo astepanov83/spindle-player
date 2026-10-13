@@ -92,4 +92,16 @@ describe('end of song and album', () => {
     sleep.liveStarted()
     expect(sleep.set).toMatchObject({ pick: 45 })
   })
+
+  it('drops End of album when shuffle goes on; the rest stay', () => {
+    sleep.pick('album')
+    sleep.shuffleStarted()
+    expect(sleep.set).toBeUndefined()
+    sleep.pick('song')
+    sleep.shuffleStarted()
+    expect(sleep.set).toEqual({ pick: 'song' })
+    sleep.pick(30)
+    sleep.shuffleStarted()
+    expect(sleep.set).toMatchObject({ pick: 30 })
+  })
 })

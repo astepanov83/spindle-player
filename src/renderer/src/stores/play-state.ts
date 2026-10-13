@@ -20,14 +20,16 @@ function names(info: ItemInfo): string {
   return info.names ? info.names.map((n) => n.name).join(', ') : (info.subtitle ?? '')
 }
 
-// `sleep`: the sleep timer set, for the tray's submenu (ticket 111).
-export function playStateOf(q: PlayingNow, sleep?: SleepShown): PlayState {
+// `sleep`: the sleep timer set, for the tray's submenu (ticket 111), and
+// `shuffle`, which takes End of this album out of it.
+export function playStateOf(q: PlayingNow, shuffle: boolean, sleep?: SleepShown): PlayState {
   const info = q.nothingPlaying ? undefined : q.info
   const s: PlayState = {
     title: info?.title ?? '',
     artist: info ? names(info) : '',
     playing: q.wantsSound,
     live: q.bar.live,
+    shuffle,
     nothing: q.nothing,
     next: q.bar.next,
     previous: q.bar.previous

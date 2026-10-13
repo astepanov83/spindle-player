@@ -114,6 +114,8 @@ export interface PlayState {
   playing: boolean
   // a live item (radio): Stop in place of Pause
   live: boolean
+  // shuffle is on: the sleep timer has no End of this album
+  shuffle: boolean
   // nothing picked: Play, Previous and Next have nothing to act on
   nothing: boolean
   // the bar shows Next and Previous

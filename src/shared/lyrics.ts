@@ -94,14 +94,20 @@ export function parseLyricsText(text: string): Lyrics | undefined {
   return plain ? { plain } : undefined
 }
 
-// The line being sung at `t` seconds: the last that started; -1 before the first.
+// A seek to a line's time can come back a few microseconds short: a disc
+// image track's time is the file's time minus the track's start, and
+// Chromium keeps time in whole microseconds. That lit the line before.
+const earlySec = 0.001
+
+// The line being sung at `t` seconds: the last that started (or starts within
+// earlySec); -1 before the first.
 export function lineAt(lines: readonly LyricLine[], t: number): number {
   let lo = 0
   let hi = lines.length - 1
   let found = -1
   while (lo <= hi) {
     const mid = (lo + hi) >> 1
-    if (lines[mid].t <= t) {
+    if (lines[mid].t <= t + earlySec) {
       found = mid
       lo = mid + 1
     } else hi = mid - 1

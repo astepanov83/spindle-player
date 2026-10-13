@@ -4,13 +4,13 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-4cc3c9?style=for-the-badge"></a>
-  <img alt="Linux" src="https://img.shields.io/badge/Linux-AppImage%20%7C%20.deb-f7b733?style=for-the-badge&logo=linux&logoColor=white">
-  <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-b9a6ff?style=for-the-badge">
+  <a href="https://github.com/astepanov83/spindle-player/releases/latest"><img alt="Linux and Windows" src="https://img.shields.io/badge/runs_on-Linux%20%7C%20Windows-f7b733?style=for-the-badge"></a>
+  <a href="https://github.com/astepanov83/spindle-player/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/astepanov83/spindle-player?style=for-the-badge&label=version&color=b9a6ff"></a>
   <br>
-  <img alt="Electron" src="https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron&logoColor=white">
-  <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00?style=flat-square&logo=svelte&logoColor=white">
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178c6?style=flat-square&logo=typescript&logoColor=white">
-  <img alt="Vitest" src="https://img.shields.io/badge/tested_with-Vitest-6e9f18?style=flat-square&logo=vitest&logoColor=white">
+  <a href="https://www.electronjs.org"><img alt="Electron" src="https://img.shields.io/badge/Electron-44-47848f?style=flat-square&logo=electron&logoColor=white"></a>
+  <a href="https://svelte.dev"><img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00?style=flat-square&logo=svelte&logoColor=white"></a>
+  <a href="https://www.typescriptlang.org"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178c6?style=flat-square&logo=typescript&logoColor=white"></a>
+  <a href="https://vitest.dev"><img alt="Vitest" src="https://img.shields.io/badge/tested_with-Vitest-6e9f18?style=flat-square&logo=vitest&logoColor=white"></a>
 </p>
 
 <p align="center">
@@ -129,9 +129,16 @@ Everything except the player, the queue, playlists, Settings and the look is a *
 ## 🚀 Run it
 
 > [!NOTE]
-> Spindle is early (version 0.1.0) and Linux only for now. There are no ready-made downloads yet, so build it from source.
+> Spindle is early. It runs on Linux and Windows, both x64.
 
-You need Node 22 or newer.
+Download it from the [latest release](https://github.com/astepanov83/spindle-player/releases/latest):
+
+| System | File | Install |
+|---|---|---|
+| Linux (Debian, Ubuntu and others) | `spindle_<version>_amd64.deb` | `sudo apt install ./spindle_<version>_amd64.deb` |
+| Windows | `spindle-setup-<version>.exe` | Run it. The installer isn't signed, so Windows may warn first: choose **More info**, then **Run anyway**. |
+
+To build it from source instead, you need Node 22 or newer.
 
 ```bash
 git clone https://github.com/astepanov83/spindle-player.git
@@ -151,10 +158,12 @@ Then open Settings (the gear), add your music folders under **Music files**, and
 | `npm run package` | AppImage and .deb in `dist/` |
 | `npm run package:win` | Windows installer and .zip in `dist/` (run it on Windows) |
 
+Releases are built on GitHub: pushing a tag `v<version>` (the version in `package.json`, such as `v0.1.0`) runs `.github/workflows/release.yml`, which builds the .deb for Linux and the installer for Windows and publishes them as that release. It can also be run by hand from the Actions tab to build the packages without publishing them.
+
 <details>
 <summary><b>About ffmpeg</b></summary>
 
-`npm install` downloads a pinned static build of ffmpeg and ffprobe into `resources/ffmpeg/` and checks its sha256: 7.0.2 on Linux x64 (about 58 MB), or gyan.dev's 6.1.1 on Windows x64 (about 165 MB). If that fails (offline, another platform), the app still runs, but APE, ALAC, WMA, WavPack and AIFF won't play. `npm run fetch-ffmpeg` tries again; `npm run package` and `npm run package:win` stop if the binaries are missing.
+`npm install` downloads a pinned static build of ffmpeg and ffprobe into `resources/ffmpeg/` and checks its sha256: 7.0.2 on Linux x64 (about 58 MB), or gyan.dev's 6.1.1 on Windows x64 (about 165 MB). If that fails (offline, another platform), the app still runs, but APE, ALAC, WMA, WavPack and AIFF won't play. `npm run fetch-ffmpeg` tries again; `npm run package` and `npm run package:win` stop if the binaries are missing. These downloads are for working on Spindle: released packages are built by the Release workflow (see above).
 
 </details>
 
@@ -186,17 +195,6 @@ The installed .deb sets this up by itself. The AppImage turns the sandbox off wh
 
 Spindle is under the [MIT](LICENSE) license.
 
-The packaged app also ships ffmpeg and ffprobe as separate programs, which Spindle runs unmodified. They are not part of Spindle's code and are not under its MIT license: they are John Van Sickle's static build of [FFmpeg](https://ffmpeg.org) 7.0.2, licensed under the GNU GPL version 3 (see `resources/ffmpeg/LICENSE.txt` and `README.txt` after `npm install`, and `resources/app.asar.unpacked/resources/ffmpeg/` in the installed app). The build comes from the [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) release `b6.1.1`.
-
-<details>
-<summary><b>Source for ffmpeg and ffprobe</b></summary>
-
-The GPL asks that anyone who gets these programs can also get their source. [`resources/ffmpeg/SOURCE.txt`](resources/ffmpeg/SOURCE.txt), shipped next to the programs, says where it is: an archive published with each release, kept as long as that release is. It also has a written offer to provide that archive for at least three years. The archive is not the full Corresponding Source: the build's own scripts are not public, and a few linked libraries have no known version. `SOURCE.txt` says so.
-
-`node scripts/fetch-ffmpeg-source.mjs` makes that archive. It downloads the FFmpeg 7.0.2 source and the source of each library linked into the build whose version is known (about 100 MB, needs git and GNU tar), checks each file's sha256 and each git snapshot's commit, and packs them into `ffmpeg-source/ffmpeg-7.0.2-linux-x64-source.tar` (about 170 MB). `SOURCES.txt` in the archive lists what each file is, and what is missing.
-
-To publish: put the archive's release link in `SOURCE.txt`, then run the script again (the archive holds a copy of `SOURCE.txt`), and attach the new archive to the release.
-
-</details>
+The packaged app also ships ffmpeg and ffprobe as separate programs, which Spindle runs unmodified. They are not part of Spindle's code and are not under its MIT license: they are [FFmpeg](https://ffmpeg.org), built by the Release workflow from FFmpeg's source with only its own audio decoders and no outside libraries (`scripts/ffmpeg/build.sh`), and licensed under the GNU LGPL version 2.1 or later. In the installed app they are in `resources/app.asar.unpacked/resources/ffmpeg/`, with their license, build settings, and `SOURCE.txt`, which says where their source is.
 
 <p align="center"><sub>Made for listening to whole albums. 💿</sub></p>

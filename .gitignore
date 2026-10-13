@@ -5,9 +5,6 @@ out/
 .DS_Store
 .env
 .eslintcache
-# ffmpeg and ffprobe, fetched by scripts/fetch-ffmpeg.mjs; the source offer is ours
-resources/ffmpeg/*
-!resources/ffmpeg/SOURCE.txt
-# their source, gathered by scripts/fetch-ffmpeg-source.mjs
-ffmpeg-source/
+# ffmpeg and ffprobe, put there by scripts/fetch-ffmpeg.mjs
+resources/ffmpeg/
 *.tsbuildinfo

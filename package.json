@@ -2,7 +2,7 @@
   "name": "spindle",
   "productName": "Spindle",
   "desktopName": "spindle.desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A desktop music player for local files",
   "main": "./out/main/index.js",
   "author": "Alexander Stepanov <alexander.stepanov.v@gmail.com>",

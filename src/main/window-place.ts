@@ -119,3 +119,9 @@ export function applyWindowKind(win: KindWindow, template: Template, miniOnTop: 
   else win.setMaximumSize(0, 0)
   win.setAlwaysOnTop(!!w.onTop && miniOnTop)
 }
+
+// The pointer is over the window. Mini asks this, since its whole bar drags
+// the window and a drag area gets no hover in the page.
+export function pointerOver(p: { x: number; y: number }, r: Rect): boolean {
+  return p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height
+}

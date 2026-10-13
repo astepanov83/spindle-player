@@ -95,11 +95,11 @@
     const r = rows[layout.songRow[song]]
     return albums[r && r.kind !== 'part' ? r.album : 0]
   }
-  // "From" is the album's while the songs are of one album, else the artist's
-  function origin(keys: ItemKey[]): { from: string; link: AlbumSongs['link'] } {
+  // the album's page while the songs are of one album, else the artist's
+  function origin(keys: ItemKey[]): { link: AlbumSongs['link'] } {
     const of = new Set(keys.map((k) => albumOfSong(shown.indexOf(k))))
     const [al] = of
-    return of.size === 1 && al ? { from: al.from, link: al.link } : { from: b.from, link: b.link }
+    return of.size === 1 && al ? { link: al.link } : { link: b.link }
   }
 
   // a click plays the album from the song clicked, as on the album page
@@ -107,7 +107,7 @@
     if (songDrag.tookClick()) return
     if (sel.click(r.song, e)) return
     const al = albums[r.album]
-    queue.playList(al.items, r.at, al.from, al.link)
+    queue.playList(al.items, r.at, al.link)
   }
 
   // a drag takes the selected songs when the row is one of them (ticket 089)
@@ -207,7 +207,7 @@
             class="pill ghost play"
             tabindex="-1"
             aria-label="{playState(al.link, al.songs) === 'pause' ? 'Pause' : 'Play'} {al.title}"
-            onclick={unlessDragged(() => playPage('all', al.songs, al.from, al.link))}
+            onclick={unlessDragged(() => playPage('all', al.songs, al.link))}
             >{playState(al.link, al.songs) === 'pause' ? 'Pause' : 'Play'}</button
           >
         </div>

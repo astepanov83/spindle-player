@@ -91,7 +91,6 @@ export type HeadButton =
       label: string
       // asked when it is clicked
       songs: () => ItemKey[]
-      from: string
       link?: QueueLink
       // the filled one
       primary?: boolean
@@ -103,8 +102,6 @@ export type HeadButton =
       // the label; More shows an icon and this as its tooltip
       label: string
       songs: () => ItemKey[]
-      // the song menu's "From"
-      from?: string
       link?: QueueLink
       // the plugin's own entries in that menu: act(head id, id)
       actions?: { id: string; label: string }[]
@@ -177,7 +174,7 @@ export interface HeadBlock {
     items: {
       text: string
       action?: { id: string; label: string; value: string; hint?: string }
-      play?: { label: string; songs: () => ItemKey[]; from: string; link?: QueueLink }
+      play?: { label: string; songs: () => ItemKey[]; link?: QueueLink }
     }[]
   }
   buttons?: HeadButton[]
@@ -212,7 +209,6 @@ export interface Tile {
   playing?: (item: ItemKey) => boolean
   // its songs, asked for the play button and the song menu
   songs: () => ItemKey[]
-  from: string
   link?: QueueLink
   // more entries in its song menu: act(the tile's key, id)
   actions?: { id: string; label: string }[]
@@ -294,8 +290,7 @@ export interface ShelvesBlock<T = unknown> {
 export interface AlbumSongsBlock {
   kind: 'albumSongs'
   parts: { title: string; albums: AlbumSongs[] }[]
-  // "From" for songs taken from more than one album (a menu, a drag)
-  from: string
+  // the page, for songs taken from more than one album (a menu, a drag)
   link?: QueueLink
 }
 
@@ -323,7 +318,6 @@ export interface ArtistHeading {
   // none for a name with no page (a split credit)
   to?: PageAddress
   songs: () => ItemKey[]
-  from: string
   link?: QueueLink
 }
 
@@ -334,10 +328,10 @@ export interface SongsBlock {
   // act's target for the sort
   id: string
   items: ItemKey[]
-  // names the songs when they start the queue, and the title shown with `meta`
-  from: string
+  // the title shown with `meta`
+  title: string
   link?: QueueLink
-  // the table's title: `meta` over `from`, or `from` alone on a list's
+  // the table's title: `meta` over `title`, or `title` alone on a list's
   // one-line title row when `meta` is ''; else `label`, a small heading
   meta?: string
   label?: string
@@ -387,7 +381,6 @@ export interface PageRow extends RowLook {
   to: PageAddress
   playing?: (item: ItemKey) => boolean
   songs: () => ItemKey[]
-  from: string
   link?: QueueLink
 }
 
@@ -400,7 +393,7 @@ export interface ItemRow extends RowLook {
   play?: ItemKey
   // What a click plays, from the row's item: these track items in order (the
   // songs kept from the radio that are in the library). None: the item alone.
-  queue?: { items: ItemKey[]; from: string }
+  queue?: { items: ItemKey[] }
   // never a page row's link, so the two sorts can't mix
   to?: never
   // a star button after the row: `on` filled; `label` is its tooltip. `heart`:

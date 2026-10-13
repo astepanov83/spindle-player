@@ -5,7 +5,13 @@ import { execFile } from 'child_process'
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
 import icon from '../../resources/icon.png?asset'
 import type { PlayControl, PlayState } from '../shared/ipc'
-import { endsWithSong, isSleepPick, sleepLabel, sleepPicks, type SleepShown } from '../shared/sleep'
+import {
+  endsWithSong,
+  isSleepPick,
+  sleepLabel,
+  sleepPicksFor,
+  type SleepShown
+} from '../shared/sleep'
 
 // The icon's size in points; a 2x copy is added for sharp screens.
 function iconSize(platform: NodeJS.Platform): number {
@@ -70,14 +76,12 @@ export function trayItems(state: PlayState | undefined): TrayItem[] {
 // time left by the minute, so the menu is not built anew every second.
 function sleepMenu(state: PlayState): TrayItem {
   const s = state.sleep
-  const items: TrayItem[] = sleepPicks
-    .filter((p) => !state.live || !endsWithSong(p))
-    .map((p) => ({
-      kind: 'pick',
-      label: sleepLabel(p),
-      action: { sleep: p },
-      checked: s?.pick === p
-    }))
+  const items: TrayItem[] = sleepPicksFor(state).map((p) => ({
+    kind: 'pick',
+    label: sleepLabel(p),
+    action: { sleep: p },
+    checked: s?.pick === p
+  }))
   if (s)
     items.push(
       { kind: 'line' },
@@ -113,6 +117,7 @@ export function parsePlayState(raw: unknown): PlayState | undefined {
     artist: text(r.artist),
     playing: flag(r.playing),
     live: flag(r.live),
+    shuffle: flag(r.shuffle),
     nothing: r.nothing !== false,
     next: flag(r.next),
     previous: flag(r.previous),

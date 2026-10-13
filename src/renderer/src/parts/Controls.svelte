@@ -28,6 +28,17 @@
   // stack a live item's row has no room for it, so it goes in the row under.
   const own = $derived(bar.buttons.filter((a) => a.id !== sleepId))
   const moon = $derived(bar.buttons.find((a) => a.id === sleepId))
+
+  // The bar's stage needs room: under 1000px, or with its end under 280px,
+  // it would be a row of dots with no meaning. The layout store is told, so
+  // the visualizer button goes too while nothing shows the visualizer.
+  let endWidth = $state(0)
+  const stageFits = $derived(layout.width >= 1000 && endWidth >= 280)
+  $effect(() => {
+    if (style !== 'bar') return
+    layout.barStage = stageFits
+    return () => (layout.barStage = true)
+  })
 </script>
 
 {#if style === 'bar'}
@@ -64,8 +75,8 @@
         </div>
       {/if}
     </div>
-    <div class="br">
-      <Stage cover={false} onclick={() => layout.cycleVisualizer()} />
+    <div class="br" bind:clientWidth={endWidth}>
+      {#if stageFits}<Stage cover={false} onclick={() => layout.cycleVisualizer()} />{/if}
       {#if moon}<BarAction action={moon} wide />{/if}
       <Volume width={80} pop />
       <VizButton />
@@ -73,10 +84,11 @@
     </div>
   </div>
 {:else if style === 'compact'}
-  <!-- Mini: Previous, Play, Next, and the item's own buttons (the first one
-       always, the rest while there is room). No seek bar, volume or stage; a
-       live item shows only Stop. -->
-  <div class="ctl compact">
+  <!-- Mini: Previous, Play, Next and the item's own buttons, over the song's
+       text and only while the pointer is on the bar (App.svelte), so the
+       text has the whole bar the rest of the time. No seek bar, volume or
+       stage; a live item shows only Stop. -->
+  <div class="ctl compact mini-hot">
     {#if bar.buttons.length}
       <div class="acts">
         {#each bar.buttons as a (a.id)}<BarAction action={a} wide={false} bare />{/each}
@@ -131,12 +143,17 @@
 {/if}
 
 <style>
+  /* over the song's text: from the cover's edge to Mini's own buttons */
   .compact {
-    flex: 1;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(100vh + 2px);
+    right: 30px;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
-    padding: 0 6px 0 4px;
     --playbtn: 36px;
     --playico: 20px;
     --icobtn: 30px;
@@ -148,18 +165,14 @@
     display: flex;
     align-items: center;
   }
-  /* In a narrow Mini only one stays: the first (the heart, ticket 117), or
-     the moon while a sleep timer is set (ticket 111), so it still shows that
-     the sound will stop. The rest give the title their room. */
+  /* The narrowest bars have room for the three alone; the right-click menu
+     has the rest. A set sleep timer's moon stays (ticket 111). */
   @media (max-width: 319px) {
-    .compact .acts > :global(:not(:first-child)) {
+    .compact .acts > :global(:not([data-keep])) {
       display: none;
     }
-    .compact .acts:has(:global([data-keep])) > :global(:not([data-keep])) {
+    .compact .acts:not(:has(:global([data-keep]))) {
       display: none;
-    }
-    .compact .acts > :global([data-keep]) {
-      display: grid;
     }
   }
   .stack {
@@ -277,17 +290,5 @@
     flex: 0 1 120px;
     min-width: 0;
     height: 48px;
-  }
-  @container bar-end (max-width: 279px) {
-    .br > :global(.vstage) {
-      display: none;
-    }
-  }
-  /* In a window under 1000px it is only a few dots wide, a row of dots with
-     no meaning; the button beside it shows the style. */
-  @media (max-width: 999px) {
-    .br > :global(.vstage) {
-      display: none;
-    }
   }
 </style>

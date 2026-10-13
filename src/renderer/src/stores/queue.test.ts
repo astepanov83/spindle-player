@@ -160,7 +160,7 @@ function setSongs(...list: [string, number, string?][]): void {
 }
 
 function playAlbum(a: string, index: number): void {
-  queue.playList(albums[a], index, `Album ${a}`, queueLink('album', a))
+  queue.playList(albums[a], index, queueLink('album', a))
 }
 
 const k = (...ids: string[]): ItemKey[] => ids.map((id) => `files:${id}` as ItemKey)
@@ -340,7 +340,7 @@ describe('a song fails', () => {
   })
 
   it('stays put when paused, as after a restore, and says nothing until Play', () => {
-    queue.restore({ items: ['files:a0', 'files:a1'], index: 0, from: 'Album a', pos: 12 })
+    queue.restore({ items: ['files:a0', 'files:a1'], index: 0, pos: 12 })
     fake.reset()
     fake.on.error!(bad)
     expect(playing()).toBe('a0')
@@ -444,7 +444,6 @@ describe('saving', () => {
     expect(saveQueue).toHaveBeenLastCalledWith({
       items: ['files:b0', 'files:b1'],
       index: 1,
-      from: 'Album b',
       link: queueLink('album', 'b'),
       pos: 0
     })
@@ -526,7 +525,6 @@ describe('tracks of a disc image', () => {
     queue.restore({
       items: ['files:c0', 'files:c1', 'files:c2'],
       index: 1,
-      from: 'Album c',
       pos: 30
     })
     expect(fake.calls).toEqual(['load media/img 100-250 at 30'])
@@ -554,29 +552,27 @@ describe('queue actions (ticket 037)', () => {
     queue.clear()
     queue.clear()
     fake.reset()
-    queue.append(k('b0', 'b1'), 'Album b')
+    queue.append(k('b0', 'b1'))
     expect(queue.items).toEqual(['files:b0', 'files:b1'])
-    expect(queue.from).toBe('Album b')
     expect(playing()).toBe('b0')
     expect(fake.calls).toEqual(['load media/b0'])
     expect(player.playing).toBe(false)
   })
 
-  it('keeps what "From" opens, from a list, a menu and the last run (ticket 040)', () => {
+  it('keeps the page it came from, from a list, a menu and the last run (ticket 040)', () => {
     expect(queue.link).toEqual(queueLink('album', 'a'))
-    queue.playList(k('b0'), 0, 'search "b"')
+    queue.playList(k('b0'), 0)
     expect(queue.link).toBeUndefined()
     queue.clear()
     queue.clear()
-    queue.playNext(k('b0'), 'Mix', queueLink('playlist', 'p1'))
+    queue.playNext(k('b0'), queueLink('playlist', 'p1'))
     expect(queue.link).toEqual(queueLink('playlist', 'p1'))
     expect(saveQueue).toHaveBeenLastCalledWith(
-      expect.objectContaining({ from: 'Mix', link: queueLink('playlist', 'p1') })
+      expect.objectContaining({ link: queueLink('playlist', 'p1') })
     )
     queue.restore({
       items: ['files:a1'],
       index: 0,
-      from: 'X',
       link: queueLink('artist', 'x'),
       pos: 0
     })
@@ -596,7 +592,7 @@ describe('queue actions (ticket 037)', () => {
 
   it('moves only files keys when ids change', () => {
     setSongs(['a', 3], ['e', 2, 'mfp'])
-    queue.restore({ items: ['files:a0', 'mfp:e0', 'files:a2'], index: 0, from: 'X', pos: 0 })
+    queue.restore({ items: ['files:a0', 'mfp:e0', 'files:a2'], index: 0, pos: 0 })
     // the same ids from a files rescan: only the files key moves
     queue.moveIds('files', { a0: 'n0', e0: 'n1' })
     expect(queue.items).toEqual(['files:n0', 'mfp:e0', 'files:a2'])
@@ -637,7 +633,7 @@ describe('queue actions (ticket 037)', () => {
   })
 
   it('removing the last song left stops and empties the player', () => {
-    queue.playList(k('b0'), 0, 'B')
+    queue.playList(k('b0'), 0)
     fake.reset()
     queue.remove(0)
     expect(queue.items).toEqual([])
@@ -686,7 +682,6 @@ describe('queue actions (ticket 037)', () => {
     expect(notice.text).toBe('Cleared the queue')
     queue.clear()
     expect(queue.items).toEqual([])
-    expect(queue.from).toBe('')
     expect(fake.calls).toEqual(['clear'])
     expect(player.playing).toBe(false)
   })
@@ -723,7 +718,6 @@ describe('queue actions (ticket 037)', () => {
     queue.restore({
       items: ['files:a0', 'files:b0', 'files:a1', 'files:a2'],
       index: 0,
-      from: 'X',
       pos: 3,
       next: 1
     })
@@ -764,14 +758,12 @@ describe('undo of Clear and Remove (ticket 071)', () => {
     queue.playNext(k('b0'))
     queue.jump(2)
     queue.playNext(k('b1'))
-    const before = { items: queue.items, index: queue.index, from: queue.from, link: queue.link }
+    const before = { items: queue.items, index: queue.index, link: queue.link }
     fake.reset()
     queue.clear()
     expect(notice.text).toBe('Cleared the queue')
     undo()
-    expect({ items: queue.items, index: queue.index, from: queue.from, link: queue.link }).toEqual(
-      before
-    )
+    expect({ items: queue.items, index: queue.index, link: queue.link }).toEqual(before)
     expect(fake.calls).toEqual([])
     expect(player.playing).toBe(true)
     expect(saveQueue).toHaveBeenLastCalledWith(expect.objectContaining({ next: 1 }))
@@ -789,7 +781,6 @@ describe('undo of Clear and Remove (ticket 071)', () => {
     fake.reset()
     undo()
     expect(queue.items).toEqual(['files:a0'])
-    expect(queue.from).toBe('Album a')
     expect(fake.calls).toEqual(['load media/a0', 'play'])
     expect(player.pos).toBe(42)
   })
@@ -847,7 +838,7 @@ describe('undo of Clear and Remove (ticket 071)', () => {
     expect(notice.action).toBeUndefined()
     expect(notice.text).toBe('Removed from the queue: "A 2"')
     queue.clear()
-    queue.playList(k('b0', 'b1'), 0, 'B')
+    queue.playList(k('b0', 'b1'), 0)
     expect(notice.action).toBeUndefined()
   })
 
@@ -961,13 +952,12 @@ describe('songs dropped on the queue (ticket 089)', () => {
     expect(saveQueue).toHaveBeenLastCalledWith(expect.objectContaining({ index: 1, next: 1 }))
   })
 
-  it('fill an empty queue, the first loaded paused and named where they came from', () => {
+  it('fill an empty queue, the first loaded paused and with their page', () => {
     queue.clear()
     queue.clear()
     fake.reset()
-    queue.insert(k('b0', 'b1'), 0, 'Album b', queueLink('album', 'b'))
+    queue.insert(k('b0', 'b1'), 0, queueLink('album', 'b'))
     expect(queue.items).toEqual(['files:b0', 'files:b1'])
-    expect(queue.from).toBe('Album b')
     expect(queue.link).toEqual(queueLink('album', 'b'))
     expect(fake.calls).toEqual(['load media/b0'])
     expect(player.playing).toBe(false)
@@ -988,7 +978,7 @@ describe('the shuffle walk (ticket 076)', () => {
   beforeEach(() => {
     setSongs(['s', 6])
     player.shuffle = true
-    queue.playList(albums.s, 0, 'S')
+    queue.playList(albums.s, 0)
     fake.reset()
   })
 
@@ -1072,7 +1062,7 @@ describe('the shuffle walk (ticket 076)', () => {
 describe('songs of a plugin that is off (ticket 056)', () => {
   beforeEach(() => {
     setSongs(['a', 2], ['e', 2, 'mfp'])
-    queue.playList([albums.a[0], ...albums.e, albums.a[1]], 0, 'Mix')
+    queue.playList([albums.a[0], ...albums.e, albums.a[1]], 0)
     plugin.off.add('mfp')
     fake.reset()
   })
@@ -1103,7 +1093,7 @@ describe('songs of a plugin that is off (ticket 056)', () => {
   })
 
   it('stay current in a restore, held at their place until the plugin is on', () => {
-    queue.restore({ items: ['mfp:e0', 'files:a1'], index: 0, from: 'Mix', pos: 3000 })
+    queue.restore({ items: ['mfp:e0', 'files:a1'], index: 0, pos: 3000 })
     expect(queue.current).toBe('mfp:e0')
     expect(fake.calls).toEqual(['clear'])
     expect(savePlace).toHaveBeenLastCalledWith({ index: 0, pos: 3000 })
@@ -1133,7 +1123,7 @@ describe('songs of a plugin that is off (ticket 056)', () => {
   })
 
   it('Play on a held song goes on to the next one that can play', () => {
-    queue.restore({ items: ['mfp:e0', 'files:a1'], index: 0, from: 'Mix', pos: 3000 })
+    queue.restore({ items: ['mfp:e0', 'files:a1'], index: 0, pos: 3000 })
     expect(queue.playWhenReady()).toBe(true)
     expect(queue.current).toBe('files:a1')
     expect(fake.calls.slice(-2)).toEqual(['load media/a1', 'play'])
@@ -1151,7 +1141,7 @@ describe('songs of a plugin that is off (ticket 056)', () => {
   })
 
   it('with nothing else to play, waits and loads paused when the plugin is on again', () => {
-    queue.playList(albums.e, 0, 'Episode')
+    queue.playList(albums.e, 0)
     expect(queue.current).toBe('mfp:e0')
     expect(fake.calls).toEqual(['clear'])
     expect(notice.text).toBe('mfp is off: nothing to play')
@@ -1163,7 +1153,7 @@ describe('songs of a plugin that is off (ticket 056)', () => {
   })
 
   it('Play pressed in that wait plays once the plugin is on', () => {
-    queue.playList(albums.e, 0, 'Episode')
+    queue.playList(albums.e, 0)
     expect(queue.playWhenReady()).toBe(true)
     fake.reset()
     plugin.off.clear()
@@ -1189,7 +1179,7 @@ describe('songs of a plugin that is off (ticket 056)', () => {
 
   it('a queue that ran out on an MFP song starts nothing when MFP goes off and on', () => {
     plugin.off.clear()
-    queue.playList(albums.e, 1, 'Episode')
+    queue.playList(albums.e, 1)
     fake.on.ended!()
     expect(queue.ended).toBe(true)
     fake.reset()
@@ -1221,7 +1211,7 @@ describe('songs whose music folder was not found', () => {
   }
   beforeEach(() => {
     setSongs(['a', 3], ['b', 2])
-    queue.playList([...albums.a, ...albums.b], 0, 'Mix')
+    queue.playList([...albums.a, ...albums.b], 0)
     away(albums.a[2])
     away(albums.b[0])
     fake.reset()
@@ -1245,7 +1235,7 @@ describe('songs whose music folder was not found', () => {
   })
 
   it('a list started on one holds it: nothing loads, no notice, and Play does nothing', () => {
-    queue.playList([albums.a[2], albums.a[0]], 0, 'Mix')
+    queue.playList([albums.a[2], albums.a[0]], 0)
     expect(queue.current).toBe('files:a2')
     expect(fake.calls).toEqual(['clear'])
     expect(notice.text).toBe('')
@@ -1257,7 +1247,7 @@ describe('songs whose music folder was not found', () => {
   })
 
   it('a restored one stays current, and loads paused at its place once its folder is back', () => {
-    queue.restore({ items: ['files:a2', 'files:a0'], index: 0, from: 'Mix', pos: 40 })
+    queue.restore({ items: ['files:a2', 'files:a0'], index: 0, pos: 40 })
     expect(fake.calls).toEqual(['clear'])
     expect(notice.text).toBe('')
     fake.reset()
@@ -1272,7 +1262,7 @@ describe('songs whose music folder was not found', () => {
 
   it('one restored before the scan found its folder gone is unloaded and held then', () => {
     away(albums.a[2], false)
-    queue.restore({ items: ['files:a2', 'files:a0'], index: 0, from: 'Mix', pos: 40 })
+    queue.restore({ items: ['files:a2', 'files:a0'], index: 0, pos: 40 })
     expect(fake.calls).toEqual(['load media/a2'])
     fake.reset()
     away(albums.a[2])
@@ -1287,7 +1277,7 @@ describe('songs whose music folder was not found', () => {
   })
 
   it('the queue stops at its end when only such songs are left', () => {
-    queue.playList([albums.a[0], albums.a[2], albums.b[0]], 0, 'Mix')
+    queue.playList([albums.a[0], albums.a[2], albums.b[0]], 0)
     fake.reset()
     fake.on.ended!()
     expect(queue.current).toBe('files:a0')
@@ -1301,7 +1291,7 @@ describe('songs whose plugin has no data yet (ticket 056)', () => {
     plugin.songs.clear()
     plugin.loading.add('mfp')
     plugin.loading.add('files')
-    queue.restore({ items: ['files:a0', 'mfp:e0', 'files:a1'], index: 0, from: 'X', pos: 30 })
+    queue.restore({ items: ['files:a0', 'mfp:e0', 'files:a1'], index: 0, pos: 30 })
     queue.refresh()
     expect(queue.items).toEqual(['files:a0', 'mfp:e0', 'files:a1'])
     expect(fake.loaded).toBe(false)
@@ -1321,7 +1311,7 @@ describe('songs whose plugin has no data yet (ticket 056)', () => {
 
   it('only gone songs leave the queue, not off or loading ones', () => {
     setSongs(['a', 3])
-    queue.playList(['files:a0', 'mfp:x', 'radio:y', 'files:gone', 'files:a1'] as ItemKey[], 0, 'X')
+    queue.playList(['files:a0', 'mfp:x', 'radio:y', 'files:gone', 'files:a1'] as ItemKey[], 0)
     plugin.off.add('mfp')
     plugin.loading.add('radio')
     queue.refresh()
@@ -1332,7 +1322,7 @@ describe('songs whose plugin has no data yet (ticket 056)', () => {
 describe('a song that waits for its plugin (ticket 056)', () => {
   beforeEach(() => {
     plugin.loading.add('mfp')
-    queue.playList(['files:a0', 'mfp:x'] as ItemKey[], 0, 'X')
+    queue.playList(['files:a0', 'mfp:x'] as ItemKey[], 0)
     fake.reset()
   })
 
@@ -1343,7 +1333,7 @@ describe('a song that waits for its plugin (ticket 056)', () => {
   })
 
   it('plays when it loads if Play was pressed while it waited', () => {
-    queue.restore({ items: ['mfp:x'], index: 0, from: 'X', pos: 0 })
+    queue.restore({ items: ['mfp:x'], index: 0, pos: 0 })
     expect(queue.playWhenReady(true)).toBe(true)
     plugin.songs.set('mfp:x', { info: { title: 'X', length: 50 } })
     plugin.loading.clear()
@@ -1378,7 +1368,7 @@ describe('a playable that comes later (ticket 056)', () => {
 
   it('Play pressed while it is on its way plays it when it comes (ticket 057)', async () => {
     plugin.later = true
-    queue.restore({ items: albums.a, index: 1, from: 'A', pos: 7 })
+    queue.restore({ items: albums.a, index: 1, pos: 7 })
     fake.reset()
     expect(queue.playWhenReady(true)).toBe(true)
     for (const done of plugin.pending) done()
@@ -1490,7 +1480,7 @@ describe('the next song, loaded ahead (ticket 087)', () => {
 
   it('a song whose plugin is off is passed over', () => {
     setSongs(['a', 3], ['x', 1, 'off'])
-    queue.playList([...albums.a.slice(0, 1), ...albums.x, albums.a[1]], 0, '')
+    queue.playList([...albums.a.slice(0, 1), ...albums.x, albums.a[1]], 0)
     plugin.off.add('off')
     queue.planNext()
     expect(fake.next).toBe('media/a1')
@@ -1506,7 +1496,7 @@ describe('the next song, loaded ahead (ticket 087)', () => {
       })
       return key
     }
-    queue.playList([img(0, 0, 100), img(1, 100, 250)], 0, '')
+    queue.playList([img(0, 0, 100), img(1, 100, 250)], 0)
     expect(fake.next).toBe('')
   })
 
@@ -1518,7 +1508,7 @@ describe('the next song, loaded ahead (ticket 087)', () => {
       part: { file: 'img', start: 0, end: 100 }
     })
     const b = songs('b', 1)
-    queue.playList([t, ...b], 0, '')
+    queue.playList([t, ...b], 0)
     expect(fake.next).toBe('media/b0')
   })
 
@@ -1574,7 +1564,7 @@ describe('each song’s level (ReplayGain, ticket 090)', () => {
   })
 
   it('By album in a list that mixes albums uses each song’s own gain', () => {
-    queue.playList(k('a0', 'b0', 'a1'), 0, 'Mix')
+    queue.playList(k('a0', 'b0', 'a1'), 0)
     expect(db(fake.gain)).toBe(-8)
     expect(db(fake.nextGain)).toBe(-2)
   })
@@ -1807,7 +1797,7 @@ describe('long songs keep their place (ticket 114)', () => {
 
   it('is forgotten when the song ends into the next one loaded ahead', () => {
     positions.load(kept(600))
-    queue.playList(['files:l0', 'files:b0'], 0, '')
+    queue.playList(['files:l0', 'files:b0'], 0)
     expect(player.pos).toBe(595)
     fake.on.time!(700)
     expect(setPosition).toHaveBeenLastCalledWith('files:l0', 700)
@@ -1841,7 +1831,7 @@ describe('long songs keep their place (ticket 114)', () => {
 
   it('the queue’s own place after a restart comes first', () => {
     positions.load(kept(600))
-    queue.restore({ items: albums.l, index: 0, from: 'Album l', pos: 300 })
+    queue.restore({ items: albums.l, index: 0, pos: 300 })
     expect(player.pos).toBe(300)
     expect(notice.text).toBe('')
   })

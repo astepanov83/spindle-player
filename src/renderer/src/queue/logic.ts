@@ -7,9 +7,8 @@ import type { PlayablePart } from '../plugins/types'
 export interface QueueState {
   items: ItemKey[]
   index: number
-  // shown as "From <from>" in the queue header
-  from: string
-  // what "From" opens; left out when it opens nothing
+  // the page the list was played from, so its Play button pauses; left out
+  // for a list with no page
   link?: QueueLink
   // How many songs right after the current one were put there with "Play
   // next". Shuffle plays them first, in order. Left out when none.
@@ -185,29 +184,24 @@ export function jump(q: QueueState, index: number): QueueState {
 }
 
 // An empty queue takes the songs, the first one current.
-function filled(items: ItemKey[], from: string, link: QueueLink | undefined): QueueState {
-  return link ? { items, index: 0, from, link } : { items, index: 0, from }
+function filled(items: ItemKey[], link: QueueLink | undefined): QueueState {
+  return link ? { items, index: 0, link } : { items, index: 0 }
 }
 
 // "Play next": the songs go right after the current one, before other Play
 // next songs. An empty queue takes them, the first one current.
-export function insertNext(
-  q: QueueState,
-  keys: ItemKey[],
-  from = '',
-  link?: QueueLink
-): QueueState {
+export function insertNext(q: QueueState, keys: ItemKey[], link?: QueueLink): QueueState {
   if (!keys.length) return q
-  if (!q.items.length) return filled(keys, from, link)
+  if (!q.items.length) return filled(keys, link)
   const items = [...q.items.slice(0, q.index + 1), ...keys, ...q.items.slice(q.index + 1)]
   const walk = remapWalk(q.shuffle, (r) => (r > q.index ? r + keys.length : r), q.index)
   return withWalk(withNext({ ...q, items }, (q.next ?? 0) + keys.length), walk)
 }
 
 // "Add to queue": the songs go at the end.
-export function append(q: QueueState, keys: ItemKey[], from = '', link?: QueueLink): QueueState {
+export function append(q: QueueState, keys: ItemKey[], link?: QueueLink): QueueState {
   if (!keys.length) return q
-  if (!q.items.length) return filled(keys, from, link)
+  if (!q.items.length) return filled(keys, link)
   return { ...q, items: [...q.items, ...keys] }
 }
 
@@ -219,11 +213,10 @@ export function insertAt(
   q: QueueState,
   keys: ItemKey[],
   slot: number,
-  from = '',
   link?: QueueLink
 ): QueueState {
   if (!keys.length) return q
-  if (!q.items.length) return filled(keys, from, link)
+  if (!q.items.length) return filled(keys, link)
   const at = Math.max(q.index + 1, Math.min(slot, q.items.length))
   const items = [...q.items.slice(0, at), ...keys, ...q.items.slice(at)]
   const old = nextMarks(q)
@@ -238,7 +231,7 @@ export function insertAt(
 // one shuffle would play next, unless Play next songs wait.
 export function removeRow(q: QueueState, i: number): QueueState {
   if (i < 0 || i >= q.items.length) return q
-  if (q.items.length === 1) return { items: [], index: 0, from: '' }
+  if (q.items.length === 1) return { items: [], index: 0 }
   const items = q.items.filter((_, k) => k !== i)
   const marks = nextMarks(q).filter((_, k) => k !== i)
   const to = (r: number): number => (r === i ? -1 : r > i ? r - 1 : r)
@@ -375,7 +368,7 @@ export function shiftOrder(n: number, rows: readonly number[], dir: -1 | 1): num
 // The Clear button: only the current song is left, so what plays goes on.
 // A second Clear takes that one out too.
 export function clearQueue(q: QueueState): QueueState {
-  if (q.items.length <= 1) return { items: [], index: 0, from: '' }
+  if (q.items.length <= 1) return { items: [], index: 0 }
   const walk = remapWalk(q.shuffle, (r) => (r === q.index ? 0 : -1), 0)
   return withWalk(withNext({ ...q, items: [q.items[q.index]], index: 0 }, 0), walk)
 }

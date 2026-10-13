@@ -121,9 +121,7 @@
       <button class="use" aria-label={a.hint} onclick={() => act(a.id, a.value)}>{a.label}</button>
     {/if}
     {#if p}
-      <button class="use" onclick={() => playPage('start', p.songs, p.from, p.link)}
-        >{p.label}</button
-      >
+      <button class="use" onclick={() => playPage('start', p.songs, p.link)}>{p.label}</button>
     {/if}
   {/each}
 {/snippet}
@@ -141,7 +139,7 @@
             class:ghost={!btn.primary}
             class:play={btn.play === 'all'}
             disabled={btn.disabled}
-            onclick={() => playPage(btn.play, btn.songs, btn.from, btn.link)}
+            onclick={() => playPage(btn.play, btn.songs, btn.link)}
             >{playState(btn) === 'pause' ? 'Pause' : btn.label}</button
           >
         {:else if 'menu' in btn && btn.menu === 'songs'}
@@ -153,7 +151,6 @@
             disabled={btn.disabled}
             onclick={(e) =>
               openSongMenu(e, btn.songs(), {
-                from: btn.from,
                 link: btn.link,
                 actions: btn.actions?.map((a) => ({ label: a.label, run: () => act(a.id) }))
               })}><Icon name="more" size={18} /></button

@@ -49,7 +49,7 @@
 
   // from a song that can play: greyed ones are passed over
   function play(how: 'all' | 'shuffle'): void {
-    if (p) playPage(how, playIds, p.name, link, (k) => itemInfo(k).state === 'ok')
+    if (p) playPage(how, playIds, link, (k) => itemInfo(k).state === 'ok')
   }
 
   // a step clears the text: it filtered this playlist's rows, and the list
@@ -139,7 +139,6 @@
               p &&
               openSongMenu(e, playIds(), {
                 onPlaylist: id,
-                from: p.name,
                 link
               })}><Icon name="more" size={18} /></button
           >

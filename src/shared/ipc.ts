@@ -24,13 +24,15 @@ export const WinChannel = {
   // Mini (ticket 110)
   wantsBig: 'win:wants-big',
   contextMenu: 'win:context-menu',
+  pointerIn: 'win:pointer-in',
   popupMenu: 'win:popup-menu',
   quit: 'win:quit'
 } as const
 
 // A row of a menu main draws (WinApi.popupMenu): one that can go past the
-// window's edge, as in Mini.
-export type PopupItem = { id: string; label: string; checked?: boolean } | 'line'
+// window's edge, as in Mini. A row with `items` opens a submenu, one level deep.
+export type PopupItem =
+  { id: string; label: string; checked?: boolean } | { label: string; items: PopupItem[] } | 'line'
 
 export const SettingsChannel = {
   load: 'settings:load',
@@ -59,6 +61,8 @@ export interface WinApi {
   onWantsBig(listener: () => void): () => void
   // A right click on a window with no title bar, where the page gets no click
   onContextMenu(listener: () => void): () => void
+  // Mini: the pointer came onto the bar or left it (a drag area gets no hover)
+  onPointerIn(listener: (on: boolean) => void): () => void
   // The menu at the pointer; the id of the row picked, or null
   popupMenu(items: PopupItem[]): Promise<string | null>
   quit(): void
@@ -114,6 +118,8 @@ export interface PlayState {
   playing: boolean
   // a live item (radio): Stop in place of Pause
   live: boolean
+  // shuffle is on: the sleep timer has no End of this album
+  shuffle: boolean
   // nothing picked: Play, Previous and Next have nothing to act on
   nothing: boolean
   // the bar shows Next and Previous

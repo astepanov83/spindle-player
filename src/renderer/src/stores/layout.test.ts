@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 const { layout } = await import('./layout.svelte')
 const { library } = await import('./library.svelte')
+const { lyrics } = await import('./lyrics.svelte')
 const { settings } = await import('./settings.svelte')
 
 // The library keeps its place, search text and history; Studio and Classic
@@ -195,5 +196,158 @@ describe('Focus hides its controls (ticket 113)', () => {
       expect(layout.idleHides).toBe(false)
     }
     settings.focusHide = false
+  })
+})
+
+// Studio's words take the stage's place (ticket 120): a new style would not
+// be seen, so the button brings the stage back first.
+describe('the visualizer button over the words', () => {
+  beforeEach(() => {
+    settings.template = 'studio'
+    settings.visualizer = 'ring'
+    lyrics.words = { synced: [{ t: 0, text: 'One' }] }
+    lyrics.setShown(true)
+  })
+
+  it('hides the words first, then changes the style', () => {
+    expect(layout.wordsOverStage).toBe(true)
+    layout.pressVisualizer()
+    expect([lyrics.shown, settings.visualizer]).toEqual([false, 'ring'])
+    expect(layout.wordsOverStage).toBe(false)
+    layout.pressVisualizer()
+    expect(settings.visualizer).not.toBe('ring')
+  })
+
+  it('changes the style where the words leave the stage in view', () => {
+    settings.template = 'focus'
+    lyrics.setShown(true)
+    expect(layout.wordsOverStage).toBe(false)
+    layout.pressVisualizer()
+    expect([lyrics.shown, settings.visualizer]).toEqual([true, expect.not.stringMatching('ring')])
+  })
+
+  it('changes the style for a song with no words', () => {
+    lyrics.words = undefined
+    expect(layout.wordsOverStage).toBe(false)
+    layout.pressVisualizer()
+    expect(settings.visualizer).not.toBe('ring')
+  })
+})
+
+// The Queue tab or an open drawer can hide the stage or the words: their
+// buttons show them first, so a press is never lost.
+describe('the visualizer and Lyrics buttons behind the queue', () => {
+  beforeEach(() => {
+    settings.visualizer = 'ring'
+    lyrics.words = { synced: [{ t: 0, text: 'One' }] }
+    layout.resized(1100, 680)
+    for (const t of ['studio', 'classic', 'focus'] as const)
+      settings.lyricsShown = { ...settings.lyricsShown, [t]: false }
+  })
+  const use = (t: 'studio' | 'classic' | 'focus', q: 'tab' | 'drawer' | 'col'): void => {
+    settings.template = t
+    settings.queue[t] = q
+    layout.showQueue = false
+    layout.tabSel = 0
+  }
+
+  it('Studio Tab: the visualizer goes to Now playing, then changes', () => {
+    use('studio', 'tab')
+    layout.tabSel = 1
+    expect(layout.hides('stage')).toBe(true)
+    layout.pressVisualizer()
+    expect([layout.tabSel, settings.visualizer]).toEqual([0, 'ring'])
+    layout.pressVisualizer()
+    expect(settings.visualizer).not.toBe('ring')
+  })
+
+  it('Studio Tab: the visualizer over the words shows the stage in one press', () => {
+    use('studio', 'tab')
+    lyrics.setShown(true)
+    layout.tabSel = 1
+    layout.pressVisualizer()
+    expect([layout.tabSel, lyrics.shown, settings.visualizer]).toEqual([0, false, 'ring'])
+  })
+
+  it('Studio Tab: Lyrics goes to Now playing and turns on; the words left on stay on', () => {
+    use('studio', 'tab')
+    layout.tabSel = 1
+    layout.pressLyrics()
+    expect([layout.tabSel, lyrics.shown]).toEqual([0, true])
+    layout.tabSel = 1
+    layout.pressLyrics()
+    expect([layout.tabSel, lyrics.shown]).toEqual([0, true])
+    layout.pressLyrics()
+    expect(lyrics.shown).toBe(false)
+  })
+
+  it('Studio Drawer: the drawer is over the library, so it stays open', () => {
+    use('studio', 'drawer')
+    layout.showQueue = true
+    expect([layout.hides('stage'), layout.hides('lyrics')]).toEqual([false, false])
+    layout.pressLyrics()
+    expect([layout.showQueue, lyrics.shown]).toEqual([true, true])
+  })
+
+  it('Classic: the drawer over the library closes for the words; the bar keeps its stage', () => {
+    use('classic', 'drawer')
+    layout.showQueue = true
+    expect(layout.hides('stage')).toBe(false)
+    layout.pressLyrics()
+    expect([layout.showQueue, lyrics.shown]).toEqual([false, true])
+  })
+
+  it('Focus Drawer: both buttons close the drawer first', () => {
+    use('focus', 'drawer')
+    layout.resized(440, 680)
+    layout.showQueue = true
+    layout.pressVisualizer()
+    expect([layout.showQueue, settings.visualizer]).toEqual([false, 'ring'])
+    layout.showQueue = true
+    layout.pressLyrics()
+    expect([layout.showQueue, lyrics.shown]).toEqual([false, true])
+  })
+
+  it('wide Focus: the stage at the left stays in view; the words behind the queue come back', () => {
+    for (const q of ['tab', 'drawer'] as const) {
+      use('focus', q)
+      layout.resized(1600, 600)
+      lyrics.setShown(false)
+      layout.tabSel = 1
+      layout.showQueue = true
+      expect(layout.hides('stage')).toBe(false)
+      layout.pressLyrics()
+      expect(lyrics.shown).toBe(true)
+      expect(q === 'tab' ? layout.tabSel : layout.showQueue).toBe(q === 'tab' ? 0 : false)
+    }
+  })
+})
+
+// A narrow Classic's bar has no room for its stage: a style change would never be seen.
+describe('the visualizer with nowhere to show it', () => {
+  it('has no stage in a narrow Classic, so V does nothing', () => {
+    settings.template = 'classic'
+    settings.visualizer = 'ring'
+    expect(layout.hasStage).toBe(true)
+    layout.barStage = false
+    expect(layout.hasStage).toBe(false)
+    layout.pressVisualizer()
+    expect(settings.visualizer).toBe('ring')
+    layout.barStage = true
+    layout.pressVisualizer()
+    expect(settings.visualizer).not.toBe('ring')
+  })
+
+  it('Studio and Focus always have one; Mini never', () => {
+    layout.barStage = false
+    for (const [t, has] of [
+      ['studio', true],
+      ['focus', true],
+      ['mini', false]
+    ] as const) {
+      settings.template = t
+      expect(layout.hasStage).toBe(has)
+    }
+    layout.barStage = true
   })
 })

@@ -42,20 +42,93 @@
     if (!el || !boxHeight) return
     shift = Math.round(boxHeight / 2 - (el.offsetTop + el.offsetHeight / 2))
   })
+  // where the list was moved by hand (see move), or null: it follows the song
+  let free: number | null = $state(null)
+
   // a new song starts at its top, with no slide from the last one's place
   let still = $state(true)
   $effect(() => {
     void words
     still = true
+    free = null
     const f = requestAnimationFrame(() => requestAnimationFrame(() => (still = false)))
     return () => cancelAnimationFrame(f)
   })
+
+  // The wheel or a finger moves the list by hand. It stops following the
+  // song until a while after the last move, then slides back to the lit line.
+  const backAfterMs = 3000
+  let listHeight = $state(0)
+  let back: ReturnType<typeof setTimeout> | undefined
+  const shown = $derived(free ?? shift)
+
+  function move(dy: number): void {
+    // the first and last lines can come to the middle, no further
+    const top = boxHeight / 2
+    const bottom = boxHeight / 2 - listHeight
+    free = Math.min(top, Math.max(bottom, (free ?? shift) - dy))
+    clearTimeout(back)
+    back = setTimeout(() => (free = null), backAfterMs)
+  }
+  $effect(() => () => clearTimeout(back))
+
+  function onwheel(e: WheelEvent): void {
+    e.preventDefault()
+    // deltaMode 1 is in lines, 2 in pages
+    const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? boxHeight : 1
+    move(e.deltaY * unit)
+  }
+
+  let touchY: number | null = null
+  function ontouchstart(e: TouchEvent): void {
+    touchY = e.touches[0]?.clientY ?? null
+  }
+  function ontouchmove(e: TouchEvent): void {
+    const y = e.touches[0]?.clientY
+    if (touchY === null || y === undefined) return
+    e.preventDefault()
+    move(touchY - y)
+    touchY = y
+  }
+
+  function seek(t: number): void {
+    clearTimeout(back)
+    free = null
+    queues.seek(t)
+  }
+
+  // listeners not passive, so the wheel doesn't also scroll what is under
+  function scrollable(el: HTMLElement): { destroy: () => void } {
+    const opts = { passive: false }
+    el.addEventListener('wheel', onwheel, opts)
+    el.addEventListener('touchstart', ontouchstart, opts)
+    el.addEventListener('touchmove', ontouchmove, opts)
+    return {
+      destroy: () => {
+        el.removeEventListener('wheel', onwheel)
+        el.removeEventListener('touchstart', ontouchstart)
+        el.removeEventListener('touchmove', ontouchmove)
+      }
+    }
+  }
 </script>
 
 {#if synced}
   <!-- the lines are for the mouse: the seek bar and arrows seek from the keyboard -->
-  <div class="lyr synced {size}" role="region" aria-label="Lyrics" bind:clientHeight={boxHeight}>
-    <div class="lines" class:still style:transform="translateY({shift}px)">
+  <div
+    class="lyr synced {size}"
+    role="region"
+    aria-label="Lyrics"
+    bind:clientHeight={boxHeight}
+    use:scrollable
+  >
+    <div
+      class="lines"
+      class:still
+      class:free={free !== null}
+      style:transform="translateY({shown}px)"
+      bind:clientHeight={listHeight}
+    >
       {#each synced as line, i (i)}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
         <p
@@ -63,7 +136,7 @@
           class:past={i < at}
           class:gap={!line.text}
           bind:this={lines[i]}
-          onclick={() => queues.seek(line.t)}
+          onclick={() => seek(line.t)}
         >
           {line.text || '♪'}
         </p>
@@ -121,6 +194,10 @@
   }
   .still {
     transition: none;
+  }
+  /* moved by hand: it keeps up with the wheel */
+  .free {
+    transition-duration: 0.08s;
   }
   p {
     margin: 0;

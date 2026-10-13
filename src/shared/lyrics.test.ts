@@ -95,6 +95,24 @@ describe('lineAt', () => {
     expect(lineAt(lines, 100)).toBe(3)
     expect(lineAt([], 3)).toBe(-1)
   })
+
+  it('takes a time a hair short of a line as that line, as a seek to it gives', () => {
+    // a disc image track starting at 00:03:52 (3 s and 52 frames), seeked to 12.34
+    const start = 3 + 52 / 75
+    const back = start + 12.34 - start
+    expect(back).toBeLessThan(12.34)
+    expect(
+      lineAt(
+        [
+          { t: 1, text: 'a' },
+          { t: 12.34, text: 'b' }
+        ],
+        back
+      )
+    ).toBe(1)
+    expect(lineAt(lines, 4.9999)).toBe(2)
+    expect(lineAt(lines, 4.99)).toBe(0)
+  })
 })
 
 describe('parseLyricsSong', () => {

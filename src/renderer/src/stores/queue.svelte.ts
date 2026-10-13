@@ -94,8 +94,7 @@ function gainIn(p: Playable, q: QueueState): number {
 class TrackQueue {
   items: ItemKey[] = $state.raw([])
   index = $state(0)
-  from = $state('')
-  // what "From" opens (ticket 040)
+  // the page the list was played from, so its Play button pauses (ticket 040)
   link: QueueLink | undefined = $state.raw()
   // Play next songs right after the current one (see queue/logic.ts)
   #next = 0
@@ -231,10 +230,9 @@ class TrackQueue {
   // The list can hold 50k ids, so it goes to main only when it changes. A new
   // current song alone goes from #start, which always follows, with its position.
   #set(s: QueueState): void {
-    const listChanged = s.items !== this.items || s.from !== this.from || s.link !== this.link
+    const listChanged = s.items !== this.items || s.link !== this.link
     this.items = s.items
     this.index = s.index
-    this.from = s.from
     this.link = s.link
     this.#next = s.next ?? 0
     // shuffle went off: it starts a new walk when it goes on again
@@ -467,11 +465,11 @@ class TrackQueue {
   }
 
   // Replaces the queue with a list of songs and plays the clicked one.
-  playList(keys: ItemKey[], index: number, from: string, link?: QueueLink): void {
+  playList(keys: ItemKey[], index: number, link?: QueueLink): void {
     if (!keys.length) return
     this.#claim()
     this.#fails = 0
-    const s: QueueState = { items: keys, index: Math.min(index, keys.length - 1), from }
+    const s: QueueState = { items: keys, index: Math.min(index, keys.length - 1) }
     if (link) s.link = link
     this.#set(s)
     this.#start()
@@ -490,22 +488,22 @@ class TrackQueue {
   }
 
   // "Play next" from a menu. An empty queue takes the songs, the first one
-  // loaded paused; `from` names them then.
-  playNext(keys: ItemKey[], from = '', link?: QueueLink): void {
-    const s = insertNext(this.#state(), keys, from, link)
+  // loaded paused.
+  playNext(keys: ItemKey[], link?: QueueLink): void {
+    const s = insertNext(this.#state(), keys, link)
     this.#add(s, this.index + 1, queueNotice('next', keys, this.#title(keys)))
   }
 
   // "Add to queue" from a menu.
-  append(keys: ItemKey[], from = '', link?: QueueLink): void {
-    const s = append(this.#state(), keys, from, link)
+  append(keys: ItemKey[], link?: QueueLink): void {
+    const s = append(this.#state(), keys, link)
     this.#add(s, this.items.length, queueNotice('add', keys, this.#title(keys)))
   }
 
   // Songs dropped on the queue part (ticket 089): in at the gap before row
   // `slot`, after the current song at the earliest.
-  insert(keys: ItemKey[], slot: number, from = '', link?: QueueLink): void {
-    const s = insertAt(this.#state(), keys, slot, from, link)
+  insert(keys: ItemKey[], slot: number, link?: QueueLink): void {
+    const s = insertAt(this.#state(), keys, slot, link)
     const at = Math.max(this.index + 1, Math.min(slot, this.items.length))
     this.#add(s, at, queueNotice('add', keys, this.#title(keys)))
   }
@@ -869,7 +867,6 @@ class TrackQueue {
     if (!s.items.length) return
     this.items = s.items
     this.index = s.index
-    this.from = s.from
     this.link = s.link
     this.#next = s.next ?? 0
     this.#walk = undefined
@@ -879,7 +876,7 @@ class TrackQueue {
   }
 
   #state(): QueueState {
-    const s: QueueState = { items: this.items, index: this.index, from: this.from }
+    const s: QueueState = { items: this.items, index: this.index }
     if (this.link) s.link = this.link
     if (this.#next) s.next = this.#next
     if (this.#walk && player.shuffle) s.shuffle = this.#walk

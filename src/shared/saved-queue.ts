@@ -4,8 +4,9 @@
 import { plugins, type PluginId } from './plugins'
 import { isKeyOfKind, splitKey, type ItemKey } from './plugins/items'
 
-// What "From <from>" opens (ticket 040): a page of a plugin, or of the core
-// for a playlist. None for a list with no page of its own (a search, Classic's Songs).
+// The page the queue was played from (ticket 040), so that page's Play
+// button pauses it: a page of a plugin, or of the core for a playlist. None
+// for a list with no page of its own (a search, Classic's Songs).
 export interface QueueLink {
   plugin: PluginId | 'core'
   // "album/<id>", "artist/<key>", "folder/<path key>" (files), "episode/<album id>"
@@ -40,7 +41,6 @@ export function linkTarget(link: QueueLink): { kind: LinkKind; id: string } | un
 export interface SavedQueue {
   items: ItemKey[]
   index: number
-  from: string
   link?: QueueLink
   // seconds into the current song
   pos: number
@@ -61,7 +61,7 @@ export interface SavedQueues {
 export type SavedPlaying = { active: 'track' } | { active: 'live'; current: ItemKey }
 
 export function emptyQueue(): SavedQueue {
-  return { items: [], index: 0, from: '', pos: 0 }
+  return { items: [], index: 0, pos: 0 }
 }
 
 export function emptyQueues(): SavedQueues {
@@ -90,13 +90,11 @@ export function parseSavedQueue(raw: unknown): SavedQueue {
       ? Math.min(items.length - 1, Math.max(0, raw.index))
       : 0
   const pos = typeof raw.pos === 'number' && Number.isFinite(raw.pos) ? Math.max(0, raw.pos) : 0
-  const from = typeof raw.from === 'string' ? raw.from.slice(0, 500) : ''
   const link = parseLink(raw.link)
   const next = isCount(raw.next) ? Math.min(raw.next, items.length - 1 - index) : 0
   return {
     items,
     index,
-    from,
     ...(link ? { link } : {}),
     pos,
     ...(next > 0 ? { next } : {})

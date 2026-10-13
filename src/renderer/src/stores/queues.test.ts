@@ -122,7 +122,7 @@ beforeEach(async () => {
   files.load(lib)
   radio.load(mine)
   await queues.backToQueue()
-  queue.playList(['files:s0', 'files:s1', 'files:s2'], 1, 'Mix')
+  queue.playList(['files:s0', 'files:s1', 'files:s2'], 1)
   fake.on.time!(42)
   fake.calls = []
   savePlace.mockClear()
@@ -243,7 +243,7 @@ describe('back to the queue', () => {
     expect(fake.calls).toEqual(['pause', 'load spindle://media/s2 at 0', 'play'])
     await playStation(mine[0])
     fake.calls = []
-    queue.playList(['files:s0'], 0, 'One')
+    queue.playList(['files:s0'], 0)
     expect(queues.active).toBe('track')
     expect(loads()).toEqual(['load spindle://media/s0 at 0'])
   })
@@ -253,7 +253,7 @@ describe('Play while the song waits for its plugin (ticket 056)', () => {
   it('plays it once its data is in, without a second press', async () => {
     settings.plugins.mfp = true
     // MFP was just turned on: its episodes are not in yet
-    queue.restore({ items: ['mfp:m1'], index: 0, from: 'X', pos: 0 })
+    queue.restore({ items: ['mfp:m1'], index: 0, pos: 0 })
     fake.calls = []
     queues.togglePlay()
     expect(fake.calls).toEqual([])
@@ -271,7 +271,7 @@ describe('Play while the song waits for its plugin (ticket 056)', () => {
 describe('after a restart', () => {
   const saved: SavedQueues = {
     ...emptyQueues(),
-    track: { items: ['files:s0', 'files:s1', 'files:s2'], index: 2, from: 'Mix', pos: 30 }
+    track: { items: ['files:s0', 'files:s1', 'files:s2'], index: 2, pos: 30 }
   }
   const onRadio = (station: string): SavedQueues => ({
     ...saved,
@@ -356,7 +356,7 @@ describe('what shows as playing while radio plays (027 fix round 1)', () => {
 describe('radio turned off (ticket 057)', () => {
   const saved: SavedQueues = {
     version: 2,
-    track: { items: ['files:s0', 'files:s1', 'files:s2'], index: 2, from: 'Mix', pos: 30 },
+    track: { items: ['files:s0', 'files:s1', 'files:s2'], index: 2, pos: 30 },
     live: { current: 'radio:b' },
     active: 'live'
   }
@@ -437,7 +437,7 @@ describe('music files turned off (ticket 063)', () => {
     queues.refresh()
     expect(queue.items).toEqual(['files:s0', 'files:s1', 'files:s2'])
     fake.calls = []
-    queue.playList([...queue.items], 1, 'Mix')
+    queue.playList([...queue.items], 1)
     expect(loads()).toEqual(['load spindle://media/s1 at 0'])
   })
 

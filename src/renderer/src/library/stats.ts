@@ -34,7 +34,6 @@ export interface TopRow {
   // its songs, for Play and the menu; none when it left the library
   songs?: () => ItemKey[]
   play?: () => void
-  from: string
 }
 
 export interface PeriodOption {

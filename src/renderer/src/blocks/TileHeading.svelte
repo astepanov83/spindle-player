@@ -29,7 +29,7 @@
   const playTab = $derived(tabbable === true ? undefined : -1)
 
   function openMenu(e: MouseEvent, a: ArtistHeading): void {
-    menu.showFor(e, songMenu(a.songs(), { from: a.from, link: a.link }))
+    menu.showFor(e, songMenu(a.songs(), { link: a.link }))
   }
 </script>
 
@@ -56,7 +56,7 @@
       class="play"
       tabindex={playTab}
       aria-label="Play {h.title}"
-      onclick={() => queue.playList(a.songs(), 0, a.from, a.link)}
+      onclick={() => queue.playList(a.songs(), 0, a.link)}
     >
       <Icon name="play" size={14} />
     </button>

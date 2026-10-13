@@ -154,7 +154,7 @@
   function onmainkey(e: KeyboardEvent & { currentTarget: HTMLElement }, r: ListRow): void {
     if (e.code === 'Space' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey) {
       e.preventDefault()
-      playPage('all', r.songs, r.from, r.link)
+      playPage('all', r.songs, r.link)
       return
     }
     onrowkey(e)
@@ -272,7 +272,7 @@
                 tabindex="-1"
                 aria-label="Play {r.title}"
                 onkeydown={onrowkey}
-                onclick={unlessDragged(() => queue.playList(r.songs(), 0, r.from, r.link))}
+                onclick={unlessDragged(() => queue.playList(r.songs(), 0, r.link))}
                 ><Icon name="play" size={18} /></button
               ></span
             >

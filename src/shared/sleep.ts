@@ -9,6 +9,12 @@ export const sleepPicks: readonly SleepPick[] = ['song', 'album', 15, 30, 45, 60
 // A live item (radio) has no song or album end.
 export const endsWithSong = (p: SleepPick): p is 'song' | 'album' => typeof p === 'string'
 
+// What can be picked now. A live item has no song or album end. With shuffle
+// the next song is picked at random, so when the album ends means nothing.
+export function sleepPicksFor(now: { live: boolean; shuffle: boolean }): SleepPick[] {
+  return sleepPicks.filter((p) => (now.live ? !endsWithSong(p) : !(now.shuffle && p === 'album')))
+}
+
 export function sleepLabel(p: SleepPick): string {
   if (p === 'song') return 'End of this song'
   if (p === 'album') return 'End of this album'

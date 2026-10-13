@@ -26,7 +26,7 @@
 
   // player.playing is the live item's wish for sound while it plays
   const rows = $derived(historyRows(queues.live.history, player.playing, now))
-  const note = $derived(backNote(queue.from, queue.items.length))
+  const note = $derived(backNote(queue.items.length))
   // the cover column shows only once a song has one (ticket 032): with the
   // setting off, rows keep their width for the text
   const thumbs = $derived(rows.some((r) => r.cover))

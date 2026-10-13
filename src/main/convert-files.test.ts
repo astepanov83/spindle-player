@@ -8,10 +8,10 @@ const none = oldIdsFrom({ tracks: new Set(), albums: new Set() })
 
 describe('convertQueue', () => {
   it("gives MFP's ids to mfp and the rest to files, in order", () => {
-    const q = convertQueue({ items: ['t1', 'm1', 't2', 'm2'], index: 2, from: 'X', pos: 3 }, mfp)
+    const q = convertQueue({ items: ['t1', 'm1', 't2', 'm2'], index: 2, pos: 3 }, mfp)
     expect(q).toEqual({
       ...emptyQueues(),
-      track: { items: ['files:t1', 'mfp:m1', 'files:t2', 'mfp:m2'], index: 2, from: 'X', pos: 3 }
+      track: { items: ['files:t1', 'mfp:m1', 'files:t2', 'mfp:m2'], index: 2, pos: 3 }
     })
     expect(convertQueue({ items: ['m1'] }, none).track.items).toEqual(['files:m1'])
   })
@@ -48,7 +48,6 @@ describe('convertQueue', () => {
     expect(q.track).toEqual({
       items: ['files:t1', 'files:t2', 'files:t3'],
       index: 2,
-      from: '',
       pos: 0
     })
     const n = convertQueue({ items: ['t1', 't2', 't3'], index: 0, pos: 0, next: 2 }, mfp)

@@ -54,6 +54,11 @@ const win: WinApi = {
     ipcRenderer.on(WinChannel.contextMenu, handler)
     return () => ipcRenderer.off(WinChannel.contextMenu, handler)
   },
+  onPointerIn: (listener) => {
+    const handler = (_: Electron.IpcRendererEvent, on: unknown): void => listener(on === true)
+    ipcRenderer.on(WinChannel.pointerIn, handler)
+    return () => ipcRenderer.off(WinChannel.pointerIn, handler)
+  },
   popupMenu: (items) => invoke(WinChannel.popupMenu, items),
   quit: () => send(WinChannel.quit)
 }

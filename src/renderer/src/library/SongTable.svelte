@@ -55,7 +55,7 @@
     onsort?: (k: SortKey) => void
     // set in a playlist, so the menu can take songs out of it
     playlistId?: string
-    // what "From" opens after playing from here
+    // the page, so its Play button pauses after playing from here
     link?: QueueLink
     // replaces the title block (a playlist's name can be edited)
     head?: Snippet
@@ -117,7 +117,7 @@
   // can't play.
   function play(i: number): void {
     if (itemInfo(rows[i]).state !== 'ok') return
-    queue.playList(rows, i, title, link)
+    queue.playList(rows, i, link)
   }
 
   function onrowclick(e: MouseEvent, i: number): void {
@@ -164,8 +164,7 @@
   // playlist in its own order they can also go to another place in it: the
   // rows make room where they would land.
   const self = {}
-  const dragOf = (i: number): DragSongs =>
-    dragSongs(keysFor(i), { from: title, link, source: self })
+  const dragOf = (i: number): DragSongs => dragSongs(keysFor(i), { link, source: self })
 
   // while own rows are over the table: them, in order, and the gap they go to
   type Moving = { rows: number[]; slot: number }
@@ -257,7 +256,7 @@
         onclick={(e) => onrowclick(e, item.index)}
         onkeydown={(e) => onrowkey(e, item.index)}
         oncontextmenu={(e) =>
-          openSongMenu(e, sel.menu(item.index), { inPlaylist: playlistId, from: title, link })}
+          openSongMenu(e, sel.menu(item.index), { inPlaylist: playlistId, link })}
       >
         <span class="n"
           >{#if cur && queues.songPlaying}<Eq />{:else}{placeOf(item.index) + 1}{/if}</span

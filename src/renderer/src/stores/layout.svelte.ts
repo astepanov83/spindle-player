@@ -3,9 +3,19 @@
 import type { QueueMode, ShownQueue, TemplateId } from '../../../shared/layout'
 import { queueModeFor, visualizerStyles, type VisualizerStyle } from '../../../shared/settings'
 import { templates } from '../../../shared/templates'
-import { buildLayout, partsOf, type BuiltLayout, type Slots } from '../layout/build'
+import {
+  buildLayout,
+  partsOf,
+  placesOf,
+  shows,
+  type BuiltLayout,
+  type Place,
+  type Shown,
+  type Slots
+} from '../layout/build'
 import { shownQueueMode } from '../layout/narrow'
 import { isWide } from '../layout/wide'
+import { lyrics } from './lyrics.svelte'
 import { settings } from './settings.svelte'
 
 class LayoutStore {
@@ -25,8 +35,29 @@ class LayoutStore {
   built: BuiltLayout = $derived(buildLayout(this.template, this.queueMode, this.wide))
   // Focus has none: links to an album or artist are plain text there (ticket 040)
   hasLibrary: boolean = $derived(partsOf(this.built.root).some((p) => p.part === 'library'))
+  // The song's words are shown in the stage's place (Studio's panel, ticket
+  // 120), so a new visualizer style would not be seen.
+  wordsOverStage: boolean = $derived(
+    lyrics.showing &&
+      lyrics.hasWords &&
+      partsOf(this.built.root).some(
+        (p) => p.part === 'nowplaying' && p.opts.style === 'panel' && !!p.opts.lyrics
+      )
+  )
+  // Classic's bar draws its stage only with room for it (Controls.svelte)
+  barStage = $state(true)
+  // Somewhere draws the visualizer. Without (a narrow Classic) its button
+  // hides and V does nothing, as a change there would never be seen.
+  hasStage: boolean = $derived(
+    partsOf(this.built.root).some(
+      (p) => shows(p, 'stage') && (p.part !== 'controls' || this.barStage)
+    )
+  )
   // Mini: no title bar, and no room for Settings or the close question
   bar: boolean = $derived(this.template.titleBar === false)
+  // Mini shows its controls in place of the song's text while the pointer is
+  // on it (main says, see App.svelte) or a key moved the focus into it
+  barHot = $state(false)
   // Focus with the setting on: its tabs, controls and title bar fade while
   // nobody uses it (layout/idle.ts)
   idleHides: boolean = $derived(!!this.template.idleHide && settings.focusHide)
@@ -121,6 +152,42 @@ class LayoutStore {
   cycleVisualizer(): void {
     const i = visualizerStyles.indexOf(settings.visualizer)
     this.chooseVisualizer(visualizerStyles[(i + 1) % visualizerStyles.length])
+  }
+
+  // The visualizer button and the V key. While the queue or the words cover
+  // the stage the first press brings it back, so it shows something; the
+  // next ones change the style.
+  pressVisualizer(): void {
+    if (!this.hasStage) return
+    const revealed = this.#reveal('stage')
+    if (this.wordsOverStage) lyrics.setShown(false)
+    else if (!revealed) this.cycleVisualizer()
+  }
+
+  // The Lyrics button. Words the queue hides come into view, on, and stay on.
+  pressLyrics(): void {
+    if (this.#reveal('lyrics')) lyrics.setShown(true)
+    else lyrics.toggle()
+  }
+
+  #seen(p: Place): boolean {
+    return !(p.tab && this.tabSel === 1) && !(p.drawer && this.showQueue)
+  }
+
+  // The queue hides every place `what` is drawn (the Queue tab, an open
+  // drawer): a change there would not be seen.
+  hides(what: Shown): boolean {
+    const places = placesOf(this.built.root, what)
+    return places.length > 0 && !places.some((p) => this.#seen(p))
+  }
+
+  // Shows the first place the queue hides; false when one is in view already.
+  #reveal(what: Shown): boolean {
+    if (!this.hides(what)) return false
+    const p = placesOf(this.built.root, what)[0]
+    if (p.tab) this.tabSel = 0
+    if (p.drawer) this.showQueue = false
+    return true
   }
 
   // Q key and the slot button: Tab switches tabs, Drawer opens or closes

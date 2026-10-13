@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte'
   import { defaultPalettes } from '../../shared/palette'
-  import { endsWithSong, isSleepPick } from '../../shared/sleep'
+  import { isSleepPick, sleepPicksFor } from '../../shared/sleep'
   import TitleBar from './components/TitleBar.svelte'
   import Settings from './components/Settings.svelte'
   import { keysSection } from './components/settings-sections'
@@ -21,7 +21,7 @@
   import { layout } from './stores/layout.svelte'
   import { menu } from './stores/menu.svelte'
   import { notice } from './stores/notice.svelte'
-  import { loveNotice } from './queue/bar'
+  import { loveId, loveNotice } from './queue/bar'
   import {
     setupMediaSession,
     showInMediaSession,
@@ -57,6 +57,9 @@
     void player.shuffle
     void player.repeat
     untrack(() => queue.planNext())
+  })
+  $effect(() => {
+    if (player.shuffle) untrack(() => sleep.shuffleStarted())
   })
 
   // a new loudness setting is heard on the song playing, not only the next
@@ -136,7 +139,7 @@
   $effect(() => showPositionInMediaSession(player.pos, player.duration))
 
   // The tray menu shows what plays and has Play, Next and Previous (ticket 088).
-  $effect(() => window.playbackApi.state(playStateOf(queues, sleep.shown)))
+  $effect(() => window.playbackApi.state(playStateOf(queues, player.shuffle, sleep.shown)))
   $effect(() =>
     window.playbackApi.onControl((c) => {
       // the sleep timer's submenu (ticket 111)
@@ -151,7 +154,11 @@
 
   function pickSleep(p: unknown): void {
     if (p === null) sleep.cancel()
-    else if (isSleepPick(p) && (queues.active === 'track' || !endsWithSong(p))) sleep.pick(p)
+    else if (
+      isSleepPick(p) &&
+      sleepPicksFor({ live: queues.active === 'live', shuffle: player.shuffle }).includes(p)
+    )
+      sleep.pick(p)
   }
 
   // Mini (ticket 110): a double click on the bar asks main to maximize, which
@@ -166,6 +173,9 @@
       if (layout.bar) void miniMenu()
     })
   )
+  // Its controls show while the pointer is on the bar, and go at once when
+  // it leaves: a wait there read as lag.
+  $effect(() => window.win.onPointerIn((on) => (layout.barHot = on)))
 
   // Focus fades its tabs, controls and title bar while nobody uses it
   // (ticket 113). Any move, key or touch brings them back.
@@ -248,12 +258,23 @@
   async function miniMenu(): Promise<void> {
     if (miniMenuOpen) return
     miniMenuOpen = true
+    const song = {
+      buttons: queues.bar.buttons,
+      sleep: sleep.set,
+      live: queues.active === 'live',
+      shuffle: player.shuffle
+    }
     const id = await window.win
-      .popupMenu(miniMenuItems(settings.template, settings.miniOnTop))
+      .popupMenu(miniMenuItems(settings.template, settings.miniOnTop, song))
       .finally(() => (miniMenuOpen = false))
     const pick = miniPick(id)
     if (!pick) return
     if (pick === 'pin') settings.miniOnTop = !settings.miniOnTop
+    else if (typeof pick === 'object' && 'act' in pick) {
+      // the heart as the L key, with its notice, as the bar may not show it
+      if (pick.act === loveId) love()
+      else queues.act(pick.act)
+    } else if (typeof pick === 'object' && 'sleep' in pick) pickSleep(pick.sleep)
     else if (pick === 'settings') layout.openSettings()
     else if (pick === 'minimize') window.win.minimize()
     else if (pick === 'quit') window.win.quit()
@@ -300,7 +321,7 @@
     else if (act === 'settings') layout.toggleSettings()
     else if (act === 'keys') toggleKeys()
     else if (act === 'escape') escape()
-    else if (act === 'visualizer') layout.cycleVisualizer()
+    else if (act === 'visualizer') layout.pressVisualizer()
     else if (act === 'queue') layout.toggleQueue()
     else if (act === 'love') love()
     else if (act === 'studio' || act === 'classic' || act === 'focus' || act === 'mini')
@@ -382,7 +403,13 @@
   {/if}
   <!-- inert under the Settings page, so Tab and clicks stay on the page.
        Mini has no title bar: all of it drags the window but its buttons. -->
-  <main class="winbody" class:bar={layout.bar} inert={layout.settingsOpen} {oncontextmenu}>
+  <main
+    class="winbody"
+    class:bar={layout.bar}
+    class:hot={layout.bar && layout.barHot}
+    inert={layout.settingsOpen}
+    {oncontextmenu}
+  >
     <Node node={layout.built.root} />
     {#if layout.bar}<MiniButtons />{/if}
   </main>
@@ -433,8 +460,27 @@
   .winbody.bar :global(button) {
     -webkit-app-region: no-drag;
   }
-  /* room for Mini's own buttons at the right */
-  .winbody.bar > :global(.box) {
-    padding-right: 30px;
+  /* Mini: the song's text at rest, its controls while the pointer is on it
+     or a key moved the focus into them (Controls.svelte, MiniButtons.svelte) */
+  .winbody.bar :global(.mini-rest),
+  .winbody.bar :global(.mini-hot) {
+    transition: opacity 0.15s;
+  }
+  /* the controls lie over the whole bar, not their own empty wrapper */
+  .winbody.bar :global(.part:has(> .compact)) {
+    position: static;
+  }
+  .winbody.bar :global(.mini-hot) {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .winbody.bar.hot :global(.mini-hot),
+  .winbody.bar:has(:global(:focus-visible)) :global(.mini-hot) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .winbody.bar.hot :global(.mini-rest),
+  .winbody.bar:has(:global(:focus-visible)) :global(.mini-rest) {
+    opacity: 0;
   }
 </style>

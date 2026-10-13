@@ -78,7 +78,6 @@ describe('the episode list', () => {
       details: ['2026', '3 songs'],
       meta: '5 min',
       to: { plugin: 'mfp', page: 'episode/b' },
-      from: '2: Paper Suns',
       link: { plugin: 'mfp', page: 'episode/b' }
     })
     expect(r.songs()).toEqual(['mfp:b0', 'mfp:b1', 'mfp:b2'])
@@ -120,7 +119,7 @@ describe('the tab search', () => {
       numbers: [2],
       starts: { at: [100], hint: 'Guessed start' },
       queue: ['mfp:b0', 'mfp:b1', 'mfp:b2'],
-      from: '2: Paper Suns',
+      title: '2: Paper Suns',
       link: { plugin: 'mfp', page: 'episode/b' }
     })
     expect(ids(blocks[3])).toEqual(['a'])
@@ -173,7 +172,7 @@ describe('an episode', () => {
       items: ['mfp:b0', 'mfp:b1', 'mfp:b2'],
       numbers: [1, 2, 3],
       starts: { at: [0, 100, 200], hint: 'Guessed start' },
-      from: '2: Paper Suns'
+      title: '2: Paper Suns'
     })
     expect(songs(s).sort).toBeUndefined()
   })

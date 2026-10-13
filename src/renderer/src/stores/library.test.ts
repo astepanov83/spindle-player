@@ -638,7 +638,7 @@ describe('links from what plays (ticket 040)', () => {
     expect([library.tab, library.openPlaylist]).toEqual(['radio', 'p1'])
   })
 
-  it('opens what "From" names', () => {
+  it('opens the page a queue link names', () => {
     const from = (kind: Parameters<typeof queueLink>[0], id: string): void => {
       const l = queueLink(kind, id)
       if (l.plugin === 'core') library.showPlaylist(id)
@@ -664,7 +664,7 @@ describe('links from what plays (ticket 040)', () => {
     expect(library.landing).toEqual({ song: null })
   })
 
-  it('says whether "From" still has something to open', () => {
+  it("says whether a queue link's page is still there", () => {
     const can = (kind: Parameters<typeof queueLink>[0], id: string): boolean => {
       const l = queueLink(kind, id)
       return l.plugin !== 'core' && p.canOpen({ plugin: l.plugin, page: l.page })

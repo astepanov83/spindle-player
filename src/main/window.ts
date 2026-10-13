@@ -17,6 +17,7 @@ import {
   applyWindowKind,
   placeCentered,
   placeSaved,
+  pointerOver,
   settleMs,
   sizeFor
 } from './window-place'
@@ -30,6 +31,9 @@ const resizeQuietMs = 400
 // A page that doesn't say it shows the close question by then is stuck, and
 // the window closes anyway.
 const askWaitMs = 1000
+// How often Mini looks where the pointer is: its controls show while it is
+// on the bar. Short, so they follow the pointer with no seen lag.
+const pointerMs = 30
 
 export class MainWindow {
   readonly win: BrowserWindow
@@ -57,6 +61,8 @@ export class MainWindow {
   // the close was decided, so the next one goes through
   #closeNow = false
   #askTimer: ReturnType<typeof setTimeout> | undefined
+  // the pointer was on the bar at the last look (Mini)
+  #pointerIn = false
 
   constructor(readonly store: SettingsStore) {
     const s = store.get()
@@ -89,6 +95,11 @@ export class MainWindow {
       }
     })
     const win = this.win
+
+    const watch = setInterval(() => this.#watchPointer(), pointerMs)
+    win.on('closed', () => clearInterval(watch))
+    // a page loaded again knows nothing yet: say it again when the pointer is on
+    win.webContents.on('did-finish-load', () => (this.#pointerIn = false))
 
     win.on('ready-to-show', () => {
       // Known only once the GPU process is up. Without a GPU, blurs and
@@ -243,6 +254,21 @@ export class MainWindow {
     const [width, height] = win.getSize()
     const size = this.#applied.userSize({ width, height }, this.#resizedAt)
     if (size) this.store.setWindowSize(id, size)
+  }
+
+  // Mini shows its controls while the pointer is on it. Its bar is a drag
+  // area, which gets no hover in the page, so main looks for it.
+  #watchPointer(): void {
+    const win = this.win
+    if (win.isDestroyed()) return
+    const on =
+      this.#isBar() &&
+      win.isVisible() &&
+      !win.isMinimized() &&
+      pointerOver(screen.getCursorScreenPoint(), win.getBounds())
+    if (on === this.#pointerIn) return
+    this.#pointerIn = on
+    win.webContents.send(WinChannel.pointerIn, on)
   }
 
   #isBar(): boolean {

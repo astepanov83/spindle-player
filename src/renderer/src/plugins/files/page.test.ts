@@ -192,7 +192,6 @@ describe('pages', () => {
     expect(a).toMatchObject({
       sub: '1 album',
       to: at('artist/marinavale'),
-      from: 'Marina Vale',
       link: { plugin: 'files', page: 'artist/marinavale' }
     })
     expect(a.covers.map((c) => c.cover)).toEqual(['c-a'])
@@ -200,7 +199,7 @@ describe('pages', () => {
     // a split credit has no page: the albums' covers, no link
     const split = g.artist!({ key: 'artist:x', title: 'A, B', artist: 'A, B' }, files.albums)
     expect(split.to).toBeUndefined()
-    expect(split).toMatchObject({ sub: '2 albums', from: 'A, B' })
+    expect(split).toMatchObject({ sub: '2 albums' })
     expect(split.covers.map((c) => c.cover)).toEqual(['c-a', 'c-b'])
     // Name: letters with the strip; Year: decades without; the play sorts: none
     page.filesAct('albums', 'sort', 'name')
@@ -242,7 +241,6 @@ describe('pages', () => {
       cols: ['2003', '3', '6 min'],
       label: 'Album a, Marina Vale, 2003, 3 songs, 6 min',
       to: at('album/a'),
-      from: 'Album a',
       link: { plugin: 'files', page: 'album/a' }
     })
     expect(r.songs()).toEqual(['files:a1', 'files:a2', 'files:a3'])
@@ -328,7 +326,6 @@ describe('pages', () => {
     expect(h).toMatchObject({
       sub: '3 albums',
       to: at('artist/marinavale'),
-      from: 'Marina Vale',
       link: { plugin: 'files', page: 'artist/marinavale' }
     })
     expect(h.songs()).toHaveLength(8)
@@ -416,7 +413,7 @@ describe('pages', () => {
     expect(head(h).buttons?.map((b) => b.label)[0]).toBe('Play')
     expect(songs(s)).toMatchObject({
       items: ['files:a1', 'files:a2', 'files:a3'],
-      from: 'Album a',
+      title: 'Album a',
       numbers: [1, 2, 1],
       groups: [
         { at: 0, label: 'Disc 1' },
@@ -745,7 +742,7 @@ describe('artist page: sections (ticket 099)', () => {
     // a tie goes to the one played last
     expect(songs(blocks[2])).toMatchObject({
       items: ['files:f2', 'files:v2', 'files:n3', 'files:r1', 'files:f1'],
-      from: 'Amber Fields',
+      title: 'Amber Fields',
       link: { plugin: 'files', page: 'artist/amberfields' },
       album: true
     })
@@ -789,7 +786,6 @@ describe('artist page: sections (ticket 099)', () => {
     const their = head(h).note?.items[0].play
     expect(their).toMatchObject({
       label: 'Play their songs',
-      from: 'Summer',
       link: { plugin: 'files', page: 'album/v' }
     })
     expect(their?.songs()).toEqual(['files:v1', 'files:v3'])
@@ -931,7 +927,6 @@ describe('artist page: albums with their songs (ticket 100)', () => {
       ['Singles and EPs', ['Rain Days', 'First Light']]
     ])
     expect(b).toMatchObject({
-      from: 'Amber Fields',
       link: { plugin: 'files', page: 'artist/amberfields' }
     })
     expect(blocks[2]).toEqual({ kind: 'text', text: 'Appears on', part: true })
@@ -968,7 +963,6 @@ describe('artist page: albums with their songs (ticket 100)', () => {
     const [north] = list(page.filesPage('artists', 'artist/amberfields', '')[1]).parts[0].albums
     expect(north.songs()).toEqual(north.items)
     expect(north).toMatchObject({
-      from: 'Northern Lines',
       link: { plugin: 'files', page: 'album/north' }
     })
     expect(north.playing?.('files:n3')).toBe(true)
@@ -1108,7 +1102,7 @@ describe('a page as a tile (the stats page, ticket 116)', () => {
 
   it('gives the tile of an album or an artist, as the grids draw it', () => {
     const al = page.filesTile('album/a')
-    expect(al).toMatchObject({ title: 'Album a', to: at('album/a'), from: 'Album a' })
+    expect(al).toMatchObject({ title: 'Album a', to: at('album/a') })
     expect(al?.songs()).toEqual(['files:a1', 'files:a2', 'files:a3'])
     const ar = page.filesTile('artist/junopark')
     expect(ar).toMatchObject({ title: 'Juno Park', to: at('artist/junopark') })

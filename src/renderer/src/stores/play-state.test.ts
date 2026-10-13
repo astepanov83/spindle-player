@@ -16,11 +16,12 @@ const now = (q: Partial<PlayingNow>): PlayingNow => ({
 
 describe('playStateOf', () => {
   it('has the song and the artist, without the album', () => {
-    expect(playStateOf(now({}))).toEqual({
+    expect(playStateOf(now({}), false)).toEqual({
       title: 'Blue Song',
       artist: 'The Blues',
       playing: true,
       live: false,
+      shuffle: false,
       nothing: false,
       next: true,
       previous: true
@@ -29,23 +30,30 @@ describe('playStateOf', () => {
 
   it('joins the names as the bar does', () => {
     const i = info({ subtitle: 'A & B', names: [{ name: 'A' }, { name: 'B' }] })
-    expect(playStateOf(now({ info: i })).artist).toBe('A, B')
+    expect(playStateOf(now({ info: i }), false).artist).toBe('A, B')
   })
 
   it('has no text while the bar says Nothing playing', () => {
-    const s = playStateOf(now({ nothingPlaying: true, nothing: true, wantsSound: false }))
+    const s = playStateOf(now({ nothingPlaying: true, nothing: true, wantsSound: false }), false)
     expect(s).toMatchObject({ title: '', artist: '', playing: false, nothing: true })
   })
 
+  it('says whether shuffle is on, for the sleep timer', () => {
+    expect(playStateOf(now({}), true).shuffle).toBe(true)
+  })
+
   it('has the sleep timer while one is set (ticket 111)', () => {
-    expect(playStateOf(now({})).sleep).toBeUndefined()
+    expect(playStateOf(now({}), false).sleep).toBeUndefined()
     const sleep = { pick: 30 as const, left: '23m' }
-    expect(playStateOf(now({}), sleep).sleep).toEqual(sleep)
+    expect(playStateOf(now({}), false, sleep).sleep).toEqual(sleep)
   })
 
   it('follows the bar for a live item', () => {
     const bar = barOf('live', undefined, [])
-    const s = playStateOf(now({ info: info({ title: 'Deep Space One', subtitle: 'Radio' }), bar }))
+    const s = playStateOf(
+      now({ info: info({ title: 'Deep Space One', subtitle: 'Radio' }), bar }),
+      false
+    )
     expect(s).toMatchObject({
       title: 'Deep Space One',
       artist: 'Radio',

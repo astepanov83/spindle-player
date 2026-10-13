@@ -48,6 +48,7 @@ const song: PlayState = {
   artist: 'The Blues',
   playing: true,
   live: false,
+  shuffle: false,
   nothing: false,
   next: true,
   previous: true
@@ -167,6 +168,13 @@ describe('trayItems', () => {
     expect(labelsOf(sub({ ...song, live: true }))[0]).toBe('15 minutes')
   })
 
+  it('has no album end with shuffle', () => {
+    expect(labelsOf(sub({ ...song, shuffle: true })).slice(0, 2)).toEqual([
+      'End of this song',
+      '15 minutes'
+    ])
+  })
+
   it('cuts a long song line to 40 characters', () => {
     const line = (trayItems({ ...song, title: 'x'.repeat(60) })[0] as { label: string }).label
     expect(Array.from(line)).toHaveLength(40)
@@ -235,6 +243,7 @@ describe('parsePlayState', () => {
       artist: '',
       playing: false,
       live: false,
+      shuffle: false,
       nothing: true,
       next: false,
       previous: false

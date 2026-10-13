@@ -56,7 +56,7 @@
     sortItems(shown, library.playlistSort(sortId), infoOf, (k) => plays.of(k))
 
   function play(how: 'all' | 'shuffle'): void {
-    if (list) playPage(how, playIds, list.name, link, (k) => itemInfo(k).state === 'ok')
+    if (list) playPage(how, playIds, link, (k) => itemInfo(k).state === 'ok')
   }
 
   function save(): void {
@@ -111,7 +111,7 @@
             aria-label="More"
             title="Play next, add to the queue or a playlist"
             disabled={!shown.length}
-            onclick={(e) => list && openSongMenu(e, playIds(), { from: list.name, link })}
+            onclick={(e) => list && openSongMenu(e, playIds(), { link })}
             ><Icon name="more" size={18} /></button
           >
         </div>

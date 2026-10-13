@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLayout, partsOf, type BuiltNode } from './build'
+import { buildLayout, partsOf, placesOf, type BuiltNode } from './build'
 import { templates } from '../../../shared/templates'
 import { queueModeFor } from '../../../shared/settings'
 
@@ -204,5 +204,18 @@ describe('queueModeFor', () => {
 describe('Mini', () => {
   it('has no place for the words, so no Lyrics button', () => {
     expect(buildLayout(templates.mini, 'none').slots['player.buttons']).toEqual([])
+  })
+})
+
+describe('placesOf', () => {
+  it('says which places the Queue tab and the drawer cover', () => {
+    const tab = buildLayout(templates.studio, 'tab')
+    expect(placesOf(tab.root, 'stage')).toEqual([{ tab: true, drawer: false }])
+    const drawer = buildLayout(templates.classic, 'drawer')
+    expect(placesOf(drawer.root, 'lyrics')).toEqual([{ tab: false, drawer: true }])
+    expect(placesOf(drawer.root, 'stage')).toEqual([{ tab: false, drawer: false }])
+    const wide = buildLayout(templates.focus, 'tab', true)
+    expect(placesOf(wide.root, 'stage')).toEqual([{ tab: false, drawer: false }])
+    expect(placesOf(buildLayout(templates.mini, 'none').root, 'stage')).toEqual([])
   })
 })

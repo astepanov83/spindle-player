@@ -29,10 +29,10 @@ vi.mock('../stores/queue.svelte', () => ({
     get index() {
       return fake.index
     },
-    playNext: (ids: string[], from = '', link?: { plugin: string; page: string }) =>
-      fake.calls.push(`next ${ids} ${from}` + (link ? ` ${link.plugin}:${link.page}` : '')),
-    append: (ids: string[], from = '', link?: { plugin: string; page: string }) =>
-      fake.calls.push(`add ${ids} ${from}` + (link ? ` ${link.plugin}:${link.page}` : '')),
+    playNext: (ids: string[], link?: { plugin: string; page: string }) =>
+      fake.calls.push(`next ${ids}` + (link ? ` ${link.plugin}:${link.page}` : '')),
+    append: (ids: string[], link?: { plugin: string; page: string }) =>
+      fake.calls.push(`add ${ids}` + (link ? ` ${link.plugin}:${link.page}` : '')),
     removeRows: (rows: number[]) => fake.calls.push(`remove ${rows}`),
     playRowsNext: (rows: number[]) => fake.calls.push(`row next ${rows}`)
   }
@@ -82,24 +82,18 @@ describe('songMenu', () => {
     ])
   })
 
-  it('hands the songs and their source to the queue', () => {
-    const m = songMenu(['files:x', 'files:y'], { from: 'Blue Hours' })
+  it('hands the songs to the queue', () => {
+    const m = songMenu(['files:x', 'files:y'])
     pick(m, 'Play next')
     pick(m, 'Add to queue')
-    expect(fake.calls).toEqual([
-      'next files:x,files:y Blue Hours',
-      'add files:x,files:y Blue Hours'
-    ])
+    expect(fake.calls).toEqual(['next files:x,files:y', 'add files:x,files:y'])
   })
 
-  it('names where the songs come from, so "From" can open it (ticket 040)', () => {
-    const m = songMenu(['files:x'], { from: 'Mix', link: queueLink('playlist', 'p1') })
+  it('hands their page to the queue, so its Play button pauses it (ticket 040)', () => {
+    const m = songMenu(['files:x'], { link: queueLink('playlist', 'p1') })
     pick(m, 'Play next')
     pick(m, 'Add to queue')
-    expect(fake.calls).toEqual([
-      'next files:x Mix core:playlist/p1',
-      'add files:x Mix core:playlist/p1'
-    ])
+    expect(fake.calls).toEqual(['next files:x core:playlist/p1', 'add files:x core:playlist/p1'])
   })
 
   it('a queue row can leave the queue or move up to play next', () => {
@@ -338,12 +332,12 @@ describe('Love and Unlove (ticket 117)', () => {
 describe('a list that fills itself (ticket 118)', () => {
   it('is read only: no Remove, never offered to add to; Unlove takes a song out of Loved', () => {
     loved.load({ 'files:a': 1 })
-    const m = songMenu(['files:a'], { from: 'Loved', link: queueLink('smart', 'loved') })
+    const m = songMenu(['files:a'], { link: queueLink('smart', 'loved') })
     expect(labels(m)).not.toContain('Remove from this playlist')
     expect(labels(m)).not.toContain('Loved')
     expect(labels(m)).toContain('Unlove')
     pick(m, 'Play next')
-    expect(fake.calls).toEqual(['next files:a Loved core:smart/loved'])
+    expect(fake.calls).toEqual(['next files:a core:smart/loved'])
     pick(m, 'Unlove')
     expect(loved.has('files:a')).toBe(false)
   })

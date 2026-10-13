@@ -53,7 +53,7 @@
   // the queue a click starts: the block's songs, or all of them while a few show
   function play(key: ItemKey, at: number): void {
     const list = b.queue ?? b.items
-    queue.playList(list, b.queue ? Math.max(0, list.indexOf(key)) : at, b.from, b.link)
+    queue.playList(list, b.queue ? Math.max(0, list.indexOf(key)) : at, b.link)
   }
 
   function onrowclick(e: MouseEvent, key: ItemKey, at: number): void {
@@ -64,7 +64,7 @@
   // a drag takes the selected songs when the row is one of them (ticket 089)
   function dragOf(key: ItemKey): DragSongs {
     const keys = sel.has(key) ? sel.ids() : [key]
-    return dragSongs(keys, { from: b.from, link: b.link })
+    return dragSongs(keys, { link: b.link })
   }
 </script>
 
@@ -74,7 +74,7 @@
 
 {#if b.sort !== undefined}
   <SongTable
-    title={b.from}
+    title={b.title}
     meta={b.meta ?? ''}
     items={b.items}
     {scrollEl}
@@ -122,8 +122,7 @@
             other={!!marked && !marked.has(line.key)}
             onpointerdown={(e) => songDrag.press(e, () => dragOf(line.key))}
             onclick={(e) => onrowclick(e, line.key, line.at)}
-            oncontextmenu={(e) =>
-              openSongMenu(e, sel.menu(line.at), { from: b.from, link: b.link })}
+            oncontextmenu={(e) => openSongMenu(e, sel.menu(line.at), { link: b.link })}
           />
         {/if}
       {/each}

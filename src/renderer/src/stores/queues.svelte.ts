@@ -205,7 +205,7 @@ class Queues {
   // queue's list, a live one here.
   playItem(key: ItemKey): Promise<void> | void {
     if (isLive(key)) return this.playLive(key)
-    queue.playList([key], 0, '')
+    queue.playList([key], 0)
   }
 
   // A live item takes the player; the track queue keeps its list and place.

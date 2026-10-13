@@ -11,17 +11,19 @@
 
   function run(b: SlotButton): void {
     if (b.act === 'queue') layout.toggleQueue()
-    else lyrics.toggle()
+    else layout.pressLyrics()
   }
 
   // the Lyrics button only while the song has words
   const buttons = $derived(layout.slots[name].filter((b) => b.act !== 'lyrics' || lyrics.hasWords))
-  const isOn = (b: SlotButton): boolean => (b.act === 'queue' ? layout.showQueue : lyrics.shown)
+  // not lit while the queue hides the words: they aren't seen then
+  const isOn = (b: SlotButton): boolean =>
+    b.act === 'queue' ? layout.showQueue : lyrics.shown && !layout.hides('lyrics')
 
   // Songs dropped on the queue button go at the end (ticket 089); resting on
   // it opens the queue, to drop them at a place.
   const onQueue: DropTarget = {
-    drop: (d) => queue.append(d.keys, d.from, d.link),
+    drop: (d) => queue.append(d.keys, d.link),
     rest: () => layout.openQueue()
   }
 </script>

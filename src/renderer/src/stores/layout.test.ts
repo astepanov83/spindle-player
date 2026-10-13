@@ -322,3 +322,32 @@ describe('the visualizer and Lyrics buttons behind the queue', () => {
     }
   })
 })
+
+// A narrow Classic's bar has no room for its stage: a style change would never be seen.
+describe('the visualizer with nowhere to show it', () => {
+  it('has no stage in a narrow Classic, so V does nothing', () => {
+    settings.template = 'classic'
+    settings.visualizer = 'ring'
+    expect(layout.hasStage).toBe(true)
+    layout.barStage = false
+    expect(layout.hasStage).toBe(false)
+    layout.pressVisualizer()
+    expect(settings.visualizer).toBe('ring')
+    layout.barStage = true
+    layout.pressVisualizer()
+    expect(settings.visualizer).not.toBe('ring')
+  })
+
+  it('Studio and Focus always have one; Mini never', () => {
+    layout.barStage = false
+    for (const [t, has] of [
+      ['studio', true],
+      ['focus', true],
+      ['mini', false]
+    ] as const) {
+      settings.template = t
+      expect(layout.hasStage).toBe(has)
+    }
+    layout.barStage = true
+  })
+})

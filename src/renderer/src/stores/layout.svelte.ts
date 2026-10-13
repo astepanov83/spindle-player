@@ -7,6 +7,7 @@ import {
   buildLayout,
   partsOf,
   placesOf,
+  shows,
   type BuiltLayout,
   type Place,
   type Shown,
@@ -42,6 +43,15 @@ class LayoutStore {
       partsOf(this.built.root).some(
         (p) => p.part === 'nowplaying' && p.opts.style === 'panel' && !!p.opts.lyrics
       )
+  )
+  // Classic's bar draws its stage only with room for it (Controls.svelte)
+  barStage = $state(true)
+  // Somewhere draws the visualizer. Without (a narrow Classic) its button
+  // hides and V does nothing, as a change there would never be seen.
+  hasStage: boolean = $derived(
+    partsOf(this.built.root).some(
+      (p) => shows(p, 'stage') && (p.part !== 'controls' || this.barStage)
+    )
   )
   // Mini: no title bar, and no room for Settings or the close question
   bar: boolean = $derived(this.template.titleBar === false)
@@ -148,6 +158,7 @@ class LayoutStore {
   // the stage the first press brings it back, so it shows something; the
   // next ones change the style.
   pressVisualizer(): void {
+    if (!this.hasStage) return
     const revealed = this.#reveal('stage')
     if (this.wordsOverStage) lyrics.setShown(false)
     else if (!revealed) this.cycleVisualizer()

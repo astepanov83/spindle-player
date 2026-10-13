@@ -11,13 +11,16 @@
   const hidden = $derived(queued || layout.wordsOverStage)
 </script>
 
-<IconButton
-  icon={off ? 'vizOff' : 'viz'}
-  label={queued
-    ? 'Show the visualizer'
-    : hidden
-      ? 'Show the visualizer in place of the lyrics'
-      : `${vzLabel(settings.visualizer)}. Press to change.`}
-  on={!off && !hidden}
-  onclick={() => layout.pressVisualizer()}
-/>
+<!-- none where nothing draws the visualizer (a narrow Classic) -->
+{#if layout.hasStage}
+  <IconButton
+    icon={off ? 'vizOff' : 'viz'}
+    label={queued
+      ? 'Show the visualizer'
+      : hidden
+        ? 'Show the visualizer in place of the lyrics'
+        : `${vzLabel(settings.visualizer)}. Press to change.`}
+    on={!off && !hidden}
+    onclick={() => layout.pressVisualizer()}
+  />
+{/if}

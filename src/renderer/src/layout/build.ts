@@ -133,7 +133,7 @@ export interface Place {
   drawer: boolean
 }
 
-function shows(p: BuiltPart, what: Shown): boolean {
+export function shows(p: BuiltPart, what: Shown): boolean {
   if (what === 'lyrics') return 'lyrics' in p.opts && !!p.opts.lyrics
   if (p.part === 'controls') return p.opts.style === 'bar'
   return p.part === 'nowplaying' && p.opts.style !== 'line' && p.opts.show !== 'text'

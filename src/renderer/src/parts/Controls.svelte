@@ -28,6 +28,17 @@
   // stack a live item's row has no room for it, so it goes in the row under.
   const own = $derived(bar.buttons.filter((a) => a.id !== sleepId))
   const moon = $derived(bar.buttons.find((a) => a.id === sleepId))
+
+  // The bar's stage needs room: under 1000px, or with its end under 280px,
+  // it would be a row of dots with no meaning. The layout store is told, so
+  // the visualizer button goes too while nothing shows the visualizer.
+  let endWidth = $state(0)
+  const stageFits = $derived(layout.width >= 1000 && endWidth >= 280)
+  $effect(() => {
+    if (style !== 'bar') return
+    layout.barStage = stageFits
+    return () => (layout.barStage = true)
+  })
 </script>
 
 {#if style === 'bar'}
@@ -64,8 +75,8 @@
         </div>
       {/if}
     </div>
-    <div class="br">
-      <Stage cover={false} onclick={() => layout.cycleVisualizer()} />
+    <div class="br" bind:clientWidth={endWidth}>
+      {#if stageFits}<Stage cover={false} onclick={() => layout.cycleVisualizer()} />{/if}
       {#if moon}<BarAction action={moon} wide />{/if}
       <Volume width={80} pop />
       <VizButton />
@@ -279,17 +290,5 @@
     flex: 0 1 120px;
     min-width: 0;
     height: 48px;
-  }
-  @container bar-end (max-width: 279px) {
-    .br > :global(.vstage) {
-      display: none;
-    }
-  }
-  /* In a window under 1000px it is only a few dots wide, a row of dots with
-     no meaning; the button beside it shows the style. */
-  @media (max-width: 999px) {
-    .br > :global(.vstage) {
-      display: none;
-    }
   }
 </style>

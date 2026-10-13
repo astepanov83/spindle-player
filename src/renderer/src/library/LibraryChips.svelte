@@ -44,7 +44,7 @@
   // playlist, and opening the Playlists page under the drag would lose the
   // page they came from.
   const toPlaylists: DropTarget = {
-    drop: (d, x, y) => menu.show(x, y, playlistMenu(d.keys, { from: d.from, link: d.link }))
+    drop: (d, x, y) => menu.show(x, y, playlistMenu(d.keys, { link: d.link }))
   }
 
   scrollTopOnChange(

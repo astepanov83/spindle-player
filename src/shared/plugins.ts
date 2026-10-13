@@ -20,7 +20,7 @@ export interface PluginInfo {
   itemKind: ItemKind
   // what the queue and playlists show on its items while it is off
   offText: string
-  // the pages of it a queue's "From" link may open (see saved-queue.ts)
+  // the kinds of its pages a queue may be played from (see saved-queue.ts)
   linkKinds: LinkKind[]
   // what a live item's id must look like when read from a file (it ends up in a URL)
   liveIds?: RegExp

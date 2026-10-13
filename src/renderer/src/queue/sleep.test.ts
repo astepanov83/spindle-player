@@ -50,7 +50,7 @@ describe('stopsAfter', () => {
   const album = (key: ItemKey): string | undefined =>
     key.startsWith('t:n') ? undefined : key.slice(2, 3).toUpperCase()
   const to = (id: string): EndStep => {
-    const state: QueueState = { items: [k('a0'), k(id)], index: 1, from: '' }
+    const state: QueueState = { items: [k('a0'), k(id)], index: 1 }
     return { kind: 'play', state }
   }
   const stop: EndStep = { kind: 'stop' }

@@ -219,7 +219,7 @@ describe('moveIds when the new ids can not be written', () => {
     const sub = join(dir, 'ro')
     mkdirSync(sub)
     const file = new QueueFile(oldIds, join(sub, 'queue.json'))
-    file.setFromPage({ items: ['files:old'], index: 0, from: '', pos: 0 })
+    file.setFromPage({ items: ['files:old'], index: 0, pos: 0 })
     chmodSync(sub, 0o500)
     try {
       expect(file.moveIds('files', { old: 'new' })).toBe(false)
@@ -230,7 +230,7 @@ describe('moveIds when the new ids can not be written', () => {
 
   it('says it worked when both are on disk', () => {
     const file = new QueueFile(oldIds, join(dir, 'queue.json'))
-    file.setFromPage({ items: ['files:old'], index: 0, from: '', pos: 0 })
+    file.setFromPage({ items: ['files:old'], index: 0, pos: 0 })
     expect(file.moveIds('files', { old: 'new' })).toBe(true)
   })
 })
@@ -247,36 +247,36 @@ describe('QueueFile', () => {
   it('moves the place without the list, and ignores a bad place', () => {
     const path = join(dir, 'queue.json')
     const file = new QueueFile(oldIds, path)
-    file.setFromPage({ items: ['files:a', 'files:b'], index: 0, from: 'X', pos: 0 })
+    file.setFromPage({ items: ['files:a', 'files:b'], index: 0, pos: 0 })
     file.setPlace({ index: 1, pos: 4 })
     file.setPlace({ index: 5, pos: 1 })
     file.flushSync()
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(
-      queues({ items: ['files:a', 'files:b'], index: 1, from: 'X', pos: 4 })
+      queues({ items: ['files:a', 'files:b'], index: 1, pos: 4 })
     )
   })
 
   it('renames songs whose ids changed and keeps the place', () => {
     const path = join(dir, 'queue.json')
     const file = new QueueFile(oldIds, path)
-    file.setFromPage({ items: ['files:a', 'files:old', 'mfp:old'], index: 1, from: 'X', pos: 7 })
+    file.setFromPage({ items: ['files:a', 'files:old', 'mfp:old'], index: 1, pos: 7 })
     file.moveIds('files', { old: 'new' })
     // on disk at once, before the library process is told
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(
-      queues({ items: ['files:a', 'files:new', 'mfp:old'], index: 1, from: 'X', pos: 7 })
+      queues({ items: ['files:a', 'files:new', 'mfp:old'], index: 1, pos: 7 })
     )
   })
 
   it('keeps the live item apart from the list: a new list or place leaves it', () => {
     const path = join(dir, 'queue.json')
     const file = new QueueFile(oldIds, path)
-    file.setFromPage({ items: ['files:a', 'files:b'], index: 0, from: 'X', pos: 0 })
+    file.setFromPage({ items: ['files:a', 'files:b'], index: 0, pos: 0 })
     file.setPlaying({ active: 'live', current: 'radio:metal-only' })
-    file.setFromPage({ items: ['files:c'], index: 0, from: 'Y', pos: 0 })
+    file.setFromPage({ items: ['files:c'], index: 0, pos: 0 })
     file.setPlace({ index: 0, pos: 9 })
     file.flushSync()
     const live = { live: { current: 'radio:metal-only' }, active: 'live' }
-    const track = { items: ['files:c'], index: 0, from: 'Y', pos: 9 }
+    const track = { items: ['files:c'], index: 0, pos: 9 }
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(queues(track, live))
     file.setPlaying({ active: 'track' })
     file.flushSync()
@@ -332,7 +332,6 @@ describe('files from before item keys (ticket 055)', () => {
       {
         items: ['files:t1', `mfp:${mfp.song}`],
         index: 1,
-        from: '79: Corticyte',
         link: { plugin: 'mfp', page: `episode/${mfp.album}` },
         pos: 12.5
       },
@@ -397,13 +396,13 @@ describe('files from before item keys (ticket 055)', () => {
     const path = join(dir, 'queue.json')
     writeFileSync(path, '{"items":["t1"')
     const file = new QueueFile(oldIds, path)
-    expect(file.get()).toEqual(queues({ items: [], index: 0, from: '', pos: 0 }))
+    expect(file.get()).toEqual(queues({ items: [], index: 0, pos: 0 }))
     expect(readFileSync(`${path}.broken`, 'utf8')).toBe('{"items":["t1"')
   })
 
   it('keeps the old file as it is when no copy can be made, and does not write over it', () => {
     const path = join(dir, 'queue.json')
-    const old = JSON.stringify({ items: ['t1'], index: 0, from: '', pos: 0 })
+    const old = JSON.stringify({ items: ['t1'], index: 0, pos: 0 })
     writeFileSync(path, old)
     // a folder where the copy would go
     mkdirSync(`${path}.unknown`)

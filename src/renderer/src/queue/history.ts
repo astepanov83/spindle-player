@@ -49,9 +49,8 @@ export function historyRows(list: HistoryEntry[], playing: boolean, now: number)
     .reverse()
 }
 
-// What "Back to queue" goes back to: "From Late Night, 42 songs".
-export function backNote(from: string, count: number): string {
+// What "Back to queue" goes back to: "42 songs".
+export function backNote(count: number): string {
   if (!count) return 'The queue is empty'
-  const songs = `${count.toLocaleString('en-US')} ${count === 1 ? 'song' : 'songs'}`
-  return from ? `From ${from}, ${songs}` : songs
+  return `${count.toLocaleString('en-US')} ${count === 1 ? 'song' : 'songs'}`
 }

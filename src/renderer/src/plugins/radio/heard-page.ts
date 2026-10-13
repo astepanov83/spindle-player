@@ -79,7 +79,7 @@ export function heardBlocks(now = Date.now()): Block[] {
       }
     ]
   const search = canSearch()
-  const queue = { items: playable, from: 'Heard on radio' }
+  const queue = { items: playable }
   return [
     head,
     rowsBlock<HeardSong>({

@@ -15,6 +15,14 @@ import {
 } from './saved-queue'
 
 describe('parseSavedQueue', () => {
+  // the queue lost its "From" line: an older file's name is let go
+  it('drops the name an older file kept, and keeps its link', () => {
+    const link = { plugin: 'files', page: 'album/a' }
+    expect(
+      parseSavedQueue({ items: ['files:a'], index: 0, from: 'Album a', link, pos: 1 })
+    ).toEqual({ items: ['files:a'], index: 0, link, pos: 1 })
+  })
+
   it('gives an empty queue for no file or a wrong one', () => {
     for (const raw of [
       undefined,
@@ -32,7 +40,7 @@ describe('parseSavedQueue', () => {
   })
 
   it('keeps a good file as it is', () => {
-    const good = { items: ['files:a', 'files:b'], index: 1, from: 'Night Bus', pos: 12.5 }
+    const good = { items: ['files:a', 'files:b'], index: 1, pos: 12.5 }
     expect(parseSavedQueue(good)).toEqual(good)
   })
 
@@ -40,14 +48,13 @@ describe('parseSavedQueue', () => {
     expect(parseSavedQueue({ items: ['files:a', 'files:b'], index: 9, pos: -3 })).toEqual({
       items: ['files:a', 'files:b'],
       index: 1,
-      from: '',
       pos: 0
     })
     expect(parseSavedQueue({ items: ['files:a'], index: 0.5, pos: Infinity }).index).toBe(0)
   })
 
   it('keeps what "From" opens, and drops a bad one (ticket 040)', () => {
-    const good = { items: ['files:a'], index: 0, from: 'Blue', pos: 0 }
+    const good = { items: ['files:a'], index: 0, pos: 0 }
     for (const link of [
       { plugin: 'files', page: 'album/al1' },
       { plugin: 'files', page: 'artist/marinavale' },
@@ -76,7 +83,7 @@ describe('parseSavedQueue', () => {
 })
 
 describe('applyPlace', () => {
-  const q: SavedQueue = { items: ['files:a', 'files:b', 'files:c'], index: 0, from: 'X', pos: 3 }
+  const q: SavedQueue = { items: ['files:a', 'files:b', 'files:c'], index: 0, pos: 3 }
 
   it('moves to a new song and position, keeping the list', () => {
     const next = applyPlace(q, { index: 2, pos: 0 })
@@ -103,7 +110,7 @@ describe('applyPlace', () => {
 
 describe('Play next songs (ticket 037)', () => {
   it('keeps their count, pulled into the list', () => {
-    const good = { items: ['files:a', 'files:b', 'files:c'], index: 0, from: 'X', pos: 0, next: 2 }
+    const good = { items: ['files:a', 'files:b', 'files:c'], index: 0, pos: 0, next: 2 }
     expect(parseSavedQueue(good)).toEqual(good)
     expect(parseSavedQueue({ ...good, index: 1, next: 5 }).next).toBe(1)
     for (const next of [0, -1, 1.5, 'x']) {
@@ -115,7 +122,6 @@ describe('Play next songs (ticket 037)', () => {
     const q: SavedQueue = {
       items: ['files:a', 'files:b', 'files:c'],
       index: 0,
-      from: 'X',
       pos: 0,
       next: 2
     }
@@ -150,7 +156,7 @@ describe('isKnownQueueFile', () => {
 })
 
 describe('what plays (ticket 027)', () => {
-  const track = { items: ['files:a' as const], index: 0, from: 'X', pos: 2 }
+  const track = { items: ['files:a' as const], index: 0, pos: 2 }
 
   it('keeps a live station, even with no songs in the queue', () => {
     const raw = { ...emptyQueues(), live: { current: 'radio:metal-only' }, active: 'live' }

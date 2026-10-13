@@ -115,7 +115,6 @@ function episodeRows(list: Episode[]): Block {
       to: at(episodePage(e.id)),
       playing: (key) => key.startsWith('mfp:') && mfp.song(key.slice(4))?.episode === e,
       songs: () => keysOf(e),
-      from: e.title,
       link: linkOf(e)
     })
   })
@@ -129,7 +128,7 @@ function songsOf(e: Episode, songs: EpisodeSong[]): Block {
     kind: 'songs',
     id: episodePage(e.id),
     items: songs.map(songKey),
-    from: e.title,
+    title: e.title,
     link: linkOf(e),
     numbers: songs.map((s) => place(s) + 1),
     starts: { at: songs.map((s) => s.start), hint: startHint },
@@ -172,17 +171,15 @@ function episodeBlocks(e: Episode, query: string): Block[] {
         play: 'all',
         label: 'Play',
         songs: () => items,
-        from: e.title,
         link,
         primary: true
       },
-      { play: 'shuffle', label: 'Shuffle', songs: () => items, from: e.title, link },
+      { play: 'shuffle', label: 'Shuffle', songs: () => items, link },
       { menu: 'playlist', label: 'Add to playlist', songs: () => items },
       {
         menu: 'songs',
         label: 'Play next, add to the queue or a playlist',
         songs: () => items,
-        from: e.title,
         link
       }
     ]

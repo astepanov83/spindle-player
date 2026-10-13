@@ -212,7 +212,7 @@
     }
     if (!r.play) return openMenu(e, key, r)
     const at = r.queue ? r.queue.items.indexOf(r.play) : -1
-    if (r.queue && at >= 0) queue.playList(r.queue.items, at, r.queue.from)
+    if (r.queue && at >= 0) queue.playList(r.queue.items, at)
     else void queues.playItem(r.play)
   }
 
@@ -334,7 +334,7 @@
         data-row
         data-index={item.index}
         onclick={() => openFrom(tab, r.to, b.filtered)}
-        oncontextmenu={(e) => openSongMenu(e, r.songs(), { from: r.from, link: r.link })}
+        oncontextmenu={(e) => openSongMenu(e, r.songs(), { link: r.link })}
       >
         <Thumb src={r.art} art={r.made} size={40} radius={6} />
         <span class="nm">

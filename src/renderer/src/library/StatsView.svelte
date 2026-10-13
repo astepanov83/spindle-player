@@ -111,14 +111,11 @@
     s ? s.days.map((n, i) => ({ label: dayNames[i].slice(0, 3), full: dayNames[i], value: n })) : []
   )
 
-  const fromText = (what: string): string =>
-    `Top ${what} of ${s?.period === 'all' ? 'all time' : s?.period}`
-
   // Play on a top song plays the list from it, so the next ones follow
   function playSongs(from: ItemKey): void {
     const keys = (s?.topSongs ?? []).map((t) => t.key).filter((k) => infoOf(k))
     const at = keys.indexOf(from)
-    if (at >= 0) queue.playList(keys, at, fromText('songs'))
+    if (at >= 0) queue.playList(keys, at)
   }
 
   const songRows = $derived.by((): TopRow[] => {
@@ -137,8 +134,7 @@
               songs: () => [t.key],
               play: () => playSongs(t.key)
             }
-          : {}),
-        from: fromText('songs')
+          : {})
       }
     })
   })
@@ -162,10 +158,9 @@
           ? {
               to,
               songs: tile.songs,
-              play: () => queue.playList(tile.songs(), 0, tile.from, tile.link)
+              play: () => queue.playList(tile.songs(), 0, tile.link)
             }
-          : {}),
-        from: tile?.from ?? g.name
+          : {})
       }
     })
   }

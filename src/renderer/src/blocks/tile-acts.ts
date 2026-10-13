@@ -18,7 +18,6 @@ export const tilePlaying = (t: Tile): boolean => !!queues.item && !!t.playing?.(
 export function tilePress(e: PointerEvent, t: Tile, sub = t.subtitle): void {
   songDrag.press(e, () => ({
     keys: t.songs(),
-    from: t.from,
     link: t.link,
     title: t.title,
     sub,
@@ -37,7 +36,7 @@ export function tileMenu(e: MouseEvent, plugin: PluginId, key: string, t: Tile):
   menu.showFor(
     e,
     sections(
-      songMenu(t.songs(), { from: t.from, link: t.link }),
+      songMenu(t.songs(), { link: t.link }),
       (t.actions ?? []).map((a) => ({ label: a.label, run: () => actOnPage(plugin, key, a.id) }))
     )
   )

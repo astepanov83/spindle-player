@@ -10,8 +10,7 @@ import { edgeStep } from '../ui/drag-rows'
 
 export interface DragSongs {
   keys: ItemKey[]
-  // names the songs when they start an empty queue ("From ...")
-  from?: string
+  // the page they are on, kept when they start an empty queue
   link?: QueueLink
   // what the copy under the pointer shows
   title: string

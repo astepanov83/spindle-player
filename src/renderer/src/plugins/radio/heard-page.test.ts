@@ -85,7 +85,7 @@ describe('the page', () => {
     const [, list] = heardBlocks(now)
     const r = rows(list as RowsBlock)[0]
     expect(r.play).toBe('files:t1')
-    expect(r.queue).toEqual({ items: ['files:t1'], from: 'Heard on radio' })
+    expect(r.queue).toEqual({ items: ['files:t1'] })
     // no cover found online: the album's
     expect(r.art).toBe(info.art!.cover)
     expect(r.buttons).toEqual([{ id: 'album', label: 'Album', hint: 'Go to Holy Diver (Album)' }])

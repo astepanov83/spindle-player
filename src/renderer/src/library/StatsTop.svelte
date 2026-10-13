@@ -25,7 +25,7 @@
         oncontextmenu={(e) => {
           if (!r.songs) return
           e.preventDefault()
-          openSongMenu(e, r.songs(), { from: r.from })
+          openSongMenu(e, r.songs())
         }}
       >
         <span class="n">{i + 1}</span>

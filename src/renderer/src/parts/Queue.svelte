@@ -1,6 +1,5 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte'
-  import GoLink from '../ui/GoLink.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Thumb from '../ui/Thumb.svelte'
   import LiveHistory from './LiveHistory.svelte'
@@ -14,16 +13,12 @@
   import { ROW, clearLabel, followsSong, insertSlotAt, startRow } from '../queue/rows'
   import { dropSlot, movedTo } from '../ui/drag-rows'
   import { layout } from '../stores/layout.svelte'
-  import { library } from '../stores/library.svelte'
   import { queues } from '../stores/queues.svelte'
-  import { playlists } from '../stores/playlists.svelte'
   import { queue } from '../stores/queue.svelte'
   import { openSongMenu } from '../library/song-menu'
-  import { linkTarget } from '../../../shared/saved-queue'
-  import { smartList } from '../library/smart-lists'
   import type { ItemKey } from '../../../shared/plugins/items'
   import type { ItemAnswer } from '../plugins/types'
-  import { canOpen, infoOf, itemInfo, openPage } from '../plugins'
+  import { infoOf, itemInfo } from '../plugins'
   import { dropTarget, type DropTarget } from '../stores/song-drag.svelte'
 
   // header and close are set by the container, not by templates
@@ -132,30 +127,6 @@
     return s.state === 'ok' ? (s.info.length ?? 0) : 0
   }
   const sum = $derived(`${fmtCount(queue.items.length, 'song', 'songs')} · ${fmtLength(total)}`)
-
-  // "From" opens a playlist, or the plugin's page (an album, artist, folder),
-  // while it is still there
-  const openFrom = $derived.by(() => {
-    const link = queue.link
-    if (!link) return undefined
-    let show: () => void
-    if (link.plugin === 'core') {
-      const to = linkTarget(link)
-      if (to?.kind === 'smart' && smartList(to.id)) show = () => library.showSmart(to.id)
-      else if (to?.kind === 'playlist' && playlists.get(to.id))
-        show = () => library.showPlaylist(to.id)
-      else return undefined
-    } else {
-      const to = { plugin: link.plugin, page: link.page }
-      if (!canOpen(to)) return undefined
-      show = () => openPage(to)
-    }
-    return () => {
-      // the drawer would cover the page opened
-      layout.showQueue = false
-      show()
-    }
-  })
 
   // the rows a key on row `i` acts on: the selected ones when it is one of them
   const rowsFor = (i: number): number[] => (sel.has(i) ? sel.ids() : [i])
@@ -279,7 +250,7 @@
   const intoQueue: DropTarget = {
     over: (_d, _x, y) => (dropAt = slotAt(y)),
     leave: () => (dropAt = null),
-    drop: (d, _x, y) => queue.insert(d.keys, slotAt(y), d.from, d.link),
+    drop: (d, _x, y) => queue.insert(d.keys, slotAt(y), d.link),
     scroller: () => body
   }
 
@@ -288,9 +259,6 @@
   const liveHead = $derived(
     `${infoOf(queues.live.current ?? undefined)?.title ?? ''} · recent songs`
   )
-
-  // in the markup this would lose its spaces next to a block
-  const dot = ' · '
 </script>
 
 <!-- A song its plugin can't give now is greyed: off says so, loading says
@@ -329,8 +297,7 @@
         {#if onLive}
           <b title={liveHead}>{liveHead}</b>
         {:else}
-          <b>Queue</b>{#if queue.from}<small>From <GoLink go={openFrom}>{queue.from}</GoLink></small
-            >{/if}
+          <b>Queue</b>
         {/if}
       </div>
       {#if close}
@@ -340,11 +307,7 @@
   {/if}
   {#if !onLive && queue.items.length}
     <div class="sum" class:tab={!header}>
-      <!-- the tab has no head, so "From" goes here there -->
-      <span class="count"
-        >{#if !header && queue.from}From <GoLink go={openFrom}>{queue.from}</GoLink
-          >{dot}{/if}{sum}</span
-      >
+      <span class="count">{sum}</span>
       <button
         class="clear chip"
         title={queue.items.length > 1 ? 'Keep only the song playing' : 'Empty the queue'}
@@ -460,10 +423,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  small {
-    font-size: var(--text-xs);
-    color: var(--ink-3);
   }
   .body {
     flex: 1;

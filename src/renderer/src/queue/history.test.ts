@@ -44,10 +44,9 @@ describe('a live item’s recent songs (031)', () => {
     expect(msToMidnight(at(30, 0, 0))).toBe(86_400_000)
   })
 
-  it('says where the queue came from and how long it is', () => {
-    expect(backNote('Late Night', 42)).toBe('From Late Night, 42 songs')
-    expect(backNote('Powerslave', 1)).toBe('From Powerslave, 1 song')
-    expect(backNote('', 1200)).toBe('1,200 songs')
-    expect(backNote('Late Night', 0)).toBe('The queue is empty')
+  it('says how long the queue is', () => {
+    expect(backNote(1)).toBe('1 song')
+    expect(backNote(1200)).toBe('1,200 songs')
+    expect(backNote(0)).toBe('The queue is empty')
   })
 })

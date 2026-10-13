@@ -31,7 +31,6 @@ export function playState(
 export function playPage(
   how: 'all' | 'shuffle' | 'start',
   songs: () => ItemKey[],
-  from: string,
   link: QueueLink | undefined,
   can: (k: ItemKey) => boolean = () => true
 ): void {
@@ -42,5 +41,5 @@ export function playPage(
   if (!ok.length) return
   player.shuffle = how === 'shuffle'
   const at = how === 'shuffle' ? ok[Math.floor(Math.random() * ok.length)] : ok[0]
-  queue.playList(keys, at, from, link)
+  queue.playList(keys, at, link)
 }

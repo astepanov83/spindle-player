@@ -193,7 +193,7 @@ beforeEach(async () => {
   live.reactive = false
   queues.backToQueue()
   await answer(() => undefined)
-  queue.playList(['files:s0', 'files:s1'], 1, 'Mix')
+  queue.playList(['files:s0', 'files:s1'], 1)
   fake.on.time!(42)
   fake.calls = []
   live.calls = []
@@ -412,7 +412,7 @@ describe('media keys', () => {
 describe('after a restart', () => {
   const saved = {
     version: 2 as const,
-    track: { items: ['files:s0', 'files:s1'] as ItemKey[], index: 0, from: 'Mix', pos: 9 },
+    track: { items: ['files:s0', 'files:s1'] as ItemKey[], index: 0, pos: 9 },
     live: { current: one },
     active: 'live' as const
   }
@@ -510,14 +510,14 @@ describe('the player bar', () => {
 
   it('a song: seek bar, Shuffle and Repeat, Next and Previous, also while it is on its way', async () => {
     live.songsLater = true
-    queue.playList(['files:s0'], 0, '')
+    queue.playList(['files:s0'], 0)
     expect(queues.bar).toMatchObject({ live: false, seek: true, next: true, order: true })
     await answer(() => undefined)
     expect(queues.bar).toMatchObject({ live: false, seek: true, next: true, previous: true })
   })
 
   it('a song’s Next is hidden when it can’t; its actions are drawn and heard', () => {
-    queue.playList(['files:a'], 0, '')
+    queue.playList(['files:a'], 0)
     expect(queues.bar).toMatchObject({ seek: true, next: false, previous: true, order: true })
     expect(ownButtons().map((a) => a.id)).toEqual([loveId, 'like'])
     live.calls = []
@@ -528,7 +528,7 @@ describe('the player bar', () => {
 
 describe('the player bar while a song changes (fix round 1)', () => {
   it('a clicked song on its way: the default bar, not the last song’s actions', async () => {
-    queue.playList(['files:a', 'files:s0'], 0, '')
+    queue.playList(['files:a', 'files:s0'], 0)
     expect(ownButtons().map((a) => a.id)).toEqual([loveId, 'like'])
     live.songsLater = true
     void queue.next()
@@ -544,7 +544,7 @@ describe('the player bar while a song changes (fix round 1)', () => {
   })
 
   it('a song whose id moved (a rescan) keeps its playable on the bar', () => {
-    queue.playList(['files:a'], 0, '')
+    queue.playList(['files:a'], 0)
     queue.moveIds('files', { a: 'a2' })
     expect(queue.current).toBe('files:a2')
     expect(ownButtons().map((x) => x.id)).toEqual([loveId, 'like'])
@@ -552,7 +552,7 @@ describe('the player bar while a song changes (fix round 1)', () => {
 
   it('a song’s can and actions are read as its plugin changes them', () => {
     live.reactive = true
-    queue.playList(['files:a'], 0, '')
+    queue.playList(['files:a'], 0)
     expect(ownButtons()).toEqual([
       loveAction(false),
       { id: 'like', kind: 'button', label: 'Like', on: false }
@@ -568,7 +568,7 @@ describe('the heart on the bar (ticket 117)', () => {
   it('a song that can be loved has it first; the core keeps it, the plugin never hears it', () => {
     loved.load({})
     setLoved.mockClear()
-    queue.playList(['files:a'], 0, '')
+    queue.playList(['files:a'], 0)
     expect(queues.bar.buttons[0]).toEqual(loveAction(false))
     live.calls = []
     queues.act(loveId)
@@ -583,7 +583,7 @@ describe('the heart on the bar (ticket 117)', () => {
 
   it('the L key loves and unloves the song playing', () => {
     loved.load({})
-    queue.playList(['files:a'], 0, '')
+    queue.playList(['files:a'], 0)
     expect(queues.toggleLove()).toBe(true)
     expect(loved.has('files:a')).toBe(true)
     expect(queues.toggleLove()).toBe(false)

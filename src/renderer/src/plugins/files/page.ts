@@ -151,7 +151,7 @@ function songsPage(query: string): Block[] {
     kind: 'songs',
     id: songsTarget,
     items,
-    from: 'Songs',
+    title: 'Songs',
     // the one-line title row of every list view
     meta: '',
     plays: true,
@@ -214,8 +214,7 @@ function albumArtistHeading(h: Heading, albums: readonly Album[]): ArtistHeading
     photo: a && files.photos[a.key]?.cover,
     covers: a ? artistCovers(a, album, songArt) : albumCovers(albums),
     ...(a ? { to: at(artistPage(a.key)), link: queueLink('artist', a.key) } : {}),
-    songs: () => trackKeys(albums.flatMap((al) => al.trackIds)),
-    from: h.title
+    songs: () => trackKeys(albums.flatMap((al) => al.trackIds))
   }
 }
 
@@ -245,7 +244,6 @@ function albumTile(al: Album, under?: { artist: string }): Tile {
     // the album of the song the queue plays (not while radio plays)
     playing: (key) => trackOf(key)?.albumId === al.id,
     songs: () => trackKeys(al.trackIds),
-    from: al.title,
     link: albumLink(al)
   }
 }
@@ -332,7 +330,6 @@ const artistTile = (a: Artist): Tile => ({
   to: at(artistPage(a.key)),
   playing: (item) => playsArtist(item, a.key),
   songs: () => trackKeys(artistSongs(a, album)),
-  from: a.name,
   link: queueLink('artist', a.key),
   actions: [{ id: 'edit', label: 'Edit artist' }]
 })
@@ -403,7 +400,6 @@ function artistHeading(a: Artist): ArtistHeading {
     covers: t.covers ?? [],
     to: t.to,
     songs: t.songs,
-    from: t.from,
     ...(t.link ? { link: t.link } : {})
   }
 }
@@ -575,17 +571,15 @@ function albumBlocks(
         play: 'all',
         label: 'Play',
         songs: () => items,
-        from: al.title,
         link,
         primary: true
       },
-      { play: 'shuffle', label: 'Shuffle', songs: () => items, from: al.title, link },
+      { play: 'shuffle', label: 'Shuffle', songs: () => items, link },
       { menu: 'playlist', label: 'Add to playlist', songs: () => items },
       {
         menu: 'songs',
         label: 'Play next, add to the queue or a playlist, go to its folder',
         songs: () => items,
-        from: al.title,
         link,
         ...(where
           ? {
@@ -603,9 +597,7 @@ function albumBlocks(
   if (marked && theirs)
     head.note = {
       text: `${fmtCount(theirs.ids.length, 'song', 'songs')} by ${theirs.name}`,
-      items: [
-        { text: '', play: { label: 'Play their songs', songs: () => marked, from: al.title, link } }
-      ]
+      items: [{ text: '', play: { label: 'Play their songs', songs: () => marked, link } }]
     }
   return [
     head,
@@ -613,7 +605,7 @@ function albumBlocks(
       kind: 'songs',
       id,
       items,
-      from: al.title,
+      title: al.title,
       link,
       numbers,
       groups,
@@ -669,7 +661,6 @@ function artistAlbums(a: Artist): Block[] {
       { title: 'Albums', albums: parts.albums.map((al) => albumSongs(a, al)) },
       { title: 'Singles and EPs', albums: parts.singles.map((al) => albumSongs(a, al)) }
     ].filter((p) => p.albums.length),
-    from: a.name,
     link: queueLink('artist', a.key)
   }
   return [
@@ -748,7 +739,7 @@ function topSongsBlocks(a: Artist): Block[] {
     kind: 'songs',
     id: artistPage(a.key),
     items: top,
-    from: a.name,
+    title: a.name,
     link: queueLink('artist', a.key),
     album: true
   })
@@ -787,15 +778,14 @@ function artistHead(a: Artist): HeadBlock {
       }
     ],
     buttons: [
-      { play: 'all', label: 'Play', songs: playIds, from: a.name, link, primary: true },
-      { play: 'shuffle', label: 'Shuffle', songs: playIds, from: a.name, link },
+      { play: 'all', label: 'Play', songs: playIds, link, primary: true },
+      { play: 'shuffle', label: 'Shuffle', songs: playIds, link },
       { menu: 'playlist', label: 'Add to playlist', songs: playIds },
       { id: 'edit', label: 'Edit' },
       {
         menu: 'songs',
         label: 'Play next, add to the queue or a playlist',
         songs: playIds,
-        from: a.name,
         link
       }
     ]
@@ -1005,18 +995,16 @@ function foldersPage(page: string, query: string): Block[] {
         play: 'all',
         label: 'Play',
         songs: playIds,
-        from: title,
         link,
         primary: true,
         disabled: !total
       },
-      { play: 'shuffle', label: 'Shuffle', songs: playIds, from: title, link, disabled: !total },
+      { play: 'shuffle', label: 'Shuffle', songs: playIds, link, disabled: !total },
       { menu: 'playlist', label: 'Add to playlist', songs: playIds, disabled: !total },
       {
         menu: 'songs',
         label: 'Play next, add to the queue or a playlist',
         songs: playIds,
-        from: title,
         link,
         disabled: !total
       }
@@ -1045,7 +1033,6 @@ function foldersPage(page: string, query: string): Block[] {
           to: at(folderPage(f.key)),
           playing: (item) => playingIn(tree, i, item),
           songs: () => folderSongs(tree, i).map(trackKey),
-          from: f.name,
           link: queueLink('folder', f.key)
         }
       }
@@ -1056,7 +1043,7 @@ function foldersPage(page: string, query: string): Block[] {
       kind: 'songs',
       id,
       items: view.songs.map(trackKey),
-      from: title,
+      title: title,
       link,
       label: 'Songs in this folder',
       get sort() {

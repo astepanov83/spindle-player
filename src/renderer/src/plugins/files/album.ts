@@ -35,7 +35,7 @@ export function albumLabel(al: Pick<Album, 'artist' | 'artistTag' | 'year'>): st
   return al.year ? `${kind} · ${al.year}` : kind
 }
 
-// What "From" opens for an album's songs.
+// The page of an album's songs, for the queue (its Play button pauses it).
 export function albumLink(al: Pick<Album, 'id'>): QueueLink {
   return queueLink('album', al.id)
 }

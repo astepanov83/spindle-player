@@ -18,7 +18,7 @@
   // Songs dropped on the Queue tab go at the end (ticket 089); resting on it
   // opens it, to drop them at a place.
   const onQueueTab: DropTarget = {
-    drop: (d) => queue.append(d.keys, d.from, d.link),
+    drop: (d) => queue.append(d.keys, d.link),
     rest: () => (layout.tabSel = 1)
   }
 

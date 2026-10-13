@@ -59,7 +59,7 @@ describe('movePlaylists', () => {
 describe('moveQueue', () => {
   const queues = (items: ItemKey[]): SavedQueues => ({
     ...emptyQueues(),
-    track: { items, index: 1, from: 'Album', pos: 12 }
+    track: { items, index: 1, pos: 12 }
   })
 
   it('renames the track queue and keeps its place', () => {
@@ -67,7 +67,6 @@ describe('moveQueue', () => {
     expect(out.track).toEqual({
       items: ['files:x', 'files:A', 'mfp:b'],
       index: 1,
-      from: 'Album',
       pos: 12
     })
     expect(parseSavedQueues(out)).toEqual(out)

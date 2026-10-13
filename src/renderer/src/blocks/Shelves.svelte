@@ -169,7 +169,7 @@
       e.preventDefault()
       if (e.repeat) return
       const p = s.at < 0 ? b.head(x) : b.shelf(x)[s.at]
-      if (p) playPage('all', p.songs, p.from, p.link)
+      if (p) playPage('all', p.songs, p.link)
       return
     }
     const to = shelfMove(e.key, s, items.length, (i) => b.shelf(items[i]).length)

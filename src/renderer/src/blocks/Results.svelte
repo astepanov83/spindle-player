@@ -40,7 +40,6 @@
   const q = $derived(library.query.trim())
   // a group shown whole stays while the text changes, also with nothing in it
   const whole = $derived(b.groups?.find((f) => f.key === library.searchAll))
-  const from = $derived(`search "${q}"`)
 
   const size = (f: FoundGroup): number =>
     'songs' in f.group ? f.group.songs.length : f.group.tiles.items.length
@@ -49,7 +48,7 @@
 
   // the clicked song, with every song of its group found after it as the queue
   function play(keys: ItemKey[], i: number): void {
-    queue.playList(keys, i, from)
+    queue.playList(keys, i)
   }
 
   // One selection over the songs shown in every group (ticket 086), so a
@@ -119,9 +118,9 @@
           data-row
           aria-current={cur ? 'true' : undefined}
           onpointerdown={(e) =>
-            songDrag.press(e, () => dragSongs(sel.has(key) ? sel.ids() : [key], { from }))}
+            songDrag.press(e, () => dragSongs(sel.has(key) ? sel.ids() : [key]))}
           onclick={(e) => onrowclick(e, f, keys, i)}
-          oncontextmenu={(e) => openSongMenu(e, sel.menu(startOf(f) + i), { from })}
+          oncontextmenu={(e) => openSongMenu(e, sel.menu(startOf(f) + i))}
         >
           <span class="tt">
             <Thumb src={t?.art?.cover} art={t?.art} size={36} radius={4} away={!!away} />

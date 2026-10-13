@@ -68,7 +68,7 @@
       class="qp"
       tabindex={stop === undefined ? undefined : -1}
       aria-label="Play {t.title}"
-      onclick={unlessDragged(() => queue.playList(t.songs(), 0, t.from, t.link))}
+      onclick={unlessDragged(() => queue.playList(t.songs(), 0, t.link))}
     >
       <Icon name="play" size={small ? 16 : undefined} />
     </button>

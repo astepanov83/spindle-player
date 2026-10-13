@@ -23,7 +23,7 @@
   // Songs dropped on the queue button go at the end (ticket 089); resting on
   // it opens the queue, to drop them at a place.
   const onQueue: DropTarget = {
-    drop: (d) => queue.append(d.keys, d.from, d.link),
+    drop: (d) => queue.append(d.keys, d.link),
     rest: () => layout.openQueue()
   }
 </script>

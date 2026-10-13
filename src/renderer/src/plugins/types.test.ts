@@ -5,8 +5,7 @@ import { rowsBlock, type ItemRow, type PageRow, type Row } from './types'
 const pageRow: PageRow = {
   title: 'Rock',
   to: { plugin: 'files', page: '' },
-  songs: () => [],
-  from: ''
+  songs: () => []
 }
 const itemRow: ItemRow = { title: 'Drone', play: 'radio:drone' }
 

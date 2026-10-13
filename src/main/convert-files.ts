@@ -14,7 +14,7 @@ import {
 export interface OldIds {
   // the key of an old track id
   track(id: string): ItemKey
-  // the "From" link of an old album, which may be another plugin's page
+  // the page link of an old album, which may be another plugin's page
   album(id: string): QueueLink
   // the live item an old queue file was playing, if any
   live(raw: Record<string, unknown>): ItemKey | undefined
@@ -54,7 +54,6 @@ export function convertQueue(raw: Record<string, unknown>, ids: OldIds): SavedQu
       items: Array.isArray(raw.items) ? raw.items.map((id) => toKey(id, ids)) : [],
       index: raw.index,
       pos: raw.pos,
-      from: raw.from,
       next: raw.next,
       link: convertLink(raw.link, ids)
     },

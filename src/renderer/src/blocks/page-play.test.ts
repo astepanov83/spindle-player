@@ -32,37 +32,34 @@ beforeEach(() => {
 describe('a page Play and Shuffle (ticket 076)', () => {
   it('Play plays in order and turns shuffle off', () => {
     s.player.shuffle = true
-    playPage('all', () => keys, 'X', link)
+    playPage('all', () => keys, link)
     expect(s.player.shuffle).toBe(false)
-    expect(s.queue.playList).toHaveBeenCalledWith(keys, 0, 'X', link)
+    expect(s.queue.playList).toHaveBeenCalledWith(keys, 0, link)
   })
 
   it('Shuffle turns shuffle on and starts on a song that can play', () => {
     playPage(
       'shuffle',
       () => keys,
-      'X',
       link,
       (k) => k === 'files:c'
     )
     expect(s.player.shuffle).toBe(true)
-    expect(s.queue.playList).toHaveBeenCalledWith(keys, 2, 'X', link)
+    expect(s.queue.playList).toHaveBeenCalledWith(keys, 2, link)
   })
 
   it('Play starts at the first song that can play, and does nothing with none', () => {
     playPage(
       'all',
       () => keys,
-      'X',
       link,
       (k) => k !== 'files:a'
     )
-    expect(s.queue.playList).toHaveBeenCalledWith(keys, 1, 'X', link)
+    expect(s.queue.playList).toHaveBeenCalledWith(keys, 1, link)
     s.queue.playList.mockClear()
     playPage(
       'all',
       () => keys,
-      'X',
       link,
       () => false
     )
@@ -73,10 +70,10 @@ describe('a page Play and Shuffle (ticket 076)', () => {
     s.queue.link = link
     s.queue.current = 'files:b'
     expect(playState(link, () => keys)).toBe('pause')
-    playPage('all', () => keys, 'X', link)
+    playPage('all', () => keys, link)
     expect(s.queues.togglePlay).toHaveBeenCalled()
     expect(s.queue.playList).not.toHaveBeenCalled()
-    playPage('shuffle', () => keys, 'X', link)
+    playPage('shuffle', () => keys, link)
     expect(s.queue.playList).toHaveBeenCalled()
   })
 
@@ -84,10 +81,10 @@ describe('a page Play and Shuffle (ticket 076)', () => {
     s.player.shuffle = true
     s.queue.link = link
     s.queue.current = 'files:b'
-    playPage('start', () => ['files:b', 'files:c'], 'X', link)
+    playPage('start', () => ['files:b', 'files:c'], link)
     expect(s.queues.togglePlay).not.toHaveBeenCalled()
     expect(s.player.shuffle).toBe(false)
-    expect(s.queue.playList).toHaveBeenCalledWith(['files:b', 'files:c'], 0, 'X', link)
+    expect(s.queue.playList).toHaveBeenCalledWith(['files:b', 'files:c'], 0, link)
   })
 
   it('gathers the songs only when the queue came from this page', () => {

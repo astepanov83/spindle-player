@@ -20,9 +20,7 @@ export interface SongMenuOptions {
   onPlaylist?: string
   // the songs are these rows of the queue, in the order of the keys
   queueRows?: number[]
-  // names the songs when they start an empty queue ("From ...")
-  from?: string
-  // what "From" opens then
+  // the page they are on, kept when they start an empty queue
   link?: QueueLink
   // the plugin's own entries, from the block the menu opened on (HeadButton.actions)
   actions?: MenuItem[]
@@ -37,8 +35,8 @@ function queuePart(keys: ItemKey[], o: SongMenuOptions): MenuEntry[] {
   const rows = o.queueRows
   if (rows === undefined) {
     return [
-      { label: 'Play next', run: () => queue.playNext(keys, o.from, o.link) },
-      { label: 'Add to queue', run: () => queue.append(keys, o.from, o.link) }
+      { label: 'Play next', run: () => queue.playNext(keys, o.link) },
+      { label: 'Add to queue', run: () => queue.append(keys, o.link) }
     ]
   }
   // the queue may have changed while the menu was open

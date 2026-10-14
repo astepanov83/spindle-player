@@ -1,6 +1,7 @@
 // What plays, as the player bar shows it, for main's tray menu and tooltip
 // (ticket 088). Pure, so it is tested; App.svelte sends it on every change.
 import type { PlayState } from '../../../shared/ipc'
+import type { ShuffleMode } from '../../../shared/shuffle'
 import type { SleepShown } from '../../../shared/sleep'
 import type { ItemInfo } from '../plugins/types'
 import type { Bar } from '../queue/bar'
@@ -21,8 +22,9 @@ function names(info: ItemInfo): string {
 }
 
 // `sleep`: the sleep timer set, for the tray's submenu (ticket 111), and
-// `shuffle`, which takes End of this album out of it.
-export function playStateOf(q: PlayingNow, shuffle: boolean, sleep?: SleepShown): PlayState {
+// `shuffle`, for the tray's Shuffle submenu (ticket 125); song shuffle takes
+// End of this album out of the timer's.
+export function playStateOf(q: PlayingNow, shuffle: ShuffleMode, sleep?: SleepShown): PlayState {
   const info = q.nothingPlaying ? undefined : q.info
   const s: PlayState = {
     title: info?.title ?? '',

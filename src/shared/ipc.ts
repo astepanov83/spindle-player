@@ -9,6 +9,7 @@ import type { Positions } from './positions'
 import type { QueuePlace, SavedPlaying, SavedQueue, SavedQueues } from './saved-queue'
 import type { Settings } from './settings'
 import type { SleepPick, SleepShown } from './sleep'
+import type { ShuffleMode } from './shuffle'
 
 // Channel names used by both main and preload, so a typo is a type error.
 export const WinChannel = {
@@ -118,8 +119,8 @@ export interface PlayState {
   playing: boolean
   // a live item (radio): Stop in place of Pause
   live: boolean
-  // shuffle is on: the sleep timer has no End of this album
-  shuffle: boolean
+  // what shuffle mixes (ticket 125); song shuffle has no End of this album
+  shuffle: ShuffleMode
   // nothing picked: Play, Previous and Next have nothing to act on
   nothing: boolean
   // the bar shows Next and Previous
@@ -130,7 +131,13 @@ export interface PlayState {
 }
 
 // null: cancel the sleep timer
-export type PlayControl = 'toggle' | 'next' | 'previous' | { sleep: SleepPick | null }
+export type PlayControl =
+  | 'toggle'
+  | 'next'
+  | 'previous'
+  | { sleep: SleepPick | null }
+  // the tray's Shuffle submenu (ticket 125)
+  | { shuffle: ShuffleMode }
 
 // What the preload exposes to the page as `window.playbackApi`.
 export interface PlaybackApi {

@@ -1,6 +1,7 @@
 // The sleep timer's rules (ticket 111), pure so they are tested. The timer
 // itself is stores/sleep.svelte.ts; the queue asks stopsAfter at each end.
 import type { ItemKey } from '../../../shared/plugins/items'
+import type { ShuffleMode } from '../../../shared/shuffle'
 import {
   sleepLabel,
   sleepPicks,
@@ -62,7 +63,7 @@ export type SleepRow = { id: string; label: string; checked?: boolean } | 'line'
 // and Cancel while one is set.
 export function sleepRows(
   s: SleepSet | undefined,
-  now: { live: boolean; shuffle: boolean }
+  now: { live: boolean; shuffle: ShuffleMode }
 ): SleepRow[] {
   const rows: SleepRow[] = sleepPicksFor(now).map((p) => ({
     id: `sleep:${p}`,

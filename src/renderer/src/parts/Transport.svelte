@@ -4,8 +4,10 @@
 <script lang="ts">
   import IconButton from '../ui/IconButton.svelte'
   import PlayButton from './PlayButton.svelte'
+  import { chordFor } from '../keys'
   import { player } from '../stores/player.svelte'
   import { queues } from '../stores/queues.svelte'
+  import { openShuffleMenu } from './shuffle-menu'
 
   // false: no Shuffle and Repeat, only what plays now (Mini)
   let { order = true }: { order?: boolean } = $props()
@@ -13,16 +15,23 @@
   const bar = $derived(queues.bar)
   const showOrder = $derived(order && bar.order)
   const pauseWord = $derived(bar.live ? 'Stop' : 'Pause')
+  // a press turns on what was picked last; a right click picks (ticket 125)
+  const shuffleWord = $derived(`Shuffle ${player.shuffleBy}`)
+  const shuffleHint = $derived(
+    `${shuffleWord} (${chordFor('shuffle')}). Right-click to pick songs or albums`
+  )
 </script>
 
 <div class="transport" class:alone={!showOrder && !bar.previous && !bar.next}>
   {#if showOrder}
     <IconButton
-      icon="shuffle"
-      label="Shuffle"
+      icon={player.shuffleBy === 'albums' ? 'shuffleAlbums' : 'shuffle'}
+      label={shuffleWord}
+      hint={shuffleHint}
       on={player.shuffle}
       toggle
       onclick={() => (player.shuffle = !player.shuffle)}
+      oncontextmenu={openShuffleMenu}
     />
   {/if}
   {#if bar.previous}

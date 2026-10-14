@@ -306,6 +306,49 @@ describe('folders', () => {
   })
 })
 
+describe('genres and years (ticket 122)', () => {
+  it("keeps a song's own year only when it differs from its album's", () => {
+    const { data } = build([
+      entry('/m/1.mp3', { album: 'Hits', year: 1983, title: 'One', track: 1 }),
+      entry('/m/2.mp3', { album: 'Hits', year: 2005, title: 'Two', track: 2 }),
+      entry('/m/3.mp3', { album: 'Hits', year: 2005, title: 'Three', track: 3 }),
+      entry('/m/4.mp3', { album: 'Hits', title: 'Four', track: 4 })
+    ])
+    expect(data.albums[0].year).toBe(2005)
+    expect(data.tracks.map((t) => t.year)).toEqual([1983, undefined, undefined, undefined])
+    expect(data.tracks[1]).not.toHaveProperty('year')
+  })
+
+  it('splits genres, spells each one way across the library, and gives albums theirs, most common first', () => {
+    const { data } = build([
+      entry('/m/a/1.mp3', { album: 'A', track: 1, genre: ['Synthpop; New Wave'] }),
+      entry('/m/a/2.mp3', { album: 'A', track: 2, genre: ['new wave', 'Rock'] }),
+      entry('/m/a/3.mp3', { album: 'A', track: 3, genre: ['(17)'] }),
+      entry('/m/a/4.mp3', { album: 'A', track: 4 }),
+      entry('/m/b/1.mp3', { album: 'B', track: 1, genre: ['New Wave'] }),
+      entry('/m/c/1.mp3', { album: 'C', track: 1 })
+    ])
+    const byAlbum = (title: string): (string[] | undefined)[] =>
+      data.tracks.filter((t) => t.album === title).map((t) => t.genre)
+    expect(byAlbum('A')).toEqual([
+      ['Synthpop', 'New Wave'],
+      ['New Wave', 'Rock'],
+      ['Rock'],
+      undefined
+    ])
+    expect(data.tracks.find((t) => t.album === 'A' && t.no === 4)).not.toHaveProperty('genre')
+    const albums = Object.fromEntries(data.albums.map((a) => [a.title, a]))
+    expect(albums.A.genres).toEqual(['New Wave', 'Rock', 'Synthpop'])
+    expect(albums.B.genres).toEqual(['New Wave'])
+    expect(albums.C).not.toHaveProperty('genres')
+  })
+
+  it('reads an older index entry with genres joined by ", " as genres', () => {
+    const { data } = build([entry('/m/1.mp3', { album: 'X', genre: ['Rock, Metal'] })])
+    expect(data.tracks[0].genre).toEqual(['Rock', 'Metal'])
+  })
+})
+
 describe('albumFolder', () => {
   it('steps out of a disc folder only', () => {
     expect(albumFolder('/m/Album/Disc 2')).toBe('/m/Album')

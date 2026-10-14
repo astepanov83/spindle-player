@@ -175,7 +175,7 @@ describe('cueTracks', () => {
       albumArtist: 'Tag Artist',
       artist: 'Tag Artist',
       year: 2001,
-      genre: 'Rock',
+      genre: ['Rock'],
       disc: 2,
       cover: 'c'.repeat(40)
     })
@@ -199,7 +199,7 @@ describe('cueTracks', () => {
       albumArtist: 'Cue Artist',
       artist: 'Cue Artist',
       year: 1999,
-      genre: 'Rock',
+      genre: ['Rock'],
       disc: 2,
       cover: 'c'.repeat(40),
       title: 'T1',
@@ -208,6 +208,35 @@ describe('cueTracks', () => {
     const bare = cueTracks(index([image], [['/m/a/img.cue', sheet(['img.flac'], [[0, 5]])]]))
       .items[0].entry
     expect(bare).toMatchObject({ album: 'Tag Album', albumArtist: 'Tag Artist', year: 2001 })
+  })
+
+  it("takes a track's own genre and year first, then the sheet's, then the image's (ticket 122)", () => {
+    const img = '/m/a/img.flac'
+    const image = entry(img, { year: 2001, genre: ['Rock', 'Blues'] })
+    const s = sheet(
+      ['img.flac'],
+      [
+        [0, 0],
+        [0, 100],
+        [0, 200]
+      ]
+    )
+    s.tracks[0].genre = 'Disco'
+    s.tracks[0].year = 1979
+    const own = cueTracks(index([image], [['/m/a/img.cue', s]])).items.map((i) => i.entry)
+    expect(own.map((e) => [e.genre, e.year])).toEqual([
+      [['Disco'], 1979],
+      [['Rock', 'Blues'], 2001],
+      [['Rock', 'Blues'], 2001]
+    ])
+    const withSheet = cueTracks(
+      index([image], [['/m/a/img.cue', { ...s, genre: 'Pop', year: 2010 }]])
+    ).items.map((i) => i.entry)
+    expect(withSheet.map((e) => [e.genre, e.year])).toEqual([
+      [['Disco'], 1979],
+      [['Pop'], 2010],
+      [['Pop'], 2010]
+    ])
   })
 
   it('names a track with no TITLE by its number', () => {

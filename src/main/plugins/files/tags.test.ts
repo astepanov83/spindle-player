@@ -47,7 +47,8 @@ describe('normalizeTags', () => {
       track: 3,
       disc: 1,
       year: 2021,
-      genre: 'Ambient, ambient',
+      // as written, each once: group.ts splits them and folds case
+      genre: ['Ambient', 'ambient'],
       duration: 203.46,
       codec: 'FLAC',
       container: 'FLAC'
@@ -60,6 +61,11 @@ describe('normalizeTags', () => {
       format: { duration: NaN }
     })
     expect(t).toEqual({ duration: 0 })
+  })
+
+  it('keeps genre values apart, not joined (ticket 122)', () => {
+    const t = normalizeTags({ common: { genre: ['Rock, Pop', 'Metal'] }, format: {} })
+    expect(t.genre).toEqual(['Rock, Pop', 'Metal'])
   })
 
   it('takes the year from the date when there is no year tag', () => {

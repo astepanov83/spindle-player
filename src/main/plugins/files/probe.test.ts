@@ -91,7 +91,7 @@ describe('probeToTags', () => {
       track: 1,
       disc: 2,
       year: 1996,
-      genre: 'Gothic Metal'
+      genre: ['Gothic Metal']
     })
   })
 

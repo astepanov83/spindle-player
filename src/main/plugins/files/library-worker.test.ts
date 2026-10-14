@@ -845,6 +845,52 @@ describe('the library process', () => {
     })
   })
 
+  describe('genres from an older index (ticket 122)', () => {
+    it('reads again only the files whose genre the older reader joined, then saves the new reader', async () => {
+      // what a file on disk is, as the index keeps it
+      const known = (name: string, comments: string[], more: object): object => {
+        const path = join(music, name)
+        writeFileSync(path, flacWith(comments))
+        const st = statSync(path, { bigint: true })
+        return { path, mtime: Number(st.mtimeMs), size: Number(st.size), duration: 10, ...more }
+      }
+      rmSync(join(music, 'a.mp3'))
+      const files = [
+        known('joined.flac', ['TITLE=Joined', 'GENRE=Rock', 'GENRE=Metal'], {
+          title: 'Joined',
+          genre: 'Rock, Metal'
+        }),
+        // read again, it would say "New title"
+        known('plain.flac', ['TITLE=New title', 'GENRE=Ambient'], {
+          title: 'Old title',
+          genre: 'Ambient'
+        })
+      ]
+      const ix = { ...(serializeIndex({ ...emptyIndex(), reader: 4 }) as object), files }
+      writeFileSync(join(dir, 'library.json'), JSON.stringify(ix))
+      start(true)
+      scan(1)
+      await until(() => scanned(1))
+      send({ type: 'get-library', req: 2 })
+      await until(() => heard.some((m) => m.type === 'reply' && m.req === 2))
+      const m = heard.find((m) => m.type === 'reply' && m.req === 2) as { data: Uint8Array }
+      const lib = JSON.parse(new TextDecoder().decode(m.data)) as {
+        tracks: { title: string; genre?: string[] }[]
+      }
+      expect(lib.tracks.map((t) => [t.title, t.genre])).toEqual([
+        ['Joined', ['Rock', 'Metal']],
+        ['Old title', ['Ambient']]
+      ])
+      send({ type: 'flush' })
+      const saved = JSON.parse(readFileSync(join(dir, 'library.json'), 'utf8'))
+      expect(saved.reader).toBe(readerVersion)
+      expect(saved.files.find((f: { title: string }) => f.title === 'Joined').genre).toEqual([
+        'Rock',
+        'Metal'
+      ])
+    })
+  })
+
   describe("a song's words (ticket 120)", () => {
     async function words(id: string, req: number): Promise<unknown> {
       send({ type: 'lyrics', req, id })

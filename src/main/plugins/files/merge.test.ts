@@ -307,7 +307,7 @@ describe('cue sheets in the index', () => {
     files: ['CDImage.ape'],
     tracks: [
       { no: 1, file: 0, start: 0, title: 'Bad Ground', gain: { track: -5.1 } },
-      { no: 2, file: 0, start: 38.4 }
+      { no: 2, file: 0, start: 38.4, genre: 'Doom Metal', year: 1995 }
     ]
   }
 
@@ -416,7 +416,44 @@ describe('reading every file again for a new reader', () => {
     const known = new Map([['/m/a.mp3', entry('/m/a.mp3', { title: 'A' })]])
     const found = [{ path: '/m/a.mp3', mtime: 1, size: 10 }]
     expect(planReads(known, found, () => true, false, readAgain(3))).toEqual(['/m/a.mp3'])
-    expect(planReads(known, found, () => true, false, readAgain(4))).toEqual([])
+    expect(planReads(known, found, () => true, false, readAgain(readerVersion))).toEqual([])
+  })
+
+  it('reads again for reader 5 only the files whose genre an older reader joined (ticket 122)', () => {
+    const old = parseIndex({
+      version: indexVersion,
+      reader: 4,
+      files: [
+        { path: '/m/joined.mp3', mtime: 1, size: 10, genre: 'Rock, Metal' },
+        { path: '/m/one.mp3', mtime: 1, size: 10, genre: 'Ambient' },
+        { path: '/m/none.mp3', mtime: 1, size: 10 }
+      ]
+    })
+    // read as one value until the file is read again
+    expect(old.files.get('/m/joined.mp3')!.genre).toEqual(['Rock, Metal'])
+    const found = [...old.files.values()].map(({ path }) => ({ path, mtime: 1, size: 10 }))
+    expect(planReads(old.files, found, () => true, false, readAgain(old.reader))).toEqual([
+      '/m/joined.mp3'
+    ])
+    expect(readAgain(readerVersion)).toBeUndefined()
+  })
+
+  it('keeps genre values through a save and load, and drops bad ones', () => {
+    const ix = emptyIndex()
+    ix.files.set('/m/a.mp3', entry('/m/a.mp3', { genre: ['Rock, Pop', 'Metal'] }))
+    const back = parseIndex(JSON.parse(JSON.stringify(serializeIndex(ix))))
+    expect(back.files.get('/m/a.mp3')!.genre).toEqual(['Rock, Pop', 'Metal'])
+    const bad = parseIndex({
+      version: indexVersion,
+      files: [
+        { path: '/m/a.mp3', mtime: 1, size: 1, genre: ['Rock', 3, ''] },
+        { path: '/m/b.mp3', mtime: 1, size: 1, genre: [] },
+        { path: '/m/c.mp3', mtime: 1, size: 1, genre: 7 }
+      ]
+    })
+    expect(bad.files.get('/m/a.mp3')!.genre).toEqual(['Rock'])
+    expect(bad.files.get('/m/b.mp3')).not.toHaveProperty('genre')
+    expect(bad.files.get('/m/c.mp3')).not.toHaveProperty('genre')
   })
 
   it('keeps MusicBrainz ids through a save and load', () => {

@@ -32,6 +32,18 @@ export interface Track {
   // the sample rate the file decodes at, in Hz (ticket 091); none until an
   // older index is scanned again
   rate?: number
+  // From the tags (ticket 122): split ("Rock; Metal" is two), each once, in
+  // tag order, spelled one way across the library (shared/genres.ts). None
+  // when it has none.
+  genre?: string[]
+  // the song's own year, only when it differs from its album's (a
+  // compilation's songs); else the album's year is the song's
+  year?: number
+}
+
+// A song's year: its own, else its album's; 0 when unknown.
+export function songYear(t: Pick<Track, 'year'>, album: Pick<Album, 'year'> | undefined): number {
+  return t.year ?? album?.year ?? 0
 }
 
 // ReplayGain from a song's tags (ticket 090). Gains are in dB, peaks are the
@@ -144,6 +156,9 @@ export interface Album extends Art {
   grouped?: true
   // 0 when unknown
   year: number
+  // its songs' genres, the most common first (ticket 122); none when no
+  // song has one
+  genres?: string[]
   // when its first song was added to the library, in ms (ticket 085); 0 when unknown
   added: number
   trackIds: string[]

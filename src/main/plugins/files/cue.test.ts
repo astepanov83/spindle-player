@@ -117,6 +117,32 @@ describe('parseCue', () => {
     expect(s.year).toBe(2003)
     expect(s.disc).toBe(2)
     expect(s.files).toEqual(['x.flac'])
+    // a DATE under a track is the track's (ticket 122)
+    expect(s.tracks[0].year).toBe(1999)
+  })
+
+  it("keeps a track's own REM GENRE and DATE apart from the sheet's (ticket 122)", () => {
+    const s = parseCue(
+      crlf([
+        'REM GENRE Pop',
+        'REM DATE 2010',
+        'FILE x.flac WAVE',
+        'TRACK 01 AUDIO',
+        'REM GENRE "Synthpop; Disco"',
+        'REM DATE 1983',
+        'REM DISCNUMBER 3',
+        'INDEX 01 00:00:00',
+        'TRACK 02 AUDIO',
+        'INDEX 01 03:00:00'
+      ])
+    )!
+    expect(s.genre).toBe('Pop')
+    expect(s.year).toBe(2010)
+    // a disc number under a track says nothing
+    expect(s.disc).toBeUndefined()
+    expect(s.tracks[0]).toMatchObject({ genre: 'Synthpop; Disco', year: 1983 })
+    expect(s.tracks[1].genre).toBeUndefined()
+    expect(s.tracks[1].year).toBeUndefined()
   })
 
   it('keeps album and track TITLE and PERFORMER apart', () => {

@@ -1,17 +1,18 @@
 // The menu for songs (spec "Pages and tabs", Song menu): the core's queue
 // part, then the item's links (Go to), then what the songs' plugin offers
-// (Show in file manager), then Love and Unlove, then the core's playlists. Each part is a
-// function; a new part is one more argument to `sections`. Songs come as
-// item keys.
+// (Show in file manager), then Love and Unlove, then the core's playlists,
+// then Song info. Each part is a function; a new part is one more argument
+// to `sections`. Songs come as item keys.
 import { canLove } from '../../../shared/loved'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
-import { canOpen, infoOf, openPage } from '../plugins'
+import { canOpen, hasSongInfo, infoOf, openPage } from '../plugins'
 import { layout } from '../stores/layout.svelte'
 import { loved } from '../stores/loved.svelte'
 import { menu, type MenuEntry, type MenuItem } from '../stores/menu.svelte'
 import { playlists } from '../stores/playlists.svelte'
 import { queue } from '../stores/queue.svelte'
+import { songInfo } from './song-info.svelte'
 
 export interface SongMenuOptions {
   // the songs are rows of this playlist: they can leave it
@@ -95,13 +96,22 @@ function playlistPart(keys: ItemKey[], o: SongMenuOptions): MenuEntry[] {
   return entries
 }
 
+// One song only, of a plugin that has a panel for it (music files; not a
+// station or an MFP mix, ticket 127). Last, as Properties is in other players.
+function infoPart(keys: ItemKey[]): MenuEntry[] {
+  if (keys.length !== 1 || !hasSongInfo(keys[0])) return []
+  const key = keys[0]
+  return [{ label: 'Song info', run: () => songInfo.open(key) }]
+}
+
 export function songMenu(keys: ItemKey[], o: SongMenuOptions = {}): MenuEntry[] {
   return sections(
     queuePart(keys, o),
     goToPart(keys),
     o.actions ?? [],
     lovePart(keys),
-    playlistPart(keys, o)
+    playlistPart(keys, o),
+    infoPart(keys)
   )
 }
 

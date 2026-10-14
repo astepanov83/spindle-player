@@ -55,6 +55,7 @@ export type KeyAction =
   | 'visualizer'
   | 'queue'
   | 'love'
+  | 'info'
   // switch to that layout
   | TemplateId
 
@@ -154,6 +155,10 @@ export const shortcuts: Shortcut[] = [
     chords: [{ action: 'queue', key: 'q' }]
   },
   { does: 'Love or unlove the song playing', chords: [{ action: 'love', key: 'l' }] },
+  {
+    does: 'Song info: the song with focus, else the song playing',
+    chords: [{ action: 'info', key: 'i' }]
+  },
   {
     does: 'Switch layout: Studio, Classic, Focus or Mini',
     chords: [

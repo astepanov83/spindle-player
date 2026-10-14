@@ -1,6 +1,7 @@
 <script lang="ts">
   import Lyrics from './Lyrics.svelte'
   import PlayingText from './PlayingText.svelte'
+  import { openPlayingMenu } from './playing-menu'
   import Cover from '../ui/Cover.svelte'
   import Icon from '../ui/Icon.svelte'
   import Marquee from '../ui/Marquee.svelte'
@@ -74,7 +75,9 @@
       <Lyrics size={show === 'text' ? 'fill' : 'block'} />
     {/if}
     {#if show !== 'stage'}
-      <div class="meta">
+      <!-- a right click is the song menu (ticket 127); the keys have I for Song info -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="meta" oncontextmenu={openPlayingMenu}>
         {#if queues.title}
           <!-- a long line is cut: the tooltip has it whole -->
           <div class="song-title" title={queues.title}><PlayingText line="title" /></div>

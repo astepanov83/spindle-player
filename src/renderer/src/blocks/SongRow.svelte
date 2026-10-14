@@ -66,6 +66,7 @@
 <button
   class="srow row"
   data-song={splitKey(key)?.id}
+  data-song-key={key}
   class:cur-row={cur}
   class:selected
   class:other

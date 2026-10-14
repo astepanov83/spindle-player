@@ -6,6 +6,7 @@ import type { Answer, JsonRequest } from '../../../shared/ai'
 import type { CoverSource } from '../../../shared/settings'
 import type { ThemePalettes } from '../../../shared/palette'
 import type { Lyrics } from '../../../shared/lyrics'
+import type { SongFileInfo } from '../../../shared/plugins/files/song-info'
 import type { CueSheet } from './cue'
 
 // One audio file. Tags are already cleaned up (see tags.ts); a missing tag is left out.
@@ -213,6 +214,11 @@ export type WorkerIn =
   // the words of a song that starts (ticket 120), from its .lrc or tags;
   // answered with `lyrics`, none when it has none
   | { type: 'lyrics'; req: number; id: string }
+  // the song info panel (ticket 127): the song's file read now, answered
+  // with `info`; none when the id is not in the library
+  | { type: 'song-info'; req: number; id: string }
+  // the path of a song's file, or of a CUE track's sheet, answered with `path`
+  | { type: 'song-path'; req: number; id: string; sheet?: boolean }
 
 // the library process to main
 export type WorkerOut =
@@ -230,6 +236,8 @@ export type WorkerOut =
       data?: Uint8Array
       song?: 'found' | 'none' | 'later'
       lyrics?: Lyrics
+      info?: SongFileInfo
+      path?: string
     }
   | { type: 'log'; text: string }
   | { type: 'flushed' }

@@ -116,6 +116,7 @@
           class:cur-row={cur}
           class:selected={sel.has(key)}
           data-row
+          data-song-key={key}
           aria-current={cur ? 'true' : undefined}
           onpointerdown={(e) =>
             songDrag.press(e, () => dragSongs(sel.has(key) ? sel.ids() : [key]))}

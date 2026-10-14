@@ -8,6 +8,7 @@
   import BarAction from './BarAction.svelte'
   import LiveStatus from './LiveStatus.svelte'
   import PlayingText from './PlayingText.svelte'
+  import { openPlayingMenu } from './playing-menu'
   import Seek from './Seek.svelte'
   import Speed from './Speed.svelte'
   import TabLine from './TabLine.svelte'
@@ -45,7 +46,9 @@
   <div class="ctl bar">
     <div class="bl">
       <div class="minicv"><Cover src={queues.art?.cover} art={queues.art} /></div>
-      <div class="meta">
+      <!-- a right click is the song menu (ticket 127); the keys have I for Song info -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="meta" oncontextmenu={openPlayingMenu}>
         {#if !queues.nothingPlaying}
           <!-- cut sooner when a button shows next to it: the tooltip has it whole -->
           <div class="song-title" title={queues.title}><PlayingText line="title" /></div>

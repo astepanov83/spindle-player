@@ -23,6 +23,7 @@ import type {
   PageAddress,
   PageHalf,
   Playable,
+  SongInfoView,
   Tile
 } from './types'
 
@@ -97,6 +98,26 @@ export function canOf(key: ItemKey): Can | undefined {
 export function actionsOf(key: ItemKey): Action[] | undefined {
   const e = entryOf(key)
   return e && pluginOn(e.id) ? e.half.actions?.(key.slice(e.prefix.length)) : undefined
+}
+
+// The song info panel's view of an item (ticket 127), while its plugin is on
+// and gives one.
+export function songInfoOf(
+  key: ItemKey
+): { now: SongInfoView; full: Promise<SongInfoView> } | undefined {
+  const e = entryOf(key)
+  return e && pluginOn(e.id) ? e.half.songInfo?.(key.slice(e.prefix.length)) : undefined
+}
+
+// Whether "Song info" is offered for an item, without reading anything.
+export function hasSongInfo(key: ItemKey): boolean {
+  const e = entryOf(key)
+  return (
+    !!e &&
+    pluginOn(e.id) &&
+    !!e.half.songInfo &&
+    e.half.info(key.slice(e.prefix.length)).state === 'ok'
+  )
 }
 
 export function canOpen(to: PageAddress): boolean {

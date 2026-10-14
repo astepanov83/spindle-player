@@ -147,6 +147,13 @@ describe('keyAction', () => {
     expect(keyAction(press('l'), { ...free, arrows: true })).toBe('love')
     expect(chordFor('love')).toBe('L')
   })
+  it('opens song info with I, also from a focused list, not while typing (ticket 127)', () => {
+    expect(keyAction(press('i'), free)).toBe('info')
+    expect(keyAction(press('i'), { ...free, arrows: true })).toBe('info')
+    expect(keyAction(press('i'), { ...free, typing: true })).toBe('none')
+    expect(keyAction(press('i', { repeat: true }), free)).toBe('none')
+    expect(chordFor('info')).toBe('I')
+  })
   it('mutes with M, once for a held key, not while typing or with Ctrl', () => {
     expect(keyAction(press('m'), free)).toBe('mute')
     expect(keyAction(press('m', { repeat: true }), free)).toBe('none')
@@ -388,6 +395,7 @@ describe('shortcuts', () => {
       'visualizer',
       'queue',
       'love',
+      'info',
       'studio',
       'classic',
       'focus',
@@ -421,6 +429,7 @@ describe('shortcuts', () => {
       'V',
       'Q',
       'L',
+      'I',
       'Ctrl+1 / Ctrl+2 / Ctrl+3 / Ctrl+4'
     ])
     expect(keyText('Alt+ArrowUp')).toBe('Alt+↑')

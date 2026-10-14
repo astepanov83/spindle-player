@@ -250,6 +250,7 @@
         class:lifted={lifted.has(item.index)}
         data-row
         data-index={item.index}
+        data-song-key={key}
         aria-current={cur ? 'true' : undefined}
         style:transform="translateY({topOf(item.index, v.offset(item))}px)"
         onpointerdown={(e) => songDrag.press(e, () => dragOf(item.index))}

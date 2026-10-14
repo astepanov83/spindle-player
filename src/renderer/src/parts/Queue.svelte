@@ -354,6 +354,7 @@
             class:lifted={lifted.has(i)}
             data-row
             data-index={i}
+            data-song-key={key}
             aria-current={cur ? 'true' : undefined}
             style:transform="translateY({drag
               ? movedTo(i, drag.rows, slot) * ROW

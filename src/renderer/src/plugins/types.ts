@@ -708,6 +708,41 @@ export interface PageHalf {
   // not known), for the lists that fill themselves (ticket 118). Only a
   // plugin whose plays count gives them. The same array until its data changes.
   songs?(): readonly { id: string; added: number }[]
+  // The song info panel (ticket 127): what it knows at once, and the whole
+  // view once it has read more (the file). None: its items have no "Song info".
+  songInfo?(id: string): { now: SongInfoView; full: Promise<SongInfoView> } | undefined
+}
+
+// The song info panel's content, drawn by the core: sections of rows.
+export interface SongInfoView {
+  title: string
+  sub?: string
+  sections: InfoSection[]
+}
+
+export interface InfoSection {
+  title: string
+  rows: InfoLine[]
+  // a line under the title: "No ReplayGain tags", "Reading the file…"
+  note?: string
+}
+
+export type InfoLine =
+  | {
+      label: string
+      value: string
+      // cut to a few lines, with a button to see it all (lyrics, a long comment)
+      long?: boolean
+      // breaks anywhere, as a path has no spaces to break at
+      path?: boolean
+      // after the value; one may answer with a word to show a moment ("Copied")
+      buttons?: InfoButton[]
+    }
+  | { heading: string }
+
+export interface InfoButton {
+  label: string
+  run(): void | Promise<string | undefined>
 }
 
 // A plugin's start, once its asks are answered. `load` runs once the settings

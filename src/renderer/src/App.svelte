@@ -6,6 +6,9 @@
   import Settings from './components/Settings.svelte'
   import { keysSection } from './components/settings-sections'
   import CloseAsk from './components/CloseAsk.svelte'
+  import SongInfo from './library/SongInfo.svelte'
+  import { songInfo } from './library/song-info.svelte'
+  import { songKeyOf } from './library/song-info-key'
   import MiniButtons from './components/MiniButtons.svelte'
   import Node from './layout/Node.svelte'
   import Menu from './ui/Menu.svelte'
@@ -324,6 +327,7 @@
     else if (act === 'visualizer') layout.pressVisualizer()
     else if (act === 'queue') layout.toggleQueue()
     else if (act === 'love') love()
+    else if (act === 'info') showSongInfo()
     else if (act === 'studio' || act === 'classic' || act === 'focus' || act === 'mini')
       layout.chooseTemplate(act)
   }
@@ -332,6 +336,13 @@
   function love(): void {
     const on = queues.toggleLove()
     if (on !== undefined) notice.show(loveNotice(on, queues.title))
+  }
+
+  // the song row with focus, else the song playing; not in Mini, which has no room
+  function showSongInfo(): void {
+    if (layout.bar) return
+    const key = songKeyOf(document.activeElement) ?? queues.item
+    if (key) songInfo.open(key)
   }
 
   function escape(): void {
@@ -417,6 +428,7 @@
   <Notice />
   <Menu />
   <CloseAsk />
+  <SongInfo />
   <DragGhost />
 </div>
 

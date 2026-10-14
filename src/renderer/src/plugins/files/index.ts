@@ -9,6 +9,7 @@ import { filesTabOf } from './pages'
 import { filesActSetting, filesCoverLines, filesSettings, filesStatusLine } from './settings'
 import { trackPlayable, trackState } from './tracks'
 import { findIn, songIndex } from './find-song'
+import { filesSongInfo } from './song-info'
 import type { Album } from '../../../../shared/library'
 
 // before the first library, or the first scan of an empty index, a song is on its way, not gone
@@ -54,5 +55,6 @@ export const filesHalf: PageHalf = {
   drop: filesDrop,
   start: startFiles,
   findSong,
-  songs
+  songs,
+  songInfo: filesSongInfo
 }

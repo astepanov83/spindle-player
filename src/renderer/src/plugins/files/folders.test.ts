@@ -264,6 +264,40 @@ describe('folderPlaySongs', () => {
   })
 })
 
+describe('search by field in folders (ticket 128)', () => {
+  // Rock/A holds a metal song and a rock one, Rock/B a rock song, and a
+  // loose song at the top
+  const t = folderTree(
+    folders,
+    [
+      track('Iron', 2, 'al', { genre: ['Metal'] }),
+      track('Stone', 2, 'al', { genre: ['Rock'] }),
+      track('Live Rock', 3, 'al', { genre: ['Rock'] }),
+      track('Loose', 0, 'al', { genre: ['Jazz'] })
+    ],
+    () => ''
+  )
+
+  it('shows a folder when a song below has the fields', () => {
+    expect(filterFolder(t, 0, 'genre:metal').folders).toEqual([1])
+    expect(filterFolder(t, 1, 'genre:metal').folders).toEqual([2])
+    expect(ids(filterFolder(t, 0, 'genre:jazz').songs)).toEqual(['Loose'])
+    expect(filterFolder(t, 0, 'genre:jazz').folders).toEqual([])
+  })
+
+  it('needs a song with the fields in a folder found by its name', () => {
+    // "a" is in A's name; only A holds metal
+    expect(filterFolder(t, 1, 'a genre:metal').folders).toEqual([2])
+    expect(filterFolder(t, 1, 'b genre:metal').folders).toEqual([])
+    expect(ids(folderPlaySongs(t, 1, 'a genre:rock', null, () => 0))).toEqual(['Stone'])
+  })
+
+  it('leaves out songs with a word after "-", and finds no folder by name for it alone', () => {
+    expect(filterFolder(t, 1, '-live').folders).toEqual([2])
+    expect(ids(folderPlaySongs(t, 1, 'genre:rock -live', null, () => 0))).toEqual(['Stone'])
+  })
+})
+
 describe('folderSearchText', () => {
   it('names the folder shown', () => {
     const t = tree()

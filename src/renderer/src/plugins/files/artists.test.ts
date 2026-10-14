@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Artist } from '../../../../shared/plugins/files/artists'
+import type { Album, Track } from '../../../../shared/library'
 import { fallbackPalettes, type ThemePalettes } from '../../../../shared/palette'
 import {
   allBy,
@@ -8,7 +9,8 @@ import {
   artistSongs,
   albumArtists,
   filterArtists,
-  shownArtists
+  shownArtists,
+  type SongLookup
 } from './artists'
 
 const artist = (name: string, albums: string[] = [], also: string[] = []): Artist => ({
@@ -49,6 +51,57 @@ describe('filterArtists', () => {
     const all = [artist('Björk'), artist('Sigur Rós')]
     expect(filterArtists(all, 'bjork').map((a) => a.name)).toEqual(['Björk'])
     expect(filterArtists(all, 'RÓS').map((a) => a.name)).toEqual(['Sigur Rós'])
+  })
+})
+
+describe('filterArtists by field (ticket 128)', () => {
+  const song = (id: string, artist: string, more: Partial<Track> = {}): Track => ({
+    id,
+    title: id,
+    duration: 1,
+    albumId: id[0],
+    artist,
+    album: id[0],
+    no: 1,
+    disc: 1,
+    codec: '',
+    folder: 0,
+    ...more
+  })
+  const songs = new Map(
+    [
+      song('a1', 'Marina Vale', { genre: ['Synthpop'] }),
+      song('a2', 'Marina Vale feat. Kai', { genre: ['Rock'] }),
+      song('v1', 'DJ Sol', { genre: ['House'], year: 1999 })
+    ].map((t) => [t.id, t])
+  )
+  const look: SongLookup = {
+    album: (id) => ({ a: { trackIds: ['a1', 'a2'] }, v: { trackIds: ['v1'] } })[id] as Album,
+    track: (id) => songs.get(id)!
+  }
+  const all = [
+    artist('DJ Sol', [], ['v1']),
+    artist('Marina Vale', ['a']),
+    artist('Marina Vale feat. Kai', [], ['a2'])
+  ]
+  const names = (q: string): string[] => filterArtists(all, q, look).map((a) => a.name)
+
+  it('finds an artist when one of their songs has the fields', () => {
+    expect(names('genre:house')).toEqual(['DJ Sol'])
+    // their albums' songs count, also a guest's on them
+    expect(names('genre:rock')).toEqual(['Marina Vale', 'Marina Vale feat. Kai'])
+    expect(names('year:1999')).toEqual(['DJ Sol'])
+    expect(names('vale genre:synthpop')).toEqual(['Marina Vale'])
+  })
+
+  it('matches artist: by their own name, not by a guest on their album', () => {
+    expect(names('artist:kai')).toEqual(['Marina Vale feat. Kai'])
+    expect(names('-artist:kai genre:rock')).toEqual(['Marina Vale'])
+  })
+
+  it('finds none by song fields with no way to read songs', () => {
+    expect(filterArtists(all, 'genre:rock')).toEqual([])
+    expect(filterArtists(all, 'artist:sol').map((a) => a.name)).toEqual(['DJ Sol'])
   })
 })
 

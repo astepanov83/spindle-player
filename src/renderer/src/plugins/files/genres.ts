@@ -3,7 +3,7 @@
 // rules (splitting, one spelling) are in shared/genres.ts.
 import { genreKey } from '../../../../shared/genres'
 import type { Album, Track } from '../../../../shared/library'
-import { foldedName, foldQuery } from '../../library/views'
+import { filterByName, type SongLookup } from './artists'
 
 export interface Genre {
   // genreKey of the name: "hiphop/rap"
@@ -97,7 +97,8 @@ export function sortGenres(genres: Genre[], by: GenreSort): Genre[] {
   )
 }
 
-export function filterGenres(genres: Genre[], q: string): Genre[] {
-  const s = foldQuery(q)
-  return s ? genres.filter((g) => foldedName(g).includes(s)) : genres
+// By name; genre: by the name too, so Rock is not found by genre:metal for
+// its songs that are Rock and Metal. Other fields by its songs.
+export function filterGenres(genres: Genre[], q: string, look?: SongLookup): Genre[] {
+  return filterByName(genres, q, 'genre', look)
 }

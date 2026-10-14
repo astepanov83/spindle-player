@@ -1,7 +1,15 @@
 // The Folders view (ticket 020): the folder tree from main's folder table,
 // search, and what Play plays. No DOM.
 import type { Folder, Track } from '../../../../shared/library'
-import { foldedName, foldQuery, songOrAlbumHas, sortRows, type Sort } from '../../library/views'
+import {
+  hasQuery,
+  hasText,
+  parseQuery,
+  songTest,
+  type Query,
+  type SongFields
+} from '../../library/search-query'
+import { foldedName, songOrAlbumHas, sortRows, trackFields, type Sort } from '../../library/views'
 
 export interface FolderNode {
   // shown name: a music folder's last part
@@ -145,47 +153,80 @@ export function folderPath(parts: string[]): string {
 
 // Search in a folder: its songs by title, artist or album, and the subfolders
 // with a match anywhere in them (a folder name or a song), so you can go down
-// to it. At the top, the music folders the same way.
+// to it. At the top, the music folders the same way. With fields (ticket
+// 128), a folder found by its name shows only when a song in it has them.
 export function filterFolder(
   tree: FolderTree,
   i: number | null,
-  q: string
+  q: string,
+  of = trackFields()
 ): { folders: number[]; songs: Track[] } {
-  const s = foldQuery(q)
   const folders = i === null ? tree.roots : tree.nodes[i].children
   const songs = i === null ? [] : tree.nodes[i].tracks
-  if (!s) return { folders, songs }
+  const m = folderMatch(q, of)
+  if (!m) return { folders, songs }
   const has = (j: number): boolean => {
     const n = tree.nodes[j]
-    return foldedName(n).includes(s) || n.tracks.some(songMatches(s)) || n.children.some(has)
+    if (m.byName(n)) return !m.inNamed || anyBelow(tree, j, m.inNamed)
+    return n.tracks.some(m.song) || n.children.some(has)
   }
-  return { folders: folders.filter(has), songs: songs.filter(songMatches(s)) }
+  return { folders: folders.filter(has), songs: songs.filter(m.song) }
 }
 
-const songMatches =
-  (s: string) =>
-  (t: Track): boolean =>
-    songOrAlbumHas(t, s)
+interface FolderMatch {
+  // its name has the words to find
+  byName(n: FolderNode): boolean
+  // which songs of a folder found by name count: the ones with the fields
+  // and no left-out word; null: all of them
+  inNamed: ((t: Track) => boolean) | null
+  // a song found by itself
+  song(t: Track): boolean
+}
+
+// undefined for an empty search
+function folderMatch(q: string, of: SongFields<Track>): FolderMatch | undefined {
+  const p = parseQuery(q)
+  if (!hasQuery(p)) return undefined
+  const fields = p.terms.length ? songTest(p.terms, of) : null
+  const rest: Query = { ...p, text: '' }
+  return {
+    // "-live" alone finds no folder by its name, only by its songs
+    byName: (n) => !!p.text && hasText(p, foldedName(n)),
+    inNamed:
+      fields || p.not.length ? (t) => songOrAlbumHas(t, rest) && (!fields || fields(t)) : null,
+    song: (t) => songOrAlbumHas(t, p) && (!fields || fields(t))
+  }
+}
+
+function anyBelow(tree: FolderTree, j: number, test: (t: Track) => boolean): boolean {
+  const n = tree.nodes[j]
+  return n.tracks.some(test) || n.children.some((c) => anyBelow(tree, c, test))
+}
 
 // What Play plays in a folder: what the page shows. The shown subfolders
 // first, each in folder order, then the folder's own songs in the table's
 // sort. With a search, a subfolder plays only its songs that match, or all
-// of it when its name matches (that is why it is shown).
+// of it when its name matches (that is why it is shown), less the songs
+// without the fields.
 export function folderPlaySongs(
   tree: FolderTree,
   i: number | null,
   q: string,
   sort: Sort | null,
   order: (t: Track) => number,
-  year?: (t: Track) => number
+  year?: (t: Track) => number,
+  of = trackFields()
 ): Track[] {
-  const s = foldQuery(q)
-  const view = filterFolder(tree, i, q)
+  const m = folderMatch(q, of)
+  const view = filterFolder(tree, i, q, of)
   const matches = (j: number): Track[] => {
     const n = tree.nodes[j]
-    if (foldedName(n).includes(s)) return folderSongs(tree, j)
-    return [...n.children.flatMap(matches), ...n.tracks.filter(songMatches(s))]
+    if (m!.byName(n)) {
+      const all = folderSongs(tree, j)
+      return m!.inNamed ? all.filter(m!.inNamed) : all
+    }
+    return [...n.children.flatMap(matches), ...n.tracks.filter(m!.song)]
   }
-  const below = view.folders.flatMap((j) => (s ? matches(j) : folderSongs(tree, j)))
+  const below = view.folders.flatMap((j) => (m ? matches(j) : folderSongs(tree, j)))
   return [...below, ...sortRows(view.songs, sort, order, year)]
 }

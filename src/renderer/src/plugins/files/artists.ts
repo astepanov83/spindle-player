@@ -1,14 +1,69 @@
 // The Artists view (ticket 021): search, what Play plays and the covers for
 // an artist's picture. No DOM. Who counts as an artist is in shared/plugins/files/artists.ts.
 import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
-import type { ArtistCredit } from '../../../../shared/library'
+import type { Album, ArtistCredit, Track } from '../../../../shared/library'
 import type { ArtistsShown } from '../../../../shared/settings'
-import { foldedName, foldQuery } from '../../library/views'
+import {
+  hasQuery,
+  hasText,
+  nameFields,
+  parseQuery,
+  songTest,
+  splitTerms,
+  type SongFields,
+  type TextField
+} from '../../library/search-query'
+import { foldedName, foldQuery, trackFields } from '../../library/views'
 import type { CoverArt } from '../types'
 
-export function filterArtists(artists: Artist[], q: string): Artist[] {
-  const s = foldQuery(q)
-  return s ? artists.filter((a) => foldedName(a).includes(s)) : artists
+// How a search reaches the songs of an artist or genre, and reads them.
+export interface SongLookup {
+  album(id: string): Album | undefined
+  track(id: string): Track
+  fields?: SongFields<Track>
+}
+
+// Whether one of its songs passes: its albums' songs, then its own songs
+// on other albums.
+export function someSong(
+  x: Pick<Artist, 'albums' | 'also'>,
+  look: SongLookup,
+  test: (t: Track) => boolean
+): boolean {
+  for (const id of x.albums) {
+    const al = look.album(id)
+    if (al?.trackIds.some((t) => test(look.track(t)))) return true
+  }
+  return x.also.some((id) => test(look.track(id)))
+}
+
+// Those whose name has the plain words. A field is matched by one of their
+// songs, `own` by the name itself (an artist's name for artist:).
+export function filterByName<T extends { name: string } & Pick<Artist, 'albums' | 'also'>>(
+  list: T[],
+  q: string,
+  own: TextField,
+  look?: SongLookup
+): T[] {
+  const p = parseQuery(q)
+  if (!hasQuery(p)) return list
+  const terms = splitTerms(p.terms, own)
+  const name = terms.own.length ? songTest(terms.own, nameFields(foldedName)) : null
+  const song =
+    look && terms.songs.length ? songTest(terms.songs, look.fields ?? trackFields()) : null
+  // with no way to read songs, song fields leave none
+  const none = !look && terms.songs.length > 0
+  return list.filter(
+    (x) =>
+      !none &&
+      hasText(p, foldedName(x)) &&
+      (!name || name(x)) &&
+      (!song || someSong(x, look!, song))
+  )
+}
+
+export function filterArtists(artists: Artist[], q: string, look?: SongLookup): Artist[] {
+  return filterByName(artists, q, 'artist', look)
 }
 
 // artists with an album of their own, after the names in artists.json
@@ -17,8 +72,13 @@ export const albumArtists = (artists: Artist[]): Artist[] =>
 
 // What the Artists grid shows (ticket 081). A search looks at every artist
 // whatever the choice, so a guest on one song can still be found.
-export function shownArtists(artists: Artist[], shown: ArtistsShown, q: string): Artist[] {
-  if (foldQuery(q)) return filterArtists(artists, q)
+export function shownArtists(
+  artists: Artist[],
+  shown: ArtistsShown,
+  q: string,
+  look?: SongLookup
+): Artist[] {
+  if (foldQuery(q)) return filterArtists(artists, q, look)
   return shown === 'album' ? albumArtists(artists) : artists
 }
 

@@ -45,6 +45,9 @@ export interface Tab {
   // that found nothing on another tab offers a button to search here, named
   // by `search` and the text: 'Search stations for "har"' (ticket 077).
   searchWide?: boolean
+  // its search takes fields, "genre:metal year:1990-1999" (ticket 128):
+  // the box offers a "?" that lists them
+  fields?: boolean
 }
 
 // A page is a list of blocks: the plugin gives the data, the core draws each
@@ -550,6 +553,9 @@ export interface ItemInfo {
   // none when unknown
   genre?: string
   year?: number
+  // for search by field (ticket 128): "FLAC"; when its album was added (ms)
+  codec?: string
+  added?: number
   art?: Art
   // Now Playing's links: the title, each name in the subtitle, the group
   titleTo?: PageAddress

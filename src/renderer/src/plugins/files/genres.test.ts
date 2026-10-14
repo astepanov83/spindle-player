@@ -101,4 +101,18 @@ describe('genres (ticket 123)', () => {
     expect(filterGenres(list(), ' hip ').map((g) => g.name)).toEqual(['Hip-Hop/Rap'])
     expect(filterGenres(list(), '')).toHaveLength(4)
   })
+
+  it('takes genre: by the name and other fields by its songs (ticket 128)', () => {
+    const look = {
+      album: (id: string) => albums.find((a) => a.id === id),
+      track: (id: string) => tracks.get(id)!
+    }
+    const names = (q: string): string[] => filterGenres(list(), q, look).map((g) => g.name)
+    // Rock's songs are Metal too, but Rock is not a metal genre
+    expect(names('genre:metal')).toEqual(['Metal'])
+    expect(names('-genre:rock')).toEqual(['Drum & Bass', 'Hip-Hop/Rap', 'Metal'])
+    // a song of each: b1 is Hip-Hop/Rap's, the c album is Rock's
+    expect(names('title:b1')).toEqual(['Hip-Hop/Rap'])
+    expect(names('title:c2')).toEqual(['Rock'])
+  })
 })

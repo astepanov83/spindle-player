@@ -958,7 +958,7 @@ describe('the library process', () => {
       scan(1)
       await until(() => scanned(1))
       const { info } = await ask({ type: 'song-info', id: shortHash(song) }, 2)
-      expect(info).toMatchObject({ path: song, genre: 'Jazz', format: { sampleRate: 44100 } })
+      expect(info).toMatchObject({ path: song, genre: ['Jazz'], format: { sampleRate: 44100 } })
       expect(info?.added).toBeGreaterThan(0)
       expect(info?.tags).toContainEqual({ type: 'vorbis', id: 'TITLE', value: 'Song' })
       expect((await ask({ type: 'song-path', id: shortHash(song) }, 3)).path).toBe(song)
@@ -992,7 +992,7 @@ describe('the library process', () => {
       const first = await ask({ type: 'song-info', id: cueTrackId(image, 1) }, 2)
       expect(first.info).toMatchObject({
         path: image,
-        genre: 'Ambient',
+        genre: ['Ambient'],
         cue: { sheet, start: 0, end: 5 }
       })
       const second = await ask({ type: 'song-info', id: cueTrackId(image, 2) }, 3)

@@ -20,7 +20,7 @@ export interface SongFile {
   cue?: { sheet: string; start: number; end?: number }
   added?: number
   year?: number
-  genre?: string
+  genre?: string[]
   // the index's: for a CUE track, worked out from its sheet
   gain?: ReplayGain
 }

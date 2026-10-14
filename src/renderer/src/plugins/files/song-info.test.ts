@@ -209,7 +209,7 @@ describe('songInfoView', () => {
     path: '/m/Blue Hours/03 Night Bus.mp3',
     added: new Date(2026, 8, 2).getTime(),
     year: 2004,
-    genre: 'Jazz',
+    genre: ['Jazz'],
     size: 7654321,
     format: {
       container: 'MPEG',
@@ -243,6 +243,9 @@ describe('songInfoView', () => {
     })
     const v = songInfoView(i)
     expect(values(section(v.sections, 'Song'))).toMatchObject({ Year: '2004', Genre: 'Jazz' })
+    // the library's split genres win over the raw tag (ticket 122)
+    const split = songInfoView({ ...i, t: { ...track, genre: ['Rock', 'Metal'] } })
+    expect(values(section(split.sections, 'Song'))).toMatchObject({ Genre: 'Rock, Metal' })
     const f = section(v.sections, 'File')
     expect(f.note).toBeUndefined()
     expect(values(f)).toEqual({

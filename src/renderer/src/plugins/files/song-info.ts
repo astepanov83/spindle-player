@@ -153,7 +153,7 @@ function song(i: SongInfoInput): InfoSection {
       ...row('Track', t.no ? String(t.no) : undefined),
       ...row('Disc', t.disc ? String(t.disc) : undefined),
       ...row('Year', year ? String(year) : undefined),
-      ...row('Genre', f?.genre),
+      ...row('Genre', (t.genre ?? f?.genre)?.join(', ')),
       ...row('Length', t.duration ? fmtClock(t.duration) : undefined)
     ]
   }

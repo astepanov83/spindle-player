@@ -82,10 +82,10 @@ describe('readSongInfo', () => {
       ])
     )
     const info = await readSongInfo(
-      { path, added: 5, year: 2003, genre: 'Jazz', gain: { track: 1 } },
+      { path, added: 5, year: 2003, genre: ['Jazz'], gain: { track: 1 } },
       songInfoIo(undefined)
     )
-    expect(info).toMatchObject({ path, added: 5, year: 2003, genre: 'Jazz' })
+    expect(info).toMatchObject({ path, added: 5, year: 2003, genre: ['Jazz'] })
     expect(info.size).toBeGreaterThan(0)
     expect(info.format).toMatchObject({
       container: 'FLAC',

@@ -9,10 +9,11 @@ export interface SongFileInfo {
   // no end: to the end of the file)
   cue?: { sheet: string; start: number; end?: number; sheetGone?: true }
   // from the index: when the scan first found the file (ms), and the year and
-  // genre the library has (a CUE track's come from its sheet)
+  // genre the library has (a CUE track's come from its sheet); the genre
+  // tag's values as written, not split (the page shows the track's, ticket 122)
   added?: number
   year?: number
-  genre?: string
+  genre?: string[]
   // read now
   size?: number
   modified?: number

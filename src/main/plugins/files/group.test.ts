@@ -10,6 +10,7 @@ import {
 import { defaultPalettes, fallbackPalettes } from '../../../shared/palette'
 import { emptyIndex } from './merge'
 import type { FileEntry, LibraryIndex } from './types'
+import type { TagFix } from '../../../shared/plugins/files/tag-fixes'
 import { cleanArtist } from '../../../shared/clean-names'
 import { searchKey } from './cover-match'
 import { artistKey } from '../../../shared/plugins/files/artists'
@@ -38,7 +39,8 @@ function build(
   fetched?: Fetched,
   photos?: Fetched,
   overrides?: Record<string, string[]>,
-  groups?: Record<string, string>
+  groups?: Record<string, string>,
+  fixes?: Record<string, TagFix>
 ): ReturnType<typeof buildLibrary> {
   const ix = emptyIndex()
   for (const f of files) ix.files.set(f.path, f)
@@ -49,7 +51,9 @@ function build(
   const spelling = (key: string): string | undefined => tags.find((t) => artistKey(t) === key)
   const old = { groups: new Map(Object.entries(groups ?? {})), asked: new Set<string>() }
   const f = convertOld(new Map(Object.entries(overrides ?? {})), old, spelling).artists
-  return buildLibrary(ix, has, fetched, [], photos, resolve(f, true))
+  // tag fixes by path here; the library keeps them by track id
+  const byId = new Map(Object.entries(fixes ?? {}).map(([p, fix]) => [shortHash(p), fix]))
+  return buildLibrary(ix, has, fetched, [], photos, resolve(f, true), byId)
 }
 
 describe('addedOf', () => {
@@ -346,6 +350,83 @@ describe('genres and years (ticket 122)', () => {
   it('reads an older index entry with genres joined by ", " as genres', () => {
     const { data } = build([entry('/m/1.mp3', { album: 'X', genre: ['Rock, Metal'] })])
     expect(data.tracks[0].genre).toEqual(['Rock', 'Metal'])
+  })
+})
+
+describe('song info changed in Spindle (ticket 129)', () => {
+  const files = [
+    entry('/m/a/1.mp3', { album: 'Blue Hours', artist: 'Kai', track: 1, year: 1995 }),
+    entry('/m/a/2.mp3', { album: 'Blue Hourz', artist: 'Kai', track: 2, year: 1995 }),
+    entry('/m/a/3.mp3', { album: 'Blue Hourz', artist: 'Kai', track: 3, year: 1995 })
+  ]
+  const fixed = (fixes: Record<string, TagFix>, o?: Record<string, string[]>): LibraryData =>
+    build(files, undefined, () => true, undefined, undefined, o, undefined, fixes).data
+
+  it('groups albums by the fixed album name: a split album is one again', () => {
+    expect(build(files).data.albums).toHaveLength(2)
+    const data = fixed({
+      '/m/a/2.mp3': { album: 'Blue Hours' },
+      '/m/a/3.mp3': { album: 'Blue Hours' }
+    })
+    expect(data.albums).toHaveLength(1)
+    expect(data.albums[0]).toMatchObject({ title: 'Blue Hours', artist: 'Kai' })
+    expect(data.albums[0].trackIds).toEqual(files.map((f) => shortHash(f.path)))
+    // the id is the one the album had with the right name
+    expect(data.albums[0].id).toBe(
+      build(files).data.albums.find((a) => a.title === 'Blue Hours')!.id
+    )
+    expect(data.tracks.map((t) => t.album)).toEqual(['Blue Hours', 'Blue Hours', 'Blue Hours'])
+  })
+
+  it('takes the fixed album artist, and keeps a song with its own one apart', () => {
+    const data = fixed({
+      '/m/a/1.mp3': { album: 'Blue Hourz', albumArtist: 'Kai & Friends' },
+      '/m/a/2.mp3': { albumArtist: 'Kai & Friends' },
+      '/m/a/3.mp3': { albumArtist: 'Kai & Friends' }
+    })
+    expect(data.albums.map((a) => [a.title, a.artist])).toEqual([['Blue Hourz', 'Kai & Friends']])
+  })
+
+  it("gives the album the fixed year, and the song its genre, split and spelled as the library's", () => {
+    // the library's spelling: the one most songs have
+    const more = [
+      ...files,
+      entry('/m/b/1.mp3', { album: 'Other', genre: ['Doom Metal'] }),
+      entry('/m/b/2.mp3', { album: 'Other', genre: ['Doom Metal'] })
+    ]
+    const data = build(more, undefined, () => true, undefined, undefined, undefined, undefined, {
+      '/m/a/1.mp3': { year: 1996, genre: ['doom metal; Stoner rock'] },
+      '/m/a/2.mp3': { year: 1996, album: 'Blue Hours' },
+      '/m/a/3.mp3': { album: 'Blue Hours' }
+    }).data
+    const al = data.albums.find((a) => a.title === 'Blue Hours')!
+    expect(al.year).toBe(1996)
+    const [one, , three] = al.trackIds.map((id) => data.tracks.find((t) => t.id === id)!)
+    expect(one.genre).toEqual(['Doom Metal', 'Stoner rock'])
+    expect(al.genres).toEqual(['Doom Metal', 'Stoner rock'])
+    // the third keeps 1995, now its own year on an album of 1996
+    expect(three.year).toBe(1995)
+  })
+
+  it("marks each fixed song with its file's own values of the fields fixed", () => {
+    const data = fixed({ '/m/a/1.mp3': { year: 1996, title: 'Lucid', genre: ['Ambient'] } })
+    const t = data.tracks.find((x) => x.id === shortHash('/m/a/1.mp3'))!
+    expect(t.title).toBe('Lucid')
+    expect(t.fileTags).toEqual({ year: 1995, title: '', genre: [] })
+    expect(data.tracks.filter((x) => x.fileTags)).toHaveLength(1)
+  })
+
+  it('puts artists.json on top of a fixed artist, and takes a tag away with an empty value', () => {
+    const data = fixed({ '/m/a/1.mp3': { artist: 'kino', title: '' } }, { kino: ['Кино'] })
+    const t = data.tracks.find((x) => x.id === shortHash('/m/a/1.mp3'))!
+    expect(t).toMatchObject({ artist: 'Кино', artistTag: 'kino', title: '1' })
+  })
+
+  it('keeps the entries as read, for the edit form', () => {
+    const b = build(files, undefined, () => true, undefined, undefined, undefined, undefined, {
+      '/m/a/2.mp3': { album: 'Blue Hours' }
+    })
+    expect(b.entries.get(shortHash('/m/a/2.mp3'))?.album).toBe('Blue Hourz')
   })
 })
 

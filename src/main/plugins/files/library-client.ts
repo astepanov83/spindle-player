@@ -10,6 +10,7 @@ import type { ScanStatus } from '../../../shared/library'
 import type { FullLibrary } from '../../../shared/plugins/files/library-patch'
 import type { WorkerIn, WorkerOut } from './types'
 import type { AfterExit } from './library-process'
+import type { TagChange } from '../../../shared/plugins/files/tag-fixes'
 
 export type Reply = Extract<WorkerOut, { type: 'reply' }>
 export type Ask =
@@ -18,6 +19,8 @@ export type Ask =
   | { type: 'get-library' }
   | { type: 'song-cover'; artist: string; song: string }
   | { type: 'lyrics'; id: string }
+  | { type: 'tag-values'; ids: string[] }
+  | { type: 'fix-tags'; change: TagChange }
 
 // What the page gets when the process can't give it a library.
 // No epoch a process makes, so a patch from a process that comes back later

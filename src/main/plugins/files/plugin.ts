@@ -65,6 +65,8 @@ export class FilesPlugin implements MainPlugin {
     page.handle(LibraryChannel.showFolder, (_, parts) =>
       this.#on ? showFolder(parts, settings.get().folders) : false
     )
+    page.handle(LibraryChannel.tagValues, (_, ids) => library.tagValues(ids))
+    page.handle(LibraryChannel.fixTags, (_, change) => library.fixTags(change))
   }
 
   setOn(on: boolean): void {

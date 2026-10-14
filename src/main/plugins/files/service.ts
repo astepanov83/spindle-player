@@ -12,6 +12,12 @@ import { artistGroupsTask } from '../../../shared/plugins/files/artists-file'
 import type { AiClient } from '../../../shared/ai'
 import type { CoverSource } from '../../../shared/settings'
 import type { Lyrics } from '../../../shared/lyrics'
+import {
+  parseIds,
+  parseTagChange,
+  type FixesBefore,
+  type SongTags
+} from '../../../shared/plugins/files/tag-fixes'
 import { ffmpegTool } from '../../ffmpeg-path'
 import type { SettingsStore } from '../../settings-store'
 import type { CoverCache } from '../../covers/cover-cache'
@@ -122,6 +128,7 @@ export class LibraryService {
         aiCachePath: join(this.dir, 'artist-ai-cache.json'),
         oldOverridesPath: join(this.dir, 'artist-overrides.json'),
         oldGroupsPath: join(this.dir, 'artist-groups.json'),
+        tagFixesPath: join(this.dir, 'tag-fixes.json'),
         aiOn: this.#aiOn,
         aiEnabled: this.#aiEnabled,
         userAgent: this.userAgent,
@@ -315,6 +322,21 @@ export class LibraryService {
   setArtists(changes: unknown): void {
     const c = this.#on && parseChanges(changes)
     if (c) this.#post({ type: 'set-artists', changes: c })
+  }
+
+  // The edit form's songs (ticket 129): their tags now and in their files.
+  // Ids not in the library are left out of the answer.
+  async tagValues(ids: unknown): Promise<Record<string, SongTags>> {
+    const list = parseIds(ids)
+    if (!this.#on || !list) return {}
+    return (await this.#client.ask({ type: 'tag-values', ids: list })).tags ?? {}
+  }
+
+  // A change to tag-fixes.json; what the songs had before, for Undo. Checked
+  // here, since the page can't be trusted. None when nothing was taken.
+  async fixTags(change: unknown): Promise<FixesBefore | undefined> {
+    const c = this.#on ? parseTagChange(change) : undefined
+    return c && (await this.#client.ask({ type: 'fix-tags', change: c })).before
   }
 
   // The page asked for a full check of the artist names; main has no state for it.

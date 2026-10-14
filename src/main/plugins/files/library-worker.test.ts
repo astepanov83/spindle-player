@@ -66,6 +66,7 @@ function start(
     aiCachePath: join(dir, 'artist-ai-cache.json'),
     oldOverridesPath: join(dir, 'artist-overrides.json'),
     oldGroupsPath: join(dir, 'artist-groups.json'),
+    tagFixesPath: join(dir, 'tag-fixes.json'),
     aiOn,
     aiEnabled,
     userAgent: 'test',
@@ -934,6 +935,87 @@ describe('the library process', () => {
       await until(() => scanned(1))
       expect(await words(cueTrackId(image, 2), 2)).toEqual({ plain: 'Second words' })
       expect(await words(cueTrackId(image, 1), 3)).toBeUndefined()
+    })
+  })
+
+  describe('song info changed in Spindle (ticket 129)', () => {
+    type Lib = {
+      albums: { title: string; year: number }[]
+      tracks: { id: string; album: string }[]
+    }
+    const decode = (b: Uint8Array): Lib => JSON.parse(new TextDecoder().decode(b))
+    async function ask(
+      m: WorkerIn & { req: number }
+    ): Promise<Extract<WorkerOut, { type: 'reply' }>> {
+      send(m)
+      await until(() => heard.some((x) => x.type === 'reply' && x.req === m.req))
+      return heard.find((x) => x.type === 'reply' && x.req === m.req) as Extract<
+        WorkerOut,
+        { type: 'reply' }
+      >
+    }
+    const library = async (req: number): Promise<Lib> =>
+      decode((await ask({ type: 'get-library', req })).data!)
+
+    beforeEach(() => {
+      rmSync(join(music, 'a.mp3'))
+      writeFileSync(join(music, '1.flac'), flacWith(['TITLE=One', 'ALBUM=Blue Hours', 'DATE=1995']))
+      writeFileSync(join(music, '2.flac'), flacWith(['TITLE=Two', 'ALBUM=Blue Hourz', 'DATE=1995']))
+    })
+    const one = (): string => shortHash(join(music, '1.flac'))
+    const two = (): string => shortHash(join(music, '2.flac'))
+
+    it('builds the library again with a change, no scan, and keeps it after a restart', async () => {
+      start(true)
+      scan(1)
+      await until(() => scanned(1))
+      expect((await library(2)).albums.map((a) => a.title).sort()).toEqual([
+        'Blue Hours',
+        'Blue Hourz'
+      ])
+      const tags = (await ask({ type: 'tag-values', req: 3, ids: [two(), 'gone'] })).tags!
+      expect(Object.keys(tags)).toEqual([two()])
+      expect(tags[two()].now).toMatchObject({ title: 'Two', album: 'Blue Hourz', year: 1995 })
+      const r = await ask({
+        type: 'fix-tags',
+        req: 4,
+        change: { edit: { ids: [two()], set: { album: 'Blue Hours', year: 1996 }, reset: [] } }
+      })
+      expect(r.before).toEqual({ [two()]: null })
+      // the page gets the change as a patch
+      await until(() => heard.some((m) => m.type === 'library'))
+      const lib = await library(5)
+      expect(lib.albums.map((a) => [a.title, a.year])).toEqual([['Blue Hours', 1996]])
+      const now = (await ask({ type: 'tag-values', req: 6, ids: [two()] })).tags![two()]
+      expect(now.now).toMatchObject({ album: 'Blue Hours', year: 1996 })
+      expect(now.file).toMatchObject({ album: 'Blue Hourz', year: 1995 })
+      send({ type: 'flush' })
+      expect(JSON.parse(readFileSync(join(dir, 'tag-fixes.json'), 'utf8'))).toEqual({
+        version: 1,
+        fixes: { [`files:${two()}`]: { album: 'Blue Hours', year: 1996 } }
+      })
+      await boot()
+      start(true)
+      expect((await library(1)).albums.map((a) => a.title)).toEqual(['Blue Hours'])
+      // Undo puts back what the song had
+      await ask({ type: 'fix-tags', req: 2, change: { put: { [two()]: null } } })
+      expect((await library(3)).albums).toHaveLength(2)
+      expect(one()).not.toBe(two())
+    })
+
+    it('takes no change while off', async () => {
+      start(true)
+      scan(1)
+      await until(() => scanned(1))
+      send({ type: 'set-on', on: false })
+      const r = await ask({
+        type: 'fix-tags',
+        req: 2,
+        change: { edit: { ids: [two()], set: { year: 2001 }, reset: [] } }
+      })
+      expect(r.before).toEqual({})
+      send({ type: 'flush' })
+      expect(existsSync(join(dir, 'tag-fixes.json'))).toBe(false)
     })
   })
 })

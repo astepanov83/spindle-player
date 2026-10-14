@@ -71,6 +71,8 @@ import { AiOverMessages } from './ai-messages'
 import { promptNumber, taskNames } from './group-artists'
 import { fullCheckDue, groupArtists, limitWaitMs, startFullCheck } from './group-artists-job'
 import { scanLogLine } from './scan-log'
+import { TagFixesStore, tagValuesOf } from './tag-fixes-file'
+import type { TagChange, TagValues } from '../../../shared/plugins/files/tag-fixes'
 import { markerOf, smallName } from '../../covers/cover-names'
 import { CoverFetcher } from './cover-fetch'
 import { findSongCover, stopsSongLookups } from './song-cover'
@@ -159,7 +161,8 @@ let built: BuiltLibrary = {
   data: { albums: [], tracks: [], folders: [] },
   paths: new Map(),
   queries: [],
-  artists: []
+  artists: [],
+  entries: new Map()
 }
 // the index changed since the page last got the library
 let dirty = false
@@ -378,6 +381,38 @@ function setArtists(c: ArtistChanges): void {
   publisher.now()
 }
 
+// --- song info fixed in Spindle: tag-fixes.json (ticket 129) ---
+
+// read at start, before the first build
+let tagFixes: TagFixesStore | undefined
+
+// A song's tags as its file has them; none when it is not in the library.
+function fileTagsOf(id: string): TagValues | undefined {
+  const e = built.entries.get(id)
+  return e && tagValuesOf(e)
+}
+
+// The edit form's songs: their tags with their fixes, and the file's.
+function songTags(ids: string[]): Record<string, { now: TagValues; file: TagValues }> {
+  const out: Record<string, { now: TagValues; file: TagValues }> = {}
+  for (const id of ids) {
+    const file = fileTagsOf(id)
+    if (file) out[id] = { now: { ...file, ...tagFixes?.fixes.get(id) }, file }
+  }
+  return out
+}
+
+// A change from the page; the library is built again with it, no scan.
+// Nothing changes while off, as nothing is written then.
+function fixTags(req: number, change: TagChange): void {
+  const before = on ? tagFixes?.change(change, fileTagsOf) : undefined
+  if (before) {
+    dirty = true
+    publisher.now()
+  }
+  post({ type: 'reply', req, before: before ?? {} })
+}
+
 // The old files still to move: write: artists.json came from them, so it is
 // written first. Nothing is written while off, so the move waits for on.
 let oldFiles: { write: boolean } | undefined
@@ -575,7 +610,8 @@ function build(): void {
     // While the task is switched off the AI's links are kept but not shown.
     // A provider that is not ready (a key that lasts until quit, a refused
     // key) does not hide them: only the job waits for it.
-    resolve(artists, !!aiEnabled[artistGroupsTask])
+    resolve(artists, !!aiEnabled[artistGroupsTask]),
+    tagFixes?.fixes
   )
   const track = new Map(built.data.tracks.map((t) => [t.id, t]))
   spellings = tagSpellings(built.data.albums, (id) => track.get(id))
@@ -911,6 +947,7 @@ function setOn(next: boolean): void {
     fetchedWriter?.flushSync()
     artistsWriter?.flushSync()
     cacheWriter?.flushSync()
+    tagFixes?.flushSync()
   }
   on = next
   if (on) moveOldFiles(start)
@@ -951,6 +988,8 @@ function movedIds(ids: IdMoves, files: number): void {
   aliases = mergeMoves(aliases, ids)
   // kept in the index until main says the files have them
   ix.pendingMoves = mergeMoves(ix.pendingMoves, ids)
+  // on disk with the index, so a crash can't leave fixes under ids that are gone
+  if (tagFixes?.moveIds(ids)) tagFixes.flushSync()
   log(`Library: ${files} files are now reached by another path; their ids changed`)
   // On disk before main renames its files: a crash in between must not leave
   // new ids in the queue and old paths in the index. If this write fails the
@@ -1060,6 +1099,8 @@ async function scan(
     const used = usedKeys(credits)
     if (prune(artists, used)) saveArtists()
     if (pruneCache(aiCache, cacheKeys(artists, used))) saveCache()
+    // a song gone, or a file that now has the fixed value itself
+    if (tagFixes?.prune(fileTagsOf)) publisher.now()
     if (convertLater) {
       convertLater = false
       if (convertOldFiles(start, false, false, true)) publisher.now()
@@ -1246,6 +1287,18 @@ port.on('message', (e: Electron.MessageEvent) => {
           () => post({ type: 'reply', req: m.req })
         )
       break
+    case 'tag-values':
+      ready.then(
+        () => post({ type: 'reply', req: m.req, tags: songTags(m.ids) }),
+        () => post({ type: 'reply', req: m.req })
+      )
+      break
+    case 'fix-tags':
+      ready.then(
+        () => fixTags(m.req, m.change),
+        () => post({ type: 'reply', req: m.req })
+      )
+      break
     case 'get-library':
       ready.then(
         () => post({ type: 'reply', req: m.req, data: encodeLibrary() }),
@@ -1261,6 +1314,7 @@ port.on('message', (e: Electron.MessageEvent) => {
       fetchedWriter?.flushSync()
       artistsWriter?.flushSync()
       cacheWriter?.flushSync()
+      tagFixes?.flushSync()
       stopGroupsJob()
       closing = true
       clearTimeout(offPrune)
@@ -1292,7 +1346,9 @@ port.on('message', (e: Electron.MessageEvent) => {
 // covers and may be at it now (a restart), so only old ones go there.
 async function removeStrayTemp(): Promise<void> {
   const dir = dirname(start.indexPath)
-  const names = [start.indexPath, start.artistsPath, start.aiCachePath].map((p) => basename(p))
+  const names = [start.indexPath, start.artistsPath, start.aiCachePath, start.tagFixesPath].map(
+    (p) => basename(p)
+  )
   try {
     for (const n of await readdir(dir))
       if (names.some((f) => n.startsWith(f + '.')) && n.endsWith('.tmp'))
@@ -1313,6 +1369,7 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   await removeStrayTemp()
   await loadCached()
   const { had: hadArtists, unusable } = loadArtists(s)
+  tagFixes = new TagFixesStore(s.tagFixesPath, log)
   await startFetcher(s)
   const r = readJsonFile(start.indexPath)
   // the index is only a cache of the music files, so it is made again either way
@@ -1322,6 +1379,8 @@ const ready = new Promise<WorkerStart>((r) => (started = r)).then(async (s) => {
   partial = ix.files.size === 0
   ixEdits++
   aliases = mergeMoves(s.aliases ?? {}, ix.pendingMoves)
+  // a crash after the index was saved, before the fixes were
+  tagFixes.moveIds(ix.pendingMoves)
   // a quit or crash came before main saved them: send them again
   if (Object.keys(ix.pendingMoves).length) post({ type: 'ids-moved', moves: ix.pendingMoves })
   build()

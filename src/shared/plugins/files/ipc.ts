@@ -2,6 +2,7 @@
 import type { IdMoves } from '../../id-moves'
 import type { ScanStatus } from '../../library'
 import type { ArtistChanges } from './artist-edit'
+import type { FixesBefore, SongTags, TagChange } from './tag-fixes'
 
 export const LibraryChannel = {
   load: 'library:load',
@@ -16,6 +17,9 @@ export const LibraryChannel = {
   // the artist groups task: ask about every name again (ticket 070)
   aiRecheck: 'library:ai-recheck',
   showFolder: 'library:show-folder',
+  // song info fixed in Spindle (ticket 129): the edit form's songs, and a change
+  tagValues: 'library:tag-values',
+  fixTags: 'library:fix-tags',
   // main to page: what changed in the library (a patch, see library-patch.ts)
   changed: 'library:changed',
   // main to page: scan progress and the folder list
@@ -63,6 +67,12 @@ export interface LibraryApi {
   // opens a folder in the system's file manager: a music folder's path, then
   // the names below it; false when it is gone or could not be opened
   showFolder(parts: string[]): Promise<boolean>
+  // the songs' tags now and in their files, by id; songs not in the library
+  // are left out
+  tagValues(ids: string[]): Promise<Record<string, SongTags>>
+  // changes tag-fixes.json and builds the library again; resolves with what
+  // the songs had before (a `put` of it is the Undo), none when nothing was taken
+  fixTags(change: TagChange): Promise<FixesBefore | undefined>
   onChanged(listener: (library: Uint8Array) => void): () => void
   onStatus(listener: (status: ScanStatus) => void): () => void
   onIdsMoved(listener: (moves: IdMoves) => void): () => void
@@ -80,4 +90,6 @@ export interface FilesChannels {
   [LibraryChannel.setArtists]: LibraryApi['setArtists']
   [LibraryChannel.aiRecheck]: LibraryApi['aiRecheck']
   [LibraryChannel.showFolder]: LibraryApi['showFolder']
+  [LibraryChannel.tagValues]: LibraryApi['tagValues']
+  [LibraryChannel.fixTags]: LibraryApi['fixTags']
 }

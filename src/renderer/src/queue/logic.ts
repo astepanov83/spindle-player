@@ -26,7 +26,12 @@ export interface Walk {
   order: number[]
   at: number
   start: number
+  // shuffle by album (ticket 125): each album's rows follow each other
+  byAlbum?: boolean
 }
+
+// A song's album page, for shuffle by album. None: an album of its own.
+export type AlbumOf = (key: ItemKey) => string | undefined
 
 // The state with this walk, the field left out for none.
 function withWalk(q: QueueState, walk: Walk | undefined): QueueState {
@@ -42,7 +47,7 @@ function walkTo(w: Walk, index: number): Walk {
   if (w.order[w.at] === index) return w
   const waiting = w.order.slice(w.at + 1).filter((r) => r !== index)
   const order = [...w.order.slice(0, w.at + 1), index, ...waiting]
-  return { order, at: w.at + 1, start: Math.min(w.start, w.at + 1) }
+  return { ...w, order, at: w.at + 1, start: Math.min(w.start, w.at + 1) }
 }
 
 // The walk after an edit: `to` gives each old row's new place, -1 when it
@@ -62,7 +67,7 @@ function remapWalk(
     if (n >= 0) order.push(n)
     if (k === w.at) at = order.length - 1
   })
-  return walkTo({ order, at, start: Math.max(0, Math.min(start, at)) }, index)
+  return walkTo({ ...w, order, at, start: Math.max(0, Math.min(start, at)) }, index)
 }
 
 // Gives rows with no place in this round random places among the waiting
@@ -84,6 +89,105 @@ function placeNew(w: Walk, n: number, random: () => number): Walk {
   return { ...w, order: [...w.order.slice(0, w.at + 1), ...merged] }
 }
 
+// Shuffle by album: rows with no place in this round get places by album. A
+// row of the album playing joins its run right after the current song, in
+// queue order, or counts as played when it is above the current song in the
+// queue (the album was started past it). A row of an album that waits joins
+// that album's run. The rest make runs of their own, one per album, which get
+// random places among the waiting runs. In a new round (`round`) the album
+// playing gets no run to join, and does not go first.
+function placeAlbums(
+  w: Walk,
+  items: readonly ItemKey[],
+  albumOf: AlbumOf,
+  random: () => number,
+  round: boolean
+): Walk {
+  const seen = new Set(w.order.slice(w.start))
+  const fresh: number[] = []
+  for (let r = 0; r < items.length; r++) if (!seen.has(r)) fresh.push(r)
+  if (!fresh.length) return w
+  const album = (r: number): string | undefined => albumOf(items[r])
+  const cur = w.order[w.at]
+  const playing = round ? undefined : album(cur)
+  const waiting = w.order.slice(w.at + 1)
+  let h = 0
+  while (playing !== undefined && h < waiting.length && album(waiting[h]) === playing) h++
+  const head = waiting.slice(0, h)
+  const runs = toRuns(waiting.slice(h), album)
+  const passed: number[] = []
+  const added: number[][] = []
+  const byName = new Map<string, number[]>()
+  for (const r of fresh) {
+    const a = album(r)
+    const run = a === undefined ? undefined : (byName.get(a) ?? runs.find((x) => album(x[0]) === a))
+    if (a !== undefined && a === playing) {
+      if (r < cur) passed.push(r)
+      else inRowOrder(head, r)
+    } else if (run) inRowOrder(run, r)
+    else {
+      const g = [r]
+      added.push(g)
+      if (a !== undefined) byName.set(a, g)
+    }
+  }
+  shuffleInPlace(added, random)
+  const slots = runs.map(() => false).concat(added.map(() => true))
+  shuffleInPlace(slots, random)
+  let a = 0
+  let b = 0
+  const merged = slots.map((isNew) => (isNew ? added[b++] : runs[a++]))
+  // a new round does not start with the album that just ended
+  if (round && merged.length > 1 && merged[0].includes(cur)) {
+    const k = 1 + Math.floor(random() * (merged.length - 1))
+    ;[merged[0], merged[k]] = [merged[k], merged[0]]
+  }
+  const order = [...w.order.slice(0, w.at), ...passed, cur, ...head, ...merged.flat()]
+  return { ...w, order, at: w.at + passed.length }
+}
+
+// Rows split into runs of one album each; a row with no album is a run alone.
+function toRuns(rows: number[], album: (r: number) => string | undefined): number[][] {
+  const runs: number[][] = []
+  let last: string | undefined
+  for (const r of rows) {
+    const a = album(r)
+    if (a !== undefined && a === last) runs[runs.length - 1].push(r)
+    else runs.push([r])
+    last = a
+  }
+  return runs
+}
+
+// Puts row `r` into `run` before the first row below it in the queue.
+function inRowOrder(run: number[], r: number): void {
+  const k = run.findIndex((x) => x > r)
+  run.splice(k < 0 ? run.length : k, 0, r)
+}
+
+// A click under shuffle by album plays the album from the clicked row: the
+// album's other rows that wait, and the ones below it in the queue that
+// played this round, lose their places, so the next step puts the ones below
+// it after it and passes over the ones above it (placeAlbums).
+function fromHere(w: Walk, items: readonly ItemKey[], albumOf: AlbumOf): Walk {
+  const cur = w.order[w.at]
+  const a = albumOf(items[cur])
+  if (a === undefined) return w
+  const order: number[] = []
+  let at = 0
+  let start = 0
+  w.order.forEach((r, k) => {
+    if (k === w.start) start = order.length
+    if (k === w.at) at = order.length
+    const goes =
+      k > w.at
+        ? albumOf(items[r]) === a
+        : k >= w.start && k < w.at && (r === cur || (r > cur && albumOf(items[r]) === a))
+    if (!goes) order.push(r)
+  })
+  return { ...w, order, at, start: Math.min(start, at) }
+}
+
 function shuffleInPlace<T>(a: T[], random: () => number): void {
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1))
@@ -93,16 +197,19 @@ function shuffleInPlace<T>(a: T[], random: () => number): void {
 
 // The next song under shuffle: the next waiting row, or the first of a new
 // round when every row has played once. A new round has every row, but not
-// the song that just played first. It keeps the round before it, so Previous
-// can go back through it.
-function shuffleStep(q: QueueState, random: () => number): QueueState {
+// the song that just played first (by album: not its album). It keeps the
+// round before it, so Previous can go back through it.
+function shuffleStep(q: QueueState, random: () => number, albums?: AlbumOf): QueueState {
   const n = q.items.length
-  let w = placeNew(q.shuffle ? walkTo(q.shuffle, q.index) : fresh(q.index), n, random)
+  const place = (w: Walk, round: boolean): Walk =>
+    albums ? placeAlbums(w, q.items, albums, random, round) : placeNew(w, n, random)
+  const own = walkOf(q, albums)
+  let w = place(own ? walkTo(own, q.index) : fresh(q.index, !!albums), false)
   if (w.at + 1 >= w.order.length) {
     const at = w.at - w.start
-    w = placeNew({ order: w.order.slice(w.start), at, start: at + 1 }, n, random)
+    w = place({ ...w, order: w.order.slice(w.start), at, start: at + 1 }, true)
     const order = w.order
-    if (order[at + 1] === q.index) {
+    if (!albums && order[at + 1] === q.index) {
       const k = at + 2 + Math.floor(random() * (n - 1))
       ;[order[at + 1], order[k]] = [order[k], order[at + 1]]
     }
@@ -111,7 +218,15 @@ function shuffleStep(q: QueueState, random: () => number): QueueState {
   return withWalk({ ...q, index }, { ...w, at: w.at + 1 })
 }
 
-const fresh = (index: number): Walk => ({ order: [index], at: 0, start: 0 })
+const fresh = (index: number, byAlbum = false): Walk =>
+  byAlbum ? { order: [index], at: 0, start: 0, byAlbum } : { order: [index], at: 0, start: 0 }
+
+// The walk, when it is of the kind shuffle plays now: songs or albums. A
+// switch between them starts a new one.
+function walkOf(q: QueueState, albums: AlbumOf | undefined): Walk | undefined {
+  const w = q.shuffle
+  return w && !!w.byAlbum === !!albums ? w : undefined
+}
 
 // The state with `next` songs waiting to play next, the field left out for none.
 function withNext(q: QueueState, next: number): QueueState {
@@ -136,6 +251,9 @@ function countNext(marks: boolean[], index: number): number {
 
 export interface NextOptions {
   shuffle: boolean
+  // with shuffle: by album (ticket 125), albums in a random order, each in
+  // queue order
+  albums?: AlbumOf
   random?: () => number
 }
 
@@ -146,10 +264,11 @@ export function advance(q: QueueState, o: NextOptions): QueueState {
   // Play next songs come first, with shuffle too
   if (next > 0) {
     const index = q.index + 1
-    const walk = o.shuffle ? walkTo(q.shuffle ?? fresh(q.index), index) : undefined
+    const own = walkOf(q, o.albums) ?? fresh(q.index, !!o.albums)
+    const walk = o.shuffle ? walkTo(own, index) : undefined
     return withWalk(withNext({ ...q, index }, next - 1), walk)
   }
-  if (o.shuffle && q.items.length > 1) return shuffleStep(q, o.random ?? Math.random)
+  if (o.shuffle && q.items.length > 1) return shuffleStep(q, o.random ?? Math.random, o.albums)
   if (q.index + 1 >= q.items.length) return q
   return withWalk({ ...q, index: q.index + 1 }, undefined)
 }
@@ -177,9 +296,11 @@ export function sameQueue(a: QueueState, b: QueueState): boolean {
 }
 
 // Clicking a queue row. Play next songs after the clicked one still wait.
-export function jump(q: QueueState, index: number): QueueState {
+// Under shuffle by album (`albums`) its album plays on from there.
+export function jump(q: QueueState, index: number, albums?: AlbumOf): QueueState {
   if (index < 0 || index >= q.items.length || index === q.index) return q
-  const walk = q.shuffle && walkTo(q.shuffle, index)
+  let walk = q.shuffle && walkTo(q.shuffle, index)
+  if (walk && walk.byAlbum && albums) walk = fromHere(walk, q.items, albums)
   return withWalk(withNext({ ...q, index }, countNext(nextMarks(q), index)), walk)
 }
 
@@ -425,7 +546,7 @@ function backShuffled(q: QueueState, pos: number): { state: QueueState; restart:
   const rest = w.order.slice(w.at + 1).filter((r) => !waiting.includes(r))
   const order = [...w.order.slice(0, w.at + 1), ...waiting, ...rest]
   const at = w.at - 1
-  const walk = { order, at, start: Math.min(w.start, at) }
+  const walk = { ...w, order, at, start: Math.min(w.start, at) }
   return { state: withWalk(withNext({ ...q, index: order[at] }, 0), walk), restart: false }
 }
 

@@ -1,5 +1,6 @@
 // Slow player state: play/pause, and the position a few times a second.
 // The visualizer loop (ticket 008) reads the analyser, not this.
+import type { ShuffleBy, ShuffleMode } from '../../../shared/shuffle'
 import { engine } from '../audio/engine'
 
 export const player = $state({
@@ -9,8 +10,21 @@ export const player = $state({
   // the current song's length: the tag's until the file says otherwise
   duration: 0,
   shuffle: false,
+  // what shuffle mixes while on (ticket 125); a press on Shuffle keeps it
+  shuffleBy: 'songs' as ShuffleBy,
   repeat: false
 })
+
+// Off, or what shuffle mixes.
+export function shuffleMode(): ShuffleMode {
+  return player.shuffle ? player.shuffleBy : 'off'
+}
+
+// The mode picked on the bar's menu, the tray or Mini.
+export function setShuffle(m: ShuffleMode): void {
+  if (m !== 'off') player.shuffleBy = m
+  player.shuffle = m !== 'off'
+}
 
 export function play(): void {
   if (!engine.loaded) return

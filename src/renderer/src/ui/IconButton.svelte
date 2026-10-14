@@ -11,7 +11,9 @@
     act,
     disabled = false,
     drop,
-    onclick
+    hint,
+    onclick,
+    oncontextmenu
   }: {
     icon: IconName
     label: string
@@ -23,7 +25,10 @@
     disabled?: boolean
     // songs dragged onto it (ticket 089)
     drop?: DropTarget
+    // the tooltip, when it says more than the name
+    hint?: string
     onclick: () => void
+    oncontextmenu?: (e: MouseEvent) => void
   } = $props()
 </script>
 
@@ -33,11 +38,12 @@
   class:on
   aria-label={label}
   aria-pressed={toggle ? on : undefined}
-  title={label}
+  title={hint ?? label}
   data-act={act}
   {disabled}
   use:dropTarget={drop}
-  {onclick}><Icon name={icon} /></button
+  {onclick}
+  {oncontextmenu}><Icon name={icon} /></button
 >
 
 <style>

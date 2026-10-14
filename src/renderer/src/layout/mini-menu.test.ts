@@ -31,7 +31,7 @@ describe('Mini menu', () => {
       buttons: [loveAction(true), star, busy, sleepAction(false, '')],
       sleep: undefined,
       live: false,
-      shuffle: false
+      shuffle: 'off'
     })
     expect(items.slice(4, 9)).toEqual([
       'line',
@@ -56,7 +56,7 @@ describe('Mini menu', () => {
       buttons: [sleepAction(true, '23m')],
       sleep: { pick: 30, end: 0 },
       live: true,
-      shuffle: false
+      shuffle: 'off'
     })
     expect(live[5]).toEqual({
       label: 'Sleep timer',
@@ -72,8 +72,25 @@ describe('Mini menu', () => {
     })
     // nothing playing: no extra rows
     expect(
-      miniMenuItems('mini', true, { buttons: [], sleep: undefined, live: false, shuffle: false })
+      miniMenuItems('mini', true, { buttons: [], sleep: undefined, live: false, shuffle: 'off' })
     ).toEqual(miniMenuItems('mini', true))
+  })
+
+  it('has Shuffle with its modes while the track queue has a song (ticket 125)', () => {
+    const song = { buttons: [], sleep: undefined, live: false, shuffle: 'albums' as const }
+    expect(miniMenuItems('mini', true, { ...song, order: true }).slice(4, 7)).toEqual([
+      'line',
+      {
+        label: 'Shuffle: albums',
+        items: [
+          { id: 'shuffle:off', label: 'Off', checked: false },
+          { id: 'shuffle:songs', label: 'Songs', checked: false },
+          { id: 'shuffle:albums', label: 'Albums', checked: true }
+        ]
+      },
+      'line'
+    ])
+    expect(miniMenuItems('mini', true, song)).toEqual(miniMenuItems('mini', true))
   })
 
   it('reads the row picked', () => {
@@ -84,7 +101,19 @@ describe('Mini menu', () => {
     expect(miniPick('sleep:30')).toEqual({ sleep: 30 })
     expect(miniPick('sleep:song')).toEqual({ sleep: 'song' })
     expect(miniPick('sleep:off')).toEqual({ sleep: null })
-    for (const id of [null, '', 'act:', 'sleep:7', 'layout:', 'layout:tiny', 'other'])
+    expect(miniPick('shuffle:albums')).toEqual({ shuffle: 'albums' })
+    expect(miniPick('shuffle:off')).toEqual({ shuffle: 'off' })
+    for (const id of [
+      null,
+      '',
+      'act:',
+      'sleep:7',
+      'shuffle:',
+      'shuffle:on',
+      'layout:',
+      'layout:tiny',
+      'other'
+    ])
       expect(miniPick(id)).toBe(undefined)
   })
 })

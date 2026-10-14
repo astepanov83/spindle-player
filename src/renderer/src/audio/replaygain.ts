@@ -3,6 +3,7 @@
 // gain node, before the analyser, so the visualizer sees the evened level.
 import type { ReplayGain } from '../../../shared/library'
 import type { Loudness } from '../../../shared/settings'
+import type { ShuffleMode } from '../../../shared/shuffle'
 
 // The song's level as a factor (1 is as the file is). `use` 'song' takes its
 // track gain, 'album' its album gain; each falls back to the other when the
@@ -20,21 +21,26 @@ export function gainFactor(g: ReplayGain | undefined, use: Loudness): number {
 }
 
 // By album uses album gain only while the album plays in order: shuffle off,
-// and the song before or after it in the queue is from the same album.
+// and the song before or after it in the queue is from the same album; or
+// shuffle by album (ticket 125), which plays every song of an album in the
+// queue in a row, and another song of its album is in the queue.
 // Album gain keeps an album's quiet songs quiet next to its loud ones, which
-// is right only among its own songs. Anywhere else (shuffle, a playlist that
-// mixes albums) the song's own gain evens it out against its neighbors.
+// is right only among its own songs. Anywhere else (song shuffle, a playlist
+// that mixes albums) the song's own gain evens it out against its neighbors.
 export function gainUse<K>(
   setting: Loudness,
   q: { items: readonly K[]; index: number },
-  shuffle: boolean,
+  shuffle: ShuffleMode,
   albumOf: (key: K) => string | undefined
 ): Loudness {
   if (setting !== 'album') return setting
-  if (shuffle) return 'song'
+  if (shuffle === 'songs') return 'song'
   const key = q.items[q.index]
   const album = key === undefined ? undefined : albumOf(key)
   if (album === undefined) return 'song'
-  const near = [q.items[q.index - 1], q.items[q.index + 1]]
+  const near =
+    shuffle === 'albums'
+      ? q.items.filter((_, i) => i !== q.index)
+      : [q.items[q.index - 1], q.items[q.index + 1]]
   return near.some((k) => k !== undefined && albumOf(k) === album) ? 'album' : 'song'
 }

@@ -154,6 +154,22 @@ describe('keyAction', () => {
     expect(keyAction(press('i', { repeat: true }), free)).toBe('none')
     expect(chordFor('info')).toBe('I')
   })
+
+  it('shuffles with S and picks songs or albums with Shift+S (ticket 125)', () => {
+    const s = { code: 'KeyS' }
+    expect(keyAction(press('s', s), free)).toBe('shuffle')
+    expect(keyAction(press('S', { ...s, shiftKey: true }), free)).toBe('shuffleBy')
+    // by the key's place: Caps Lock or another layout changes nothing
+    expect(keyAction(press('S', s), free)).toBe('shuffle')
+    expect(keyAction(press('ы', s), free)).toBe('shuffle')
+    expect(keyAction(press('s', { ...s, repeat: true }), free)).toBe('none')
+    expect(keyAction(press('s', s), { ...free, typing: true })).toBe('none')
+    expect(keyAction(press('s', { ...s, ctrlKey: true }), free)).toBe('none')
+    expect(chordFor('shuffle')).toBe('S')
+    expect(shortcutKeys(shortcuts.find((x) => x.chords[0].action === 'shuffle')!)).toEqual([
+      'S / Shift+S'
+    ])
+  })
   it('mutes with M, once for a held key, not while typing or with Ctrl', () => {
     expect(keyAction(press('m'), free)).toBe('mute')
     expect(keyAction(press('m', { repeat: true }), free)).toBe('none')
@@ -396,6 +412,8 @@ describe('shortcuts', () => {
       'queue',
       'love',
       'info',
+      'shuffle',
+      'shuffleBy',
       'studio',
       'classic',
       'focus',
@@ -409,7 +427,8 @@ describe('shortcuts', () => {
         const e = press(c.key, {
           code: c.code ? c.key : 'Other',
           ctrlKey: !!c.ctrl,
-          altKey: !!c.alt
+          altKey: !!c.alt,
+          shiftKey: !!c.shift
         })
         expect(keyAction(e, free)).toBe(c.action)
       }
@@ -430,6 +449,7 @@ describe('shortcuts', () => {
       'Q',
       'L',
       'I',
+      'S / Shift+S',
       'Ctrl+1 / Ctrl+2 / Ctrl+3 / Ctrl+4'
     ])
     expect(keyText('Alt+ArrowUp')).toBe('Alt+↑')

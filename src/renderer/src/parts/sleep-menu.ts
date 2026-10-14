@@ -3,7 +3,7 @@
 import { pickOf, sleepHeading, sleepRows } from '../queue/sleep'
 import { layout } from '../stores/layout.svelte'
 import { menu } from '../stores/menu.svelte'
-import { player } from '../stores/player.svelte'
+import { shuffleMode } from '../stores/player.svelte'
 import { queues } from '../stores/queues.svelte'
 import { sleep } from '../stores/sleep.svelte'
 
@@ -14,7 +14,7 @@ function run(id: string | null): void {
 }
 
 export async function openSleepMenu(e: MouseEvent): Promise<void> {
-  const rows = sleepRows(sleep.set, { live: queues.active === 'live', shuffle: player.shuffle })
+  const rows = sleepRows(sleep.set, { live: queues.active === 'live', shuffle: shuffleMode() })
   if (layout.bar) {
     e.preventDefault()
     run(await window.win.popupMenu(rows))

@@ -56,7 +56,7 @@
     off: 'Songs play as loud as their files are.',
     song: 'Each song plays as loud as the others, by the ReplayGain tags in its file. Songs without them play as they are.',
     album:
-      'An album played in order plays as loud as other albums and keeps its quiet songs quiet. With shuffle, or songs from different albums, each song is evened out on its own. Songs without ReplayGain tags play as they are.'
+      'An album played in order plays as loud as other albums and keeps its quiet songs quiet. With song shuffle, or songs from different albums, each song is evened out on its own. Songs without ReplayGain tags play as they are.'
   }
 
   const sections = settingsSections(plugins)

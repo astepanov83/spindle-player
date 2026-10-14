@@ -3,7 +3,7 @@ import { queueLink } from '../../../shared/saved-queue'
 import type { ItemKey } from '../../../shared/plugins/items'
 
 const s = vi.hoisted(() => ({
-  player: { shuffle: false },
+  player: { shuffle: false, shuffleBy: 'songs' },
   queue: {
     link: undefined as unknown,
     current: undefined as unknown,
@@ -13,16 +13,19 @@ const s = vi.hoisted(() => ({
   queues: { active: 'track', wantsSound: true, togglePlay: vi.fn() }
 }))
 vi.mock('../stores/player.svelte', () => ({ player: s.player }))
-vi.mock('../stores/queue.svelte', () => ({ queue: s.queue }))
+// keys are "files:<album><n>"; "x" is no album
+const albumOf = (k: string): string | undefined => (k[6] === 'x' ? undefined : k[6])
+vi.mock('../stores/queue.svelte', () => ({ queue: s.queue, albumOf }))
 vi.mock('../stores/queues.svelte', () => ({ queues: s.queues }))
 
-const { playPage, playState } = await import('./page-play')
+const { playPage, playState, shuffleStart } = await import('./page-play')
 
 const link = queueLink('artist', 'x')
 const keys: ItemKey[] = ['files:a', 'files:b', 'files:c']
 
 beforeEach(() => {
   s.player.shuffle = false
+  s.player.shuffleBy = 'songs'
   s.queue.link = undefined
   s.queue.current = undefined
   s.queue.playList.mockClear()
@@ -93,5 +96,34 @@ describe('a page Play and Shuffle (ticket 076)', () => {
     s.queue.current = 'files:b'
     expect(playState(link, songs)).toBe('play')
     expect(songs).not.toHaveBeenCalled()
+  })
+})
+
+describe('a page Shuffle by album (ticket 125)', () => {
+  const list: ItemKey[] = ['files:a1', 'files:a2', 'files:b1', 'files:b2', 'files:x1', 'files:x2']
+  const all = [0, 1, 2, 3, 4, 5]
+
+  it('starts on the first song of a random album; a song with no album is one', () => {
+    const at = (r: number): number => shuffleStart(list, all, albumOf, true, () => r).at
+    expect([0, 0.3, 0.6, 0.9].map(at)).toEqual([0, 2, 4, 5])
+    // the first that can play
+    expect(shuffleStart(list, [1, 3], albumOf, true, () => 0)).toEqual({ at: 1, byAlbum: true })
+  })
+
+  it('shuffles the songs of a list of one album', () => {
+    const one: ItemKey[] = ['files:a1', 'files:a2', 'files:a3']
+    expect(shuffleStart(one, [0, 1, 2], albumOf, true, () => 0.9)).toEqual({
+      at: 2,
+      byAlbum: false
+    })
+  })
+
+  it('keeps shuffle by album on, or picks songs for one album', () => {
+    s.player.shuffleBy = 'albums'
+    playPage('shuffle', () => list, link)
+    expect(s.player).toMatchObject({ shuffle: true, shuffleBy: 'albums' })
+    expect([0, 2, 4, 5]).toContain(s.queue.playList.mock.calls[0][1])
+    playPage('shuffle', () => ['files:a1', 'files:a2'], link)
+    expect(s.player).toMatchObject({ shuffle: true, shuffleBy: 'songs' })
   })
 })

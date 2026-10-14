@@ -23,6 +23,7 @@ import {
   shiftOrder,
   undoRemove,
   undoRemoveRows,
+  type NextOptions,
   type QueueState
 } from './logic'
 import { queueLink } from '../../../shared/saved-queue'
@@ -813,5 +814,179 @@ describe('the shuffle walk (ticket 076)', () => {
     const s = walk({ items: keys(5), index: 0 }, 1, o).s
     expect(s.shuffle).toBeDefined()
     if (s.index < 4) expect(advance(s, { shuffle: false }).shuffle).toBeUndefined()
+  })
+})
+
+describe('shuffle by album (ticket 125)', () => {
+  function seeded(seed: number): () => number {
+    let a = seed
+    return () => {
+      a = (a + 0x6d2b79f5) | 0
+      let t = Math.imul(a ^ (a >>> 15), 1 | a)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+  }
+  // keys are "files:<album><n>"; "x" songs have no album
+  const albumOf = (k: ItemKey): string | undefined => (k[6] === 'x' ? undefined : k[6])
+  const ks = (...ids: string[]): ItemKey[] => ids.map((id) => `files:${id}` as ItemKey)
+  const id = (k: ItemKey): string => k.slice(6)
+  const cur = (s: QueueState): string => id(s.items[s.index])
+  const opts = (seed: number): NextOptions => ({
+    shuffle: true,
+    albums: albumOf,
+    random: seeded(seed)
+  })
+  function walk(s: QueueState, steps: number, o: NextOptions): { s: QueueState; played: string[] } {
+    const played: string[] = []
+    for (let i = 0; i < steps; i++) {
+      s = advance(s, o)
+      played.push(cur(s))
+    }
+    return { s, played }
+  }
+  // the albums in the order played, one entry per run: "a", "b", "x"...
+  const runs = (played: string[]): string[] =>
+    played.map((p) => p[0]).filter((a, i, all) => a === 'x' || a !== all[i - 1])
+  // a playlist that mixes albums: a has 4 songs, b 3, c 2, and two lone songs
+  const mixed = ks('a0', 'b0', 'a1', 'x0', 'c0', 'b1', 'a2', 'c1', 'x1', 'b2', 'a3')
+
+  it('plays every album once in a round, each in queue order', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const r = walk({ items: mixed, index: 0 }, 10, opts(seed))
+      const played = ['a0', ...r.played]
+      expect(new Set(played).size).toBe(11)
+      expect(runs(played).sort()).toEqual(['a', 'b', 'c', 'x', 'x'])
+      for (const a of ['a', 'b', 'c'])
+        expect(played.filter((p) => p[0] === a)).toEqual(mixed.map(id).filter((p) => p[0] === a))
+    }
+  })
+
+  it('starts a new walk when the round ends, not with the album that just ended', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const o = opts(seed)
+      const first = walk({ items: mixed, index: 0 }, 10, o)
+      const last = first.played.at(-1)!
+      const second = walk(first.s, 11, o)
+      expect(new Set(second.played).size).toBe(11)
+      expect(runs(second.played).sort()).toEqual(['a', 'b', 'c', 'x', 'x'])
+      if (last[0] === 'x') expect(second.played[0]).not.toBe(last)
+      else expect(second.played[0][0]).not.toBe(last[0])
+    }
+  })
+
+  it('one album plays in order again and again', () => {
+    const r = walk({ items: ks('a0', 'a1', 'a2'), index: 0 }, 5, opts(1))
+    expect(r.played).toEqual(['a1', 'a2', 'a0', 'a1', 'a2'])
+  })
+
+  it('turned on in the middle of an album, the album plays on and the songs above count as played', () => {
+    const r = walk({ items: mixed, index: 2 }, 9, opts(3))
+    expect(r.played.slice(0, 2)).toEqual(['a2', 'a3'])
+    expect(r.played).not.toContain('a0')
+    expect(new Set(['a1', ...r.played]).size).toBe(10)
+  })
+
+  it('Previous goes back inside an album and across albums', () => {
+    const o = opts(2)
+    const a = walk({ items: ks('a0', 'a1', 'b0', 'b1'), index: 0 }, 3, o)
+    expect(['a0', ...a.played]).toEqual(
+      a.played[0] === 'a1' ? ['a0', 'a1', 'b0', 'b1'] : ['a0', 'b0', 'b1', 'a1']
+    )
+    let s = a.s
+    const seen = [cur(s)]
+    for (let i = 0; i < 3; i++) {
+      s = back(s, 0, true).state
+      seen.push(cur(s))
+    }
+    expect(seen).toEqual(['a0', ...a.played].reverse())
+    // and Next goes the same way again
+    expect(walk(s, 3, o).played).toEqual(a.played)
+  })
+
+  it('an added song joins its album if it waits or plays, else is an album of its own', () => {
+    const o = opts(4)
+    let s: QueueState = { items: ks('a0', 'a1', 'a2', 'b0', 'b1', 'c0'), index: 0 }
+    s = walk(s, 1, o).s
+    expect(cur(s)).toBe('a1')
+    s = append(s, ks('a9', 'b9', 'd0', 'd1', 'x5'))
+    const r = walk(s, 9, o)
+    // a9 joins the album playing, b9 album b's run; d0 and d1 are a new album
+    expect(r.played.slice(0, 2)).toEqual(['a2', 'a9'])
+    expect(r.played.filter((p) => p[0] === 'b')).toEqual(['b0', 'b1', 'b9'])
+    expect(runs(r.played).sort()).toEqual(['a', 'b', 'c', 'd', 'x'])
+    expect(new Set(r.played).size).toBe(9)
+  })
+
+  it('a song of an album that already played this round is an album of its own', () => {
+    const o = opts(5)
+    let s: QueueState = { items: ks('a0', 'a1', 'b0', 'b1', 'c0'), index: 0 }
+    s = walk(s, 2, o).s
+    // a played, b or c now
+    const played = s.shuffle!.order.map((r) => id(s.items[r]))
+    expect(played.slice(0, 2)).toEqual(['a0', 'a1'])
+    s = append(s, ks('a5'))
+    const r = walk(s, 4, o)
+    expect(r.played).toContain('a5')
+    expect(new Set([...played.slice(0, 3), ...r.played]).size).toBe(6)
+  })
+
+  it('Play next songs still play next, then the album goes on', () => {
+    const o = opts(6)
+    let s: QueueState = { items: ks('a0', 'a1', 'a2', 'b0', 'b1'), index: 0 }
+    s = walk(s, 1, o).s
+    s = insertNext(s, ks('x7', 'b5'))
+    expect(walk(s, 3, o).played).toEqual(['x7', 'b5', 'a2'])
+  })
+
+  it('a click plays its album from there, and the songs above it are passed over', () => {
+    const o = opts(7)
+    let s: QueueState = { items: ks('a0', 'a1', 'b0', 'b1', 'b2', 'c0', 'c1'), index: 0 }
+    s = walk(s, 1, o).s
+    s = jump(s, 3, albumOf)
+    const r = walk(s, 3, o)
+    expect(r.played[0]).toBe('b2')
+    expect(r.played).not.toContain('b0')
+    expect(r.played.slice(1)).toEqual(['c0', 'c1'])
+  })
+
+  it('a click on a song that played this round plays its album on from there', () => {
+    const o = opts(8)
+    let s: QueueState = { items: ks('a0', 'a1', 'a2', 'a3', 'b0'), index: 0 }
+    s = walk(s, 3, o).s
+    expect(cur(s)).toBe('a3')
+    s = jump(s, 1, albumOf)
+    expect(walk(s, 3, o).played).toEqual(['a2', 'a3', 'b0'])
+  })
+
+  it('switching from songs to albums mid-album plays the album on', () => {
+    // song shuffle played b1, then a1
+    const items = ks('a0', 'a1', 'a2', 'a3', 'b0', 'b1')
+    const s: QueueState = { items, index: 1, shuffle: { order: [5, 1], at: 1, start: 0 } }
+    const r = walk(s, 5, opts(9))
+    expect(r.s.shuffle!.byAlbum).toBe(true)
+    // a0 is above the song playing: passed over in this round
+    expect(r.played.slice(0, 4)).toEqual(['a2', 'a3', 'b0', 'b1'])
+    // and back to songs: a walk of songs again
+    expect(advance(r.s, { shuffle: true, random: seeded(1) }).shuffle!.byAlbum).toBeUndefined()
+  })
+
+  it('switching from albums to songs starts a song walk at once', () => {
+    let s: QueueState = { items: ks('a0', 'a1', 'a2', 'b0', 'b1', 'b2'), index: 0 }
+    s = walk(s, 1, opts(10)).s
+    const r = walk(s, 5, { shuffle: true, random: seeded(10) })
+    expect(r.s.shuffle!.byAlbum).toBeUndefined()
+    // a new round from the song playing: every song once
+    expect(new Set([cur(s), ...r.played]).size).toBe(6)
+  })
+
+  it('edits keep the walk an album walk', () => {
+    const o = opts(11)
+    let s: QueueState = { items: ks('a0', 'a1', 'a2', 'b0', 'b1'), index: 0 }
+    s = walk(s, 1, o).s
+    s = moveRow(s, 4, 3)
+    s = removeRow(s, 2)
+    expect(s.shuffle!.byAlbum).toBe(true)
+    expect(walk(s, 2, o).played.sort()).toEqual(['b0', 'b1'])
   })
 })

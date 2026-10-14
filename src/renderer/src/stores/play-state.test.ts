@@ -16,12 +16,12 @@ const now = (q: Partial<PlayingNow>): PlayingNow => ({
 
 describe('playStateOf', () => {
   it('has the song and the artist, without the album', () => {
-    expect(playStateOf(now({}), false)).toEqual({
+    expect(playStateOf(now({}), 'off')).toEqual({
       title: 'Blue Song',
       artist: 'The Blues',
       playing: true,
       live: false,
-      shuffle: false,
+      shuffle: 'off',
       nothing: false,
       next: true,
       previous: true
@@ -30,29 +30,29 @@ describe('playStateOf', () => {
 
   it('joins the names as the bar does', () => {
     const i = info({ subtitle: 'A & B', names: [{ name: 'A' }, { name: 'B' }] })
-    expect(playStateOf(now({ info: i }), false).artist).toBe('A, B')
+    expect(playStateOf(now({ info: i }), 'off').artist).toBe('A, B')
   })
 
   it('has no text while the bar says Nothing playing', () => {
-    const s = playStateOf(now({ nothingPlaying: true, nothing: true, wantsSound: false }), false)
+    const s = playStateOf(now({ nothingPlaying: true, nothing: true, wantsSound: false }), 'off')
     expect(s).toMatchObject({ title: '', artist: '', playing: false, nothing: true })
   })
 
-  it('says whether shuffle is on, for the sleep timer', () => {
-    expect(playStateOf(now({}), true).shuffle).toBe(true)
+  it('says what shuffle mixes, for the tray', () => {
+    expect(playStateOf(now({}), 'albums').shuffle).toBe('albums')
   })
 
   it('has the sleep timer while one is set (ticket 111)', () => {
-    expect(playStateOf(now({}), false).sleep).toBeUndefined()
+    expect(playStateOf(now({}), 'off').sleep).toBeUndefined()
     const sleep = { pick: 30 as const, left: '23m' }
-    expect(playStateOf(now({}), false, sleep).sleep).toEqual(sleep)
+    expect(playStateOf(now({}), 'off', sleep).sleep).toEqual(sleep)
   })
 
   it('follows the bar for a live item', () => {
     const bar = barOf('live', undefined, [])
     const s = playStateOf(
       now({ info: info({ title: 'Deep Space One', subtitle: 'Radio' }), bar }),
-      false
+      'off'
     )
     expect(s).toMatchObject({
       title: 'Deep Space One',

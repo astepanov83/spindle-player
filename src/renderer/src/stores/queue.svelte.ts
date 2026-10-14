@@ -7,6 +7,7 @@ import { moveKeys, type IdMoves } from '../../../shared/id-moves'
 import type { PluginId } from '../../../shared/plugins'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink, QueuePlace, SavedQueue } from '../../../shared/saved-queue'
+import type { ShuffleMode } from '../../../shared/shuffle'
 import { engine, type EngineError, type EngineEvents } from '../audio/engine'
 import { gainFactor, gainUse } from '../audio/replaygain'
 import {
@@ -41,7 +42,7 @@ import { fmtTime } from '../format'
 import { infoOf, itemInfo, playItem } from '../plugins'
 import type { ItemAnswer, ItemInfo, Playable } from '../plugins/types'
 import { notice, type NoticeAction } from './notice.svelte'
-import { play, player, seek as seekSong } from './player.svelte'
+import { play, player, seek as seekSong, shuffleMode } from './player.svelte'
 import { positions } from './positions'
 import { settings } from './settings.svelte'
 import { sleep } from './sleep.svelte'
@@ -81,14 +82,14 @@ const cantPlay = (key: ItemKey): boolean => isOff(key) || isAway(key)
 type Sent = { step: EndStep; key: ItemKey; p: Playable }
 
 // Two songs are of one album when their album pages are the same.
-function albumOf(key: ItemKey): string | undefined {
+export function albumOf(key: ItemKey): string | undefined {
   const to = infoOf(key)?.groupTo
   return to && `${to.plugin}/${to.page}`
 }
 
 // The level song `p` plays at as the current song of `q` (ticket 090).
 function gainIn(p: Playable, q: QueueState): number {
-  return gainFactor(p.gain, gainUse(settings.loudness, q, player.shuffle, albumOf))
+  return gainFactor(p.gain, gainUse(settings.loudness, q, shuffleMode(), albumOf))
 }
 
 class TrackQueue {
@@ -174,7 +175,7 @@ class TrackQueue {
   // and start it as this one ends (ticket 087), with the queue and rules it
   // was picked from. With shuffle the pick holds until it plays or the queue
   // changes, so the song loaded is the one that plays.
-  #picked: { from: QueueState; repeat: boolean; shuffle: boolean; step: EndStep } | undefined
+  #picked: { from: QueueState; repeat: boolean; shuffle: ShuffleMode; step: EndStep } | undefined
   // what the engine was given to play next
   #sent: Sent | undefined
   // counts plans, so a playable that comes late for an older one is dropped
@@ -404,7 +405,8 @@ class TrackQueue {
   // What follows the current song when it ends, picked once (see #picked).
   #nextStep(): EndStep {
     const q = this.#state()
-    const { repeat, shuffle } = player
+    const { repeat } = player
+    const shuffle = shuffleMode()
     const k = this.#picked
     // a picked song whose plugin went off since is passed over now
     const still = k?.step.kind !== 'play' || !cantPlay(k.step.state.items[k.step.state.index])
@@ -483,7 +485,7 @@ class TrackQueue {
     if (key === undefined || itemInfo(key).state !== 'ok' || isAway(key)) return
     this.#claim()
     this.#fails = 0
-    this.#set(jump(this.#state(), index))
+    this.#set(jump(this.#state(), index, this.#nextOptions().albums))
     this.#start()
   }
 
@@ -651,7 +653,7 @@ class TrackQueue {
   }
 
   #nextOptions(): NextOptions {
-    return { shuffle: player.shuffle }
+    return { shuffle: player.shuffle, albums: shuffleMode() === 'albums' ? albumOf : undefined }
   }
 
   // The Next button.

@@ -53,28 +53,37 @@ describe('gainUse', () => {
   })
 
   it('Off and By song are what they say', () => {
-    expect(gainUse('off', q(['a1', 'a2'], 0), false, albumOf)).toBe('off')
-    expect(gainUse('song', q(['a1', 'a2'], 0), false, albumOf)).toBe('song')
+    expect(gainUse('off', q(['a1', 'a2'], 0), 'off', albumOf)).toBe('off')
+    expect(gainUse('song', q(['a1', 'a2'], 0), 'off', albumOf)).toBe('song')
   })
 
   it('By album uses album gain among its own album in order', () => {
     const items = ['a1', 'a2', 'a3']
-    for (const i of [0, 1, 2]) expect(gainUse('album', q(items, i), false, albumOf)).toBe('album')
+    for (const i of [0, 1, 2]) expect(gainUse('album', q(items, i), 'off', albumOf)).toBe('album')
   })
 
   it('a song with no song of its album next to it uses its own gain', () => {
     const items = ['a1', 'b1', 'c1', 'c2']
-    expect(gainUse('album', q(items, 0), false, albumOf)).toBe('song')
-    expect(gainUse('album', q(items, 1), false, albumOf)).toBe('song')
-    expect(gainUse('album', q(items, 2), false, albumOf)).toBe('album')
-    expect(gainUse('album', q(['a1'], 0), false, albumOf)).toBe('song')
+    expect(gainUse('album', q(items, 0), 'off', albumOf)).toBe('song')
+    expect(gainUse('album', q(items, 1), 'off', albumOf)).toBe('song')
+    expect(gainUse('album', q(items, 2), 'off', albumOf)).toBe('album')
+    expect(gainUse('album', q(['a1'], 0), 'off', albumOf)).toBe('song')
   })
 
-  it('shuffle always uses the song’s own gain', () => {
-    expect(gainUse('album', q(['a1', 'a2', 'a3'], 1), true, albumOf)).toBe('song')
+  it('song shuffle always uses the song’s own gain', () => {
+    expect(gainUse('album', q(['a1', 'a2', 'a3'], 1), 'songs', albumOf)).toBe('song')
+  })
+
+  it('album shuffle uses album gain when another song of its album is in the queue', () => {
+    const items = ['a1', 'b1', 'c1', 'a2', 'x1']
+    expect(gainUse('album', q(items, 0), 'albums', albumOf)).toBe('album')
+    expect(gainUse('album', q(items, 3), 'albums', albumOf)).toBe('album')
+    expect(gainUse('album', q(items, 1), 'albums', albumOf)).toBe('song')
+    expect(gainUse('album', q(['x1', 'x2'], 0), 'albums', albumOf)).toBe('song')
+    expect(gainUse('song', q(items, 0), 'albums', albumOf)).toBe('song')
   })
 
   it('songs with no album are not one album', () => {
-    expect(gainUse('album', q(['x1', 'x2'], 0), false, albumOf)).toBe('song')
+    expect(gainUse('album', q(['x1', 'x2'], 0), 'off', albumOf)).toBe('song')
   })
 })

@@ -49,7 +49,8 @@ class SleepTimer {
     if (this.set && !('end' in this.set)) this.cancel()
   }
 
-  // Shuffle has no album end to wait for (sleepPicksFor): End of album goes.
+  // Song shuffle has no album end to wait for (sleepPicksFor): End of album
+  // goes. Shuffle by album keeps it.
   shuffleStarted(): void {
     if (this.set?.pick === 'album') this.cancel()
   }

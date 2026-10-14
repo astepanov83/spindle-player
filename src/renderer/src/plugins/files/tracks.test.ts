@@ -130,3 +130,31 @@ describe('a song’s genre and year (ticket 122)', () => {
     expect(info('near')).toEqual({ genre: undefined, year: undefined })
   })
 })
+
+describe('a song’s Go to genre links (ticket 123)', () => {
+  const links = (id: string): { label: string; page: string }[] => {
+    const s = tracks.trackState(id, () => true)
+    const all = s.state === 'ok' ? (s.info.links ?? []) : []
+    return all.map((l) => ({ label: l.label, page: l.to.page }))
+  }
+
+  it('one: "Go to genre"; several: each by name, the first three', () => {
+    files.load({
+      ...lib,
+      tracks: [
+        { ...track('far', 1), genre: ['Rock'] },
+        { ...track('near', 2), genre: ['Rock', 'Metal', 'Pop', 'Jazz'] }
+      ]
+    })
+    expect(links('far').slice(2)).toEqual([{ label: 'Go to genre', page: 'genre/rock' }])
+    expect(links('near').slice(2)).toEqual([
+      { label: 'Go to Rock genre', page: 'genre/rock' },
+      { label: 'Go to Metal genre', page: 'genre/metal' },
+      { label: 'Go to Pop genre', page: 'genre/pop' }
+    ])
+  })
+
+  it('none for a song with no genre', () => {
+    expect(links('far').map((l) => l.label)).toEqual(['Go to album', 'Go to artist'])
+  })
+})

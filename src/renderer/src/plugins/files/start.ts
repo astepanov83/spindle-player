@@ -6,7 +6,8 @@ import type { LibraryMessage } from '../../../../shared/plugins/files/library-pa
 import { orFallback } from '../../start'
 import { layout } from '../../stores/layout.svelte'
 import { notice } from '../../stores/notice.svelte'
-import type { PluginStart } from '../types'
+import type { OpenSongs, PluginStart } from '../types'
+import { setOpenTo, takeOpened } from './drop'
 import { LibraryFeed } from './library-feed'
 import { ScanWatch } from './scan-text'
 import { decodeLibrary, files } from './store.svelte'
@@ -42,7 +43,21 @@ function applyLibrary(m: LibraryMessage, idsMoved: (moves: IdMoves) => void): vo
   files.loadFailed = false
 }
 
-function listen(idsMoved: (moves: IdMoves) => void): void {
+// What the system gave the app waits in main until the page takes it, so
+// an open at start comes after the saved queue is back, and replaces it.
+function takeAll(): void {
+  window.libraryApi.takeOpened().then(
+    (list) => {
+      for (const r of list) takeOpened(r, 'play')
+    },
+    (e) => console.error('Could not get the files opened', e)
+  )
+}
+
+function listen(idsMoved: (moves: IdMoves) => void, open: OpenSongs): void {
+  setOpenTo(open)
+  window.libraryApi.onOpened(takeAll)
+  takeAll()
   // While a scan runs, main sends what changed (ticket 022).
   const feed = new LibraryFeed({
     have: () => files.sent,

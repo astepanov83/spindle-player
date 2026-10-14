@@ -9,12 +9,12 @@ import { isKeyOfKind, splitKey, type ItemKey } from './plugins/items'
 // for a list with no page of its own (a search, Classic's Songs).
 export interface QueueLink {
   plugin: PluginId | 'core'
-  // "album/<id>", "artist/<key>", "folder/<path key>" (files), "episode/<album id>"
+  // "album/<id>", "artist/<key>", "folder/<path key>", "genre/<key>" (files), "episode/<album id>"
   // (mfp), "playlist/<id>", "smart/<id>" (core; a list that fills itself, ticket 118)
   page: string
 }
 
-export type LinkKind = 'album' | 'artist' | 'folder' | 'episode' | 'playlist' | 'smart'
+export type LinkKind = 'album' | 'artist' | 'folder' | 'genre' | 'episode' | 'playlist' | 'smart'
 
 // Each kind's plugin, from the plugin list (`linkKinds`); playlists are the core's.
 const linkOwners = new Map<string, QueueLink['plugin']>([

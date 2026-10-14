@@ -3,6 +3,13 @@
 import type { TemplateId } from '../../../shared/layout'
 import type { PopupItem } from '../../../shared/ipc'
 import type { SleepPick } from '../../../shared/sleep'
+import {
+  isShuffleMode,
+  shuffleLabel,
+  shuffleMenuLabel,
+  shuffleModes,
+  type ShuffleMode
+} from '../../../shared/shuffle'
 import { templateIds, templates } from '../../../shared/templates'
 import { sleepId, type ButtonAction } from '../queue/bar'
 import { pickOf, sleepRows, type SleepSet } from '../queue/sleep'
@@ -11,29 +18,48 @@ export type MiniPick =
   | { layout: TemplateId }
   | { act: string }
   | { sleep: SleepPick | null }
+  | { shuffle: ShuffleMode }
   | 'pin'
   | 'settings'
   | 'minimize'
   | 'quit'
 
-// What plays: the bar's buttons, which a narrow bar has no room for. The
-// moon is a Sleep timer submenu, the rest a row each (ticked if they stay
-// pressed). One at work is left out, as its click would do nothing.
+// What plays: Shuffle, which Mini's bar has no room for, and the bar's
+// buttons, which a narrow bar hides. Shuffle and the moon are submenus, the
+// rest a row each (ticked if they stay pressed). One at work is left out, as
+// its click would do nothing.
 export interface MiniSong {
   buttons: ButtonAction[]
   sleep: SleepSet | undefined
   live: boolean
-  shuffle: boolean
+  shuffle: ShuffleMode
+  // the track queue has a song: Shuffle is there (ticket 125)
+  order?: boolean
 }
 
 function songRows(song: MiniSong | undefined): PopupItem[] {
   if (!song) return []
-  return song.buttons.flatMap((a): PopupItem[] => {
-    if (a.id === sleepId) return [{ label: 'Sleep timer', items: sleepRows(song.sleep, song) }]
-    if (a.busy) return []
-    const id = `act:${a.id}`
-    return [a.on === undefined ? { id, label: a.label } : { id, label: a.label, checked: a.on }]
-  })
+  const shuffle: PopupItem[] = song.order
+    ? [
+        {
+          label: shuffleMenuLabel(song.shuffle),
+          items: shuffleModes.map((m) => ({
+            id: `shuffle:${m}`,
+            label: shuffleLabel(m),
+            checked: song.shuffle === m
+          }))
+        }
+      ]
+    : []
+  return [
+    ...shuffle,
+    ...song.buttons.flatMap((a): PopupItem[] => {
+      if (a.id === sleepId) return [{ label: 'Sleep timer', items: sleepRows(song.sleep, song) }]
+      if (a.busy) return []
+      const id = `act:${a.id}`
+      return [a.on === undefined ? { id, label: a.label } : { id, label: a.label, checked: a.on }]
+    })
+  ]
 }
 
 export function miniMenuItems(current: TemplateId, onTop: boolean, song?: MiniSong): PopupItem[] {
@@ -58,6 +84,8 @@ export function miniMenuItems(current: TemplateId, onTop: boolean, song?: MiniSo
 export function miniPick(id: string | null): MiniPick | undefined {
   if (id === 'pin' || id === 'settings' || id === 'minimize' || id === 'quit') return id
   if (id?.startsWith('act:') && id.length > 4) return { act: id.slice(4) }
+  const shuffle = id?.startsWith('shuffle:') ? id.slice(8) : undefined
+  if (isShuffleMode(shuffle)) return { shuffle }
   const sleep = pickOf(id)
   if (sleep !== undefined) return { sleep }
   const layout = id?.startsWith('layout:') ? id.slice(7) : undefined

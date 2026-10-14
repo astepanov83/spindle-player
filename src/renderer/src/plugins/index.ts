@@ -23,7 +23,9 @@ import type {
   NavKind,
   PageAddress,
   PageHalf,
+  OpenSongs,
   Playable,
+  SongInfoView,
   Tile
 } from './types'
 
@@ -119,6 +121,26 @@ export async function editFormOf(keys: ItemKey[]): Promise<EditForm | undefined>
   return ed?.half.editSongs?.(ed.ids)
 }
 
+// The song info panel's view of an item (ticket 127), while its plugin is on
+// and gives one.
+export function songInfoOf(
+  key: ItemKey
+): { now: SongInfoView; full: Promise<SongInfoView> } | undefined {
+  const e = entryOf(key)
+  return e && pluginOn(e.id) ? e.half.songInfo?.(key.slice(e.prefix.length)) : undefined
+}
+
+// Whether "Song info" is offered for an item, without reading anything.
+export function hasSongInfo(key: ItemKey): boolean {
+  const e = entryOf(key)
+  return (
+    !!e &&
+    pluginOn(e.id) &&
+    !!e.half.songInfo &&
+    e.half.info(key.slice(e.prefix.length)).state === 'ok'
+  )
+}
+
 export function canOpen(to: PageAddress): boolean {
   return pluginOn(to.plugin) && halves[to.plugin].canOpen(to)
 }
@@ -194,7 +216,10 @@ export function coverLines(): { text: string; busy: boolean }[] {
 // gives the ids each one moved, and `listen` lets them hear main's news.
 export async function startPlugins(): Promise<{
   load(): { plugin: PluginId; moves: IdMoves }[]
-  listen(idsMoved: (plugin: PluginId, moves: IdMoves) => void): void
+  listen(
+    idsMoved: (plugin: PluginId, moves: IdMoves) => void,
+    open: (keys: ItemKey[], how: Parameters<OpenSongs>[1]) => void
+  ): void
 }> {
   const started = await Promise.all(
     entries.map(async (e) => ({ id: e.id, start: await e.half.start?.() }))
@@ -205,8 +230,16 @@ export async function startPlugins(): Promise<{
         const moves = start?.load()
         return moves ? [{ plugin: id, moves }] : []
       }),
-    listen: (idsMoved) => {
-      for (const { id, start } of started) start?.listen?.((moves) => idsMoved(id, moves))
+    listen: (idsMoved, open) => {
+      for (const { id, start } of started)
+        start?.listen?.(
+          (moves) => idsMoved(id, moves),
+          (ids, how) =>
+            open(
+              ids.map((i) => itemKey(id, i)),
+              how
+            )
+        )
     }
   }
 }

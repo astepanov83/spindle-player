@@ -133,9 +133,12 @@
   .chiprow > :global(.scan) {
     flex: 1 1 0;
   }
+  /* a narrow library wraps them onto a second line, never cuts the last off */
   .chips {
-    flex: none;
+    flex: 0 1 auto;
+    min-width: 0;
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
   }
   .fill {

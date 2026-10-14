@@ -1,18 +1,19 @@
 // The menu for songs (spec "Pages and tabs", Song menu): the core's queue
 // part, then the item's links (Go to), then what the songs' plugin offers
 // (Show in file manager), then Love and Unlove, then the core's playlists,
-// then Edit song info. Each part is a function; a new part is one more
-// argument to `sections`. Songs come as item keys.
+// then Song info and Edit song info. Each part is a function; a new part is
+// one more argument to `sections`. Songs come as item keys.
 import { canLove } from '../../../shared/loved'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
-import { canEditSongs, canOpen, editFormOf, infoOf, openPage } from '../plugins'
+import { actOn, canEditSongs, canOpen, editFormOf, hasSongInfo, infoOf, openPage } from '../plugins'
 import { layout } from '../stores/layout.svelte'
 import { loved } from '../stores/loved.svelte'
 import { menu, type MenuEntry, type MenuItem } from '../stores/menu.svelte'
 import { playlists } from '../stores/playlists.svelte'
 import { queue } from '../stores/queue.svelte'
 import { editSongs } from './edit-songs.svelte'
+import { songInfo } from './song-info.svelte'
 
 export interface SongMenuOptions {
   // the songs are rows of this playlist: they can leave it
@@ -68,6 +69,13 @@ function goToPart(keys: ItemKey[]): MenuEntry[] {
     }))
 }
 
+// The song's own entries from its plugin, for one song.
+function itemPart(keys: ItemKey[]): MenuEntry[] {
+  const key = keys[0]
+  const own = keys.length === 1 ? infoOf(key)?.menu : undefined
+  return own?.map((m): MenuItem => ({ label: m.label, run: () => actOn(key, m.id) })) ?? []
+}
+
 // Love when some of the songs are not loved, Unlove when some are: both
 // for a mix. Songs that can't be loved (a station, MFP) are left out.
 function lovePart(keys: ItemKey[]): MenuEntry[] {
@@ -96,21 +104,30 @@ function playlistPart(keys: ItemKey[], o: SongMenuOptions): MenuEntry[] {
   return entries
 }
 
-// One song or several, of a plugin that can edit them (music files, ticket
-// 129). With Song info (127), last.
-function editPart(keys: ItemKey[]): MenuEntry[] {
-  if (!canEditSongs(keys)) return []
-  return [{ label: 'Edit song info…', run: () => void editSongs.open(editFormOf(keys)) }]
+// One song only, of a plugin that has a panel for it (music files; not a
+// station or an MFP mix, ticket 127), then the edit of one song or several
+// of a plugin that can edit them (ticket 129). Last, as Properties is in
+// other players.
+function infoPart(keys: ItemKey[]): MenuEntry[] {
+  const out: MenuEntry[] = []
+  if (keys.length === 1 && hasSongInfo(keys[0])) {
+    const key = keys[0]
+    out.push({ label: 'Song info', run: () => songInfo.open(key) })
+  }
+  if (canEditSongs(keys))
+    out.push({ label: 'Edit song info…', run: () => void editSongs.open(editFormOf(keys)) })
+  return out
 }
 
 export function songMenu(keys: ItemKey[], o: SongMenuOptions = {}): MenuEntry[] {
   return sections(
     queuePart(keys, o),
     goToPart(keys),
+    itemPart(keys),
     o.actions ?? [],
     lovePart(keys),
     playlistPart(keys, o),
-    editPart(keys)
+    infoPart(keys)
   )
 }
 

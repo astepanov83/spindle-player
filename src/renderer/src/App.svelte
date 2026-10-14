@@ -2,11 +2,15 @@
   import { untrack } from 'svelte'
   import { defaultPalettes } from '../../shared/palette'
   import { isSleepPick, sleepPicksFor } from '../../shared/sleep'
+  import { isShuffleMode, shuffleNotice } from '../../shared/shuffle'
   import TitleBar from './components/TitleBar.svelte'
   import Settings from './components/Settings.svelte'
   import { keysSection } from './components/settings-sections'
   import CloseAsk from './components/CloseAsk.svelte'
   import EditSongs from './library/EditSongs.svelte'
+  import SongInfo from './library/SongInfo.svelte'
+  import { songInfo } from './library/song-info.svelte'
+  import { songKeyOf } from './library/song-info-key'
   import MiniButtons from './components/MiniButtons.svelte'
   import Node from './layout/Node.svelte'
   import Menu from './ui/Menu.svelte'
@@ -35,7 +39,7 @@
   import { itemsVersion, navTabs } from './plugins'
   import { library } from './stores/library.svelte'
   import { lyrics } from './stores/lyrics.svelte'
-  import { player } from './stores/player.svelte'
+  import { player, setShuffle, shuffleMode } from './stores/player.svelte'
   import { plays } from './stores/plays.svelte'
   import { queues } from './stores/queues.svelte'
   import { queue } from './stores/queue.svelte'
@@ -57,11 +61,12 @@
   // Shuffle or repeat changes the song that follows, which loads ahead.
   $effect(() => {
     void player.shuffle
+    void player.shuffleBy
     void player.repeat
     untrack(() => queue.planNext())
   })
   $effect(() => {
-    if (player.shuffle) untrack(() => sleep.shuffleStarted())
+    if (shuffleMode() === 'songs') untrack(() => sleep.shuffleStarted())
   })
 
   // a new loudness setting is heard on the song playing, not only the next
@@ -150,11 +155,11 @@
   $effect(() => songNotices.see(nowOf(queues)))
 
   // The tray menu shows what plays and has Play, Next and Previous (ticket 088).
-  $effect(() => window.playbackApi.state(playStateOf(queues, player.shuffle, sleep.shown)))
+  $effect(() => window.playbackApi.state(playStateOf(queues, shuffleMode(), sleep.shown)))
   $effect(() =>
     window.playbackApi.onControl((c) => {
-      // the sleep timer's submenu (ticket 111)
-      if (typeof c === 'object') return pickSleep(c.sleep)
+      // the sleep timer's submenu (ticket 111) and Shuffle's (ticket 125)
+      if (typeof c === 'object') return 'sleep' in c ? pickSleep(c.sleep) : pickShuffle(c.shuffle)
       // the menu can be a step behind the page
       if (queues.nothing) return
       if (c === 'toggle') queues.togglePlay()
@@ -167,9 +172,20 @@
     if (p === null) sleep.cancel()
     else if (
       isSleepPick(p) &&
-      sleepPicksFor({ live: queues.active === 'live', shuffle: player.shuffle }).includes(p)
+      sleepPicksFor({ live: queues.active === 'live', shuffle: shuffleMode() }).includes(p)
     )
       sleep.pick(p)
+  }
+
+  function pickShuffle(m: unknown): void {
+    if (isShuffleMode(m)) setShuffle(m)
+  }
+
+  // S and Shift+S: the bar may be out of view, so a notice says what is on
+  function shuffleKey(pick: boolean): void {
+    if (pick) setShuffle(player.shuffleBy === 'songs' ? 'albums' : 'songs')
+    else player.shuffle = !player.shuffle
+    notice.show(shuffleNotice(shuffleMode()))
   }
 
   // Mini (ticket 110): a double click on the bar asks main to maximize, which
@@ -273,7 +289,8 @@
       buttons: queues.bar.buttons,
       sleep: sleep.set,
       live: queues.active === 'live',
-      shuffle: player.shuffle
+      shuffle: shuffleMode(),
+      order: queues.bar.order && !queues.nothing
     }
     const id = await window.win
       .popupMenu(miniMenuItems(settings.template, settings.miniOnTop, song))
@@ -286,6 +303,7 @@
       if (pick.act === loveId) love()
       else queues.act(pick.act)
     } else if (typeof pick === 'object' && 'sleep' in pick) pickSleep(pick.sleep)
+    else if (typeof pick === 'object' && 'shuffle' in pick) setShuffle(pick.shuffle)
     else if (pick === 'settings') layout.openSettings()
     else if (pick === 'minimize') window.win.minimize()
     else if (pick === 'quit') window.win.quit()
@@ -335,6 +353,8 @@
     else if (act === 'visualizer') layout.pressVisualizer()
     else if (act === 'queue') layout.toggleQueue()
     else if (act === 'love') love()
+    else if (act === 'info') showSongInfo()
+    else if (act === 'shuffle' || act === 'shuffleBy') shuffleKey(act === 'shuffleBy')
     else if (act === 'studio' || act === 'classic' || act === 'focus' || act === 'mini')
       layout.chooseTemplate(act)
   }
@@ -343,6 +363,13 @@
   function love(): void {
     const on = queues.toggleLove()
     if (on !== undefined) notice.show(loveNotice(on, queues.title))
+  }
+
+  // the song row with focus, else the song playing; not in Mini, which has no room
+  function showSongInfo(): void {
+    if (layout.bar) return
+    const key = songKeyOf(document.activeElement) ?? queues.item
+    if (key) songInfo.open(key)
   }
 
   function escape(): void {
@@ -429,6 +456,7 @@
   <Menu />
   <CloseAsk />
   <EditSongs />
+  <SongInfo />
   <DragGhost />
 </div>
 

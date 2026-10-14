@@ -27,6 +27,8 @@ export function filesPreload(): LibraryApi {
   const onScanStatus = latest<ScanStatus>(LibraryChannel.status)
   // each map matters, so two that come early are joined
   const onIdsMoved = latest<IdMoves>(LibraryChannel.idsMoved, mergeMoves)
+  // only a call: the page takes what waits
+  const onOpened = latest<null>(LibraryChannel.opened)
   return {
     load: () => library,
     get: () => invoke(LibraryChannel.get),
@@ -39,8 +41,14 @@ export function filesPreload(): LibraryApi {
     showFolder: (parts) => invoke(LibraryChannel.showFolder, parts),
     tagValues: (ids) => invoke(LibraryChannel.tagValues, ids),
     fixTags: (change) => invoke(LibraryChannel.fixTags, change),
+    songInfo: (id) => invoke(LibraryChannel.songInfo, id),
+    showSongFile: (id, which) => invoke(LibraryChannel.showSongFile, id, which),
     onChanged: onLibraryChanged,
     onStatus: onScanStatus,
-    onIdsMoved
+    onIdsMoved,
+    takeOpened: () => invoke(LibraryChannel.takeOpened),
+    onOpened: (listener) => onOpened(() => listener()),
+    loose: (ids) => invoke(LibraryChannel.loose, ids),
+    showFile: (id) => invoke(LibraryChannel.showFile, id)
   }
 }

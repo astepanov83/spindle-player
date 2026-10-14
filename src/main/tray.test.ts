@@ -48,7 +48,7 @@ const song: PlayState = {
   artist: 'The Blues',
   playing: true,
   live: false,
-  shuffle: false,
+  shuffle: 'off',
   nothing: false,
   next: true,
   previous: true
@@ -82,6 +82,7 @@ describe('trayItems', () => {
       'Pause',
       'Next',
       'Previous',
+      'Shuffle: off >',
       'Sleep timer >',
       '-',
       'Show Spindle',
@@ -129,7 +130,7 @@ describe('trayItems', () => {
 
   // the sleep timer's submenu (ticket 111)
   const sub = (state: PlayState): TrayItem[] => {
-    const s = trayItems(state).find((i) => i.kind === 'sub')
+    const s = trayItems(state).find((i) => i.kind === 'sub' && i.label.startsWith('Sleep'))
     return s?.kind === 'sub' ? s.items : []
   }
 
@@ -168,11 +169,36 @@ describe('trayItems', () => {
     expect(labelsOf(sub({ ...song, live: true }))[0]).toBe('15 minutes')
   })
 
-  it('has no album end with shuffle', () => {
-    expect(labelsOf(sub({ ...song, shuffle: true })).slice(0, 2)).toEqual([
+  it('has no album end with song shuffle, but has one with album shuffle', () => {
+    expect(labelsOf(sub({ ...song, shuffle: 'songs' })).slice(0, 2)).toEqual([
       'End of this song',
       '15 minutes'
     ])
+    expect(labelsOf(sub({ ...song, shuffle: 'albums' })).slice(0, 2)).toEqual([
+      'End of this song',
+      'End of this album'
+    ])
+  })
+
+  // ticket 125
+  const shuffleSub = (state: PlayState): TrayItem | undefined =>
+    trayItems(state).find((i) => i.kind === 'sub' && i.label.startsWith('Shuffle'))
+
+  it('has Shuffle with its modes, the one on ticked', () => {
+    const s = shuffleSub({ ...song, shuffle: 'albums' })
+    expect(s && labelsOf([s])).toEqual(['Shuffle: albums >'])
+    const items = s?.kind === 'sub' ? s.items : []
+    expect(labelsOf(items)).toEqual(['Off', 'Songs', 'Albums *'])
+    expect(items.map((i) => i.kind === 'pick' && i.action)).toEqual([
+      { shuffle: 'off' },
+      { shuffle: 'songs' },
+      { shuffle: 'albums' }
+    ])
+  })
+
+  it('has no Shuffle for a live item or with nothing picked', () => {
+    expect(shuffleSub({ ...song, live: true })).toBeUndefined()
+    expect(shuffleSub({ ...song, nothing: true })).toBeUndefined()
   })
 
   it('cuts a long song line to 40 characters', () => {
@@ -243,11 +269,16 @@ describe('parsePlayState', () => {
       artist: '',
       playing: false,
       live: false,
-      shuffle: false,
+      shuffle: 'off',
       nothing: true,
       next: false,
       previous: false
     })
+  })
+
+  it('reads the shuffle mode, and takes an odd one as off', () => {
+    expect(parsePlayState({ ...song, shuffle: 'albums' })!.shuffle).toBe('albums')
+    expect(parsePlayState({ ...song, shuffle: true })!.shuffle).toBe('off')
   })
 
   it('cuts very long text', () => {

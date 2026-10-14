@@ -28,6 +28,30 @@ linux:
   maintainer: Alexander Stepanov <alexander.stepanov.v@gmail.com>
   category: AudioVideo
   synopsis: A desktop music player for local files
+  # In "Open with" for the songs it plays (ticket 124). %F: the files picked,
+  # as paths. Being listed doesn't make it the default player.
+  executableArgs: ['%F']
+  mimeTypes:
+    - audio/mpeg
+    - audio/flac
+    - audio/x-flac
+    - audio/ogg
+    - audio/x-vorbis+ogg
+    - audio/x-opus+ogg
+    - audio/opus
+    - audio/mp4
+    - audio/x-m4a
+    - audio/aac
+    - audio/x-aac
+    - audio/wav
+    - audio/x-wav
+    - audio/vnd.wave
+    - audio/x-ape
+    - audio/x-wavpack
+    - audio/x-ms-wma
+    - audio/aiff
+    - audio/x-aiff
+    - application/x-cue
 appImage:
   artifactName: ${name}-${version}.${ext}
 deb:
@@ -40,4 +64,7 @@ win:
   artifactName: ${name}-${version}-win-${arch}.${ext}
 nsis:
   artifactName: ${name}-setup-${version}.${ext}
+  # build/installer.nsh puts Spindle in "Open with" for its song types
+  # (ticket 124); `fileAssociations` would make it their default program
+  include: build/installer.nsh
 npmRebuild: false

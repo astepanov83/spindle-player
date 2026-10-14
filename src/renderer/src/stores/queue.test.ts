@@ -1890,3 +1890,89 @@ describe('long songs keep their place (ticket 114)', () => {
     expect(queue.speed).toBe(1)
   })
 })
+
+describe('shuffle by album (ticket 125)', () => {
+  // album a: track gain -8, album gain -6; the others -2 and -4
+  beforeEach(() => {
+    setSongs(['a', 3], ['b', 2], ['c', 2])
+    for (const [key, s] of plugin.songs) {
+      const album = key.slice(key.indexOf(':') + 1, -1)
+      s.info.groupTo = { plugin: 'files', page: `album/${album}` }
+      s.gain = album === 'a' ? { track: -8, album: -6 } : { track: -2, album: -4 }
+    }
+    settings.loudness = 'album'
+    sleep.replan = () => queue.planNext()
+    player.shuffle = true
+    player.shuffleBy = 'albums'
+    queue.playList([...albums.a, ...albums.b, ...albums.c], 0)
+    fake.reset()
+  })
+  afterEach(() => {
+    player.shuffleBy = 'songs'
+    sleep.cancel()
+  })
+
+  const db = (f: number): number => Math.round(20 * Math.log10(f) * 100) / 100
+
+  function nexts(n: number): string[] {
+    const out: string[] = []
+    for (let i = 0; i < n; i++) {
+      queue.next()
+      out.push(playing()!)
+    }
+    return out
+  }
+
+  it('plays the album in order, then each other album whole', () => {
+    const played = nexts(6)
+    expect(played.slice(0, 2)).toEqual(['a1', 'a2'])
+    expect([
+      ['b0', 'b1', 'c0', 'c1'],
+      ['c0', 'c1', 'b0', 'b1']
+    ]).toContainEqual(played.slice(2))
+  })
+
+  it('loads the album’s next song ahead, at the album’s gain, for a gapless join', () => {
+    expect(fake.next).toBe('media/a1')
+    expect(db(fake.gain)).toBe(-6)
+    expect(db(fake.nextGain)).toBe(-6)
+    fake.on.nextStarted!()
+    expect(playing()).toBe('a1')
+    expect(fake.next).toBe('media/a2')
+  })
+
+  it('song shuffle uses each song’s own gain', () => {
+    player.shuffleBy = 'songs'
+    queue.planNext()
+    // the next song is a random one: its track gain
+    expect(db(fake.nextGain)).toBe(fake.next.startsWith('media/a') ? -8 : -2)
+  })
+
+  it('a switch to albums in the middle of an album plays the album on', () => {
+    player.shuffleBy = 'songs'
+    queue.jump(1)
+    player.shuffleBy = 'albums'
+    queue.planNext()
+    expect(fake.next).toBe('media/a2')
+  })
+
+  it('a click plays that album from the song clicked', () => {
+    queue.jump(5)
+    expect(playing()).toBe('c0')
+    expect(fake.next).toBe('media/c1')
+  })
+
+  it('End of this album stops when the album ends', () => {
+    sleep.pick('album')
+    fake.on.nextStarted!()
+    expect(fake.next).toBe('media/a2')
+    fake.on.nextStarted!()
+    expect(playing()).toBe('a2')
+    // the next is another album: none loaded ahead
+    expect(fake.next).toBe('')
+    fake.on.ended!()
+    expect(['b0', 'c0']).toContain(playing())
+    expect(player.playing).toBe(false)
+    expect(sleep.set).toBeUndefined()
+  })
+})

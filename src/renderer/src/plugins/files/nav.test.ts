@@ -35,10 +35,11 @@ const track = (id: string, albumId: string, extra: Partial<Track> = {}): Track =
   ...extra
 })
 
+// every song is Rock
 function lib(...ids: string[]): LibraryData {
   return {
     albums: ids.map((id) => album(id, [`${id}1`])),
-    tracks: ids.map((id) => track(`${id}1`, id)),
+    tracks: ids.map((id) => track(`${id}1`, id, { genre: ['Rock'] })),
     folders: [
       { name: '/m', parent: -1 },
       { name: 'Rock', parent: 0 },
@@ -68,6 +69,10 @@ describe('files pages', () => {
     expect(nav.canOpenFiles(at('folder/nowhere'))).toBe(false)
     expect(nav.canOpenFiles(at('name-fixes'))).toBe(true)
     expect(nav.canOpenFiles(at('song-changes'))).toBe(true)
+    expect(nav.canOpenFiles(at('genre/rock'))).toBe(true)
+    expect(nav.canOpenFiles(at('genre/jazz'))).toBe(false)
+    // an album under a genre is no link
+    expect(nav.canOpenFiles(at('album/a/genre/rock'))).toBe(false)
   })
 
   it('keep what is left after a rescan', () => {
@@ -81,6 +86,11 @@ describe('files pages', () => {
     // a folder stays: the view shows the nearest one above
     expect(nav.keepFiles('folders', 'folder/nowhere')).toBe('folder/nowhere')
     expect(nav.keepFiles('albums', 'radio/x')).toBe('')
+    // a genre as an artist (ticket 123)
+    expect(nav.keepFiles('genres', 'album/b/genre/rock')).toBe('genre/rock')
+    expect(nav.keepFiles('genres', 'album/a/genre/rock')).toBe('album/a/genre/rock')
+    expect(nav.keepFiles('genres', 'genre/jazz')).toBe('')
+    expect(nav.keepFiles('genres', 'album/a/genre/jazz')).toBe('')
   })
 
   it('say how the page shown is drawn, for the scroll places (ticket 095)', async () => {
@@ -100,10 +110,19 @@ describe('files pages', () => {
     expect(nav.filesLook('albums', 'song-changes')).toBeUndefined()
     expect(nav.filesLook('folders', '')).toBeUndefined()
     expect(nav.filesLook('songs', '')).toBeUndefined()
+    // Genres has its own look, a genre's page the Albums one (ticket 123)
+    setViewLook('genres', 'list')
+    expect(nav.filesLook('genres', '')).toBe('list')
+    expect(nav.filesLook('genres', 'genre/rock')).toBe('list')
+    setViewLook('albums', 'grid')
+    expect(nav.filesLook('genres', 'genre/rock')).toBe('grid')
+    expect(nav.filesLook('genres', 'genre/jazz')).toBe('list')
+    expect(nav.filesLook('genres', 'album/a/genre/rock')).toBeUndefined()
     // the search results have one look; the filtered artists are drawn as the grid
     library.query = 'x'
     expect(nav.filesLook('albums', '')).toBeUndefined()
     expect(nav.filesLook('artists', 'artist/marinavale')).toBe('grid')
+    expect(nav.filesLook('genres', 'genre/rock')).toBe('list')
   })
 
   it('give each page its place under the tab, for the scroll places', () => {
@@ -116,6 +135,7 @@ describe('files pages', () => {
       'artist:marinavale',
       'album:a'
     ])
+    expect(nav.filesPath('genres', 'album/a/genre/rock')).toEqual(['genre:rock', 'album:a'])
     expect(nav.filesPath('folders', `folder/${live}`)).toEqual(
       [m, rock, live].map((k) => `folder:${k}`)
     )
@@ -123,6 +143,7 @@ describe('files pages', () => {
     library.query = 'x'
     expect(nav.filesPath('albums', 'album/a')).toEqual(['album:a', 'search'])
     expect(nav.filesPath('artists', '')).toEqual(['search'])
+    expect(nav.filesPath('genres', 'genre/rock')).toEqual(['genre:rock', 'search'])
     expect(nav.filesPath('folders', '')).toEqual([`folder:${m}`])
   })
 
@@ -131,9 +152,10 @@ describe('files pages', () => {
       ['songs', 'sidebar'],
       ['albums', undefined],
       ['artists', undefined],
+      ['genres', undefined],
       ['folders', undefined]
     ])
     library.openPage('folders', `folder/${files.folders.nodes[2].key}`)
-    expect(nav.filesTabs()[3].search).toBe('Search this folder')
+    expect(nav.filesTabs()[4].search).toBe('Search this folder')
   })
 })

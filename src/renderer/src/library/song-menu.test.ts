@@ -41,7 +41,7 @@ vi.mock('../stores/queue.svelte', () => ({
 vi.stubGlobal('window', {
   playlistsApi: { save: vi.fn() },
   lovedApi: { set: vi.fn() },
-  libraryApi: { tagValues: vi.fn(async () => ({})) },
+  libraryApi: { tagValues: vi.fn(async () => ({})), songInfo: vi.fn(async () => undefined) },
   radioApi: { onTitle: () => () => {}, onLogo: () => () => {}, onCover: () => () => {} }
 })
 
@@ -52,6 +52,7 @@ const { files } = await import('../plugins/files/store.svelte')
 const { layout } = await import('../stores/layout.svelte')
 const { settings } = await import('../stores/settings.svelte')
 const { loved } = await import('../stores/loved.svelte')
+const { songInfo } = await import('./song-info.svelte')
 
 const labels = (entries: MenuEntry[]): string[] =>
   entries.map((e) => (e === 'line' ? '---' : 'heading' in e ? `# ${e.heading}` : e.label))
@@ -166,36 +167,36 @@ describe('sections', () => {
   })
 })
 
-describe('Go to (ticket 040)', () => {
-  const song = (artist: string, artists?: string[]): void => {
-    const album = {
-      id: 'al',
-      title: 'Blue Hours',
-      artist,
-      year: 0,
-      added: 0,
-      palette: defaultPalettes,
-      cover: '',
-      coverLarge: '',
-      trackIds: ['s1', 's2']
-    }
-    const track = (id: string): Track => ({
-      id,
-      title: id,
-      duration: 1,
-      albumId: 'al',
-      artist,
-      ...(artists ? { artists, artistTag: artist } : {}),
-      album: 'Blue Hours',
-      no: 1,
-      disc: 1,
-      codec: '',
-      folder: 0
-    })
-    files.load({ albums: [album], tracks: [track('s1'), track('s2')], folders: [] })
-    library.go({ tab: 'radio' })
+const song = (artist: string, artists?: string[]): void => {
+  const album = {
+    id: 'al',
+    title: 'Blue Hours',
+    artist,
+    year: 0,
+    added: 0,
+    palette: defaultPalettes,
+    cover: '',
+    coverLarge: '',
+    trackIds: ['s1', 's2']
   }
+  const track = (id: string): Track => ({
+    id,
+    title: id,
+    duration: 1,
+    albumId: 'al',
+    artist,
+    ...(artists ? { artists, artistTag: artist } : {}),
+    album: 'Blue Hours',
+    no: 1,
+    disc: 1,
+    codec: '',
+    folder: 0
+  })
+  files.load({ albums: [album], tracks: [track('s1'), track('s2')], folders: [] })
+  library.go({ tab: 'radio' })
+}
 
+describe('Go to (ticket 040)', () => {
   it('one song goes to its album and its artist, between the queue and the playlists', () => {
     song('Marina Vale')
     const m = songMenu(['files:s2'])
@@ -212,6 +213,7 @@ describe('Go to (ticket 040)', () => {
       'Mix',
       'New playlist',
       '---',
+      'Song info',
       'Edit song info…'
     ])
     pick(m, 'Go to album')
@@ -361,7 +363,12 @@ describe('Edit song info (ticket 129)', () => {
   })
 
   it('comes last, for one song of the library or several', () => {
-    expect(labels(songMenu(['files:s1'])).slice(-2)).toEqual(['---', 'Edit song info…'])
+    // one section with Song info (ticket 127)
+    expect(labels(songMenu(['files:s1'])).slice(-3)).toEqual([
+      '---',
+      'Song info',
+      'Edit song info…'
+    ])
     expect(labels(songMenu(['files:s1', 'files:s2'])).at(-1)).toBe('Edit song info…')
   })
 
@@ -389,5 +396,24 @@ describe('a list that fills itself (ticket 118)', () => {
     expect(fake.calls).toEqual(['next files:a core:smart/loved'])
     pick(m, 'Unlove')
     expect(loved.has('files:a')).toBe(false)
+  })
+})
+
+describe('Song info (ticket 127)', () => {
+  it('last, for one song of the library', async () => {
+    song('Marina Vale')
+    const m = songMenu(['files:s1'], { queueRows: [1] })
+    expect(labels(m).slice(-3)).toEqual(['---', 'Song info', 'Edit song info…'])
+    pick(m, 'Song info')
+    expect(songInfo.view?.title).toBe('s1')
+    expect(window.libraryApi.songInfo).toHaveBeenCalledWith('s1')
+    songInfo.close()
+  })
+
+  it('not for several songs, a song not in the library, or a station', () => {
+    song('Marina Vale')
+    expect(labels(songMenu(['files:s1', 'files:s2']))).not.toContain('Song info')
+    expect(labels(songMenu(['files:gone']))).not.toContain('Song info')
+    expect(labels(songMenu(['radio:rb-1']))).not.toContain('Song info')
   })
 })

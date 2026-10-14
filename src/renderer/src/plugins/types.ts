@@ -125,6 +125,8 @@ export interface HeadBlock {
   title: string
   // the line over the title: "Album · 2003". A list's title row has none.
   meta?: string
+  // the rest of that line, with links (an album's genres: " · Rock, Metal")
+  metaLinks?: Piece[]
   // a list's count, after its title: "8 albums" (it shows the number)
   count?: string
   // a list's choice of what it shows, at the right of its title row: "Album
@@ -557,6 +559,9 @@ export interface ItemInfo {
   groupTo?: PageAddress
   // the song menu's "Go to ..." items
   links?: { label: string; to: PageAddress }[]
+  // its own entries in the song menu, for it alone: act(its id, the entry's id)
+  // ("Show in file manager" for a song not in the library, ticket 124)
+  menu?: { id: string; label: string }[]
   // the system's media controls' artist, when it is not the subtitle (a
   // station's name, also before its first song title)
   mediaArtist?: string
@@ -725,6 +730,9 @@ export interface PageHalf {
   canEdit?(ids: string[]): boolean
   // The form for them, once it knows their tags; none when it can't edit them now.
   editSongs?(ids: string[]): Promise<EditForm | undefined>
+  // The song info panel (ticket 127): what it knows at once, and the whole
+  // view once it has read more (the file). None: its items have no "Song info".
+  songInfo?(id: string): { now: SongInfoView; full: Promise<SongInfoView> } | undefined
 }
 
 // A form in a dialog, drawn by the core (library/EditSongs.svelte): the edit
@@ -760,15 +768,53 @@ export interface EditField {
   wide?: boolean
 }
 
+// The song info panel's content, drawn by the core: sections of rows.
+export interface SongInfoView {
+  title: string
+  sub?: string
+  sections: InfoSection[]
+}
+
+export interface InfoSection {
+  title: string
+  rows: InfoLine[]
+  // a line under the title: "No ReplayGain tags", "Reading the file…"
+  note?: string
+}
+
+export type InfoLine =
+  | {
+      label: string
+      value: string
+      // cut to a few lines, with a button to see it all (lyrics, a long comment)
+      long?: boolean
+      // breaks anywhere, as a path has no spaces to break at
+      path?: boolean
+      // after the value; one may answer with a word to show a moment ("Copied")
+      buttons?: InfoButton[]
+    }
+  | { heading: string }
+
+export interface InfoButton {
+  label: string
+  run(): void | Promise<string | undefined>
+}
+
 // A plugin's start, once its asks are answered. `load` runs once the settings
 // are in, before the playlists and the queue: it gives the ids that moved
 // (see id-moves.ts), renamed in them before they load. `listen` runs once the
 // queue is back, for main's news after that; ids that move later go to
-// `idsMoved`, which renames them in the queue and the playlists.
+// `idsMoved`, which renames them in the queue and the playlists. Songs the
+// system gave the app go to `open` (ticket 124).
 export interface PluginStart {
   load(): IdMoves | undefined
-  listen?(idsMoved: (moves: IdMoves) => void): void
+  listen?(idsMoved: (moves: IdMoves) => void, open: OpenSongs): void
 }
+
+// Songs given from outside the app, as this plugin's ids. 'play': they
+// replace the queue and play ("Open with"). 'add': to the end of the queue,
+// playing at once when nothing plays (a drop).
+export type OpenSongs = (ids: string[], how: 'play' | 'add') => void
 
 // A song heard on a live item, for the Queue part's list (newest last).
 export interface HistoryEntry {

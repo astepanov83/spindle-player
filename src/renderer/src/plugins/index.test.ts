@@ -295,6 +295,7 @@ describe('tabs', () => {
       'songs',
       'albums',
       'artists',
+      'genres',
       'folders',
       'playlists',
       'stats',
@@ -303,7 +304,7 @@ describe('tabs', () => {
     ])
     settings.plugins.radio = false
     settings.plugins.mfp = false
-    expect(ids()).toEqual(['songs', 'albums', 'artists', 'folders', 'playlists', 'stats'])
+    expect(ids()).toEqual(['songs', 'albums', 'artists', 'genres', 'folders', 'playlists', 'stats'])
     settings.plugins.files = false
     expect(ids()).toEqual([])
   })
@@ -353,14 +354,16 @@ describe('pages (ticket 059)', () => {
       ['files:songs', 'files', 'Songs'],
       ['files:albums', 'files', 'Albums'],
       ['files:artists', 'files', 'Artists'],
+      ['files:genres', 'files', 'Genres'],
       ['mfp:mixes', 'mfp', 'In MFP mixes']
     ])
-    expect(groups?.[3].group).toMatchObject({ songs: ['mfp:m1'] })
+    expect(groups?.[4].group).toMatchObject({ songs: ['mfp:m1'] })
     settings.plugins.mfp = false
     expect(p.searchGroups('song').map((f) => f.key)).toEqual([
       'files:songs',
       'files:albums',
-      'files:artists'
+      'files:artists',
+      'files:genres'
     ])
     expect(p.searchGroups('  ')).toEqual([])
   })
@@ -464,6 +467,7 @@ describe('settings blocks (ticket 060)', () => {
       'button',
       'status',
       'title',
+      'choice',
       'choice',
       'choice',
       'choice',
@@ -616,6 +620,7 @@ describe('music files turned off (ticket 063)', () => {
       'songs',
       'albums',
       'artists',
+      'genres',
       'folders',
       'playlists',
       'stats',

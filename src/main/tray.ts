@@ -5,6 +5,7 @@ import { execFile } from 'child_process'
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron'
 import icon from '../../resources/icon.png?asset'
 import type { PlayControl, PlayState } from '../shared/ipc'
+import { isShuffleMode, shuffleLabel, shuffleMenuLabel, shuffleModes } from '../shared/shuffle'
 import {
   endsWithSong,
   isSleepPick,
@@ -68,8 +69,20 @@ export function trayItems(state: PlayState | undefined): TrayItem[] {
   if (state.next) items.push({ kind: 'do', label: 'Next', action: 'next', enabled: can })
   if (state.previous)
     items.push({ kind: 'do', label: 'Previous', action: 'previous', enabled: can })
+  if (can && !state.live) items.push(shuffleMenu(state))
   if (can || state.sleep) items.push(sleepMenu(state))
   return [...items, { kind: 'line' }, ...end]
+}
+
+// Shuffle's modes (ticket 125), as the right-click menu on the bar's button.
+function shuffleMenu(state: PlayState): TrayItem {
+  const items: TrayItem[] = shuffleModes.map((m) => ({
+    kind: 'pick',
+    label: shuffleLabel(m),
+    action: { shuffle: m },
+    checked: state.shuffle === m
+  }))
+  return { kind: 'sub', label: shuffleMenuLabel(state.shuffle), items }
 }
 
 // The sleep timer's submenu (ticket 111), as the moon's menu on the bar. The
@@ -117,7 +130,7 @@ export function parsePlayState(raw: unknown): PlayState | undefined {
     artist: text(r.artist),
     playing: flag(r.playing),
     live: flag(r.live),
-    shuffle: flag(r.shuffle),
+    shuffle: isShuffleMode(r.shuffle) ? r.shuffle : 'off',
     nothing: r.nothing !== false,
     next: flag(r.next),
     previous: flag(r.previous),

@@ -46,6 +46,8 @@ import { decodeCue, parseCue } from './cue'
 import { probeTags } from './probe'
 import { readTags } from './read-tags'
 import { readLyrics, type LyricsFile } from './lyrics-files'
+import { cueTracks } from './cue-tracks'
+import { readSongInfo, songInfoIo, type SongFile } from './song-info'
 import {
   dirOf,
   dropOutside,
@@ -88,6 +90,8 @@ import {
   type Fetched
 } from './fetched-store'
 import { listSources, pruneSources, readSource, saveSource } from './fetched-files'
+import { openLoose } from './loose-songs'
+import type { OpenedSongs } from '../../../shared/plugins/files/loose'
 import {
   cueReaderVersion,
   readerVersion,
@@ -724,11 +728,15 @@ function wakeCoverWaiters(): void {
 let retryBad = false
 const known = (h: string): boolean => cached.has(h) || (!retryBad && bad.has(h))
 
-async function sendCover(data: Uint8Array, gen: number): Promise<string> {
+// `gen`: the scan it is for, which may stop meanwhile; none for a song opened
+// from the system (ticket 124)
+async function sendCover(data: Uint8Array, gen: number | undefined): Promise<string> {
   const h = hash('sha1', data)
   if (known(h) || claimed.has(h)) return h
   claimed.add(h)
-  await waitForSlot(h, () => checkGen(gen))
+  await waitForSlot(h, () => {
+    if (gen !== undefined) checkGen(gen)
+  })
   sent.add(h)
   post({ type: 'cover', hash: h, data: ownCopy(data) })
   return h
@@ -841,7 +849,10 @@ let usedCache: { edits: string; used: Set<string> } | undefined
 function liveUsed(): Set<string> {
   const edits = `${ixEdits}.${fetchedEdits}.${keptEdits}`
   if (usedCache?.edits !== edits)
-    usedCache = { edits, used: coversInUse(ix, [fetched, photos], keptCovers) }
+    usedCache = {
+      edits,
+      used: coversInUse(ix, [fetched, photos], [...keptCovers, ...looseCovers])
+    }
   return usedCache.used
 }
 
@@ -876,7 +887,7 @@ async function readFileEntry(
   path: string,
   mtime: number,
   size: number,
-  gen: number
+  gen: number | undefined
 ): Promise<FileEntry> {
   let meta
   try {
@@ -914,7 +925,7 @@ async function readCue(f: { path: string; mtime: number; size: number }): Promis
 async function readImage(
   { dir, path }: ListedImage,
   old: FolderImage | undefined,
-  gen: number
+  gen: number | undefined
 ): Promise<FolderImage | undefined> {
   let s
   let data
@@ -1149,11 +1160,12 @@ function coverSource(h: string): Promise<Uint8Array | undefined> {
   return pictureWithHash(h, coverCandidates(h))
 }
 
-// What main needs to serve a file by its id.
+// What main needs to serve a file by its id: a library file, else one opened
+// from the system.
 function mediaInfo(id: string): MediaInfo | undefined {
   const path =
     built.paths.get(id) ?? (Object.hasOwn(aliases, id) ? built.paths.get(aliases[id]) : undefined)
-  const e = path ? ix.files.get(path) : undefined
+  const e = (path ? ix.files.get(path) : undefined) ?? looseMedia.get(id)
   if (!e) return undefined
   const { codec, duration, sampleRate, channels, bits } = e
   return { path: e.path, codec, duration, sampleRate, channels, bits }
@@ -1162,12 +1174,98 @@ function mediaInfo(id: string): MediaInfo | undefined {
 // Where a song's words are (ticket 120): its own file, or for a CUE track the
 // disc image, with the track's number and title to name its .lrc.
 function lyricsFile(id: string): LyricsFile | undefined {
+  const loose = looseWords.get(id)
+  if (loose) return loose
   const real = !built.paths.has(id) && Object.hasOwn(aliases, id) ? aliases[id] : id
   const path = built.paths.get(real)
   if (path) return { path }
   const t = built.data.tracks.find((x) => x.id === real)
   const image = t?.part && built.paths.get(t.part.file)
   return t && image ? { path: image, cue: { no: t.no, title: t.title } } : undefined
+}
+
+// A song's file for the song info panel (ticket 127): its own, or for a CUE
+// track the disc image with the sheet and where the track lies. A CUE track
+// that is a whole file has the file's id, so the sheets are asked first.
+function songFile(id: string): SongFile | undefined {
+  const real = !built.paths.has(id) && Object.hasOwn(aliases, id) ? aliases[id] : id
+  const c = ix.cues.size ? cueTracks(ix).items.find((x) => x.id === real) : undefined
+  if (c) {
+    const e = c.entry
+    const cue = { sheet: c.sheet, start: c.part?.start ?? 0, end: c.part?.end }
+    if (cue.end === undefined) delete cue.end
+    return { path: e.path, cue, added: e.added, year: e.year, genre: e.genre, gain: e.gain }
+  }
+  const path = built.paths.get(real)
+  const e = path ? ix.files.get(path) : undefined
+  return e && { path: e.path, added: e.added, year: e.year, genre: e.genre, gain: e.gain }
+}
+
+// --- songs opened from the system (ticket 124) ---
+
+// What songs opened that are not in the library need for the run: their files
+// by media id, where their words are, and their covers (kept from the prune).
+// Never saved.
+const looseMedia = new Map<string, FileEntry>()
+const looseWords = new Map<string, LyricsFile>()
+const looseCovers = new Set<string>()
+// how long a song opened waits for its cover to be made before it is sent
+const looseCoverMs = 5000
+
+function coverMade(h: string): Promise<void> {
+  return new Promise((done) => {
+    const timer = setTimeout(done, looseCoverMs)
+    const check = (): void => {
+      if (claimed.has(h)) coverWaiters.push(check)
+      else {
+        clearTimeout(timer)
+        done()
+      }
+    }
+    check()
+  })
+}
+
+async function openSongs(items: string[], asLoose: boolean): Promise<OpenedSongs> {
+  const ids = new Set(built.data.tracks.map((t) => t.id))
+  const names = resolve(artists, !!aiEnabled[artistGroupsTask])
+  const r = await openLoose(
+    items,
+    {
+      files: ix.files,
+      cues: ix.cues,
+      images: ix.images,
+      palettes: ix.palettes,
+      hasTrack: (id) => ids.has(id),
+      build: (x) => buildLibrary(x, (h) => cached.has(h), new Map(), [], new Map(), names)
+    },
+    {
+      stat: async (p) => {
+        try {
+          const s = await stat(p)
+          return { mtime: Math.floor(s.mtimeMs), size: s.size, isFile: s.isFile() }
+        } catch {
+          return undefined
+        }
+      },
+      readFile: (p, mtime, size) => readFileEntry(p, mtime, size, undefined),
+      readCue,
+      list: (dir) => readdir(dir).catch(() => []),
+      readImage: (dir, path) => readImage({ dir, path }, undefined, undefined),
+      coverMade
+    },
+    asLoose
+  )
+  for (const [id, entry] of r.media) looseMedia.set(id, entry)
+  for (const [id, words] of r.words) looseWords.set(id, words)
+  if ([...r.covers].some((h) => !looseCovers.has(h))) {
+    for (const h of r.covers) looseCovers.add(h)
+    keptEdits++
+  }
+  const gone = items.filter((_, i) => !r.items[i])
+  const out: OpenedSongs = { ids: r.items.flatMap((x) => x ?? []), loose: r.songs }
+  if (gone.length) out.gone = gone
+  return out
 }
 
 port.on('message', (e: Electron.MessageEvent) => {
@@ -1275,6 +1373,17 @@ port.on('message', (e: Electron.MessageEvent) => {
         () => post({ type: 'reply', req: m.req })
       )
       break
+    case 'open':
+      ready
+        .then(() => openSongs(m.items, !!m.loose))
+        .then(
+          (opened) => post({ type: 'reply', req: m.req, opened }),
+          (error) => {
+            log(`Could not open ${m.items.length} files: ${error}`)
+            post({ type: 'reply', req: m.req })
+          }
+        )
+      break
     case 'lyrics':
       // read now, not in the scan's turns: the song is starting
       ready
@@ -1296,6 +1405,26 @@ port.on('message', (e: Electron.MessageEvent) => {
     case 'fix-tags':
       ready.then(
         () => fixTags(m.req, m.change),
+        () => post({ type: 'reply', req: m.req })
+      )
+      break
+    case 'song-info':
+      ready
+        .then(() => {
+          const f = songFile(m.id)
+          return f && readSongInfo(f, songInfoIo(start.ffprobe))
+        })
+        .then(
+          (info) => post({ type: 'reply', req: m.req, info }),
+          () => post({ type: 'reply', req: m.req })
+        )
+      break
+    case 'song-path':
+      ready.then(
+        () => {
+          const f = songFile(m.id)
+          post({ type: 'reply', req: m.req, path: m.sheet ? f?.cue?.sheet : f?.path })
+        },
         () => post({ type: 'reply', req: m.req })
       )
       break

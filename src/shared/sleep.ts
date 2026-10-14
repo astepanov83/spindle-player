@@ -1,5 +1,6 @@
 // The sleep timer's choices (ticket 111), for the player bar's menu and the
 // tray's. Not saved: a timer does not outlive a restart.
+import type { ShuffleMode } from './shuffle'
 
 // The end of the song playing, the end of its album, or minutes from now.
 export type SleepPick = 'song' | 'album' | 15 | 30 | 45 | 60 | 90
@@ -9,10 +10,12 @@ export const sleepPicks: readonly SleepPick[] = ['song', 'album', 15, 30, 45, 60
 // A live item (radio) has no song or album end.
 export const endsWithSong = (p: SleepPick): p is 'song' | 'album' => typeof p === 'string'
 
-// What can be picked now. A live item has no song or album end. With shuffle
-// the next song is picked at random, so when the album ends means nothing.
-export function sleepPicksFor(now: { live: boolean; shuffle: boolean }): SleepPick[] {
-  return sleepPicks.filter((p) => (now.live ? !endsWithSong(p) : !(now.shuffle && p === 'album')))
+// What can be picked now. A live item has no song or album end. With song
+// shuffle the next song is picked at random, so when the album ends means
+// nothing; shuffle by album (ticket 125) plays each album to its end.
+export function sleepPicksFor(now: { live: boolean; shuffle: ShuffleMode }): SleepPick[] {
+  const noAlbum = now.shuffle === 'songs'
+  return sleepPicks.filter((p) => (now.live ? !endsWithSong(p) : !(noAlbum && p === 'album')))
 }
 
 export function sleepLabel(p: SleepPick): string {

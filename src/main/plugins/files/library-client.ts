@@ -21,6 +21,9 @@ export type Ask =
   | { type: 'lyrics'; id: string }
   | { type: 'tag-values'; ids: string[] }
   | { type: 'fix-tags'; change: TagChange }
+  | { type: 'song-info'; id: string }
+  | { type: 'song-path'; id: string; sheet?: boolean }
+  | { type: 'open'; items: string[]; loose?: boolean }
 
 // What the page gets when the process can't give it a library.
 // No epoch a process makes, so a patch from a process that comes back later

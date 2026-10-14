@@ -39,7 +39,7 @@ describe('parseStoredSettings', () => {
       plugins: { files: true, radio: false, mfp: true },
       viewSorts: { albums: 'added' },
       artistsShown: 'all',
-      viewLooks: { albums: 'list', artists: 'shelves', artistPage: 'column' },
+      viewLooks: { albums: 'list', artists: 'shelves', artistPage: 'column', genres: 'list' },
       loudness: 'song',
       noCover: 'type',
       outputDevice: 'c0ffee',
@@ -149,7 +149,7 @@ describe('parseStoredSettings with a base', () => {
     plugins: { files: true, radio: true, mfp: false },
     viewSorts: { albums: 'added' },
     artistsShown: 'all',
-    viewLooks: { albums: 'list', artists: 'list', artistPage: 'albums' },
+    viewLooks: { albums: 'list', artists: 'list', artistPage: 'albums', genres: 'list' },
     loudness: 'off',
     noCover: 'record',
     outputDevice: 'c0ffee',
@@ -435,8 +435,8 @@ describe('artists shown setting', () => {
 })
 
 describe('view looks setting (ticket 095)', () => {
-  it('is grid, grid and sections by default, also for an old file without it', () => {
-    const want = { albums: 'grid', artists: 'grid', artistPage: 'sections' }
+  it('is grid, grid, sections and grid by default, also for an old file without it', () => {
+    const want = { albums: 'grid', artists: 'grid', artistPage: 'sections', genres: 'grid' }
     expect(parseStoredSettings(undefined).viewLooks).toEqual(want)
     expect(parseStoredSettings({ theme: 'dark' }).viewLooks).toEqual(want)
     expect(parseStoredSettings({ viewLooks: 'list' }).viewLooks).toEqual(want)
@@ -445,14 +445,14 @@ describe('view looks setting (ticket 095)', () => {
   it('keeps each known look and falls back on a wrong one alone', () => {
     expect(
       parseStoredSettings({
-        viewLooks: { albums: 'list', artists: 'shelves', artistPage: 'column' }
+        viewLooks: { albums: 'list', artists: 'shelves', artistPage: 'column', genres: 'list' }
       }).viewLooks
-    ).toEqual({ albums: 'list', artists: 'shelves', artistPage: 'column' })
+    ).toEqual({ albums: 'list', artists: 'shelves', artistPage: 'column', genres: 'list' })
     // shelves is an Artists look only; a view left out keeps its default
     expect(
       parseStoredSettings({ viewLooks: { albums: 'shelves', artists: 'list', other: 'x' } })
         .viewLooks
-    ).toEqual({ albums: 'grid', artists: 'list', artistPage: 'sections' })
+    ).toEqual({ albums: 'grid', artists: 'list', artistPage: 'sections', genres: 'grid' })
   })
 
   it('keeps the current look of a bad field from the page', () => {
@@ -476,7 +476,12 @@ describe('view looks setting (ticket 095)', () => {
   it('gives the page the field, as a copy', () => {
     const stored = parseStoredSettings({ viewLooks: { artistPage: 'albums' } })
     const page = pageSettings(stored)
-    expect(page.viewLooks).toEqual({ albums: 'grid', artists: 'grid', artistPage: 'albums' })
+    expect(page.viewLooks).toEqual({
+      albums: 'grid',
+      artists: 'grid',
+      artistPage: 'albums',
+      genres: 'grid'
+    })
     page.viewLooks.albums = 'list'
     expect(stored.viewLooks.albums).toBe('grid')
   })

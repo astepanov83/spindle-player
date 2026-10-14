@@ -55,6 +55,9 @@ export type KeyAction =
   | 'visualizer'
   | 'queue'
   | 'love'
+  | 'info'
+  | 'shuffle'
+  | 'shuffleBy'
   // switch to that layout
   | TemplateId
 
@@ -67,7 +70,7 @@ export interface KeyPlace {
 }
 
 // One key press that runs an action. Meta never counts; Ctrl and Alt must be
-// as written. Shift may be held unless `shift` says.
+// as written. Shift may be held unless `shift` says (true: must be).
 export interface Chord {
   action: KeyAction
   // KeyboardEvent.key, or with `code`, KeyboardEvent.code: the key's place,
@@ -76,7 +79,7 @@ export interface Chord {
   code?: boolean
   ctrl?: boolean
   alt?: boolean
-  shift?: false
+  shift?: boolean
   // a held key goes on
   repeats?: boolean
   // works in a text field too
@@ -155,6 +158,17 @@ export const shortcuts: Shortcut[] = [
   },
   { does: 'Love or unlove the song playing', chords: [{ action: 'love', key: 'l' }] },
   {
+    does: 'Song info: the song with focus, else the song playing',
+    chords: [{ action: 'info', key: 'i' }]
+  },
+  {
+    does: 'Shuffle on or off; with Shift, shuffle songs or albums',
+    chords: [
+      { action: 'shuffle', key: 'KeyS', code: true, shift: false },
+      { action: 'shuffleBy', key: 'KeyS', code: true, shift: true }
+    ]
+  },
+  {
     does: 'Switch layout: Studio, Classic, Focus or Mini',
     chords: [
       { action: 'studio', key: 'Digit1', code: true, ctrl: true, inText: true },
@@ -212,11 +226,11 @@ const keyNames: Record<string, string> = {
   PageDown: 'Page Down'
 }
 
-// How a chord is written in the list: "Ctrl+←", "Ctrl+F", "V".
-export function chordText(c: Pick<Chord, 'key' | 'ctrl' | 'alt'>): string {
+// How a chord is written in the list: "Ctrl+←", "Ctrl+F", "V", "Shift+S".
+export function chordText(c: Pick<Chord, 'key' | 'ctrl' | 'alt' | 'shift'>): string {
   const name = keyNames[c.key] ?? c.key.replace(/^(Key(?=[A-Z]$)|Digit(?=\d$))/, '')
   const key = name.length === 1 ? name.toUpperCase() : name
-  return `${c.ctrl ? 'Ctrl+' : ''}${c.alt ? 'Alt+' : ''}${key}`
+  return `${c.ctrl ? 'Ctrl+' : ''}${c.alt ? 'Alt+' : ''}${c.shift ? 'Shift+' : ''}${key}`
 }
 
 // The keys of a line, one entry per way to press it: ["Ctrl+F", "/"],

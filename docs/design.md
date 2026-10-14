@@ -105,10 +105,12 @@ Every key is decided in `src/renderer/src/keys.ts` (plain functions with tests);
 | V | next visualizer style |
 | Q | switch to the queue tab, or open / close the drawer |
 | L | love / unlove the song playing (music files only), with a notice that says which |
+| I | Song info: the song row with focus, else the song playing (music files only; not in Mini) |
+| S / Shift+S | shuffle on / off in the mode picked last; Shift+S switches between shuffling songs and albums (and turns it on). A notice says what is on |
 | Ctrl+1 / Ctrl+2 / Ctrl+3 / Ctrl+4 | switch to Studio, Classic, Focus or Mini, like the title bar's layout buttons |
 
 - A text field keeps its keys. Only Ctrl+F, Ctrl+, and Ctrl+1 to Ctrl+4 work there.
-- Ctrl+F, Ctrl+, and Ctrl+1 to Ctrl+4 go by the key's place, so they work on any keyboard layout.
+- Ctrl+F, Ctrl+1 to Ctrl+4, the Ctrl+, key, S and Shift+S go by the key's place, so they work on any keyboard layout (and S with Caps Lock on is still S).
 - A held arrow keeps seeking; a held Backspace or Alt+← goes back once.
 - While a menu is open, it gets every key but Esc.
 

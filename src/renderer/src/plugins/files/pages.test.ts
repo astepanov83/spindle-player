@@ -7,6 +7,7 @@ import {
   filesTabOf,
   fixesPage,
   folderPage,
+  genrePage,
   parsePage
 } from './pages'
 
@@ -24,10 +25,26 @@ describe('files page strings', () => {
     expect(parsePage(folderPage(key))).toEqual({ kind: 'folder', key })
     expect(parsePage(fixesPage)).toEqual({ kind: 'fixes' })
     expect(parsePage(changesPage)).toEqual({ kind: 'changes' })
+    // a genre key may hold a "/" (ticket 123)
+    expect(parsePage(genrePage('hiphop/rap'))).toEqual({ kind: 'genre', key: 'hiphop/rap' })
+    expect(parsePage(genrePage('hiphop/rap', '77c1'))).toEqual({
+      kind: 'genre',
+      key: 'hiphop/rap',
+      album: '77c1'
+    })
   })
 
   it('know nothing of other pages', () => {
-    for (const p of ['album/', 'artist/', 'episode/e', 'album/a/b', 'albums', 'album/a/artist/'])
+    for (const p of [
+      'album/',
+      'artist/',
+      'episode/e',
+      'album/a/b',
+      'albums',
+      'album/a/artist/',
+      'genre/',
+      'album/a/genre/'
+    ])
       expect(parsePage(p)).toBeUndefined()
   })
 
@@ -37,6 +54,8 @@ describe('files page strings', () => {
     expect(filesTabOf('folder/k')).toBe('folders')
     expect(filesTabOf(fixesPage)).toBe('artists')
     expect(filesTabOf(changesPage)).toBe('albums')
+    expect(filesTabOf(genrePage('rock'))).toBe('genres')
+    expect(filesTabOf(genrePage('rock', 'a'))).toBeUndefined()
     // an album under an artist is no link
     expect(filesTabOf(artistPage('x', 'a'))).toBeUndefined()
     expect(filesTabOf('')).toBeUndefined()

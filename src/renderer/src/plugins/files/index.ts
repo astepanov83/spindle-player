@@ -14,6 +14,7 @@ import { isLooseId } from '../../../../shared/plugins/files/loose'
 import { findIn, songIndex } from './find-song'
 import { filesSongInfo } from './song-info'
 import type { Album } from '../../../../shared/library'
+import { canEditSongs, songsForm } from './tag-edit'
 
 // before the first library, or the first scan of an empty index, a song is on its way, not gone
 const complete = (): boolean => files.loaded && !files.partial
@@ -70,5 +71,7 @@ export const filesHalf: PageHalf = {
   start: startFiles,
   findSong,
   songs,
+  canEdit: canEditSongs,
+  editSongs: songsForm,
   songInfo: filesSongInfo
 }

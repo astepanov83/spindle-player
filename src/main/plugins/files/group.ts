@@ -22,6 +22,8 @@ import { shortHash } from '../../ids'
 import { dirOf } from './merge'
 import { discFolderNumber, isDiscFolder, titleFromFileName } from './tags'
 import type { FileEntry, LibraryIndex } from './types'
+import type { TagFix, TagFixes } from '../../../shared/plugins/files/tag-fixes'
+import { fileTagsOf, fixEntry } from './tag-fixes-file'
 
 export interface BuiltLibrary {
   data: LibraryData
@@ -33,6 +35,8 @@ export interface BuiltLibrary {
   queries: CoverQuery[]
   // artists to find a photo for, in name order (ticket 021)
   artists: ArtistQuery[]
+  // track id -> its entry as read, before tag-fixes.json (ticket 129)
+  entries: Map<string, FileEntry>
 }
 
 export const unknownArtist = 'Unknown artist'
@@ -214,17 +218,23 @@ export function addedOf(entries: FileEntry[]): number {
 // `roots` are the music folders, for the Folders view. `photos` are the
 // artist photos found online, by artist key. `names` changes the artist
 // names shown (artists.json, see resolve); albums are still grouped and
-// looked up online by the tags.
+// looked up online by the tags. `fixes` change songs' tags by track id
+// (tag-fixes.json, ticket 129): they count as the tags, for grouping too,
+// and the artist they give is still renamed by `names`.
 export function buildLibrary(
   ix: LibraryIndex,
   hasCover: (hash: string) => boolean,
   fetched: Fetched = new Map(),
   roots: string[] = [],
   photos: Fetched = new Map(),
-  names: Map<string, Shown> = new Map()
+  names: Map<string, Shown> = new Map(),
+  fixes: TagFixes = new Map()
 ): BuiltLibrary {
   const groups = new Map<string, Group>()
   const paths = new Map<string, string>()
+  const asRead = new Map<string, FileEntry>()
+  // the file's own values of the fields a fix changes, by track id
+  const fileTags = new Map<string, TagFix>()
   // a library has a few hundred genre tags for 50k songs: split each once
   const split = new Map<string, string[]>()
   const genres = (values: string[] | undefined): string[] => {
@@ -234,7 +244,11 @@ export function buildLibrary(
     if (!out) split.set(k, (out = genresOf(values)))
     return out
   }
-  const add = (e: FileEntry, id: string, part?: TrackPart, dir = dirOf(e.path)): void => {
+  const add = (read: FileEntry, id: string, part?: TrackPart, dir = dirOf(read.path)): void => {
+    asRead.set(id, read)
+    const fix = fixes.size ? fixes.get(id) : undefined
+    if (fix) fileTags.set(id, fileTagsOf(read, fix))
+    const e = fix ? fixEntry(read, fix) : read
     const key = albumKey(e)
     let g = groups.get(key)
     if (!g) groups.set(key, (g = { key, items: [] }))
@@ -311,6 +325,8 @@ export function buildLibrary(
       if (e.year && e.year !== year) t.year = e.year
       if (e.gain) t.gain = e.gain
       if (e.sampleRate) t.rate = e.sampleRate
+      const own = fileTags.get(trackId)
+      if (own) t.fileTags = own
       if (e.cover && e.cover !== cover && hasCover(e.cover))
         t.art = { palette: paletteOf(ix, e.cover, id), ...coverUrls(e.cover) }
       return t
@@ -357,6 +373,7 @@ export function buildLibrary(
     data: { albums: shown, tracks, folders, artistPhotos },
     paths,
     queries,
-    artists
+    artists,
+    entries: asRead
   }
 }

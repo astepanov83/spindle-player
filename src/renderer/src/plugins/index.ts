@@ -14,6 +14,7 @@ import type {
   Action,
   Block,
   Can,
+  EditForm,
   EmptyBlock,
   FoundGroup,
   ItemAnswer,
@@ -99,6 +100,25 @@ export function canOf(key: ItemKey): Can | undefined {
 export function actionsOf(key: ItemKey): Action[] | undefined {
   const e = entryOf(key)
   return e && pluginOn(e.id) ? e.half.actions?.(key.slice(e.prefix.length)) : undefined
+}
+
+// The songs' plugin, when every one of them is its and it can edit them
+// (ticket 129), with their ids.
+function editorOf(keys: ItemKey[]): { half: PageHalf; ids: string[] } | undefined {
+  const e = keys.length ? entryOf(keys[0]) : undefined
+  if (!e || !pluginOn(e.id) || !e.half.canEdit) return undefined
+  if (!keys.every((k) => k.startsWith(e.prefix))) return undefined
+  const ids = keys.map((k) => k.slice(e.prefix.length))
+  return e.half.canEdit(ids) ? { half: e.half, ids } : undefined
+}
+
+// Whether "Edit song info..." is offered for these songs, without asking main.
+export const canEditSongs = (keys: ItemKey[]): boolean => !!editorOf(keys)
+
+// The form for them, from their plugin; none when they can't be edited.
+export async function editFormOf(keys: ItemKey[]): Promise<EditForm | undefined> {
+  const ed = editorOf(keys)
+  return ed?.half.editSongs?.(ed.ids)
 }
 
 // The song info panel's view of an item (ticket 127), while its plugin is on

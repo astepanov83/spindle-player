@@ -370,4 +370,33 @@ describe('songInfoView', () => {
       'Album artist fix': 'The tag says “marina vale”, shown as “Marina Vale” by your change'
     })
   })
+
+  it('info changed in Spindle: the Song section shows it, In Spindle lists each change (ticket 129)', () => {
+    const file = { path: '/m/a.mp3', year: 1995, genre: ['Ambient'] } as SongFileInfo
+    const fixed: Track = {
+      ...track,
+      title: 'Night Bus (Live)',
+      year: 1996,
+      genre: ['Doom metal'],
+      fileTags: { title: 'Night Bus', year: 1995, genre: ['Ambient'] }
+    }
+    const v = songInfoView(input({ t: fixed, file }))
+    expect(values(section(v.sections, 'Song'))).toMatchObject({
+      Title: 'Night Bus (Live)',
+      Year: '1996',
+      Genre: 'Doom metal'
+    })
+    expect(values(section(v.sections, 'In Spindle'))).toMatchObject({
+      'Title changed': 'Night Bus → Night Bus (Live)',
+      'Year changed': '1995 → 1996',
+      'Genre changed': 'Ambient → Doom metal'
+    })
+    // a genre taken away in Spindle is not the file's again
+    const gone = songInfoView(input({ t: { ...track, fileTags: { genre: ['Ambient'] } }, file }))
+    expect(values(section(gone.sections, 'Song')).Genre).toBeUndefined()
+    expect(values(section(gone.sections, 'In Spindle'))['Genre changed']).toBe('Ambient → none')
+    // nothing changed: no such rows
+    const plain = values(section(songInfoView(input({ file })).sections, 'In Spindle'))
+    expect(Object.keys(plain).some((k) => k.endsWith(' changed'))).toBe(false)
+  })
 })

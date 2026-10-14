@@ -2,6 +2,7 @@
 import type { IdMoves } from '../../id-moves'
 import type { ScanStatus } from '../../library'
 import type { ArtistChanges } from './artist-edit'
+import type { FixesBefore, SongTags, TagChange } from './tag-fixes'
 import type { SongFileInfo } from './song-info'
 import type { OpenedSongs } from './loose'
 
@@ -18,6 +19,9 @@ export const LibraryChannel = {
   // the artist groups task: ask about every name again (ticket 070)
   aiRecheck: 'library:ai-recheck',
   showFolder: 'library:show-folder',
+  // song info fixed in Spindle (ticket 129): the edit form's songs, and a change
+  tagValues: 'library:tag-values',
+  fixTags: 'library:fix-tags',
   // the song info panel (ticket 127): a song's file read now, and its file
   // or CUE sheet shown in the file manager
   songInfo: 'library:song-info',
@@ -83,6 +87,12 @@ export interface LibraryApi {
   // opens a folder in the system's file manager: a music folder's path, then
   // the names below it; false when it is gone or could not be opened
   showFolder(parts: string[]): Promise<boolean>
+  // the songs' tags now and in their files, by id; songs not in the library
+  // are left out
+  tagValues(ids: string[]): Promise<Record<string, SongTags>>
+  // changes tag-fixes.json and builds the library again; resolves with what
+  // the songs had before (a `put` of it is the Undo), none when nothing was taken
+  fixTags(change: TagChange): Promise<FixesBefore | undefined>
   // a song's file as it is now, by id; undefined when it is not in the library
   songInfo(id: string): Promise<SongFileInfo | undefined>
   // shows a song's file (or a CUE track's sheet) in its folder; false when
@@ -115,6 +125,8 @@ export interface FilesChannels {
   [LibraryChannel.setArtists]: LibraryApi['setArtists']
   [LibraryChannel.aiRecheck]: LibraryApi['aiRecheck']
   [LibraryChannel.showFolder]: LibraryApi['showFolder']
+  [LibraryChannel.tagValues]: LibraryApi['tagValues']
+  [LibraryChannel.fixTags]: LibraryApi['fixTags']
   [LibraryChannel.songInfo]: LibraryApi['songInfo']
   [LibraryChannel.showSongFile]: LibraryApi['showSongFile']
   [LibraryChannel.takeOpened]: LibraryApi['takeOpened']

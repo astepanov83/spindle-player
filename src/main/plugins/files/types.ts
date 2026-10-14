@@ -8,6 +8,7 @@ import type { ThemePalettes } from '../../../shared/palette'
 import type { Lyrics } from '../../../shared/lyrics'
 import type { SongFileInfo } from '../../../shared/plugins/files/song-info'
 import type { CueSheet } from './cue'
+import type { FixesBefore, SongTags, TagChange } from '../../../shared/plugins/files/tag-fixes'
 import type { OpenedSongs } from '../../../shared/plugins/files/loose'
 
 // One audio file. Tags are already cleaned up (see tags.ts); a missing tag is left out.
@@ -131,6 +132,8 @@ export interface WorkerStart {
   // the files artists.json replaced (tickets 024 and 068), moved once at start
   oldOverridesPath: string
   oldGroupsPath: string
+  // song info fixed in Spindle (ticket 129)
+  tagFixesPath: string
   // the files plugin's AI tasks that are on (AiClient.on) and switched on
   // (AiClient.enabled), by task id; see 'ai-on'
   aiOn: Record<string, boolean>
@@ -215,6 +218,11 @@ export type WorkerIn =
   // the words of a song that starts (ticket 120), from its .lrc or tags;
   // answered with `lyrics`, none when it has none
   | { type: 'lyrics'; req: number; id: string }
+  // the edit form's songs (ticket 129): their tags now and in the file,
+  // answered with `tags` (songs not in the library left out)
+  | { type: 'tag-values'; req: number; ids: string[] }
+  // a change to tag-fixes.json, answered with `before` (none while off)
+  | { type: 'fix-tags'; req: number; change: TagChange }
   // the song info panel (ticket 127): the song's file read now, answered
   // with `info`; none when the id is not in the library
   | { type: 'song-info'; req: number; id: string }
@@ -241,6 +249,8 @@ export type WorkerOut =
       data?: Uint8Array
       song?: 'found' | 'none' | 'later'
       lyrics?: Lyrics
+      tags?: Record<string, SongTags>
+      before?: FixesBefore
       info?: SongFileInfo
       path?: string
       opened?: OpenedSongs

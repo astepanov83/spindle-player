@@ -2,9 +2,10 @@
 // R1): "album/<id>", "artist/<key>", "folder/<key>". An album opened from an
 // artist is "album/<id>/artist/<key>" in the Artists tab: album ids hold no
 // "/", artist and folder keys may. '' is a tab's top. "name-fixes" is the
-// Artists tab's list of name fixes (ticket 074). A genre is "genre/<key>"
-// (ticket 123), an album opened from it "album/<id>/genre/<key>" in the
-// Genres tab.
+// Artists tab's list of name fixes (ticket 074), "song-changes" the Albums
+// tab's list of songs whose info was changed in Spindle (ticket 129). A
+// genre is "genre/<key>" (ticket 123), an album opened from it
+// "album/<id>/genre/<key>" in the Genres tab.
 
 export type FilesPage =
   | { kind: 'top' }
@@ -12,9 +13,11 @@ export type FilesPage =
   | { kind: 'artist'; key: string; album?: string }
   | { kind: 'folder'; key: string }
   | { kind: 'fixes' }
+  | { kind: 'changes' }
   | { kind: 'genre'; key: string; album?: string }
 
 export const fixesPage = 'name-fixes'
+export const changesPage = 'song-changes'
 export const albumPage = (id: string): string => `album/${id}`
 export const folderPage = (key: string): string => `folder/${key}`
 export const artistPage = (key: string, album?: string | null): string =>
@@ -26,6 +29,7 @@ export const genrePage = (key: string, album?: string | null): string =>
 export function parsePage(page: string): FilesPage | undefined {
   if (!page) return { kind: 'top' }
   if (page === fixesPage) return { kind: 'fixes' }
+  if (page === changesPage) return { kind: 'changes' }
   const at = page.indexOf('/')
   const kind = page.slice(0, at)
   const rest = page.slice(at + 1)
@@ -42,11 +46,11 @@ export function parsePage(page: string): FilesPage | undefined {
     : undefined
 }
 
-// The tab a link opens in: Albums, Artists (an artist, the name fixes),
-// Genres or Folders.
+// The tab a link opens in: Albums (an album, the song changes), Artists (an
+// artist, the name fixes), Genres or Folders.
 export function filesTabOf(page: string): string | undefined {
   const p = parsePage(page)
-  if (p?.kind === 'album') return 'albums'
+  if (p?.kind === 'album' || p?.kind === 'changes') return 'albums'
   if ((p?.kind === 'artist' && !p.album) || p?.kind === 'fixes') return 'artists'
   if (p?.kind === 'folder') return 'folders'
   if (p?.kind === 'genre' && !p.album) return 'genres'

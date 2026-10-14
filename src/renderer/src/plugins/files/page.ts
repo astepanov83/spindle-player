@@ -64,7 +64,17 @@ import {
 } from '../types'
 import { albumGrouping, artistGrouping, type Grouping, type Heading } from '../../library/groups'
 import { openArtist, showArtist, followArtist, goToFolder } from './nav'
-import { albumPage, artistPage, fixesPage, folderPage, genrePage, parsePage } from './pages'
+import {
+  albumPage,
+  artistPage,
+  changesPage,
+  fixesPage,
+  folderPage,
+  genrePage,
+  parsePage
+} from './pages'
+import { albumForm, changedSongs, undoAll, undoSong } from './tag-edit'
+import { editSongs } from '../../library/edit-songs.svelte'
 import { genreKey } from '../../../../shared/genres'
 import { filterGenres, genreSorts, parseGenreSort, sortGenres, type Genre } from './genres'
 import { fixCount, keepSeparate, nameFixes, tagNote, type NameFix } from './name-fixes'
@@ -175,6 +185,7 @@ function albumsPage(page: string, query: string): Block[] {
   const p = parsePage(page)
   if (p?.kind === 'album' && files.findAlbum(p.id))
     return albumBlocks(files.album(p.id), { label: 'All albums', to: at('') })
+  if (p?.kind === 'changes') return changesBlocks()
   const by = parseAlbumSort(viewSort(albumsView))
   return [
     {
@@ -699,6 +710,7 @@ function genreBlocks(g: Genre): Block[] {
 
 const showFolderId = 'show-folder'
 const goFolderId = 'go-folder'
+const editAlbumId = 'edit-album'
 
 // Where an album is on disk: its folder and that folder's parts as
 // folderParts gives them. None while the folder table is not in yet.
@@ -717,6 +729,12 @@ async function showAlbumFolder(id: string): Promise<void> {
   if (!where) return
   if (!(await window.libraryApi.showFolder(where.parts)))
     notice.show(`Couldn't open ${folderPath(where.parts)}`)
+}
+
+// "Edit album…": the form for the fields its songs share (ticket 129)
+function editAlbum(id: string): void {
+  const al = files.findAlbum(id)
+  if (al) void editSongs.open(albumForm(al))
 }
 
 // "Go to folder": the album's folder in Folders, as a link (Back returns)
@@ -776,17 +794,19 @@ function albumBlocks(
       { menu: 'playlist', label: 'Add to playlist', songs: () => items },
       {
         menu: 'songs',
-        label: 'Play next, add to the queue or a playlist, go to its folder',
+        label: 'Play next, add to the queue or a playlist, go to its folder, edit it',
         songs: () => items,
         link,
-        ...(where
-          ? {
-              actions: [
+        actions: [
+          ...(where
+            ? [
                 { id: goFolderId, label: 'Go to folder' },
                 { id: showFolderId, label: 'Show in file manager' }
               ]
-            }
-          : {})
+            : []),
+          // its album fields on every song (ticket 129)
+          { id: editAlbumId, label: 'Edit album…' }
+        ]
       }
     ]
   }
@@ -1123,6 +1143,65 @@ function fixesBlocks(): Block[] {
   return blocks
 }
 
+const undoSongId = 'undo-song'
+const undoAllId = 'undo-all'
+
+// Song changes (ticket 129): every song whose info was changed in Spindle,
+// what its file says and what shows now, each with Undo, and Undo all.
+function changesBlocks(): Block[] {
+  const songs = changedSongs()
+  const head: HeadBlock = {
+    kind: 'head',
+    look: 'folder',
+    id: changesPage,
+    title: 'Song info changes',
+    meta: 'Albums',
+    back: { label: 'All albums', to: at('') },
+    line: [
+      {
+        text: songs.length
+          ? `${fmtCount(songs.length, 'song', 'songs')} changed in Spindle. Your files stay as they are.`
+          : 'No song info is changed in Spindle'
+      }
+    ],
+    ...(songs.length ? { buttons: [{ id: undoAllId, label: 'Undo all' }] } : {})
+  }
+  if (!songs.length)
+    return [
+      head,
+      {
+        kind: 'empty',
+        id: changesPage,
+        text: 'When you change a song with Edit song info… or an album with Edit album…, it is listed here with Undo.'
+      }
+    ]
+  return [
+    head,
+    {
+      kind: 'changes',
+      id: changesPage,
+      label: 'Changed songs',
+      rows: songs.map((s) => ({
+        key: s.id,
+        head: [
+          files.findAlbum(s.albumId)
+            ? { text: s.title, to: at(albumPage(s.albumId)) }
+            : { text: s.title },
+          { text: ` · ${s.artist}` }
+        ],
+        from: s.from,
+        to: [{ text: s.to }],
+        action: {
+          id: undoSongId,
+          label: 'Undo',
+          value: s.id,
+          hint: `Undo the change to ${s.title}`
+        }
+      }))
+    }
+  ]
+}
+
 // "Keep separate" on a tag, from its artist's page or the name fixes, with a
 // notice whose Undo puts the link back. `follow`: the page to show the
 // artist on again after Undo, when Keep separate moved off it.
@@ -1303,6 +1382,9 @@ export function filesAct(target: string, id: string, value?: string): void {
   const p = parsePage(target)
   if (p?.kind === 'album' && id === showFolderId) return void showAlbumFolder(p.id)
   if (p?.kind === 'album' && id === goFolderId) return goToAlbumFolder(p.id)
+  if (p?.kind === 'album' && id === editAlbumId) return editAlbum(p.id)
+  if (p?.kind === 'changes' && id === undoSongId && value) return undoSong(value)
+  if (p?.kind === 'changes' && id === undoAllId) return undoAll()
   if (p?.kind === 'fixes' && id === undoFixId) return undoFix(value)
   const a = p?.kind === 'artist' && !p.album ? files.getArtist(p.key) : undefined
   if (a) artistAct(a, id, value)

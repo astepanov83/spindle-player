@@ -471,6 +471,8 @@ describe('settings blocks (ticket 060)', () => {
       'choice',
       'choice',
       'choice',
+      'title',
+      'status',
       'ai'
     ])
     expect(blocks[1]).toMatchObject({

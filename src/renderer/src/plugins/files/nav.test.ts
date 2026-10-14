@@ -68,6 +68,7 @@ describe('files pages', () => {
     expect(nav.canOpenFiles(at(`folder/${live}`))).toBe(true)
     expect(nav.canOpenFiles(at('folder/nowhere'))).toBe(false)
     expect(nav.canOpenFiles(at('name-fixes'))).toBe(true)
+    expect(nav.canOpenFiles(at('song-changes'))).toBe(true)
     expect(nav.canOpenFiles(at('genre/rock'))).toBe(true)
     expect(nav.canOpenFiles(at('genre/jazz'))).toBe(false)
     // an album under a genre is no link
@@ -106,6 +107,7 @@ describe('files pages', () => {
     expect(nav.filesLook('albums', 'album/a')).toBeUndefined()
     expect(nav.filesLook('artists', 'album/a/artist/marinavale')).toBeUndefined()
     expect(nav.filesLook('artists', 'name-fixes')).toBeUndefined()
+    expect(nav.filesLook('albums', 'song-changes')).toBeUndefined()
     expect(nav.filesLook('folders', '')).toBeUndefined()
     expect(nav.filesLook('songs', '')).toBeUndefined()
     // Genres has its own look, a genre's page the Albums one (ticket 123)
@@ -128,6 +130,7 @@ describe('files pages', () => {
     expect(nav.filesPath('albums', '')).toEqual([])
     expect(nav.filesPath('albums', 'album/a')).toEqual(['album:a'])
     expect(nav.filesPath('artists', 'name-fixes')).toEqual(['fixes'])
+    expect(nav.filesPath('albums', 'song-changes')).toEqual(['changes'])
     expect(nav.filesPath('artists', 'album/a/artist/marinavale')).toEqual([
       'artist:marinavale',
       'album:a'

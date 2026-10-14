@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   albumPage,
   artistPage,
+  changesPage,
   filesTabOf,
   fixesPage,
   folderPage,
@@ -23,6 +24,7 @@ describe('files page strings', () => {
     const key = '/m/rock\0live'
     expect(parsePage(folderPage(key))).toEqual({ kind: 'folder', key })
     expect(parsePage(fixesPage)).toEqual({ kind: 'fixes' })
+    expect(parsePage(changesPage)).toEqual({ kind: 'changes' })
     // a genre key may hold a "/" (ticket 123)
     expect(parsePage(genrePage('hiphop/rap'))).toEqual({ kind: 'genre', key: 'hiphop/rap' })
     expect(parsePage(genrePage('hiphop/rap', '77c1'))).toEqual({
@@ -51,6 +53,7 @@ describe('files page strings', () => {
     expect(filesTabOf('artist/x')).toBe('artists')
     expect(filesTabOf('folder/k')).toBe('folders')
     expect(filesTabOf(fixesPage)).toBe('artists')
+    expect(filesTabOf(changesPage)).toBe('albums')
     expect(filesTabOf(genrePage('rock'))).toBe('genres')
     expect(filesTabOf(genrePage('rock', 'a'))).toBeUndefined()
     // an album under an artist is no link

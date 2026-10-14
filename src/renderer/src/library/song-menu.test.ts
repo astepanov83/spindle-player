@@ -41,7 +41,7 @@ vi.mock('../stores/queue.svelte', () => ({
 vi.stubGlobal('window', {
   playlistsApi: { save: vi.fn() },
   lovedApi: { set: vi.fn() },
-  libraryApi: { songInfo: vi.fn(async () => undefined) },
+  libraryApi: { tagValues: vi.fn(async () => ({})), songInfo: vi.fn(async () => undefined) },
   radioApi: { onTitle: () => () => {}, onLogo: () => () => {}, onCover: () => () => {} }
 })
 
@@ -213,7 +213,8 @@ describe('Go to (ticket 040)', () => {
       'Mix',
       'New playlist',
       '---',
-      'Song info'
+      'Song info',
+      'Edit song info…'
     ])
     pick(m, 'Go to album')
     expect([library.tab, library.page('albums'), library.landing]).toEqual([
@@ -333,6 +334,57 @@ describe('Love and Unlove (ticket 117)', () => {
   })
 })
 
+describe('Edit song info (ticket 129)', () => {
+  beforeEach(() => {
+    const track = (id: string): Track => ({
+      id,
+      title: id,
+      duration: 1,
+      albumId: 'al',
+      artist: 'Kai',
+      album: 'Blue Hours',
+      no: 1,
+      disc: 1,
+      codec: '',
+      folder: 0
+    })
+    const album = {
+      id: 'al',
+      title: 'Blue Hours',
+      artist: 'Kai',
+      year: 0,
+      added: 0,
+      palette: defaultPalettes,
+      cover: '',
+      coverLarge: '',
+      trackIds: ['s1', 's2']
+    }
+    files.load({ albums: [album], tracks: [track('s1'), track('s2')], folders: [] })
+  })
+
+  it('comes last, for one song of the library or several', () => {
+    // one section with Song info (ticket 127)
+    expect(labels(songMenu(['files:s1'])).slice(-3)).toEqual([
+      '---',
+      'Song info',
+      'Edit song info…'
+    ])
+    expect(labels(songMenu(['files:s1', 'files:s2'])).at(-1)).toBe('Edit song info…')
+  })
+
+  it('is left out for a song not in the library, a station or an MFP song', () => {
+    for (const keys of [['files:gone'], ['radio:rb-1'], ['mfp:e#1'], ['files:s1', 'radio:rb-1']])
+      expect(labels(songMenu(keys as `files:${string}`[]))).not.toContain('Edit song info…')
+  })
+
+  it("asks main for the songs' tags, and says so when it can't read them", async () => {
+    const { notice } = await import('../stores/notice.svelte')
+    pick(songMenu(['files:s1', 'files:s2']), 'Edit song info…')
+    expect(window.libraryApi.tagValues).toHaveBeenLastCalledWith(['s1', 's2'])
+    await vi.waitFor(() => expect(notice.text).toBe("Couldn't read the song info"))
+  })
+})
+
 describe('a list that fills itself (ticket 118)', () => {
   it('is read only: no Remove, never offered to add to; Unlove takes a song out of Loved', () => {
     loved.load({ 'files:a': 1 })
@@ -351,7 +403,7 @@ describe('Song info (ticket 127)', () => {
   it('last, for one song of the library', async () => {
     song('Marina Vale')
     const m = songMenu(['files:s1'], { queueRows: [1] })
-    expect(labels(m).slice(-2)).toEqual(['---', 'Song info'])
+    expect(labels(m).slice(-3)).toEqual(['---', 'Song info', 'Edit song info…'])
     pick(m, 'Song info')
     expect(songInfo.view?.title).toBe('s1')
     expect(window.libraryApi.songInfo).toHaveBeenCalledWith('s1')

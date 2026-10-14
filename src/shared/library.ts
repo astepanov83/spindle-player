@@ -39,6 +39,26 @@ export interface Track {
   // the song's own year, only when it differs from its album's (a
   // compilation's songs); else the album's year is the song's
   year?: number
+  // Set when Spindle changed the song's info (tag-fixes.json, ticket 129):
+  // the file's own values of the fields it changed ('', 0 or [] for none).
+  // The other fields above already show the changed values.
+  fileTags?: Partial<TagValues>
+}
+
+// A song's tags as Spindle reads them, for its info changed in Spindle
+// (ticket 129, shared/plugins/files/tag-fixes.ts). A tag the file doesn't
+// have is '', 0 or []. `genre` holds the values as written; the library
+// splits them (shared/genres.ts).
+export interface TagValues {
+  title: string
+  artist: string
+  album: string
+  albumArtist: string
+  year: number
+  genre: string[]
+  // track number
+  no: number
+  disc: number
 }
 
 // A song's year: its own, else its album's; 0 when unknown.

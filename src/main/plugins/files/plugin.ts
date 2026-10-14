@@ -79,6 +79,8 @@ export class FilesPlugin implements MainPlugin {
     page.handle(LibraryChannel.showFolder, (_, parts) =>
       this.#on ? showFolder(parts, settings.get().folders) : false
     )
+    page.handle(LibraryChannel.tagValues, (_, ids) => library.tagValues(ids))
+    page.handle(LibraryChannel.fixTags, (_, change) => library.fixTags(change))
     page.handle(LibraryChannel.songInfo, (_, id) => library.songInfo(id))
     // only a path the index has, never one from the page
     page.handle(LibraryChannel.showSongFile, async (_, id, which) => {

@@ -479,6 +479,8 @@ export interface ChangesBlock {
   label: string
   rows: {
     key: string
+    // what changed, on a line of its own over the change: a song (ticket 129)
+    head?: Piece[]
     from: string
     to: Piece[]
     // `hint` names the button for screen readers: "Undo Beyonce to Beyoncé"
@@ -723,9 +725,47 @@ export interface PageHalf {
   // not known), for the lists that fill themselves (ticket 118). Only a
   // plugin whose plays count gives them. The same array until its data changes.
   songs?(): readonly { id: string; added: number }[]
+  // "Edit song info..." in the song menu (ticket 129): whether these songs
+  // of its own can be edited, asked as the menu opens, so at once.
+  canEdit?(ids: string[]): boolean
+  // The form for them, once it knows their tags; none when it can't edit them now.
+  editSongs?(ids: string[]): Promise<EditForm | undefined>
   // The song info panel (ticket 127): what it knows at once, and the whole
   // view once it has read more (the file). None: its items have no "Song info".
   songInfo?(id: string): { now: SongInfoView; full: Promise<SongInfoView> } | undefined
+}
+
+// A form in a dialog, drawn by the core (library/EditSongs.svelte): the edit
+// of songs' info (ticket 129). Save sends only the fields typed into, and
+// those put back to the file's own value.
+export interface EditForm {
+  // "Edit song info", "Edit 3 songs", "Edit album"
+  title: string
+  // what it edits: the song's title and artist, the album's
+  sub?: string
+  // a line over the buttons
+  note?: string
+  fields: EditField[]
+  // On Save, by field id: the text typed, or null for the file's own value.
+  // Nothing when no field was touched.
+  save(changes: Record<string, string | null>): void
+}
+
+export interface EditField {
+  id: string
+  label: string
+  value: string
+  // shown in the empty box: "Several values" when the songs differ
+  placeholder?: string
+  // digits only, up to this number
+  max?: number
+  // a line under the box: "Separate genres with ;"
+  hint?: string
+  // The files' own value, when Spindle changed this field: a way back.
+  // `text` is what it puts in the box ('' for none or several), `label` the line: "In the file: 1995".
+  file?: { text: string; label: string }
+  // a long box on its own row; else it shares a row
+  wide?: boolean
 }
 
 // The song info panel's content, drawn by the core: sections of rows.

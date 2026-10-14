@@ -7,6 +7,7 @@
   import Settings from './components/Settings.svelte'
   import { keysSection } from './components/settings-sections'
   import CloseAsk from './components/CloseAsk.svelte'
+  import EditSongs from './library/EditSongs.svelte'
   import SongInfo from './library/SongInfo.svelte'
   import { songInfo } from './library/song-info.svelte'
   import { songKeyOf } from './library/song-info-key'
@@ -454,6 +455,7 @@
   <Notice />
   <Menu />
   <CloseAsk />
+  <EditSongs />
   <SongInfo />
   <DragGhost />
 </div>

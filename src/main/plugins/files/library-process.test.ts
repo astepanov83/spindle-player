@@ -22,6 +22,7 @@ const start: WorkerStart = {
   aiCachePath: '/u/artist-ai-cache.json',
   oldOverridesPath: '/u/artist-overrides.json',
   oldGroupsPath: '/u/artist-groups.json',
+  tagFixesPath: '/u/tag-fixes.json',
   aiOn: {},
   aiEnabled: {},
   userAgent: 'Spindle/test',

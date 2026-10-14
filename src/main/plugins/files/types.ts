@@ -7,6 +7,7 @@ import type { CoverSource } from '../../../shared/settings'
 import type { ThemePalettes } from '../../../shared/palette'
 import type { Lyrics } from '../../../shared/lyrics'
 import type { CueSheet } from './cue'
+import type { OpenedSongs } from '../../../shared/plugins/files/loose'
 
 // One audio file. Tags are already cleaned up (see tags.ts); a missing tag is left out.
 export interface FileEntry {
@@ -207,6 +208,10 @@ export type WorkerIn =
   // the words of a song that starts (ticket 120), from its .lrc or tags;
   // answered with `lyrics`, none when it has none
   | { type: 'lyrics'; req: number; id: string }
+  // files opened from the system, or loose ids of a saved queue (ticket 124):
+  // the songs they are, read now; answered with `opened`. `loose`: the items
+  // are loose ids, which stay songs not in the library
+  | { type: 'open'; req: number; items: string[]; loose?: boolean }
 
 // the library process to main
 export type WorkerOut =
@@ -224,6 +229,7 @@ export type WorkerOut =
       data?: Uint8Array
       song?: 'found' | 'none' | 'later'
       lyrics?: Lyrics
+      opened?: OpenedSongs
     }
   | { type: 'log'; text: string }
   | { type: 'flushed' }

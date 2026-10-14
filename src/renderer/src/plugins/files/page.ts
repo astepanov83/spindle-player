@@ -3,7 +3,7 @@
 // their buttons do comes back through filesAct.
 import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
 import { cleanNames, editArtist, maxNameLength } from '../../../../shared/plugins/files/artist-edit'
-import { pictureOf, type Album, type Art } from '../../../../shared/library'
+import { pictureOf, songYear, type Album, type Art } from '../../../../shared/library'
 import type { ItemKey } from '../../../../shared/plugins/items'
 import { queueLink } from '../../../../shared/saved-queue'
 import { fmtCount, fmtLength } from '../../format'
@@ -539,7 +539,7 @@ function albumBlocks(
 ): Block[] {
   const id = albumPage(al.id)
   const tracks = al.trackIds.map((t) => files.track(t))
-  const { items, numbers, groups, artist } = albumList(al)
+  const { items, numbers, groups, artist, years } = albumList(al)
   const marked = theirs && trackKeys(theirs.ids)
   const link = albumLink(al)
   const length = albumLength(al)
@@ -610,6 +610,7 @@ function albumBlocks(
       numbers,
       groups,
       artist,
+      ...(years ? { years } : {}),
       ...(marked ? { marked } : {})
     }
   ]
@@ -617,7 +618,9 @@ function albumBlocks(
 
 // An album's songs as its page lists them: numbers, "Disc 2" labels, and
 // the Artist column when a song has another artist.
-function albumList(al: Album): Pick<AlbumSongs, 'items' | 'numbers' | 'groups' | 'artist'> {
+function albumList(
+  al: Album
+): Pick<AlbumSongs, 'items' | 'numbers' | 'groups' | 'artist' | 'years'> {
   const tracks = al.trackIds.map((t) => files.track(t))
   const numbers: number[] = []
   const groups: { at: number; label: string }[] = []
@@ -625,7 +628,14 @@ function albumList(al: Album): Pick<AlbumSongs, 'items' | 'numbers' | 'groups' |
     if ('disc' in line) groups.push({ at: numbers.length, label: `Disc ${line.disc}` })
     else numbers.push(line.no)
   }
-  return { items: trackKeys(al.trackIds), numbers, groups, artist: !allBy(tracks, al.artist) }
+  return {
+    items: trackKeys(al.trackIds),
+    numbers,
+    groups,
+    artist: !allBy(tracks, al.artist),
+    // a song keeps its own year only when it differs from the album's
+    ...(tracks.some((t) => t.year) ? { years: true } : {})
+  }
 }
 
 // An artist: their head, then their page in the look picked (ticket 099).
@@ -936,9 +946,14 @@ function playingIn(tree: FolderTree, i: number, item: ItemKey): boolean {
 
 // What a folder's Play plays: what is shown, with the search and the table's sort.
 function folderPlayIds(tree: FolderTree, shown: number | null): ItemKey[] {
-  return folderPlaySongs(tree, shown, library.query, files.folderSort, (t) => files.order(t)).map(
-    trackKey
-  )
+  return folderPlaySongs(
+    tree,
+    shown,
+    library.query,
+    files.folderSort,
+    (t) => files.order(t),
+    (t) => songYear(t, files.findAlbum(t.albumId))
+  ).map(trackKey)
 }
 
 // The Folders view: a path bar, the subfolders, then the folder's own songs.

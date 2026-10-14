@@ -107,3 +107,26 @@ describe('a song’s info', () => {
     expect(s.state === 'ok' && s.info.groupArtist).toBe('Marina Vale')
   })
 })
+
+describe('a song’s genre and year (ticket 122)', () => {
+  const info = (id: string): { genre?: string; year?: number } | undefined => {
+    const s = tracks.trackState(id, () => true)
+    return s.state === 'ok' ? { genre: s.info.genre, year: s.info.year } : undefined
+  }
+
+  it('has its genres as one line, and its own year or its album’s', () => {
+    files.load({
+      ...lib,
+      albums: [{ ...album('far', ['far', 'own']), year: 2005 }, album('near', ['near'])],
+      tracks: [
+        { ...track('far', 1), genre: ['Rock', 'Metal'] },
+        { ...track('own', 1), albumId: 'far', year: 1983 },
+        track('near', 2)
+      ]
+    })
+    expect(info('far')).toEqual({ genre: 'Rock, Metal', year: 2005 })
+    expect(info('own')).toEqual({ genre: undefined, year: 1983 })
+    // no year anywhere
+    expect(info('near')).toEqual({ genre: undefined, year: undefined })
+  })
+})

@@ -425,6 +425,18 @@ describe('pages', () => {
     expect(songs(s).artist).toBe(false)
   })
 
+  it('an album: its genres in the head, and a Year column only for songs of their own year (ticket 122)', () => {
+    const data = lib()
+    data.albums[0] = { ...data.albums[0], genres: ['Synthpop', 'New Wave'] }
+    data.tracks[1] = { ...data.tracks[1], year: 1983 }
+    files.load(data)
+    const [h, s] = page.filesPage('albums', 'album/a', '')
+    expect(head(h).meta).toBe('Album · 2003 · Synthpop, New Wave')
+    expect(songs(s).years).toBe(true)
+    const [, plain] = page.filesPage('albums', 'album/b', '')
+    expect(songs(plain)).not.toHaveProperty('years')
+  })
+
   it('"Go to folder" opens the album\'s folder in Folders, a step Back undoes (ticket 075)', () => {
     library.openPage('albums', 'album/a')
     page.filesAct('album/a', 'go-folder')

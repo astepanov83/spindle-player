@@ -176,7 +176,8 @@ export function folderPlaySongs(
   i: number | null,
   q: string,
   sort: Sort | null,
-  order: (t: Track) => number
+  order: (t: Track) => number,
+  year?: (t: Track) => number
 ): Track[] {
   const s = foldQuery(q)
   const view = filterFolder(tree, i, q)
@@ -186,5 +187,5 @@ export function folderPlaySongs(
     return [...n.children.flatMap(matches), ...n.tracks.filter(songMatches(s))]
   }
   const below = view.folders.flatMap((j) => (s ? matches(j) : folderSongs(tree, j)))
-  return [...below, ...sortRows(view.songs, sort, order)]
+  return [...below, ...sortRows(view.songs, sort, order, year)]
 }

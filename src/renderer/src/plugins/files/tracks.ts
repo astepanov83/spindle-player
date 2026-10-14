@@ -1,6 +1,7 @@
 // Answers about songs of the library store.
-import type { Art, Track } from '../../../../shared/library'
+import { songYear, type Art, type Track } from '../../../../shared/library'
 import { itemKey, type ItemKey } from '../../../../shared/plugins/items'
+import { genreText } from '../../library/views'
 import { artistLinks } from './artists'
 import { rootName } from './folders'
 import { files } from './store.svelte'
@@ -42,6 +43,7 @@ class TrackInfo implements ItemInfo {
   readonly subtitle: string
   readonly group: string
   readonly length: number
+  readonly genre: string | undefined
   readonly #t: Track
 
   constructor(t: Track) {
@@ -50,6 +52,12 @@ class TrackInfo implements ItemInfo {
     this.subtitle = t.artist
     this.group = t.album
     this.length = t.duration
+    this.genre = genreText(t) || undefined
+  }
+
+  // read when asked: the album's year can change under the same song
+  get year(): number | undefined {
+    return songYear(this.#t, files.findAlbum(this.#t.albumId)) || undefined
   }
 
   get art(): Art | undefined {

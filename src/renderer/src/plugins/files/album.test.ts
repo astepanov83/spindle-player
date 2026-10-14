@@ -60,6 +60,17 @@ describe('albumLabel', () => {
     expect(albumLabel({ artist: 'Marina Vale', year: 0 })).toBe('Album')
   })
 
+  it('names up to three genres after the year, the most common first (ticket 122)', () => {
+    expect(albumLabel({ artist: 'A', year: 1983, genres: ['New Wave', 'Synthpop'] })).toBe(
+      'Album · 1983 · New Wave, Synthpop'
+    )
+    expect(albumLabel({ artist: 'A', year: 0, genres: ['Rock'] })).toBe('Album · Rock')
+    expect(albumLabel({ artist: 'VA', year: 2001, genres: ['Pop', 'Rock', 'Jazz', 'Funk'] })).toBe(
+      'Compilation · 2001 · Pop, Rock, Jazz'
+    )
+    expect(albumLabel({ artist: 'A', year: 2001, genres: [] })).toBe('Album · 2001')
+  })
+
   it('says Compilation for a various artists credit, in any case', () => {
     expect(albumLabel({ artist: 'Various Artists', year: 2021 })).toBe('Compilation · 2021')
     expect(albumLabel({ artist: 'VA', year: 0 })).toBe('Compilation')

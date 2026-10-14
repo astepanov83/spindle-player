@@ -4,8 +4,9 @@ import type { Play } from '../../../shared/plays'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { ItemInfo } from '../plugins/types'
 
-// title, artist, album, time; plays and last played (ticket 085)
-export type SortKey = 't' | 'a' | 'al' | 'd' | 'p' | 'lp'
+// title, artist, album, time; plays and last played (ticket 085); genre
+// and year (ticket 122)
+export type SortKey = 't' | 'a' | 'al' | 'd' | 'p' | 'lp' | 'g' | 'y'
 export interface Sort {
   k: SortKey
   dir: 1 | -1
@@ -102,26 +103,45 @@ export function filterPlaylists<T extends { name: string }>(list: T[], q: string
   return s ? list.filter((p) => fold(p.name).includes(s)) : list
 }
 
-const keyOf: Record<SortKey, (t: Track) => string | number> = {
+// A song's genres as one line: "Rock, Metal".
+export const genreText = (t: Pick<Track, 'genre'>): string => t.genre?.join(', ') ?? ''
+
+// undefined: nothing to sort by, which comes last both ways
+type Field = string | number | undefined
+
+const keyOf: Record<SortKey, (t: Track, year: (t: Track) => number) => Field> = {
   t: (t) => t.title,
   a: (t) => t.artist,
   al: (t) => t.album,
   d: (t) => t.duration,
   // only Classic's Songs shows these, and it sorts items (sortItems)
   p: () => 0,
-  lp: () => 0
+  lp: () => 0,
+  g: (t) => genreText(t) || undefined,
+  y: (t, year) => year(t) || undefined
+}
+
+// Up or down by `dir`; a song with no genre or year after the rest, as an
+// album with no year in the Albums grid's Year sort.
+function compare(u: Field, v: Field, dir: 1 | -1): number {
+  if (u === undefined || v === undefined) return u === v ? 0 : u === undefined ? 1 : -1
+  return (u > v ? 1 : u < v ? -1 : 0) * dir
 }
 
 // Ties keep library order (album, then track number), as in the prototype.
-// No sort keeps the rows as they are (a playlist in its own order).
-export function sortRows(rows: Track[], sort: Sort | null, order: (t: Track) => number): Track[] {
+// No sort keeps the rows as they are (a playlist in its own order). `year`:
+// a song's year, its album's when it has none of its own (songYear).
+export function sortRows(
+  rows: Track[],
+  sort: Sort | null,
+  order: (t: Track) => number,
+  year: (t: Track) => number = (t) => t.year ?? 0
+): Track[] {
   if (!sort) return rows
   const key = keyOf[sort.k]
-  return [...rows].sort((x, y) => {
-    const u = key(x)
-    const v = key(y)
-    return (u > v ? 1 : u < v ? -1 : 0) * sort.dir || order(x) - order(y)
-  })
+  return [...rows].sort(
+    (x, y) => compare(key(x, year), key(y, year), sort.dir) || order(x) - order(y)
+  )
 }
 
 // Plays and Last played start with the most and the latest.
@@ -181,15 +201,16 @@ export function filterItems(keys: ItemKey[], q: string, info: InfoOf): ItemKey[]
 
 type PlayOf = (key: ItemKey) => Play | undefined
 
-const itemField: Record<SortKey, (key: ItemKey, info: InfoOf, played: PlayOf) => string | number> =
-  {
-    t: (k, info) => info(k)?.title ?? '',
-    a: (k, info) => info(k)?.subtitle ?? '',
-    al: (k, info) => info(k)?.group ?? '',
-    d: (k, info) => info(k)?.length ?? 0,
-    p: (k, _, played) => played(k)?.n ?? 0,
-    lp: (k, _, played) => played(k)?.last ?? 0
-  }
+const itemField: Record<SortKey, (key: ItemKey, info: InfoOf, played: PlayOf) => Field> = {
+  t: (k, info) => info(k)?.title ?? '',
+  a: (k, info) => info(k)?.subtitle ?? '',
+  al: (k, info) => info(k)?.group ?? '',
+  d: (k, info) => info(k)?.length ?? 0,
+  p: (k, _, played) => played(k)?.n ?? 0,
+  lp: (k, _, played) => played(k)?.last ?? 0,
+  g: (k, info) => info(k)?.genre || undefined,
+  y: (k, info) => info(k)?.year || undefined
+}
 
 // Ties keep the order given (library order in the library's lists). Each
 // item is asked once, not in every compare: a list can hold 50k songs.
@@ -204,7 +225,7 @@ export function sortItems(
   if (!sort) return keys
   const field = itemField[sort.k]
   const rows = keys.map((key, i) => ({ key, i, v: field(key, info, played) }))
-  rows.sort((x, y) => (x.v > y.v ? 1 : x.v < y.v ? -1 : 0) * sort.dir || x.i - y.i)
+  rows.sort((x, y) => compare(x.v, y.v, sort.dir) || x.i - y.i)
   return rows.map((r) => r.key)
 }
 

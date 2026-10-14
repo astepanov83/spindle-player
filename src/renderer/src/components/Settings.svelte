@@ -7,6 +7,7 @@
   import NoCoverPick from './NoCoverPick.svelte'
   import OutputPick from './OutputPick.svelte'
   import PluginSection from './PluginSection.svelte'
+  import SongNoticeSwitch from './SongNoticeSwitch.svelte'
   import IconButton from '../ui/IconButton.svelte'
   import Seg from '../ui/Seg.svelte'
   import Switch from '../ui/Switch.svelte'
@@ -203,6 +204,7 @@
             />
             <p class="hint">{closeHints[settings.closeAction]}</p>
           </div>
+          <SongNoticeSwitch />
           <CoverFetch />
           <div class="set">
             <span class="section-label">Lyrics</span>

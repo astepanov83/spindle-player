@@ -8,6 +8,7 @@ import {
   AiChannel,
   LovedChannel,
   LyricsChannel,
+  NotifyChannel,
   PlaybackChannel,
   PlaylistChannel,
   PositionsChannel,
@@ -44,6 +45,7 @@ import { Splash } from './splash'
 import { devRetryData, isDevRetry, takeLock } from './single-instance'
 import { parseCloseAnswer } from './close-ask'
 import { parsePopupItems, popupTemplate } from './popup-menu'
+import { makeSongNotify } from './notify'
 import { hasTrayHost, hidesOnMinimize, makeTray, parsePlayState, type SpindleTray } from './tray'
 import { currentBackground, MainWindow } from './window'
 
@@ -195,6 +197,16 @@ page.handle(LyricsChannel.get, (_, key, song) =>
 page.on(PlaybackChannel.log, (_, text) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
 })
+
+// A notification when the song changes (ticket 126)
+const songNotify = makeSongNotify({
+  on: () => store.get().songNotices,
+  window: () => main?.win,
+  coverPath: (hash) => coverCache?.smallPath(hash) ?? '',
+  click: showMain
+})
+page.handle(NotifyChannel.supported, () => songNotify.supported())
+page.on(NotifyChannel.song, (_, raw) => songNotify.song(raw))
 
 // Another copy was started: it quits, and this one comes to the front.
 app.on('second-instance', (_e, _argv, _cwd, data) => {

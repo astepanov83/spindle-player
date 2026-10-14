@@ -3,6 +3,7 @@ import {
   AiChannel,
   LovedChannel,
   LyricsChannel,
+  NotifyChannel,
   PlaybackChannel,
   PlaylistChannel,
   PositionsChannel,
@@ -11,6 +12,7 @@ import {
   type AiApi,
   type LovedApi,
   type LyricsApi,
+  type NotifyApi,
   type PlaybackApi,
   type PlayControl,
   type PlaylistsApi,
@@ -136,6 +138,12 @@ const aiApi: AiApi = {
   setProvider: (id) => send(AiChannel.setProvider, id)
 }
 
+// The song notification (ticket 126)
+const notifyApi: NotifyApi = {
+  supported: () => invoke(NotifyChannel.supported),
+  song: (notice) => send(NotifyChannel.song, notice)
+}
+
 contextBridge.exposeInMainWorld('win', win)
 contextBridge.exposeInMainWorld('aiApi', aiApi)
 contextBridge.exposeInMainWorld('playlistsApi', playlistsApi)
@@ -144,4 +152,5 @@ contextBridge.exposeInMainWorld('settingsApi', settingsApi)
 contextBridge.exposeInMainWorld('lovedApi', lovedApi)
 contextBridge.exposeInMainWorld('lyricsApi', lyricsApi)
 contextBridge.exposeInMainWorld('positionsApi', positionsApi)
+contextBridge.exposeInMainWorld('notifyApi', notifyApi)
 for (const [name, api] of Object.entries(apis)) contextBridge.exposeInMainWorld(name, api)

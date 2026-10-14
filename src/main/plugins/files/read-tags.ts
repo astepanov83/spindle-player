@@ -4,7 +4,12 @@
 // or a file that is not what its name says. So every read counts against a
 // budget, and durations come from the header or the last page instead.
 import { open, type FileHandle } from 'fs/promises'
-import { parseFromTokenizer, type IAudioMetadata, type ILyricsTag } from 'music-metadata'
+import {
+  parseFromTokenizer,
+  type IAudioMetadata,
+  type IFormat,
+  type ILyricsTag
+} from 'music-metadata'
 import {
   AbstractTokenizer,
   EndOfStreamError,
@@ -101,7 +106,12 @@ class BudgetTokenizer extends AbstractTokenizer {
 
 // Tags as music-metadata gives them, or ffprobe (no pictures or words then).
 // The scan keeps no words; they are read when a song starts (lyrics-files.ts).
-export type Meta = RawTags & { common: { picture?: Picture[]; lyrics?: ILyricsTag[] } }
+// The whole format and the native tags only for the song info panel (ticket 127).
+export type Meta = RawTags & {
+  common: { picture?: Picture[]; lyrics?: ILyricsTag[] }
+  format: Partial<IFormat>
+  native?: IAudioMetadata['native']
+}
 
 // Throws if the file can't be read, or can't be read cheaply (ReadLimitError),
 // and `probe` (ffprobe) can't read it either.
@@ -109,6 +119,8 @@ export async function readTags(
   path: string,
   options: {
     skipCovers?: boolean
+    // every tag as the file has it, too
+    native?: boolean
     budget?: ReturnType<typeof readBudget>
     probe?: (path: string) => Promise<RawTags>
   } = {}
@@ -156,7 +168,12 @@ export async function readTags(
         .flat()
         .map((t): [string, unknown] => [t.id, t.value])
     )
-    return { common: meta.common, format: { ...f, duration }, ...(gain && { gain }) }
+    return {
+      common: meta.common,
+      format: { ...f, duration },
+      ...(gain && { gain }),
+      ...(options.native && { native: meta.native })
+    }
   } finally {
     await handle.close()
   }

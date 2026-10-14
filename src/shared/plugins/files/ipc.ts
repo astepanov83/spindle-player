@@ -2,6 +2,7 @@
 import type { IdMoves } from '../../id-moves'
 import type { ScanStatus } from '../../library'
 import type { ArtistChanges } from './artist-edit'
+import type { SongFileInfo } from './song-info'
 
 export const LibraryChannel = {
   load: 'library:load',
@@ -16,6 +17,10 @@ export const LibraryChannel = {
   // the artist groups task: ask about every name again (ticket 070)
   aiRecheck: 'library:ai-recheck',
   showFolder: 'library:show-folder',
+  // the song info panel (ticket 127): a song's file read now, and its file
+  // or CUE sheet shown in the file manager
+  songInfo: 'library:song-info',
+  showSongFile: 'library:show-song-file',
   // main to page: what changed in the library (a patch, see library-patch.ts)
   changed: 'library:changed',
   // main to page: scan progress and the folder list
@@ -63,6 +68,11 @@ export interface LibraryApi {
   // opens a folder in the system's file manager: a music folder's path, then
   // the names below it; false when it is gone or could not be opened
   showFolder(parts: string[]): Promise<boolean>
+  // a song's file as it is now, by id; undefined when it is not in the library
+  songInfo(id: string): Promise<SongFileInfo | undefined>
+  // shows a song's file (or a CUE track's sheet) in its folder; false when
+  // neither it nor its folder is there
+  showSongFile(id: string, which: 'file' | 'sheet'): Promise<boolean>
   onChanged(listener: (library: Uint8Array) => void): () => void
   onStatus(listener: (status: ScanStatus) => void): () => void
   onIdsMoved(listener: (moves: IdMoves) => void): () => void
@@ -80,4 +90,6 @@ export interface FilesChannels {
   [LibraryChannel.setArtists]: LibraryApi['setArtists']
   [LibraryChannel.aiRecheck]: LibraryApi['aiRecheck']
   [LibraryChannel.showFolder]: LibraryApi['showFolder']
+  [LibraryChannel.songInfo]: LibraryApi['songInfo']
+  [LibraryChannel.showSongFile]: LibraryApi['showSongFile']
 }

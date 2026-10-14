@@ -2,7 +2,7 @@
 // music folder and the names below it, and only such a folder is opened:
 // shell.openPath on a file would run it.
 import { stat } from 'fs/promises'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { shell } from 'electron'
 
 export function folderToOpen(parts: unknown, roots: string[]): string | null {
@@ -25,5 +25,27 @@ export async function showFolder(parts: unknown, roots: string[]): Promise<boole
   if (!dir) return false
   const error = await shell.openPath(path)
   if (error) console.error(`Could not open ${path}: ${error}`)
+  return !error
+}
+
+// A song's file, picked in its folder (ticket 127). The path comes from the
+// library index. A file that is gone opens its folder, if that is there.
+export async function showFile(path: string): Promise<boolean> {
+  const there = await stat(path).then(
+    (s) => s.isFile(),
+    () => false
+  )
+  if (there) {
+    shell.showItemInFolder(path)
+    return true
+  }
+  const dir = dirname(path)
+  const dirThere = await stat(dir).then(
+    (s) => s.isDirectory(),
+    () => false
+  )
+  if (!dirThere) return false
+  const error = await shell.openPath(dir)
+  if (error) console.error(`Could not open ${dir}: ${error}`)
   return !error
 }

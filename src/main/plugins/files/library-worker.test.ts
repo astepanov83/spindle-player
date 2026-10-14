@@ -18,6 +18,7 @@ import { readerVersion, type WorkerIn, type WorkerOut, type WorkerStart } from '
 import { joinSystem } from './group-artists'
 import { flacWith } from './fixtures/flac'
 import { cueTrackId, shortHash } from '../../ids'
+import type { SongFileInfo } from '../../../shared/plugins/files/song-info'
 
 let dir: string
 let music: string
@@ -888,6 +889,70 @@ describe('the library process', () => {
       await until(() => scanned(1))
       expect(await words(cueTrackId(image, 2), 2)).toEqual({ plain: 'Second words' })
       expect(await words(cueTrackId(image, 1), 3)).toBeUndefined()
+    })
+  })
+
+  describe('song info (ticket 127)', () => {
+    async function ask(
+      m: { type: 'song-info' | 'song-path'; id: string; sheet?: boolean },
+      req: number
+    ): Promise<{ info?: SongFileInfo; path?: string }> {
+      send({ ...m, req })
+      await until(() => heard.some((x) => x.type === 'reply' && x.req === req))
+      return heard.find((x) => x.type === 'reply' && x.req === req) as {
+        info?: SongFileInfo
+        path?: string
+      }
+    }
+
+    it("reads a song's file when asked, and its path; nothing for an id it doesn't know", async () => {
+      const song = join(music, '01 Song.flac')
+      writeFileSync(song, flacWith(['TITLE=Song', 'GENRE=Jazz']))
+      start(true)
+      scan(1)
+      await until(() => scanned(1))
+      const { info } = await ask({ type: 'song-info', id: shortHash(song) }, 2)
+      expect(info).toMatchObject({ path: song, genre: 'Jazz', format: { sampleRate: 44100 } })
+      expect(info?.added).toBeGreaterThan(0)
+      expect(info?.tags).toContainEqual({ type: 'vorbis', id: 'TITLE', value: 'Song' })
+      expect((await ask({ type: 'song-path', id: shortHash(song) }, 3)).path).toBe(song)
+      expect((await ask({ type: 'song-info', id: 'nope' }, 4)).info).toBeUndefined()
+      // deleted after the scan
+      rmSync(song)
+      expect((await ask({ type: 'song-info', id: shortHash(song) }, 5)).info).toMatchObject({
+        path: song,
+        gone: true
+      })
+    })
+
+    it("gives a CUE track's image, sheet and place", async () => {
+      const image = join(music, 'disc.flac')
+      writeFileSync(image, flacWith(['TITLE=Disc']))
+      const sheet = join(music, 'disc.cue')
+      writeFileSync(
+        sheet,
+        [
+          'REM GENRE Ambient',
+          'FILE "disc.flac" WAVE',
+          '  TRACK 01 AUDIO',
+          '    INDEX 01 00:00:00',
+          '  TRACK 02 AUDIO',
+          '    INDEX 01 00:05:00'
+        ].join('\n')
+      )
+      start(true)
+      scan(1)
+      await until(() => scanned(1))
+      const first = await ask({ type: 'song-info', id: cueTrackId(image, 1) }, 2)
+      expect(first.info).toMatchObject({
+        path: image,
+        genre: 'Ambient',
+        cue: { sheet, start: 0, end: 5 }
+      })
+      const second = await ask({ type: 'song-info', id: cueTrackId(image, 2) }, 3)
+      expect(second.info?.cue).toEqual({ sheet, start: 5 })
+      const at = await ask({ type: 'song-path', id: cueTrackId(image, 2), sheet: true }, 4)
+      expect(at.path).toBe(sheet)
     })
   })
 })

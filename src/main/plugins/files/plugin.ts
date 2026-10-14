@@ -6,7 +6,7 @@ import type { PluginId } from '../../../shared/plugins'
 import { stopAllDecoders } from './decode'
 import { libraryRoutes } from './protocol'
 import { LibraryService } from './service'
-import { showFolder } from '../../show-folder'
+import { showFile, showFolder } from '../../show-folder'
 import type { MainPlugin, PluginContext } from '../types'
 
 export class FilesPlugin implements MainPlugin {
@@ -65,6 +65,12 @@ export class FilesPlugin implements MainPlugin {
     page.handle(LibraryChannel.showFolder, (_, parts) =>
       this.#on ? showFolder(parts, settings.get().folders) : false
     )
+    page.handle(LibraryChannel.songInfo, (_, id) => library.songInfo(id))
+    // only a path the index has, never one from the page
+    page.handle(LibraryChannel.showSongFile, async (_, id, which) => {
+      const path = await library.songPath(id, which === 'sheet')
+      return path ? showFile(path) : false
+    })
   }
 
   setOn(on: boolean): void {

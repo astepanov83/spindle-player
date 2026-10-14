@@ -17,6 +17,8 @@ export interface CueItem {
   part?: TrackPart
   // the sheet's folder; the image may be below it
   dir: string
+  // the sheet, for the song info panel
+  sheet: string
 }
 
 const lower = (s: string): string => s.toLocaleLowerCase()
@@ -108,7 +110,7 @@ function imageTracks(
     }
     for (const k of Object.keys(entry) as (keyof FileEntry)[])
       if (entry[k] === undefined) delete entry[k]
-    const item: CueItem = { id, entry, dir: dirOf(sheetPath) }
+    const item: CueItem = { id, entry, dir: dirOf(sheetPath), sheet: sheetPath }
     if (!whole) {
       item.part = { file: shortHash(image.path), start: t.start }
       if (end !== undefined) item.part.end = end

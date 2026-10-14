@@ -46,6 +46,8 @@ import { decodeCue, parseCue } from './cue'
 import { probeTags } from './probe'
 import { readTags } from './read-tags'
 import { readLyrics, type LyricsFile } from './lyrics-files'
+import { cueTracks } from './cue-tracks'
+import { readSongInfo, songInfoIo, type SongFile } from './song-info'
 import {
   dirOf,
   dropOutside,
@@ -1129,6 +1131,23 @@ function lyricsFile(id: string): LyricsFile | undefined {
   return t && image ? { path: image, cue: { no: t.no, title: t.title } } : undefined
 }
 
+// A song's file for the song info panel (ticket 127): its own, or for a CUE
+// track the disc image with the sheet and where the track lies. A CUE track
+// that is a whole file has the file's id, so the sheets are asked first.
+function songFile(id: string): SongFile | undefined {
+  const real = !built.paths.has(id) && Object.hasOwn(aliases, id) ? aliases[id] : id
+  const c = ix.cues.size ? cueTracks(ix).items.find((x) => x.id === real) : undefined
+  if (c) {
+    const e = c.entry
+    const cue = { sheet: c.sheet, start: c.part?.start ?? 0, end: c.part?.end }
+    if (cue.end === undefined) delete cue.end
+    return { path: e.path, cue, added: e.added, year: e.year, genre: e.genre, gain: e.gain }
+  }
+  const path = built.paths.get(real)
+  const e = path ? ix.files.get(path) : undefined
+  return e && { path: e.path, added: e.added, year: e.year, genre: e.genre, gain: e.gain }
+}
+
 port.on('message', (e: Electron.MessageEvent) => {
   const m = e.data as WorkerIn
   switch (m.type) {
@@ -1245,6 +1264,26 @@ port.on('message', (e: Electron.MessageEvent) => {
           (lyrics) => post({ type: 'reply', req: m.req, lyrics }),
           () => post({ type: 'reply', req: m.req })
         )
+      break
+    case 'song-info':
+      ready
+        .then(() => {
+          const f = songFile(m.id)
+          return f && readSongInfo(f, songInfoIo(start.ffprobe))
+        })
+        .then(
+          (info) => post({ type: 'reply', req: m.req, info }),
+          () => post({ type: 'reply', req: m.req })
+        )
+      break
+    case 'song-path':
+      ready.then(
+        () => {
+          const f = songFile(m.id)
+          post({ type: 'reply', req: m.req, path: m.sheet ? f?.cue?.sheet : f?.path })
+        },
+        () => post({ type: 'reply', req: m.req })
+      )
       break
     case 'get-library':
       ready.then(

@@ -37,6 +37,8 @@ export function filesPreload(): LibraryApi {
     setArtists: (changes) => send(LibraryChannel.setArtists, changes),
     aiRecheck: () => send(LibraryChannel.aiRecheck),
     showFolder: (parts) => invoke(LibraryChannel.showFolder, parts),
+    songInfo: (id) => invoke(LibraryChannel.songInfo, id),
+    showSongFile: (id, which) => invoke(LibraryChannel.showSongFile, id, which),
     onChanged: onLibraryChanged,
     onStatus: onScanStatus,
     onIdsMoved

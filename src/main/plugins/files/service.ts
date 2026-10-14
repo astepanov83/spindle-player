@@ -12,6 +12,7 @@ import { artistGroupsTask } from '../../../shared/plugins/files/artists-file'
 import type { AiClient } from '../../../shared/ai'
 import type { CoverSource } from '../../../shared/settings'
 import type { Lyrics } from '../../../shared/lyrics'
+import type { SongFileInfo } from '../../../shared/plugins/files/song-info'
 import { ffmpegTool } from '../../ffmpeg-path'
 import type { SettingsStore } from '../../settings-store'
 import type { CoverCache } from '../../covers/cover-cache'
@@ -332,6 +333,18 @@ export class LibraryService {
   async lyrics(id: string, signal?: AbortSignal): Promise<Lyrics | undefined> {
     if (!this.#on) return undefined
     return (await this.#client.ask({ type: 'lyrics', id }, signal)).lyrics
+  }
+
+  // The song info panel's look at a song's file (ticket 127), by id.
+  async songInfo(id: unknown): Promise<SongFileInfo | undefined> {
+    if (!this.#on || typeof id !== 'string') return undefined
+    return (await this.#client.ask({ type: 'song-info', id })).info
+  }
+
+  // Where a song's file is, or a CUE track's sheet, from the index.
+  async songPath(id: unknown, sheet: boolean): Promise<string | undefined> {
+    if (!this.#on || typeof id !== 'string') return undefined
+    return (await this.#client.ask({ type: 'song-path', id, sheet })).path
   }
 
   // A radio song's cover from the online lookup (ticket 032): the picture,

@@ -15,6 +15,7 @@ import {
   type TagFix,
   type TagValues
 } from '../../../../shared/plugins/files/tag-fixes'
+import { isLooseId } from '../../../../shared/plugins/files/loose'
 import { fmtCount } from '../../format'
 import { notice } from '../../stores/notice.svelte'
 import type { EditField, EditForm } from '../types'
@@ -156,9 +157,10 @@ function form(
   }
 }
 
-// Only songs the library has; the plugin's canEdit.
+// Only songs the library has, not ones opened from outside it (ticket 124);
+// the plugin's canEdit.
 export const canEditSongs = (ids: string[]): boolean =>
-  ids.length > 0 && ids.every((id) => files.has(id))
+  ids.length > 0 && ids.every((id) => !isLooseId(id) && files.has(id))
 
 // "Edit song info…" on one song or several.
 export async function songsForm(ids: string[]): Promise<EditForm | undefined> {

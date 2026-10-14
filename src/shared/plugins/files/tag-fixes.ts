@@ -7,6 +7,7 @@ import { genresOf } from '../../genres'
 import type { TagValues } from '../../library'
 import type { IdMoves } from '../../id-moves'
 import { itemKey, splitKey, type ItemKey } from '../items'
+import { isLooseId } from './loose'
 
 export const tagFields = [
   'title',
@@ -111,7 +112,7 @@ export function parseTagFixes(raw: unknown): Map<string, TagFix> {
   if (!isObject(raw) || !isObject(raw.fixes)) return out
   for (const [key, value] of Object.entries(raw.fixes)) {
     const k = key.length <= 5000 ? splitKey(key) : undefined
-    const fix = k?.plugin === 'files' ? cleanFix(value) : undefined
+    const fix = k?.plugin === 'files' && !isLooseId(k.id) ? cleanFix(value) : undefined
     if (k && fix) out.set(k.id, fix)
   }
   return out
@@ -168,12 +169,14 @@ export function changeFixes(
   if ('clear' in c) for (const id of fixes.keys()) set(id, undefined)
   else if ('put' in c)
     for (const [id, fix] of Object.entries(c.put)) {
+      // a song opened from outside the library (ticket 124) is never changed
+      if (isLooseId(id)) continue
       const file = fileOf(id)
       set(id, fix && file ? onlyDifferences(fix, file) : (fix ?? undefined))
     }
   else
     for (const id of c.edit.ids) {
-      const file = fileOf(id)
+      const file = isLooseId(id) ? undefined : fileOf(id)
       if (!file) continue
       const next: TagFix = { ...out.get(id), ...c.edit.set }
       for (const f of c.edit.reset) delete next[f]

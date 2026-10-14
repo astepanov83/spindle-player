@@ -157,6 +157,18 @@ describe('changeFixes', () => {
   })
 })
 
+describe('songs opened from outside the library (ticket 124)', () => {
+  it('are never changed, read or kept', () => {
+    const fileOf = (): TagValues => tags()
+    expect(
+      changeFixes(new Map(), { edit: { ids: ['/m/a.flac'], set: { year: 1 }, reset: [] } }, fileOf)
+    ).toBeUndefined()
+    expect(changeFixes(new Map(), { put: { '/m/a.flac': { year: 1 } } }, fileOf)).toBeUndefined()
+    const raw = { version: 1, fixes: { 'files:/m/a.flac': { year: 1 }, 'files:a': { year: 2 } } }
+    expect([...parseTagFixes(raw)]).toEqual([['a', { year: 2 }]])
+  })
+})
+
 describe('parseTagChange', () => {
   it('takes good changes', () => {
     expect(parseTagChange({ edit: { ids: ['a'], set: { year: 1996 }, reset: ['genre'] } })).toEqual(

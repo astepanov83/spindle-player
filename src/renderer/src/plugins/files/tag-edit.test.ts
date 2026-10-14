@@ -189,6 +189,8 @@ describe('Save', () => {
     expect(edit.canEditSongs(['a1', 'b1'])).toBe(true)
     expect(edit.canEditSongs(['a1', 'gone'])).toBe(false)
     expect(edit.canEditSongs([])).toBe(false)
+    // a song opened from outside the library (ticket 124)
+    expect(edit.canEditSongs(['/m/a.flac'])).toBe(false)
   })
 
   it("edits an album's shared fields, and its page follows its songs to their new album", async () => {

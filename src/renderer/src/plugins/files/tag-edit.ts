@@ -220,6 +220,19 @@ function shownText(f: TagField, t: Track, al: Album | undefined): string {
 
 const said = (f: TagField, text: string): string => `${fieldLabels[f]} ${text || 'none'}`
 
+// One song's changes, field by field: the file's value and what shows now
+// ('' for none). None when Spindle changed nothing.
+export function songChanges(
+  t: Track,
+  al: Album | undefined
+): { field: TagField; file: string; now: string }[] {
+  const was = t.fileTags
+  if (!was) return []
+  return tagFields
+    .filter((f) => was[f] !== undefined)
+    .map((f) => ({ field: f, file: valueText(f, was[f]!), now: shownText(f, t, al) }))
+}
+
 // Every song Spindle changed, in library order.
 export function changedSongs(): ChangedSong[] {
   const out: ChangedSong[] = []

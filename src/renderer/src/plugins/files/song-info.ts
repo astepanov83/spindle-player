@@ -1,7 +1,7 @@
 // The song info panel for a song of the library (ticket 127): what the
 // library knows at once, and the file as main reads it when the panel opens.
 // The core draws the sections (library/SongInfo.svelte).
-import type { Album, ReplayGain, Track } from '../../../../shared/library'
+import { songYear, type Album, type ReplayGain, type Track } from '../../../../shared/library'
 import type { Play } from '../../../../shared/plays'
 import type { AudioFormat, InfoTag, SongFileInfo } from '../../../../shared/plugins/files/song-info'
 import { itemKey } from '../../../../shared/plugins/items'
@@ -11,6 +11,7 @@ import { loved } from '../../stores/loved.svelte'
 import { plays } from '../../stores/plays.svelte'
 import type { InfoButton, InfoLine, InfoSection, SongInfoView } from '../types'
 import { files } from './store.svelte'
+import { fieldLabels, songChanges } from './tag-edit'
 
 // --- values ---
 
@@ -139,7 +140,13 @@ export function songInfoView(i: SongInfoInput): SongInfoView {
 function song(i: SongInfoInput): InfoSection {
   const { t, album } = i
   const f = i.file ?? undefined
-  const year = f?.year ?? (album?.year || undefined)
+  // a year or genre changed in Spindle (ticket 129) shows as the library has it
+  const fixed = t.fileTags ?? {}
+  const year =
+    fixed.year !== undefined
+      ? songYear(t, album) || undefined
+      : (f?.year ?? (album?.year || undefined))
+  const genre = fixed.genre !== undefined ? t.genre : (t.genre ?? f?.genre)
   return {
     title: 'Song',
     rows: [
@@ -153,7 +160,7 @@ function song(i: SongInfoInput): InfoSection {
       ...row('Track', t.no ? String(t.no) : undefined),
       ...row('Disc', t.disc ? String(t.disc) : undefined),
       ...row('Year', year ? String(year) : undefined),
-      ...row('Genre', (t.genre ?? f?.genre)?.join(', ')),
+      ...row('Genre', genre?.join(', ')),
       ...row('Length', t.duration ? fmtClock(t.duration) : undefined)
     ]
   }
@@ -237,7 +244,12 @@ function spindle(i: SongInfoInput): InfoSection {
     ...row('Loved', i.lovedAt ? `Yes, since ${dayText(i.lovedAt)}` : 'No'),
     ...row('Added', added ? dayText(added) : undefined),
     ...row('Artist fix', fixText(t.artistTag, t.artist, t.grouped)),
-    ...row('Album artist fix', fixText(album?.artistTag, album?.artist, album?.grouped))
+    ...row('Album artist fix', fixText(album?.artistTag, album?.artist, album?.grouped)),
+    // Edit song info's changes (ticket 129); the file stays as it is
+    ...songChanges(t, album).map((c): InfoLine => ({
+      label: `${fieldLabels[c.field]} changed`,
+      value: `${c.file || 'none'} → ${c.now || 'none'}`
+    }))
   ]
   return { title: 'In Spindle', rows }
 }

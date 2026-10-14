@@ -1,6 +1,7 @@
 <!-- An artist's round picture: their photo when one was found online, else
      made from their covers (4 of them in a square, or the first), else a
-     picture made from their name in the style Settings picks (ticket 105). -->
+     picture made from their name in the style Settings picks (ticket 105).
+     `square`: a genre's (ticket 123), with an album's no-cover picture. -->
 <script lang="ts">
   import Cover from '../ui/Cover.svelte'
   import { mosaicUrl } from '../../../shared/library'
@@ -9,8 +10,12 @@
   import { itemsVersion } from '../plugins'
   import { theme } from '../stores/theme.svelte'
 
-  let { name, photo, covers }: { name: string; photo: string | undefined; covers: CoverArt[] } =
-    $props()
+  let {
+    name,
+    photo,
+    covers,
+    square = false
+  }: { name: string; photo: string | undefined; covers: CoverArt[]; square?: boolean } = $props()
 
   // The name as shown, so a rename makes another picture. Colors from a real
   // cover when there is one, else from the name.
@@ -44,7 +49,7 @@
   )
 </script>
 
-<span class="pic">
+<span class="pic" class:square>
   {#if ok(photo)}
     <Cover src={photo} lazy={false} onfail={() => fail(photo)} />
   {:else if ok(mosaic)}
@@ -57,7 +62,7 @@
     <Cover
       src={covers[0]?.cover}
       art={made}
-      artist
+      artist={!square}
       tint={covers[0] && tone(covers[0])}
       lazy={false}
     />
@@ -72,6 +77,10 @@
     border-radius: 50%;
     overflow: hidden;
     background: var(--field);
+  }
+  /* the tile or row around it rounds the corners */
+  .square {
+    border-radius: 0;
   }
   .four {
     display: grid;

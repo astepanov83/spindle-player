@@ -431,7 +431,14 @@ describe('pages', () => {
     data.tracks[1] = { ...data.tracks[1], year: 1983 }
     files.load(data)
     const [h, s] = page.filesPage('albums', 'album/a', '')
-    expect(head(h).meta).toBe('Album · 2003 · Synthpop, New Wave')
+    expect(head(h).meta).toBe('Album · 2003')
+    // no song carries them here, so they open nothing
+    expect(head(h).metaLinks).toEqual([
+      { text: ' · ' },
+      { text: 'Synthpop' },
+      { text: ', ' },
+      { text: 'New Wave' }
+    ])
     expect(songs(s).years).toBe(true)
     const [, plain] = page.filesPage('albums', 'album/b', '')
     expect(songs(plain)).not.toHaveProperty('years')
@@ -548,7 +555,12 @@ describe('pages', () => {
     // beside the sort, which stays
     expect(albums.choice?.id).toBe('sort')
     page.filesAct(albums.id, 'look', 'list')
-    expect(settings.viewLooks).toEqual({ albums: 'list', artists: 'grid', artistPage: 'sections' })
+    expect(settings.viewLooks).toEqual({
+      albums: 'list',
+      artists: 'grid',
+      artistPage: 'sections',
+      genres: 'grid'
+    })
     expect(head(page.filesPage('albums', '', '')[0]).looks?.value).toBe('list')
 
     const artists = head(page.filesPage('artists', '', '')[0])
@@ -568,7 +580,12 @@ describe('pages', () => {
     page.filesAct(albums.id, 'look', 'shelves')
     page.filesAct(artist.id, 'look', 'grid')
     page.filesAct(albums.id, 'look')
-    expect(settings.viewLooks).toEqual({ albums: 'list', artists: 'shelves', artistPage: 'column' })
+    expect(settings.viewLooks).toEqual({
+      albums: 'list',
+      artists: 'shelves',
+      artistPage: 'column',
+      genres: 'grid'
+    })
     // an album's page has no looks, under an artist or not
     expect(head(page.filesPage('albums', 'album/a', '')[0]).looks).toBeUndefined()
     expect(
@@ -1127,5 +1144,191 @@ describe('a page as a tile (the stats page, ticket 116)', () => {
     expect(page.filesTile('album/a/artist/marinavale')).toBeUndefined()
     expect(page.filesTile('folder/1')).toBeUndefined()
     expect(page.filesTile('')).toBeUndefined()
+  })
+})
+
+describe('genres (ticket 123)', () => {
+  // a1, a2 and b1 are Rock ("rock" on b1), a3 Synthpop alone on its album
+  function genreLib(): LibraryData {
+    const data = lib()
+    data.tracks = data.tracks.map((t) =>
+      t.id === 'a3'
+        ? { ...t, genre: ['Synthpop'] }
+        : { ...t, genre: [t.id === 'b1' ? 'rock' : 'Rock'] }
+    )
+    data.albums[0] = { ...data.albums[0], genres: ['Rock', 'Synthpop'] }
+    return data
+  }
+  beforeEach(() => files.load(genreLib()))
+
+  it('Genres: a head with the sort and looks, and a tile per genre A-Z', () => {
+    const blocks = page.filesPage('genres', '', '')
+    expect(kinds(blocks)).toEqual(['head', 'tiles'])
+    const h = head(blocks[0])
+    expect(h).toMatchObject({ look: 'list', title: 'Genres', count: '2 genres' })
+    expect(h.choice).toMatchObject({ id: 'sort', value: 'name' })
+    expect(h.looks).toMatchObject({ label: 'Genres look', value: 'grid' })
+    const t = tiles(blocks[1])
+    expect(t.items.map((g) => (g as { name: string }).name)).toEqual(['Rock', 'Synthpop'])
+    expect(t.groups?.strip).toBe(true)
+    const rock = t.tile(t.items[0])
+    expect(rock).toMatchObject({
+      title: 'Rock',
+      subtitle: '2 albums · 4 songs',
+      to: at('genre/rock'),
+      link: { plugin: 'files', page: 'genre/rock' }
+    })
+    // square, from the covers the albums have
+    expect(t.round).toBeUndefined()
+    expect(rock.art).toBeUndefined()
+    expect(rock.covers?.map((c) => c.cover)).toEqual(['c-a', 'c-b'])
+    expect(rock.songs()).toEqual(['files:a1', 'files:a2', 'files:a3', 'files:b1'])
+    expect(rock.playing?.('files:a3')).toBe(true)
+    const synth = t.tile(t.items[1])
+    expect(synth).toMatchObject({ subtitle: '1 song' })
+    expect(synth.playing?.('files:a1')).toBe(false)
+    expect(synth.playing?.('files:a3')).toBe(true)
+  })
+
+  it('Genres: sorted by size with no letters, as a list, filtered by the search', async () => {
+    const { settings } = await import('../../stores/settings.svelte')
+    page.filesAct('genres', 'sort', 'size')
+    expect(settings.viewSorts.genres).toBe('size')
+    page.filesAct('genres', 'look', 'list')
+    expect(settings.viewLooks.genres).toBe('list')
+    const blocks = page.filesPage('genres', '', '')
+    const l = blocks[1] as ListBlock
+    expect(kinds(blocks)).toEqual(['head', 'list'])
+    expect(l.groups).toBeUndefined()
+    expect(l.cols.map((c) => c.head)).toEqual(['Albums', 'Songs'])
+    expect(l.row(l.items[0])).toMatchObject({
+      title: 'Rock',
+      cols: ['2', '4'],
+      under: '2 albums · 4 songs',
+      label: 'Rock, 2 albums, 4 songs'
+    })
+    expect(l.row(l.items[1])).toMatchObject({ title: 'Synthpop', cols: ['', '1'] })
+    const found = page.filesPage('genres', 'genre/rock', 'synth')
+    expect(kinds(found)).toEqual(['head', 'list'])
+    expect((found[1] as ListBlock).items).toHaveLength(1)
+    expect(kinds(page.filesPage('genres', '', 'jazz'))).toEqual(['head', 'empty', 'list'])
+  })
+
+  it('Genres with no genre tags says so', () => {
+    files.load(lib())
+    const blocks = page.filesPage('genres', '', '')
+    expect(kinds(blocks)).toEqual(['head', 'empty'])
+    expect(blocks[1]).toMatchObject({ title: 'No genres' })
+  })
+
+  it("a genre's page: its albums opening under it, then its songs on other albums", () => {
+    const rock = page.filesPage('genres', 'genre/rock', '')
+    expect(kinds(rock)).toEqual(['head', 'text', 'tiles'])
+    const h = head(rock[0])
+    expect(h).toMatchObject({
+      look: 'folder',
+      title: 'Rock',
+      meta: 'Genre',
+      back: { label: 'All genres', to: at('') },
+      line: [{ text: '2 albums · 4 songs · 8 min' }]
+    })
+    const play = h.buttons?.[0]
+    expect(play && 'play' in play && play.songs()).toEqual([
+      'files:a1',
+      'files:a2',
+      'files:a3',
+      'files:b1'
+    ])
+    expect(play && 'play' in play && play.link).toEqual({ plugin: 'files', page: 'genre/rock' })
+    const t = tiles(rock[2])
+    expect(t.tile(files.album('b'))).toMatchObject({
+      subtitle: 'Juno Park',
+      to: at('album/b/genre/rock')
+    })
+    // the albums in the Albums sort, with no headings for a few
+    expect(t.groups).toBeUndefined()
+
+    const synth = page.filesPage('genres', 'genre/synthpop', '')
+    expect(kinds(synth)).toEqual(['head', 'songs'])
+    expect(songs(synth[1])).toMatchObject({
+      items: ['files:a3'],
+      label: 'Songs',
+      link: { plugin: 'files', page: 'genre/synthpop' },
+      sort: null
+    })
+    page.filesAct('genre/synthpop', 'sort', 't')
+    expect(songs(page.filesPage('genres', 'genre/synthpop', '')[1]).sort).toEqual({
+      k: 't',
+      dir: 1
+    })
+  })
+
+  it("a genre's albums in the list look, with songs on other albums under them", () => {
+    const data = genreLib()
+    data.tracks = data.tracks.map((t) => (t.id === 'a3' ? { ...t, genre: ['Rock', 'Pop'] } : t))
+    data.tracks[0] = { ...data.tracks[0], genre: ['Pop'] }
+    data.albums.push(album('c', ['c1', 'c2', 'c3']))
+    data.tracks.push(
+      track('c1', 'c', { genre: ['Rock'] }),
+      track('c2', 'c', { genre: ['Pop'] }),
+      track('c3', 'c', { genre: ['Pop'] })
+    )
+    files.load(data)
+    page.filesAct('albums', 'look', 'list')
+    const rock = page.filesPage('genres', 'genre/rock', '')
+    expect(kinds(rock)).toEqual(['head', 'text', 'list', 'songs'])
+    expect((rock[2] as ListBlock).items.map((al) => (al as Album).id)).toEqual(['a', 'b'])
+    // no headings: the table under them would read as the last one's
+    expect((rock[2] as ListBlock).groups).toBeUndefined()
+    expect(songs(rock[3])).toMatchObject({ items: ['files:c1'], label: 'Songs on other albums' })
+    const play = head(rock[0]).buttons?.[0]
+    expect(play && 'play' in play && play.songs()).toEqual([
+      'files:a1',
+      'files:a2',
+      'files:a3',
+      'files:b1',
+      'files:c1'
+    ])
+  })
+
+  it("a genre's many albums get the Albums sort's headings while they end the page", () => {
+    const data = lib()
+    const ids = Array.from({ length: 20 }, (_, i) => `g${i}`)
+    data.albums = ids.map((id) => album(id, [`${id}1`], { title: `Album ${id}` }))
+    data.tracks = ids.map((id) => track(`${id}1`, id, { genre: ['Rock'] }))
+    files.load(data)
+    const t = tiles(page.filesPage('genres', 'genre/rock', '')[2])
+    expect(t.items).toHaveLength(20)
+    expect(t.groups?.artist).toBeDefined()
+    expect(t.groups?.strip).toBe(true)
+  })
+
+  it('an album opened from a genre goes back to it', () => {
+    const [h] = page.filesPage('genres', 'album/b/genre/rock', '')
+    expect(head(h)).toMatchObject({
+      look: 'album',
+      title: 'Album b',
+      back: { label: 'Rock', to: at('genre/rock') }
+    })
+  })
+
+  it("an album's head links its genres to their pages", () => {
+    const [h] = page.filesPage('albums', 'album/a', '')
+    expect(head(h).meta).toBe('Album · 2003')
+    expect(head(h).metaLinks).toEqual([
+      { text: ' · ' },
+      { text: 'Rock', to: at('genre/rock') },
+      { text: ', ' },
+      { text: 'Synthpop', to: at('genre/synthpop') }
+    ])
+  })
+
+  it('the search finds genres by name', () => {
+    const groups = page.filesSearch('synth')
+    const g = groups.find((x) => x.id === 'genres')
+    expect(g?.title).toBe('Genres')
+    expect(g && 'tiles' in g && g.tiles.items.map((x) => (x as { name: string }).name)).toEqual([
+      'Synthpop'
+    ])
   })
 })

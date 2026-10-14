@@ -13,7 +13,7 @@
   import Icon from '../ui/Icon.svelte'
   import Seg from '../ui/Seg.svelte'
   import { actOnPage, openFrom, openPage } from '../plugins'
-  import type { HeadBlock, HeadButton, NavKind } from '../plugins/types'
+  import type { HeadBlock, HeadButton, NavKind, Piece } from '../plugins/types'
   import { playPage, playState as pagePlayState } from './page-play'
 
   let {
@@ -97,11 +97,15 @@
   {/if}
 {/snippet}
 
+{#snippet pieces(list: Piece[])}
+  {#each list as p, i (i)}{#if p.to}<GoLink go={() => openPage(p.to!)}>{p.text}</GoLink
+      >{:else}{p.text}{/if}{/each}
+{/snippet}
+
 {#snippet line()}
   {#if b.line || link}
     <div class="page-meta">
-      {#each b.line ?? [] as p, i (i)}{#if p.to}<GoLink go={() => openPage(p.to!)}>{p.text}</GoLink
-          >{:else}{p.text}{/if}{/each}{#if link}{b.line ? dot : ''}<a
+      {@render pieces(b.line ?? [])}{#if link}{b.line ? dot : ''}<a
           class="site"
           href={link.url}
           target="_blank"
@@ -188,7 +192,9 @@
   <div class="albhead">
     <div class="cv"><Cover src={b.art?.src} art={b.art} /></div>
     <div class="words">
-      <div class="page-meta" title={b.metaHint}>{b.meta}</div>
+      <div class="page-meta" title={b.metaHint}>
+        {b.meta}{@render pieces(b.metaLinks ?? [])}
+      </div>
       <h2 class="page-title clamp" title={b.title}>{b.title}</h2>
       {@render line()}
       {#if b.note}<div class="page-meta">{@render noteItems(b.note)}</div>{/if}
@@ -266,6 +272,7 @@
     </div>
   {/if}
 {:else}
+  {@render back()}
   <div class="foldhead">
     <div class="page-meta">{b.meta}</div>
     <h2 class="page-title clamp" title={b.title}>{b.title}</h2>

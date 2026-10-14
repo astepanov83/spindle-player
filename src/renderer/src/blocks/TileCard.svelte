@@ -1,4 +1,5 @@
-<!-- A tile: a cover (an album) or a round picture (an artist), its title
+<!-- A tile: a cover (an album), a round picture (an artist) or a square one
+     made from covers (a genre), its title
      and the line under. A click opens it, the play button over the picture
      plays it, right-click is its song menu, a drag takes its songs. The grid
      and the shelves both draw it, so a fix is made once. -->
@@ -57,7 +58,12 @@
       tabindex={stop}
       aria-label="Open {t.title}"
       onclick={unlessDragged(() => openFrom(tab, t.to))}
-      >{#if round}<ArtistPic name={t.title} photo={t.photo} covers={t.covers ?? []} />{:else}<Cover
+      >{#if round || (!t.art && t.covers)}<ArtistPic
+          name={t.title}
+          photo={t.photo}
+          covers={t.covers ?? []}
+          square={!round}
+        />{:else}<Cover
           src={t.art?.cover}
           art={t.art}
           tint={t.art?.palette[theme.light ? 'light' : 'dark'][0]}

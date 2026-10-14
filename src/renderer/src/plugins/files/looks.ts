@@ -63,13 +63,27 @@ export const looks: { [V in LookView]: Record<ViewLooks[V], LookInfo> } = {
       about:
         'The artist in a column on the left that stays put, their songs and albums as rows on the right.'
     }
+  },
+  genres: {
+    grid: {
+      label: 'Grid',
+      icon: 'lookGrid',
+      about:
+        'A picture made from covers for each genre, with a heading for each letter in A-Z order.'
+    },
+    list: {
+      label: 'List',
+      icon: 'lookList',
+      about: 'A row for each genre: a few covers of its albums, then its albums and songs.'
+    }
   }
 }
 
 export const lookViewNames: Record<LookView, string> = {
   albums: 'Albums',
   artists: 'Artists',
-  artistPage: 'Artist page'
+  artistPage: 'Artist page',
+  genres: 'Genres'
 }
 
 // the act id of the switch, on the head of each view

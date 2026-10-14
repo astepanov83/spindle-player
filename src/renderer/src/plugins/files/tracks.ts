@@ -1,9 +1,11 @@
 // Answers about songs of the library store.
+import { genreKey } from '../../../../shared/genres'
 import { songYear, type Art, type Track } from '../../../../shared/library'
 import { itemKey, type ItemKey } from '../../../../shared/plugins/items'
 import { genreText } from '../../library/views'
 import { artistLinks } from './artists'
 import { rootName } from './folders'
+import { genrePage } from './pages'
 import { files } from './store.svelte'
 import type { ItemInfo, ItemState, PageAddress, Playable } from '../types'
 
@@ -30,6 +32,9 @@ export function trackKeys(ids: string[]): ItemKey[] {
 export function trackOf(key: ItemKey | undefined): Track | undefined {
   return key?.startsWith(prefix) ? files.find(key.slice(prefix.length)) : undefined
 }
+
+// a song's "Go to ... genre" entries at most
+const maxGenreLinks = 3
 
 // Kept by song object: the library replaces a song that changes and never
 // edits one, so an answer can't go stale. Its picture and links are read when
@@ -95,8 +100,22 @@ class TrackInfo implements ItemInfo {
       { label: 'Go to album', to: this.titleTo },
       ...artists.flatMap((a) =>
         a.to ? [{ label: many ? `Go to ${a.name}` : 'Go to artist', to: a.to }] : []
-      )
+      ),
+      ...this.#genreLinks()
     ]
+  }
+
+  // its genres' pages (ticket 123), the first few: a song can carry many
+  #genreLinks(): { label: string; to: PageAddress }[] {
+    const pages = (this.#t.genre ?? []).flatMap((name) => {
+      const g = files.getGenre(genreKey(name))
+      return g ? [{ name: g.name, page: genrePage(g.key) }] : []
+    })
+    const many = pages.length > 1
+    return pages.slice(0, maxGenreLinks).map((g) => ({
+      label: many ? `Go to ${g.name} genre` : 'Go to genre',
+      to: { plugin: 'files', page: g.page }
+    }))
   }
 }
 

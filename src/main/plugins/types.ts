@@ -63,6 +63,9 @@ export interface PluginContext {
   ai: AiClient
   // where the plugin's own reader of song words goes (ticket 120)
   lyrics: LyricsProvider
+  // the item keys main's files held at start: the queue, playlists, hearts,
+  // play counts and places (ticket 124)
+  savedKeys: ReadonlySet<string>
 }
 
 export interface CoverProvider {
@@ -89,4 +92,7 @@ export interface MainPlugin {
   windowClosed?(): void
   // the player started or stopped playing
   playing?(on: boolean): void
+  // Files and folders the system gave Spindle ("Open with", the command
+  // line), as absolute paths (ticket 124). Only after start.
+  openPaths?(paths: string[]): void
 }

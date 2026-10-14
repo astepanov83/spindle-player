@@ -41,7 +41,8 @@ import { LyricsService } from './lyrics'
 import { LyricsFetch } from './lyrics-fetch'
 import { SettingsStore } from './settings-store'
 import { Splash } from './splash'
-import { devRetryData, isDevRetry, takeLock } from './single-instance'
+import { devRetryData, isDevRetry, openData, openedIn, takeLock } from './single-instance'
+import { OpenBatch, openArgs, parseOpened } from './open-args'
 import { parseCloseAnswer } from './close-ask'
 import { parsePopupItems, popupTemplate } from './popup-menu'
 import { hasTrayHost, hidesOnMinimize, makeTray, parsePlayState, type SpindleTray } from './tray'
@@ -67,15 +68,27 @@ let tray: SpindleTray | null = null
 
 registerScheme()
 
+// Files and folders this copy was given (ticket 124). In dev the first word
+// after the program is the app's folder.
+const argSkip = process.defaultApp ? 2 : 1
+const startPaths = openArgs(process.argv, process.cwd(), argSkip)
+
 // Before anything reads or writes userData: one copy per user-data folder.
 // Only the dev server waits, for the copy it just stopped to finish saving.
+// A second copy hands its paths to the running one.
 const devServer = is.dev && !!process.env['ELECTRON_RENDERER_URL']
 const locked = takeLock(
-  (retry) => app.requestSingleInstanceLock(retry ? devRetryData : undefined),
+  (retry) => app.requestSingleInstanceLock(retry ? devRetryData : openData(startPaths)),
   devServer ? 10000 : 0
 )
+
+// Paths from the system go to the plugins once they started; until then they wait.
+let openTo: ((paths: string[]) => void) | undefined
+const waitingOpens: string[][] = []
+const opens = new OpenBatch((paths) => (openTo ? openTo(paths) : waitingOpens.push(paths)))
+
 void locked.then((ok) => {
-  if (ok) return
+  if (ok) return opens.add(startPaths)
   console.warn('Spindle is already running with this user-data folder; showing that one.')
   app.quit()
 })
@@ -196,10 +209,13 @@ page.on(PlaybackChannel.log, (_, text) => {
   if (typeof text === 'string') console.warn(text.slice(0, 1000))
 })
 
-// Another copy was started: it quits, and this one comes to the front.
-app.on('second-instance', (_e, _argv, _cwd, data) => {
+// Another copy was started: it quits, and this one opens what it was given
+// and comes to the front.
+app.on('second-instance', (_e, argv, cwd, data) => {
   // a dev copy asking again while it waits for this one to quit
   if (isDevRetry(data)) return
+  const sent = openedIn(data)
+  opens.add(sent === undefined ? openArgs(argv, cwd, argSkip) : (parseOpened(sent) ?? []))
   showMain()
 })
 
@@ -262,6 +278,15 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
   ai.onState(() => toPage(AiChannel.state, ai!.state()))
   // made first: a plugin may open files now that another's start asks about (the cover prune)
   plugins = createPlugins({ userData, log })
+  // what main's files hold, for songs a plugin knows only by their key (ticket 124)
+  const queueNow = savedQueue.get()
+  const savedKeys = new Set<string>([
+    ...queueNow.track.items,
+    ...playlists.get().flatMap((p) => p.items),
+    ...Object.keys(loved.get()),
+    ...Object.keys(plays.get()),
+    ...Object.keys(positions.get())
+  ])
   const ctx = {
     settings: store,
     userData,
@@ -274,7 +299,8 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     request: (o: Electron.ClientRequestConstructorOptions) => net.request(o),
     dns,
     covers,
-    ai: ai.client
+    ai: ai.client,
+    savedKeys
   }
   for (const p of plugins)
     p.start({
@@ -292,6 +318,10 @@ void Promise.all([locked, app.whenReady()]).then(([ok]) => {
     })
   // the saved value, as the plugins have only seen the setting at start
   for (const p of plugins) p.setOn(store.get().plugins[p.id])
+  openTo = (paths) => {
+    for (const p of plugins) p.openPaths?.(paths)
+  }
+  for (const paths of waitingOpens.splice(0)) openTo(paths)
   handleProtocol(routes)
 
   // F12 opens DevTools in dev, and Ctrl+R reload is blocked in production.

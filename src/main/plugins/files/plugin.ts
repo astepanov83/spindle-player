@@ -1,7 +1,8 @@
 // Music files: the library process and its service, with the page's library
 // requests.
 import { BrowserWindow } from 'electron'
-import { LibraryChannel } from '../../../shared/plugins/files/ipc'
+import { LibraryChannel, type DropResult } from '../../../shared/plugins/files/ipc'
+import { splitKey } from '../../../shared/plugins/items'
 import type { PluginId } from '../../../shared/plugins'
 import { stopAllDecoders } from './decode'
 import { libraryRoutes } from './protocol'
@@ -15,6 +16,11 @@ export class FilesPlugin implements MainPlugin {
   #flushed = false
   // set from the saved setting at start; see LibraryService for what off stops
   #on = false
+  // What the system gave Spindle, opened, until the page takes it: at start
+  // the page is not there yet. In the order given; one is read at a time.
+  #opened: DropResult[] = []
+  #opening: Promise<void> = Promise.resolve()
+  #toPage: (channel: string, data: unknown) => void = () => {}
 
   constructor(
     private readonly o: {
@@ -43,6 +49,14 @@ export class FilesPlugin implements MainPlugin {
       ctx.ai
     )
     this.#library = library
+    this.#toPage = ctx.toPage
+    // songs not in the library that main's files know of (ticket 124)
+    library.allowLoose(
+      [...ctx.savedKeys].flatMap((key) => {
+        const k = splitKey(key)
+        return k?.plugin === this.id ? [k.id] : []
+      })
+    )
     ctx.covers.provide({
       song: (q, signal) => library.songCover(q, signal),
       kept: () => library.coversKept(),
@@ -65,6 +79,22 @@ export class FilesPlugin implements MainPlugin {
     page.handle(LibraryChannel.showFolder, (_, parts) =>
       this.#on ? showFolder(parts, settings.get().folders) : false
     )
+    page.handle(LibraryChannel.takeOpened, () => this.#opened.splice(0))
+    page.handle(LibraryChannel.loose, (_, ids) => library.loose(ids))
+    page.handle(LibraryChannel.showFile, (_, id) => library.showFile(id))
+  }
+
+  openPaths(paths: string[]): void {
+    const library = this.library
+    this.#opening = this.#opening.then(async () => {
+      try {
+        this.#opened.push(await library.openPaths(paths))
+      } catch (e) {
+        console.error(`Could not open ${paths.length} files: ${e}`)
+        return
+      }
+      this.#toPage(LibraryChannel.opened, null)
+    })
   }
 
   setOn(on: boolean): void {

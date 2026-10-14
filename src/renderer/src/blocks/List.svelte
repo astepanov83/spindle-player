@@ -258,10 +258,11 @@
               onkeydown={(e) => onmainkey(e, r)}
             ></button>
             <span class="pic"
-              >{#if b.round}<ArtistPic
+              >{#if b.round || (!r.art && r.covers)}<ArtistPic
                   name={r.title}
                   photo={r.photo}
                   covers={r.covers ?? []}
+                  square={!b.round}
                 />{:else}<Cover
                   src={r.art?.cover}
                   art={r.art}

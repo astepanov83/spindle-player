@@ -7,7 +7,7 @@ import { pictureOf, songYear, type Album, type Art } from '../../../../shared/li
 import type { ItemKey } from '../../../../shared/plugins/items'
 import { queueLink } from '../../../../shared/saved-queue'
 import { fmtCount, fmtLength } from '../../format'
-import { albumLabel, albumLines, albumLink } from './album'
+import { albumKind, albumLines, albumLink, headGenres } from './album'
 import {
   allBy,
   artistCovers,
@@ -57,13 +57,16 @@ import {
   type CoverArt,
   type SearchGroup,
   type ShelvesBlock,
+  type SongsBlock,
   type Tile,
   type TileGroups,
   type TilesBlock
 } from '../types'
 import { albumGrouping, artistGrouping, type Grouping, type Heading } from '../../library/groups'
 import { openArtist, showArtist, followArtist, goToFolder } from './nav'
-import { albumPage, artistPage, fixesPage, folderPage, parsePage } from './pages'
+import { albumPage, artistPage, fixesPage, folderPage, genrePage, parsePage } from './pages'
+import { genreKey } from '../../../../shared/genres'
+import { filterGenres, genreSorts, parseGenreSort, sortGenres, type Genre } from './genres'
 import { fixCount, keepSeparate, nameFixes, tagNote, type NameFix } from './name-fixes'
 import { ai } from '../../ai.svelte'
 import { artistGroupsTask } from '../../../../shared/plugins/files/artists-file'
@@ -82,6 +85,7 @@ export function filesPage(tab: string, page: string, query: string): Block[] {
   if (tab === 'songs') return songsPage(query)
   if (tab === 'albums') return albumsPage(page, query)
   if (tab === 'artists') return artistsPage(page, query)
+  if (tab === 'genres') return genresPage(page, query)
   if (tab === 'folders') return foldersPage(page, query)
   return []
 }
@@ -233,14 +237,24 @@ function sortedAlbums(by: AlbumSort): Album[] {
   return out
 }
 
+// The page an album's tile is on, when not Albums: it opens under it.
+type Under = { artist: string } | { genre: string }
+
+const albumUnder = (al: Album, under?: Under): string =>
+  !under
+    ? albumPage(al.id)
+    : 'artist' in under
+      ? artistPage(under.artist, al.id)
+      : genrePage(under.genre, al.id)
+
 // An album as a tile. On an artist's page the line under names the year, and
-// the album opens under the artist.
-function albumTile(al: Album, under?: { artist: string }): Tile {
+// the album opens under the artist; on a genre's under the genre.
+function albumTile(al: Album, under?: Under): Tile {
   return {
     title: al.title,
-    subtitle: under ? (al.year ? String(al.year) : '') : al.artist,
+    subtitle: under && 'artist' in under ? (al.year ? String(al.year) : '') : al.artist,
     art: al,
-    to: at(under ? artistPage(under.artist, al.id) : albumPage(al.id)),
+    to: at(albumUnder(al, under)),
     // the album of the song the queue plays (not while radio plays)
     playing: (key) => trackOf(key)?.albumId === al.id,
     songs: () => trackKeys(al.trackIds),
@@ -249,11 +263,7 @@ function albumTile(al: Album, under?: { artist: string }): Tile {
 }
 
 // Albums as covers.
-function albumTiles(
-  albums: Album[],
-  under?: { artist: string },
-  groups?: TileGroups<Album>
-): TilesBlock {
+function albumTiles(albums: Album[], under?: Under, groups?: TileGroups<Album>): TilesBlock {
   return tilesBlock<Album>({
     items: albums,
     ...(groups ? { groups } : {}),
@@ -271,7 +281,7 @@ const albumLength = (al: Album): number =>
 // for the albums of `others` they appear on.
 function albumRows(
   albums: Album[],
-  under?: { artist: string; others?: boolean },
+  under?: { artist: string; others?: boolean } | { genre: string },
   groups?: TileGroups<Album>
 ): ListBlock {
   return listBlock<Album>({
@@ -289,7 +299,7 @@ function albumRows(
       const year = al.year ? String(al.year) : ''
       const n = al.trackIds.length
       const length = fmtLength(albumLength(al))
-      const own = under && !under.others
+      const own = under && 'artist' in under && !under.others
       // a split credit ("A, B") has no page
       const who = own ? undefined : files.getArtist(artistKey(al.artist))
       const sub = own ? undefined : al.artist
@@ -501,6 +511,192 @@ function artistsPage(page: string, query: string): Block[] {
   ]
 }
 
+// the Genres head's act target
+const genresView = 'genres'
+
+// The Genres view (ticket 123): every genre, or a genre's page, or an album
+// opened from it. While searching, the list shows over the open page.
+function genresPage(page: string, query: string): Block[] {
+  const p = parsePage(page)
+  const open = p?.kind === 'genre' ? p : undefined
+  const genre = open && files.getGenre(open.key)
+  if (!query.trim() && open?.album && files.findAlbum(open.album))
+    return albumBlocks(
+      files.album(open.album),
+      genre
+        ? { label: genre.name, to: at(genrePage(genre.key)) }
+        : { label: 'All genres', to: at('') }
+    )
+  if (!query.trim() && genre) return genreBlocks(genre)
+  const by = parseGenreSort(viewSort(genresView))
+  const shown = filterGenres(sortGenres(files.genres, by), query)
+  const head: HeadBlock = {
+    ...listHead(genresView, 'Genres', fmtCount(shown.length, 'genre', 'genres')),
+    looks: lookSwitch('genres'),
+    choice: {
+      id: 'sort',
+      label: 'Sort genres',
+      value: by,
+      options: genreSorts.map((o) => ({ value: o.id, label: o.label }))
+    }
+  }
+  if (!files.genres.length)
+    return [
+      head,
+      {
+        kind: 'empty',
+        id: genresView,
+        title: 'No genres',
+        text: 'None of your songs has a genre in its tags. Songs with a genre tag show here under it.'
+      }
+    ]
+  // letters for A-Z; a search's few names and the biggest first need none
+  const groups =
+    query.trim() || by !== 'name' ? undefined : { grouping: artistGrouping, strip: true }
+  return [
+    head,
+    ...(shown.length ? [] : [noMatches('No genre has that in its name.')]),
+    viewLook('genres') === 'list'
+      ? genreRows(shown, groups)
+      : // smaller than an album's, as the Artists grid, so more fit in a row
+        { ...genreTiles(shown, groups), small: true }
+  ]
+}
+
+// "4 albums · 52 songs", or "3 songs" for a genre only on songs of other albums
+const genreCount = (g: Genre): string =>
+  [
+    g.albums.length ? fmtCount(g.albums.length, 'album', 'albums') : '',
+    fmtCount(g.songs, 'song', 'songs')
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+// What a genre's Play plays: its albums in library order, then its other songs.
+const genreKeys = (g: Genre): ItemKey[] => trackKeys(artistSongs(g, album))
+
+// Each genre's albums and other songs as one set, made when first asked: a
+// tile asks for the song playing on every draw.
+const genreSets = new WeakMap<Genre, Set<string>>()
+
+function genrePlays(g: Genre, item: ItemKey): boolean {
+  const t = trackOf(item)
+  if (!t) return false
+  let set = genreSets.get(g)
+  if (!set) genreSets.set(g, (set = new Set([...g.albums, ...g.also])))
+  return set.has(t.albumId) || set.has(t.id)
+}
+
+// Square, from up to 4 covers the library has, else the no-cover picture.
+const genreTile = (g: Genre): Tile => ({
+  title: g.name,
+  subtitle: genreCount(g),
+  covers: artistCovers(g, album, songArt),
+  to: at(genrePage(g.key)),
+  playing: (item) => genrePlays(g, item),
+  songs: () => genreKeys(g),
+  link: queueLink('genre', g.key)
+})
+
+function genreTiles(genres: Genre[], groups?: TileGroups<Genre>): TilesBlock {
+  return tilesBlock<Genre>({
+    items: genres,
+    ...(groups ? { groups } : {}),
+    key: (g) => genrePage(g.key),
+    tile: genreTile
+  })
+}
+
+// Genres as rows: the picture, the name, a few covers of its albums, then
+// Albums and Songs.
+function genreRows(genres: Genre[], groups?: TileGroups<Genre>): ListBlock {
+  return listBlock<Genre>({
+    items: genres,
+    ...(groups ? { groups } : {}),
+    title: 'Name',
+    cols: [
+      { head: 'Albums', width: 64 },
+      { head: 'Songs', width: 64 }
+    ],
+    key: (g) => genrePage(g.key),
+    row: (g) => {
+      const n = g.albums.length
+      return {
+        ...genreTile(g),
+        subtitle: undefined,
+        strip: g.albums
+          .map(album)
+          .filter((al) => al.cover)
+          .slice(0, 6),
+        cols: [n ? String(n) : '', String(g.songs)],
+        under: genreCount(g),
+        label: [g.name, genreCount(g).replace(' · ', ', ')].join(', ')
+      }
+    }
+  })
+}
+
+// a genre's page has this many albums at least before it gets headings
+const groupedGenre = 20
+
+// A genre's page: its albums in the Albums look and sort, opening under it,
+// then its songs on other albums as a table.
+function genreBlocks(g: Genre): Block[] {
+  const id = genrePage(g.key)
+  const link = queueLink('genre', g.key)
+  const albums = g.albums.map(album)
+  const length =
+    albums.reduce((s, al) => s + albumLength(al), 0) +
+    g.also.reduce((s, t) => s + files.track(t).duration, 0)
+  const playIds = (): ItemKey[] => genreKeys(g)
+  const head: HeadBlock = {
+    kind: 'head',
+    look: 'folder',
+    id,
+    title: g.name,
+    meta: 'Genre',
+    back: { label: 'All genres', to: at('') },
+    line: [{ text: `${genreCount(g)} · ${fmtLength(length)}` }],
+    buttons: [
+      { play: 'all', label: 'Play', songs: playIds, link, primary: true },
+      { play: 'shuffle', label: 'Shuffle', songs: playIds, link },
+      { menu: 'playlist', label: 'Add to playlist', songs: playIds },
+      { menu: 'songs', label: 'Play next, add to the queue or a playlist', songs: playIds, link }
+    ]
+  }
+  const by = parseAlbumSort(viewSort(albumsView))
+  const sorted = sortAlbums(albums, by, (al) => playsOf(trackKeys(al.trackIds), (k) => plays.of(k)))
+  const under = { genre: g.key }
+  // Headings and the strip only for many albums, where they help find one,
+  // and only when the albums end the page: a song table under them would
+  // read as part of the last heading.
+  const groups = g.also.length || albums.length < groupedGenre ? undefined : albumGroups(by)
+  return [
+    head,
+    ...partBlocks(
+      'Albums',
+      viewLook('albums') === 'list'
+        ? albumRows(sorted, under, groups)
+        : albumTiles(sorted, under, groups)
+    ),
+    ...(g.also.length
+      ? [
+          {
+            kind: 'songs',
+            id,
+            items: trackKeys(g.also),
+            title: g.name,
+            link,
+            label: g.albums.length ? 'Songs on other albums' : 'Songs',
+            get sort() {
+              return files.genreSort
+            }
+          } satisfies SongsBlock
+        ]
+      : [])
+  ]
+}
+
 const showFolderId = 'show-folder'
 const goFolderId = 'go-folder'
 
@@ -551,12 +747,14 @@ function albumBlocks(
       key ? { text: name, to: at(artistPage(key)) } : { text: name }
     ]
   )
+  const genres = genreLinks(headGenres(al))
   const head: HeadBlock = {
     kind: 'head',
     look: 'album',
     id,
     title: al.title,
-    meta: albumLabel(al),
+    meta: albumKind(al),
+    ...(genres.length ? { metaLinks: genres } : {}),
     // the path is wanted now and then, not on every visit: a tooltip, and
     // the menu goes there
     ...(where ? { metaHint: folderPath(where.parts) } : {}),
@@ -614,6 +812,18 @@ function albumBlocks(
       ...(marked ? { marked } : {})
     }
   ]
+}
+
+// " · Rock, Metal" after an album's kind and year, each opening its genre
+// (ticket 123)
+function genreLinks(names: string[]): Piece[] {
+  return names.flatMap((name, i): Piece[] => {
+    const g = files.getGenre(genreKey(name))
+    return [
+      { text: i ? ', ' : ' · ' },
+      g ? { text: name, to: at(genrePage(g.key)) } : { text: name }
+    ]
+  })
 }
 
 // An album's songs as its page lists them: numbers, "Disc 2" labels, and
@@ -1069,7 +1279,7 @@ function foldersPage(page: string, query: string): Block[] {
 }
 
 // What the search box finds in the music folders (ticket 039): songs by
-// title or their own artist, albums, artists.
+// title or their own artist, albums, artists, genres (ticket 123).
 export function filesSearch(query: string): SearchGroup[] {
   return [
     {
@@ -1078,7 +1288,8 @@ export function filesSearch(query: string): SearchGroup[] {
       songs: searchSongs(files.albums, (id) => files.track(id), query).map(trackKey)
     },
     { id: 'albums', title: 'Albums', tiles: albumTiles(filterAlbums(files.albums, query)) },
-    { id: 'artists', title: 'Artists', tiles: artistTiles(filterArtists(files.artists, query)) }
+    { id: 'artists', title: 'Artists', tiles: artistTiles(filterArtists(files.artists, query)) },
+    { id: 'genres', title: 'Genres', tiles: genreTiles(filterGenres(files.genres, query)) }
   ]
 }
 
@@ -1102,12 +1313,15 @@ function setLook(target: string, look: string | undefined): void {
   const p = parsePage(target)
   if (target === albumsView) setViewLook('albums', look)
   else if (target === artistsView) setViewLook('artists', look)
+  else if (target === genresView) setViewLook('genres', look)
   else if (p?.kind === 'artist' && !p.album) setViewLook('artistPage', look)
 }
 
 function sortBy(target: string, k: string): void {
   const p = parsePage(target)
   if (target === albumsView) setViewSort(albumsView, parseAlbumSort(k))
+  else if (target === genresView) setViewSort(genresView, parseGenreSort(k))
+  else if (p?.kind === 'genre') files.sortGenre(k as SortKey)
   else if (target === songsTarget) library.sort = nextSort(library.sort, k as SortKey)
   else if (target === foldersTarget || p?.kind === 'folder') files.sortFolder(k as SortKey)
 }

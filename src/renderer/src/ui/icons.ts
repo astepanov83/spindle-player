@@ -52,6 +52,8 @@ export const icons = {
   disc: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 7a3 3 0 1 1 0 6 3 3 0 0 1 0-6z',
   person: 'M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2c-4 0-8 2-8 5v2h16v-2c0-3-4-5-8-5z',
   folder: 'M3 5h7l2 2h9v12H3z',
+  // the Genres section (ticket 123): kinds of things, as shapes
+  genre: 'M12 2l-5.5 9h11zm5.5 11a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zM3 13.5h8v8H3z',
   plus: 'M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z',
   more: 'M5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
   list: 'M3 5h14v2H3zm0 6h14v2H3zm0 6h10v2H3zm16-4v6.5a2.5 2.5 0 1 1-2-2.45V11h4v2z',

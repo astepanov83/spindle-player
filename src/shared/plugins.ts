@@ -45,7 +45,7 @@ export const plugins: PluginInfo[] = [
     defaultOn: true,
     itemKind: 'track',
     offText: 'Music files are off',
-    linkKinds: ['album', 'artist', 'folder'],
+    linkKinds: ['album', 'artist', 'folder', 'genre'],
     countsPlays: true,
     canLove: true,
     keepsPlace: true,

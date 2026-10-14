@@ -142,6 +142,10 @@ describe('links', () => {
     expect(parseLink({ plugin: 'files', page: 'smart/most' })).toBeUndefined()
     // a folder key is a path, with slashes of its own
     expect(linkTarget(queueLink('folder', '/m/a'))).toEqual({ kind: 'folder', id: '/m/a' })
+    // a genre's page (ticket 123), whose key may hold a slash too
+    expect(parseLink({ plugin: 'files', page: 'genre/hiphop/rap' })).toEqual(
+      queueLink('genre', 'hiphop/rap')
+    )
   })
 })
 

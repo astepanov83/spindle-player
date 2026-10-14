@@ -16,6 +16,7 @@ export interface ViewLooks {
   albums: 'grid' | 'list'
   artists: 'grid' | 'shelves' | 'list'
   artistPage: 'sections' | 'albums' | 'column'
+  genres: 'grid' | 'list'
 }
 export type LookView = keyof ViewLooks
 // what an album, artist or station with no picture shows (ticket 103)
@@ -113,7 +114,8 @@ const droppedNoCover = ['sound', 'genre']
 export const viewLookChoices: { [V in LookView]: ViewLooks[V][] } = {
   albums: ['grid', 'list'],
   artists: ['grid', 'shelves', 'list'],
-  artistPage: ['sections', 'albums', 'column']
+  artistPage: ['sections', 'albums', 'column'],
+  genres: ['grid', 'list']
 }
 export const lookViews = Object.keys(viewLookChoices) as LookView[]
 
@@ -137,7 +139,7 @@ export function defaultSettings(): Settings {
     plugins: pluginDefaults(),
     viewSorts: {},
     artistsShown: 'album',
-    viewLooks: { albums: 'grid', artists: 'grid', artistPage: 'sections' },
+    viewLooks: { albums: 'grid', artists: 'grid', artistPage: 'sections', genres: 'grid' },
     loudness: 'album',
     noCover: 'rings',
     outputDevice: '',
@@ -268,7 +270,8 @@ function parseViewLooks(v: unknown, base: ViewLooks): ViewLooks {
   return {
     albums: isViewLook('albums', r.albums) ? r.albums : base.albums,
     artists: isViewLook('artists', r.artists) ? r.artists : base.artists,
-    artistPage: isViewLook('artistPage', r.artistPage) ? r.artistPage : base.artistPage
+    artistPage: isViewLook('artistPage', r.artistPage) ? r.artistPage : base.artistPage,
+    genres: isViewLook('genres', r.genres) ? r.genres : base.genres
   }
 }
 

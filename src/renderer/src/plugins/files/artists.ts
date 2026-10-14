@@ -43,16 +43,20 @@ export function allBy(songs: ArtistCredit[], name: string): boolean {
   return songs.every((t) => artistKey(t.artist) === key)
 }
 
-// Their albums in order, then their songs on other albums.
-export function artistSongs(a: Artist, album: (id: string) => { trackIds: string[] }): string[] {
+// Their albums in order, then their songs on other albums. A genre's too.
+export function artistSongs(
+  a: Pick<Artist, 'albums' | 'also'>,
+  album: (id: string) => { trackIds: string[] }
+): string[] {
   return [...a.albums.flatMap((id) => album(id).trackIds), ...a.also]
 }
 
 // Up to 4 different covers for the picture made from covers: their albums
 // first, then the pictures of their songs on other albums. With their colors,
-// shown while the picture loads.
+// shown while the picture loads. A genre's picture too: only covers the
+// library already has, none made for it (decision 229).
 export function artistCovers(
-  a: Artist,
+  a: Pick<Artist, 'albums' | 'also'>,
   album: (id: string) => CoverArt,
   songArt: (trackId: string) => CoverArt
 ): CoverArt[] {

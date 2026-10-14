@@ -183,7 +183,8 @@ describe('the looks in Settings (ticket 095)', () => {
     expect(settings.viewLooks).toEqual({
       albums: 'grid',
       artists: 'shelves',
-      artistPage: 'sections'
+      artistPage: 'sections',
+      genres: 'grid'
     })
   })
 })

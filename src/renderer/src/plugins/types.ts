@@ -125,6 +125,8 @@ export interface HeadBlock {
   title: string
   // the line over the title: "Album · 2003". A list's title row has none.
   meta?: string
+  // the rest of that line, with links (an album's genres: " · Rock, Metal")
+  metaLinks?: Piece[]
   // a list's count, after its title: "8 albums" (it shows the number)
   count?: string
   // a list's choice of what it shows, at the right of its title row: "Album

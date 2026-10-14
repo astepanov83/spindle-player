@@ -22,6 +22,7 @@ import {
 } from '../../../../shared/plugins/files/library-patch'
 import { nextPlaylistSort, type Sort, type SortKey } from '../../library/views'
 import { emptyTree, folderTree, type FolderTree } from './folders'
+import { listGenres, type Genre } from './genres'
 import { library } from '../../stores/library.svelte'
 
 // The same list when every album in it is the same object, so views made
@@ -45,6 +46,9 @@ class FilesStore {
   // name order (see shared/plugins/files/artists.ts)
   artists: Artist[] = $state.raw([])
   #artistIndex = new Map<string, number>()
+  // A-Z (ticket 123)
+  genres: Genre[] = $state.raw([])
+  #genreIndex = new Map<string, number>()
   // artist key -> photo found online
   photos: Readonly<Record<string, ArtistPhoto>> = $state.raw({})
   // The maps above are plain, so Svelte can't see them change. Every reader
@@ -85,6 +89,8 @@ class FilesStore {
 
   // Folders show songs in folder order until a column is clicked, like playlists.
   folderSort: Sort | null = $state(null)
+  // the same for a genre's songs on other albums (ticket 123)
+  genreSort: Sort | null = $state(null)
   // the artist whose names are being edited (ticket 024)
   editingArtist: string | null = $state(null)
   // which library main sent last, so a patch is only put on the one it was made from
@@ -146,6 +152,8 @@ class FilesStore {
       })
       this.artists = listArtists(albums, (id) => this.#tracks.get(id)!)
       this.#artistIndex = new Map(this.artists.map((a, i) => [a.key, i]))
+      this.genres = listGenres(albums, (id) => this.#tracks.get(id)!)
+      this.#genreIndex = new Map(this.genres.map((g, i) => [g.key, i]))
     }
     if (songs) this.#version++
     this.#loads++
@@ -157,9 +165,18 @@ class FilesStore {
     this.folderSort = nextPlaylistSort(this.folderSort, k)
   }
 
+  sortGenre(k: SortKey): void {
+    this.genreSort = nextPlaylistSort(this.genreSort, k)
+  }
+
   getArtist(key: string): Artist | undefined {
     const i = this.#artistIndex.get(key)
     return i === undefined ? undefined : this.artists[i]
+  }
+
+  getGenre(key: string): Genre | undefined {
+    const i = this.#genreIndex.get(key)
+    return i === undefined ? undefined : this.genres[i]
   }
 
   // Bumped by every library the page gets, whole or a patch. A picture that

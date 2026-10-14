@@ -379,7 +379,8 @@ describe('pages', () => {
     const more = head(h).buttons?.find((b) => 'menu' in b && b.menu === 'songs')
     expect(more && 'actions' in more && more.actions).toEqual([
       { id: 'go-folder', label: 'Go to folder' },
-      { id: 'show-folder', label: 'Show in file manager' }
+      { id: 'show-folder', label: 'Show in file manager' },
+      { id: 'edit-album', label: 'Edit album…' }
     ])
     page.filesAct(head(h).id, 'show-folder')
     expect(api.showFolder).toHaveBeenLastCalledWith(['/m', 'Rock'])

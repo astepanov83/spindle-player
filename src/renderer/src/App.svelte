@@ -6,6 +6,7 @@
   import Settings from './components/Settings.svelte'
   import { keysSection } from './components/settings-sections'
   import CloseAsk from './components/CloseAsk.svelte'
+  import EditSongs from './library/EditSongs.svelte'
   import MiniButtons from './components/MiniButtons.svelte'
   import Node from './layout/Node.svelte'
   import Menu from './ui/Menu.svelte'
@@ -427,6 +428,7 @@
   <Notice />
   <Menu />
   <CloseAsk />
+  <EditSongs />
   <DragGhost />
 </div>
 

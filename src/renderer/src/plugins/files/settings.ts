@@ -13,7 +13,9 @@ import {
 } from './scan-text'
 import { files } from './store.svelte'
 import { nameFixes } from './name-fixes'
-import { showFixes } from './nav'
+import { showChanges, showFixes } from './nav'
+import { changedSongs, undoAll } from './tag-edit'
+import { fmtCount } from '../../format'
 import { layout } from '../../stores/layout.svelte'
 import { ai } from '../../ai.svelte'
 import { artistGroupsTask } from '../../../../shared/plugins/files/artists-file'
@@ -45,6 +47,7 @@ export function filesSettings(): SettingBlock[] {
     { kind: 'button', id: 'rescan', label: 'Rescan', disabled: !canRescan(s, files.loadFailed) },
     ...statusLines(s, files.loadFailed).map((text): SettingBlock => ({ kind: 'status', text })),
     ...lookBlocks(),
+    ...changesBlocks(),
     { kind: 'ai', task: artistGroupsTask, blocks: groupsBlocks() }
   ]
 }
@@ -69,6 +72,31 @@ function lookBlocks(): SettingBlock[] {
       }
     })
   ]
+}
+
+// Songs whose info was changed in Spindle (ticket 129): how many, the page
+// that lists them with Undo, and Undo all, which asks first.
+function changesBlocks(): SettingBlock[] {
+  const n = changedSongs().length
+  const out: SettingBlock[] = [
+    { kind: 'title', text: 'Song info changes' },
+    {
+      kind: 'status',
+      text: n
+        ? `${fmtCount(n, 'song', 'songs')} changed with Edit song info. Your files stay as they are.`
+        : "None yet. Edit song info… in a song's menu changes what Spindle shows; your files stay as they are."
+    }
+  ]
+  if (!n) return out
+  // Focus has no library to show them in
+  if (layout.hasLibrary) out.push({ kind: 'button', id: 'see-changes', label: 'See the changes' })
+  out.push({
+    kind: 'button',
+    id: 'undo-changes',
+    label: 'Undo all',
+    confirm: `Every changed song shows its file's info again.`
+  })
+  return out
 }
 
 // The task's own line and button, in its box under the setup, only while it is switched on.
@@ -113,7 +141,10 @@ export function filesActSetting(id: string, actionId: string, value?: string): v
   else if (id === 'ai-fixes' && actionId === 'press') {
     layout.closeSettings()
     showFixes()
-  }
+  } else if (id === 'see-changes' && actionId === 'press') {
+    layout.closeSettings()
+    showChanges()
+  } else if (id === 'undo-changes' && actionId === 'press') undoAll()
 }
 
 // A scan, next to the chips. With no songs yet the empty page shows it instead.

@@ -41,6 +41,7 @@ vi.mock('../stores/queue.svelte', () => ({
 vi.stubGlobal('window', {
   playlistsApi: { save: vi.fn() },
   lovedApi: { set: vi.fn() },
+  libraryApi: { tagValues: vi.fn(async () => ({})) },
   radioApi: { onTitle: () => () => {}, onLogo: () => () => {}, onCover: () => () => {} }
 })
 
@@ -209,7 +210,9 @@ describe('Go to (ticket 040)', () => {
       '---',
       '# Add to playlist',
       'Mix',
-      'New playlist'
+      'New playlist',
+      '---',
+      'Edit song info…'
     ])
     pick(m, 'Go to album')
     expect([library.tab, library.page('albums'), library.landing]).toEqual([
@@ -326,6 +329,52 @@ describe('Love and Unlove (ticket 117)', () => {
     pick(m, 'Love')
     expect(loved.all).toEqual({ 'files:a': expect.any(Number) })
     expect(window.lovedApi.set).toHaveBeenLastCalledWith(['files:a'], true)
+  })
+})
+
+describe('Edit song info (ticket 129)', () => {
+  beforeEach(() => {
+    const track = (id: string): Track => ({
+      id,
+      title: id,
+      duration: 1,
+      albumId: 'al',
+      artist: 'Kai',
+      album: 'Blue Hours',
+      no: 1,
+      disc: 1,
+      codec: '',
+      folder: 0
+    })
+    const album = {
+      id: 'al',
+      title: 'Blue Hours',
+      artist: 'Kai',
+      year: 0,
+      added: 0,
+      palette: defaultPalettes,
+      cover: '',
+      coverLarge: '',
+      trackIds: ['s1', 's2']
+    }
+    files.load({ albums: [album], tracks: [track('s1'), track('s2')], folders: [] })
+  })
+
+  it('comes last, for one song of the library or several', () => {
+    expect(labels(songMenu(['files:s1'])).slice(-2)).toEqual(['---', 'Edit song info…'])
+    expect(labels(songMenu(['files:s1', 'files:s2'])).at(-1)).toBe('Edit song info…')
+  })
+
+  it('is left out for a song not in the library, a station or an MFP song', () => {
+    for (const keys of [['files:gone'], ['radio:rb-1'], ['mfp:e#1'], ['files:s1', 'radio:rb-1']])
+      expect(labels(songMenu(keys as `files:${string}`[]))).not.toContain('Edit song info…')
+  })
+
+  it("asks main for the songs' tags, and says so when it can't read them", async () => {
+    const { notice } = await import('../stores/notice.svelte')
+    pick(songMenu(['files:s1', 'files:s2']), 'Edit song info…')
+    expect(window.libraryApi.tagValues).toHaveBeenLastCalledWith(['s1', 's2'])
+    await vi.waitFor(() => expect(notice.text).toBe("Couldn't read the song info"))
   })
 })
 

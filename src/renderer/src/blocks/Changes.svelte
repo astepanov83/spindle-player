@@ -1,5 +1,6 @@
 <!-- A changes block: one row per change, what it was, an arrow, what it is
-     now (names that open their page), and the button that undoes it. -->
+     now (names that open their page), and the button that undoes it. A row
+     may name what changed above that (a song). -->
 <script lang="ts">
   import type { PluginId } from '../../../shared/plugins'
   import { actOnPage, openFrom } from '../plugins'
@@ -31,6 +32,13 @@
   {#each b.rows as r, i (r.key)}
     <li>
       <span class="what">
+        {#if r.head}
+          <span class="head"
+            >{#each r.head as p, i (i)}{#if p.to}{@const to = p.to}<GoLink
+                  go={() => openFrom(tab, to)}>{p.text}</GoLink
+                >{:else}{p.text}{/if}{/each}</span
+          >
+        {/if}
         <span class="from">{r.from}</span>
         <span class="arrow" aria-hidden="true">→</span>
         <span class="sr">to</span>
@@ -76,6 +84,10 @@
     column-gap: 8px;
     font-size: var(--text-m);
     overflow-wrap: anywhere;
+  }
+  .head {
+    flex-basis: 100%;
+    font-weight: 600;
   }
   /* the tag as written, quieter than what it shows as now */
   .from {

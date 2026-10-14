@@ -4,7 +4,15 @@ import { crumbs, folderSearchText, shownFolder } from './folders'
 import { library } from '../../stores/library.svelte'
 import { files } from './store.svelte'
 import type { PageAddress, Tab } from '../types'
-import { artistPage, filesTabOf, fixesPage, folderPage, parsePage } from './pages'
+import {
+  albumPage,
+  artistPage,
+  changesPage,
+  filesTabOf,
+  fixesPage,
+  folderPage,
+  parsePage
+} from './pages'
 import { viewLook } from '../../stores/settings.svelte'
 
 const isAlbum = (id: string): boolean => !!files.findAlbum(id)
@@ -42,7 +50,7 @@ export function canOpenFiles(to: PageAddress): boolean {
   if (p?.kind === 'album') return isAlbum(p.id)
   if (p?.kind === 'artist') return !p.album && !!files.getArtist(p.key)
   if (p?.kind === 'folder') return files.folders.byKey.has(p.key)
-  return p?.kind === 'fixes'
+  return p?.kind === 'fixes' || p?.kind === 'changes'
 }
 
 // An album or artist that is gone closes; an album under an artist shows the
@@ -62,6 +70,7 @@ export function filesPath(tab: string, page: string): string[] {
   const path: string[] = []
   if (p?.kind === 'album') path.push(`album:${p.id}`)
   if (p?.kind === 'fixes') path.push('fixes')
+  if (p?.kind === 'changes') path.push('changes')
   if (p?.kind === 'artist') {
     path.push(`artist:${p.key}`)
     if (p.album) path.push(`album:${p.album}`)
@@ -84,7 +93,9 @@ export function filesLook(tab: string, page: string): string | undefined {
   const p = parsePage(page)
   const searching = !!library.query.trim()
   if (tab === 'albums')
-    return searching || (p?.kind === 'album' && isAlbum(p.id)) ? undefined : viewLook('albums')
+    return searching || (p?.kind === 'album' && isAlbum(p.id)) || p?.kind === 'changes'
+      ? undefined
+      : viewLook('albums')
   if (tab !== 'artists') return undefined
   if (searching) return viewLook('artists')
   if (p?.kind === 'artist' && p.album && isAlbum(p.album)) return undefined
@@ -127,3 +138,25 @@ function showLink(page: string): void {
 export const showArtist = (key: string): void => showLink(artistPage(key))
 export const goToFolder = (key: string): void => showLink(folderPage(key))
 export const showFixes = (): void => showLink(fixesPage)
+export const showChanges = (): void => showLink(changesPage)
+
+// The open album holds some of these songs, whose album or album artist was
+// changed (ticket 129): once the library comes back, it shows the album they
+// are in now. Under an artist it stays under them.
+export function followSongs(ids: string[]): void {
+  const tab = library.tab
+  const p = parsePage(library.page(tab))
+  const open = p?.kind === 'album' ? p.id : p?.kind === 'artist' ? p.album : undefined
+  const al = open ? files.findAlbum(open) : undefined
+  const id = al && ids.find((i) => al.trackIds.includes(i))
+  if (!id) return
+  library.follow({
+    tab,
+    to: (page) => {
+      const now = files.find(id)?.albumId
+      const q = parsePage(page)
+      if (!now) return ''
+      return q?.kind === 'artist' ? artistPage(q.key, now) : albumPage(now)
+    }
+  })
+}

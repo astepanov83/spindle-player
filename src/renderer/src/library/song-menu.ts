@@ -1,17 +1,18 @@
 // The menu for songs (spec "Pages and tabs", Song menu): the core's queue
 // part, then the item's links (Go to), then what the songs' plugin offers
-// (Show in file manager), then Love and Unlove, then the core's playlists. Each part is a
-// function; a new part is one more argument to `sections`. Songs come as
-// item keys.
+// (Show in file manager), then Love and Unlove, then the core's playlists,
+// then Edit song info. Each part is a function; a new part is one more
+// argument to `sections`. Songs come as item keys.
 import { canLove } from '../../../shared/loved'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
-import { canOpen, infoOf, openPage } from '../plugins'
+import { canEditSongs, canOpen, editFormOf, infoOf, openPage } from '../plugins'
 import { layout } from '../stores/layout.svelte'
 import { loved } from '../stores/loved.svelte'
 import { menu, type MenuEntry, type MenuItem } from '../stores/menu.svelte'
 import { playlists } from '../stores/playlists.svelte'
 import { queue } from '../stores/queue.svelte'
+import { editSongs } from './edit-songs.svelte'
 
 export interface SongMenuOptions {
   // the songs are rows of this playlist: they can leave it
@@ -95,13 +96,21 @@ function playlistPart(keys: ItemKey[], o: SongMenuOptions): MenuEntry[] {
   return entries
 }
 
+// One song or several, of a plugin that can edit them (music files, ticket
+// 129). With Song info (127), last.
+function editPart(keys: ItemKey[]): MenuEntry[] {
+  if (!canEditSongs(keys)) return []
+  return [{ label: 'Edit song info…', run: () => void editSongs.open(editFormOf(keys)) }]
+}
+
 export function songMenu(keys: ItemKey[], o: SongMenuOptions = {}): MenuEntry[] {
   return sections(
     queuePart(keys, o),
     goToPart(keys),
     o.actions ?? [],
     lovePart(keys),
-    playlistPart(keys, o)
+    playlistPart(keys, o),
+    editPart(keys)
   )
 }
 

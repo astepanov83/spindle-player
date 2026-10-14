@@ -3,7 +3,7 @@
 // The bookkeeping (replies, the scan asked for, the status) is in library-client.ts.
 import { stat } from 'fs/promises'
 import { join } from 'path'
-import { app, dialog, utilityProcess, type BrowserWindow } from 'electron'
+import { app, dialog, shell, utilityProcess, type BrowserWindow } from 'electron'
 import { LibraryChannel, type DropResult } from '../../../shared/plugins/files/ipc'
 import type { IdMoves } from '../../../shared/id-moves'
 import type { ScanStatus } from '../../../shared/library'
@@ -16,7 +16,8 @@ import type { SongFileInfo } from '../../../shared/plugins/files/song-info'
 import { ffmpegTool } from '../../ffmpeg-path'
 import type { SettingsStore } from '../../settings-store'
 import type { CoverCache } from '../../covers/cover-cache'
-import { addDropped } from './dropped'
+import { addFolders, droppedPaths, pathKind, sortPaths } from './dropped'
+import { looseParts, type OpenedSongs } from '../../../shared/plugins/files/loose'
 import { AiRequests } from './ai-messages'
 import { LibraryClient } from './library-client'
 import { MissingWatch, hasEntries } from './missing-watch'
@@ -57,6 +58,10 @@ export class LibraryService {
   #aiEnabled: Record<string, boolean>
   // the library process's AiClient calls, made here where the key is
   #aiRequests: AiRequests
+  // Files the page may ask about as songs not in the library (ticket 124):
+  // those opened this run, and those main's files held at start. The page
+  // can't name any other path.
+  #loose = new Set<string>()
 
   constructor(
     readonly store: SettingsStore,
@@ -284,15 +289,71 @@ export class LibraryService {
     this.#setFolders([...this.store.get().folders, ...r.filePaths])
   }
 
-  // Folders dropped on the window (ticket 047). Only folders that exist are added.
+  // Files and folders dropped on the window (tickets 047 and 124).
   addDropped(paths: unknown): Promise<DropResult> {
-    if (!this.#on) return Promise.resolve({ added: [], known: 0, other: 0 })
-    const isDir = (p: string): Promise<boolean> =>
-      stat(p).then(
-        (s) => s.isDirectory(),
-        () => false
-      )
-    return addDropped(paths, this.store, isDir, (f) => this.#setFolders(f))
+    const list = droppedPaths(paths)
+    if (!this.#on || !list) return Promise.resolve({ added: [], known: 0, other: 0 })
+    return this.openPaths(list)
+  }
+
+  // Files and folders dropped or given by the system ("Open with", ticket
+  // 124): folders that exist become music folders, songs are read.
+  async openPaths(paths: unknown[]): Promise<DropResult> {
+    if (!this.#on) return { added: [], known: 0, other: 0, off: true }
+    const { dirs, songs, other } = await sortPaths(paths, (p) => pathKind(p, stat))
+    const r: DropResult = { ...addFolders(dirs, this.store, (f) => this.#setFolders(f)), other }
+    if (!songs.length) return r
+    for (const p of songs) this.#loose.add(p)
+    const opened = await this.#open(songs, false)
+    if (opened?.ids.length) r.songs = { ids: opened.ids, loose: opened.loose }
+    r.other += opened ? (opened.gone?.length ?? 0) : songs.length
+    return r
+  }
+
+  // Loose ids main's files held at start (see #loose).
+  allowLoose(ids: Iterable<string>): void {
+    for (const id of ids) {
+      const p = looseParts(id)
+      if (p) this.#loose.add(p.path)
+    }
+  }
+
+  // Songs not in the library the page has keys of. An id main doesn't know
+  // is gone, as its file may be. Rejects when the library process gave no
+  // answer, so the page asks again later.
+  async loose(ids: unknown): Promise<OpenedSongs> {
+    const list = Array.isArray(ids)
+      ? ids.filter((id): id is string => typeof id === 'string').slice(0, 1000)
+      : []
+    const known = (id: string): boolean => {
+      const p = looseParts(id)
+      return !!p && this.#loose.has(p.path)
+    }
+    const gone = list.filter((id) => !known(id))
+    const asked = list.filter(known)
+    if (!asked.length) return { ids: [], loose: [], gone }
+    if (!this.#on) throw new Error('Music files is off')
+    const opened = await this.#open(asked, true)
+    if (!opened) throw new Error('The library process gave no answer')
+    gone.push(...(opened.gone ?? []))
+    return { ...opened, gone }
+  }
+
+  #open(items: string[], loose: boolean): Promise<OpenedSongs | undefined> {
+    return this.#client.ask({ type: 'open', items, loose }).then((r) => r.opened)
+  }
+
+  // A song not in the library in the file manager, by its loose id.
+  async showFile(id: unknown): Promise<boolean> {
+    const p = typeof id === 'string' ? looseParts(id) : undefined
+    if (!this.#on || !p || !this.#loose.has(p.path)) return false
+    try {
+      await stat(p.path)
+    } catch {
+      return false
+    }
+    shell.showItemInFolder(p.path)
+    return true
   }
 
   removeFolder(path: unknown): void {

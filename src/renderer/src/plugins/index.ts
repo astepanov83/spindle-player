@@ -22,6 +22,7 @@ import type {
   NavKind,
   PageAddress,
   PageHalf,
+  OpenSongs,
   Playable,
   SongInfoView,
   Tile
@@ -195,7 +196,10 @@ export function coverLines(): { text: string; busy: boolean }[] {
 // gives the ids each one moved, and `listen` lets them hear main's news.
 export async function startPlugins(): Promise<{
   load(): { plugin: PluginId; moves: IdMoves }[]
-  listen(idsMoved: (plugin: PluginId, moves: IdMoves) => void): void
+  listen(
+    idsMoved: (plugin: PluginId, moves: IdMoves) => void,
+    open: (keys: ItemKey[], how: Parameters<OpenSongs>[1]) => void
+  ): void
 }> {
   const started = await Promise.all(
     entries.map(async (e) => ({ id: e.id, start: await e.half.start?.() }))
@@ -206,8 +210,16 @@ export async function startPlugins(): Promise<{
         const moves = start?.load()
         return moves ? [{ plugin: id, moves }] : []
       }),
-    listen: (idsMoved) => {
-      for (const { id, start } of started) start?.listen?.((moves) => idsMoved(id, moves))
+    listen: (idsMoved, open) => {
+      for (const { id, start } of started)
+        start?.listen?.(
+          (moves) => idsMoved(id, moves),
+          (ids, how) =>
+            open(
+              ids.map((i) => itemKey(id, i)),
+              how
+            )
+        )
     }
   }
 }

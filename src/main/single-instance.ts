@@ -33,3 +33,16 @@ export async function takeLock(
   }
   return false
 }
+
+// Sent with the first ask: the files and folders this copy was given, so the
+// running copy opens them (ticket 124). Chromium may add its own flags to the
+// command line it passes on, so the paths go as data, already made absolute.
+export function openData(paths: string[]): { open: string[] } {
+  return { open: paths }
+}
+
+// What a second copy sent as its paths; undefined when it sent none (an
+// older copy, a dev copy asking again), so the caller reads its command line.
+export function openedIn(data: unknown): unknown {
+  return typeof data === 'object' && data !== null ? (data as { open?: unknown }).open : undefined
+}

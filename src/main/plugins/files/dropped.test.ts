@@ -1,56 +1,82 @@
 import { describe, expect, it } from 'vitest'
 import { maxDropped } from '../../../shared/plugins/files/ipc'
-import { addDropped, droppedFolders } from './dropped'
+import { addFolders, droppedPaths, pathKind, sortPaths } from './dropped'
 
-// folders that exist on this made-up disk
+// what is on this made-up disk
 const dirs = new Set(['/music/jazz', '/music/rock', '/home/me/Music'])
-const isDir = async (p: string): Promise<boolean> => dirs.has(p)
+const songs = new Set(['/x/a.flac', '/x/b.mp3', '/x/Live.cue'])
+const kind = async (p: string): Promise<'dir' | 'song' | undefined> =>
+  dirs.has(p) ? 'dir' : songs.has(p) ? 'song' : undefined
 
-describe('droppedFolders', () => {
-  it('adds folders that exist and are not music folders yet', async () => {
-    expect(
-      await droppedFolders(['/music/jazz', '/music/rock/'], ['/home/me/Music'], isDir)
-    ).toEqual({ added: ['/music/jazz', '/music/rock'], known: 0, other: 0 })
+describe('pathKind', () => {
+  const stat = (dir: boolean, file: boolean) => async () => ({
+    isDirectory: () => dir,
+    isFile: () => file
   })
 
-  it('counts a music folder it has already, and adds it once', async () => {
+  it('knows folders, audio files and cue sheets', async () => {
+    expect(await pathKind('/music/jazz', stat(true, false))).toBe('dir')
+    for (const p of ['/x/a.flac', '/x/b.MP3', '/x/c.ape', '/x/Live.cue'])
+      expect(await pathKind(p, stat(false, true))).toBe('song')
+  })
+
+  it('leaves out other files and paths that are gone', async () => {
+    expect(await pathKind('/x/notes.txt', stat(false, true))).toBeUndefined()
+    expect(await pathKind('/x/.hidden.mp3', stat(false, true))).toBeUndefined()
+    // a folder named like a song is still a folder
+    expect(await pathKind('/x/odd.mp3', stat(true, false))).toBe('dir')
+    const gone = async (): Promise<never> => {
+      throw new Error('ENOENT')
+    }
+    expect(await pathKind('/x/gone.mp3', gone)).toBeUndefined()
+  })
+})
+
+describe('sortPaths', () => {
+  it('splits folders and songs, keeping the order of the songs', async () => {
+    expect(await sortPaths(['/x/b.mp3', '/music/jazz', '/x/a.flac', '/music/rock/'], kind)).toEqual(
+      { dirs: ['/music/jazz', '/music/rock'], songs: ['/x/b.mp3', '/x/a.flac'], other: 0 }
+    )
+  })
+
+  it('takes each once', async () => {
+    expect(await sortPaths(['/x/a.flac', '/x/a.flac', '/music/jazz', '/music/jazz'], kind)).toEqual(
+      { dirs: ['/music/jazz'], songs: ['/x/a.flac'], other: 0 }
+    )
+  })
+
+  it('counts other files, missing paths and anything that is not an absolute path', async () => {
     expect(
-      await droppedFolders(
-        ['/home/me/Music', '/music/jazz', '/music/jazz'],
-        ['/home/me/Music'],
-        isDir
+      await sortPaths(
+        ['/x/notes.txt', '/gone', 'music/jazz', '', 42, null, { path: '/music/rock' }],
+        kind
       )
-    ).toEqual({ added: ['/music/jazz'], known: 1, other: 0 })
-  })
-
-  it('leaves out files, missing paths and anything that is not an absolute path', async () => {
-    expect(
-      await droppedFolders(
-        ['/music/jazz/song.mp3', '/gone', 'music/jazz', '', 42, null, { path: '/music/rock' }],
-        [],
-        isDir
-      )
-    ).toEqual({ added: [], known: 0, other: 7 })
-  })
-
-  it('takes nothing that is not a list of paths', async () => {
-    for (const v of ['/music/jazz', undefined, { 0: '/music/jazz' }])
-      expect(await droppedFolders(v, [], isDir)).toEqual({ added: [], known: 0, other: 0 })
-  })
-
-  it('takes nothing from a list longer than a drop can be', async () => {
-    const many = Array.from({ length: maxDropped + 1 }, () => '/music/jazz')
-    expect(await droppedFolders(many, [], isDir)).toEqual({ added: [], known: 0, other: 0 })
+    ).toEqual({ dirs: [], songs: [], other: 7 })
   })
 
   it('asks the disk only about absolute paths', async () => {
     const asked: string[] = []
-    await droppedFolders(['rel/path', '/music/jazz'], [], async (p) => (asked.push(p), true))
+    await sortPaths(['rel/path', '/music/jazz'], async (p) => (asked.push(p), 'dir'))
     expect(asked).toEqual(['/music/jazz'])
   })
 })
 
-describe('addDropped', () => {
+describe('droppedPaths', () => {
+  it('takes a list', () => {
+    expect(droppedPaths(['/a', 3])).toEqual(['/a', 3])
+  })
+
+  it('takes nothing that is not a list of paths', () => {
+    for (const v of ['/music/jazz', undefined, { 0: '/music/jazz' }])
+      expect(droppedPaths(v)).toBeUndefined()
+  })
+
+  it('takes nothing from a list longer than a drop can be', () => {
+    expect(droppedPaths(Array.from({ length: maxDropped + 1 }, () => '/x/a.flac'))).toBeUndefined()
+  })
+})
+
+describe('addFolders', () => {
   // a settings store as main has it: readable or not, and its folder list
   type FakeStore = { readable: boolean; folders: string[]; get(): { folders: string[] } }
   function fakeStore(folders: string[], readable = true): FakeStore {
@@ -58,39 +84,31 @@ describe('addDropped', () => {
     return store
   }
 
-  it('does nothing while the settings file could not be read, and says so', async () => {
-    const store = fakeStore([], false)
-    const asked: string[] = []
+  it('adds folders that are not music folders yet, and counts the rest', () => {
     const set: string[][] = []
-    const r = await addDropped(
-      ['/music/jazz'],
-      store,
-      async (p) => (asked.push(p), true),
-      (f) => set.push(f)
+    const r = addFolders(['/home/me/Music', '/music/jazz'], fakeStore(['/home/me/Music']), (f) =>
+      set.push(f)
     )
-    expect(r).toEqual({ added: [], known: 0, other: 0, unreadable: true })
-    expect(asked).toEqual([])
+    expect(r).toEqual({ added: ['/music/jazz'], known: 1 })
+    expect(set).toEqual([['/home/me/Music', '/music/jazz']])
+  })
+
+  it('does nothing while the settings file could not be read, and says so', () => {
+    const set: string[][] = []
+    const r = addFolders(['/music/jazz'], fakeStore([], false), (f) => set.push(f))
+    expect(r).toEqual({ added: [], known: 0, unreadable: true })
     expect(set).toEqual([])
   })
 
-  it('adds to the folder list as it is after the disk answered', async () => {
-    const store = fakeStore(['/home/me/Music'])
+  it('sets nothing when no folder was added', () => {
     const set: string[][] = []
-    // a folder the picker added while the disk was asked
-    const slowDir = async (p: string): Promise<boolean> => {
-      store.folders = [...store.folders, '/music/rock']
-      return isDir(p)
-    }
-    const r = await addDropped(['/music/jazz'], store, slowDir, (f) => set.push(f))
-    expect(r.added).toEqual(['/music/jazz'])
-    expect(set).toEqual([['/home/me/Music', '/music/rock', '/music/jazz']])
-  })
-
-  it('sets nothing when no folder was added', async () => {
-    const set: string[][] = []
-    await addDropped(['/home/me/Music', '/gone'], fakeStore(['/home/me/Music']), isDir, (f) =>
-      set.push(f)
-    )
+    expect(
+      addFolders(['/home/me/Music'], fakeStore(['/home/me/Music']), (f) => set.push(f))
+    ).toEqual({ added: [], known: 1 })
+    expect(addFolders([], fakeStore([], false), (f) => set.push(f))).toEqual({
+      added: [],
+      known: 0
+    })
     expect(set).toEqual([])
   })
 })

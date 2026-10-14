@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { devRetryData, isDevRetry, takeLock } from './single-instance'
+import { devRetryData, isDevRetry, openData, openedIn, takeLock } from './single-instance'
 
 // Free after `busy` asks. Counts the asks and the time waited.
 function lock(busy: number): {
@@ -65,5 +65,15 @@ describe('isDevRetry', () => {
   it('treats anything else as a real second start', () => {
     for (const d of [undefined, null, {}, { devRetry: 'yes' }, 'devRetry', []])
       expect(isDevRetry(d)).toBe(false)
+  })
+})
+
+describe('openData', () => {
+  it('carries the paths to the running copy', () => {
+    expect(openedIn(structuredClone(openData(['/m/a.flac'])))).toEqual(['/m/a.flac'])
+  })
+
+  it('gives nothing for other data', () => {
+    for (const d of [undefined, null, devRetryData, 'x', {}]) expect(openedIn(d)).toBeUndefined()
   })
 })

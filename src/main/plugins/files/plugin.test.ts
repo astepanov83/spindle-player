@@ -1,6 +1,9 @@
 // The files plugin in main, on a fake library process: what turning it off
 // stops (scans, folder and artist changes, audio, large covers), what goes on
 // (the library for the page, the radio's song lookup), and turning it on again.
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { describe, expect, it, vi } from 'vitest'
 import { LibraryChannel } from '../../../shared/plugins/files/ipc'
 import type { CoverHelper, PluginContext } from '../types'
@@ -10,6 +13,8 @@ import type { LocalLyrics } from '../../lyrics'
 
 // the library processes made, with what main sent each
 const children: { sent: WorkerIn[]; emit(m: WorkerOut): void }[] = []
+// files shown in the file manager
+const shown: string[] = []
 
 // A process that answers every ask at once: a library with nothing in it, no song cover.
 function answer(m: WorkerIn): WorkerOut | undefined {
@@ -17,6 +22,8 @@ function answer(m: WorkerIn): WorkerOut | undefined {
   if (m.type === 'get-library') return { type: 'reply', req: m.req, data: new Uint8Array([1]) }
   if (m.type === 'song-cover') return { type: 'reply', req: m.req, song: 'none' }
   if (m.type === 'lyrics') return { type: 'reply', req: m.req, lyrics: { plain: 'words' } }
+  // every song opened is there, and none is in the library
+  if (m.type === 'open') return { type: 'reply', req: m.req, opened: { ids: m.items, loose: [] } }
   return { type: 'reply', req: m.req }
 }
 
@@ -25,6 +32,7 @@ vi.mock('electron', () => ({
   protocol: {},
   BrowserWindow: { fromWebContents: () => null },
   dialog: { showOpenDialog: async () => ({ canceled: false, filePaths: ['/new'] }) },
+  shell: { showItemInFolder: (p: string) => shown.push(p) },
   utilityProcess: {
     fork: () => {
       const listeners = new Map<string, (m: unknown) => void>()
@@ -81,7 +89,8 @@ function fakeAi(): {
 
 function setup(
   on: boolean,
-  ai = fakeAi()
+  ai = fakeAi(),
+  savedKeys = new Set<string>()
 ): {
   plugin: InstanceType<typeof FilesPlugin>
   call(channel: string, ...args: unknown[]): Promise<unknown>
@@ -90,11 +99,13 @@ function setup(
   folders: string[][]
   helper: CoverHelper
   lyrics: LocalLyrics
+  toPage: string[]
 } {
   children.length = 0
   const handlers = new Map<string, Handler>()
   const routes = new Map<string, (req: Request, url: URL, parts: string[]) => unknown>()
   const folders: string[][] = []
+  const toPage: string[] = []
   let helper: CoverHelper | undefined
   let lyrics: LocalLyrics | undefined
   const settings = {
@@ -115,8 +126,9 @@ function setup(
   const ctx = {
     settings: store,
     userData: '/nowhere',
-    toPage: () => {},
+    toPage: (channel: string) => toPage.push(channel),
     idsMoved: () => true,
+    savedKeys,
     page: {
       handle: (c: string, f: Handler) => handlers.set(c, f),
       on: (c: string, f: Handler) => handlers.set(c, f)
@@ -143,7 +155,8 @@ function setup(
     sent: () => child().sent.map((m) => m.type),
     folders,
     helper: helper!,
-    lyrics: lyrics!
+    lyrics: lyrics!,
+    toPage
   }
 }
 
@@ -273,5 +286,97 @@ describe('FilesPlugin', () => {
       { type: 'ai-reply', id: 5, answer: { ok: false, error: 'off' } },
       { type: 'ai-reply', id: 4, answer: { ok: true, json: { matches: [] }, model: 'm' } }
     ])
+  })
+
+  describe('files from the system (ticket 124)', () => {
+    // a folder, a song and a text file on disk
+    function disk(): { dir: string; song: string; text: string } {
+      const dir = mkdtempSync(join(tmpdir(), 'spindle-open-'))
+      mkdirSync(join(dir, 'Jazz'))
+      writeFileSync(join(dir, 'a.flac'), 'x')
+      writeFileSync(join(dir, 'notes.txt'), 'x')
+      return { dir, song: join(dir, 'a.flac'), text: join(dir, 'notes.txt') }
+    }
+    const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 20))
+
+    it('opens songs and adds folders, then tells the page, which takes them once', async () => {
+      const d = disk()
+      const s = setup(true)
+      s.plugin.openPaths([d.song, join(d.dir, 'Jazz'), d.text, join(d.dir, 'gone.mp3')])
+      await settle()
+      expect(s.toPage).toContain(LibraryChannel.opened)
+      expect(await s.call(LibraryChannel.takeOpened)).toEqual([
+        {
+          added: [join(d.dir, 'Jazz')],
+          known: 0,
+          other: 2,
+          songs: { ids: [d.song], loose: [] }
+        }
+      ])
+      expect(await s.call(LibraryChannel.takeOpened)).toEqual([])
+      expect(s.folders).toEqual([['/music', join(d.dir, 'Jazz')]])
+    })
+
+    it('keeps opens in the order they came', async () => {
+      const d = disk()
+      const s = setup(true)
+      s.plugin.openPaths([d.song])
+      s.plugin.openPaths([join(d.dir, 'Jazz')])
+      await settle()
+      const got = (await s.call(LibraryChannel.takeOpened)) as { added: string[] }[]
+      expect(got.map((r) => r.added.length)).toEqual([0, 1])
+    })
+
+    it('opens nothing while off, and says so', async () => {
+      const d = disk()
+      const s = setup(false)
+      s.plugin.openPaths([d.song])
+      await settle()
+      expect(await s.call(LibraryChannel.takeOpened)).toEqual([
+        { added: [], known: 0, other: 0, off: true }
+      ])
+      expect(s.sent()).not.toContain('open')
+    })
+
+    it('takes dropped songs as it takes opened ones', async () => {
+      const d = disk()
+      const s = setup(true)
+      expect(await s.call(LibraryChannel.addDropped, [d.song, d.text])).toEqual({
+        added: [],
+        known: 0,
+        other: 1,
+        songs: { ids: [d.song], loose: [] }
+      })
+    })
+
+    it('answers the page about songs it opened or that its files held, and no others', async () => {
+      const d = disk()
+      const s = setup(
+        true,
+        fakeAi(),
+        new Set([`files:${d.dir}/Live.cue#2`, 'files:3fa1c2d4e5f60718'])
+      )
+      s.plugin.openPaths([d.song])
+      await settle()
+      const asked = [d.song, `${d.dir}/Live.cue#2`, '/etc/secret.mp3', 'abc']
+      expect(await s.call(LibraryChannel.loose, asked)).toEqual({
+        ids: [d.song, `${d.dir}/Live.cue#2`],
+        loose: [],
+        gone: ['/etc/secret.mp3', 'abc']
+      })
+      const opens = children[0].sent.filter((m) => m.type === 'open')
+      expect(opens.at(-1)).toMatchObject({ items: [d.song, `${d.dir}/Live.cue#2`], loose: true })
+    })
+
+    it('shows only a file it knows in the file manager', async () => {
+      const d = disk()
+      const s = setup(true)
+      expect(await s.call(LibraryChannel.showFile, d.song)).toBe(false)
+      s.plugin.openPaths([d.song])
+      await settle()
+      expect(await s.call(LibraryChannel.showFile, d.song)).toBe(true)
+      expect(shown.at(-1)).toBe(d.song)
+      expect(await s.call(LibraryChannel.showFile, d.text)).toBe(false)
+    })
   })
 })

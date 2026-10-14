@@ -20,6 +20,7 @@ import { layout } from './stores/layout.svelte'
 import { output } from './stores/output.svelte'
 import { loadSettings } from './stores/settings.svelte'
 import { dropOn, startPlugins, takesDrops } from './plugins'
+import { openSongs } from './stores/open-songs'
 import { orFallback } from './start'
 import { moveQueue, movePlaylists } from '../../shared/id-moves'
 import { movePlays } from '../../shared/plays'
@@ -30,7 +31,7 @@ import { defaultSettings } from '../../shared/settings'
 
 // A file dropped on the window would replace the app (main blocks that too),
 // so the page takes every drop itself. Only files from the system count, and
-// only while a plugin that takes them is on.
+// only while a plugin that takes them is on (songs and folders: Music files).
 window.addEventListener('dragover', (e) => {
   e.preventDefault()
   if (e.dataTransfer)
@@ -88,13 +89,17 @@ positions.load(startPlaces)
 // paused where it was; songs their plugin says are gone leave the queue.
 // A live item (a station) comes back picked, paused.
 queues.restore(startQueue)
-started.listen((plugin, moves) => {
-  queue.moveIds(plugin, moves)
-  playlists.moveIds(plugin, moves)
-  plays.moveIds(plugin, moves)
-  loved.moveIds(plugin, moves)
-  positions.moveIds(plugin, moves)
-})
+started.listen(
+  (plugin, moves) => {
+    queue.moveIds(plugin, moves)
+    playlists.moveIds(plugin, moves)
+    plays.moveIds(plugin, moves)
+    loved.moveIds(plugin, moves)
+    positions.moveIds(plugin, moves)
+  },
+  // files from the system (ticket 124), after the saved queue is back
+  openSongs
+)
 
 const app = mount(App, {
   target: document.getElementById('app')!

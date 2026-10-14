@@ -8,6 +8,7 @@ import type { ThemePalettes } from '../../../shared/palette'
 import type { Lyrics } from '../../../shared/lyrics'
 import type { SongFileInfo } from '../../../shared/plugins/files/song-info'
 import type { CueSheet } from './cue'
+import type { OpenedSongs } from '../../../shared/plugins/files/loose'
 
 // One audio file. Tags are already cleaned up (see tags.ts); a missing tag is left out.
 export interface FileEntry {
@@ -219,6 +220,10 @@ export type WorkerIn =
   | { type: 'song-info'; req: number; id: string }
   // the path of a song's file, or of a CUE track's sheet, answered with `path`
   | { type: 'song-path'; req: number; id: string; sheet?: boolean }
+  // files opened from the system, or loose ids of a saved queue (ticket 124):
+  // the songs they are, read now; answered with `opened`. `loose`: the items
+  // are loose ids, which stay songs not in the library
+  | { type: 'open'; req: number; items: string[]; loose?: boolean }
 
 // the library process to main
 export type WorkerOut =
@@ -238,6 +243,7 @@ export type WorkerOut =
       lyrics?: Lyrics
       info?: SongFileInfo
       path?: string
+      opened?: OpenedSongs
     }
   | { type: 'log'; text: string }
   | { type: 'flushed' }

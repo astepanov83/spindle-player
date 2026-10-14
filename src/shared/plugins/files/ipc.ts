@@ -3,6 +3,7 @@ import type { IdMoves } from '../../id-moves'
 import type { ScanStatus } from '../../library'
 import type { ArtistChanges } from './artist-edit'
 import type { SongFileInfo } from './song-info'
+import type { OpenedSongs } from './loose'
 
 export const LibraryChannel = {
   load: 'library:load',
@@ -26,22 +27,35 @@ export const LibraryChannel = {
   // main to page: scan progress and the folder list
   status: 'library:status',
   // main to page: track ids that changed, sent before the library that has them
-  idsMoved: 'library:ids-moved'
+  idsMoved: 'library:ids-moved',
+  // main to page: files or folders the system gave Spindle wait (ticket 124)
+  opened: 'library:opened',
+  // what the system gave, taken once
+  takeOpened: 'library:take-opened',
+  // songs not in the library, by their loose ids (a saved queue's)
+  loose: 'library:loose',
+  // a song not in the library in the system's file manager
+  showFile: 'library:show-file'
 } as const
 
-// What came of a drop: the folders added, and how many were music folders
-// already or were not folders at all (files, or paths that are gone).
+// What came of a drop, or of files and folders the system gave Spindle
+// (ticket 124): the folders added, how many were music folders already, how
+// many were neither a folder nor a song (other files, paths that are gone),
+// and the songs.
 export interface DropResult {
   added: string[]
   known: number
   other: number
-  // settings.json could not be read, so nothing was added
+  // settings.json could not be read, so no folder was added
   unreadable?: true
+  songs?: OpenedSongs
+  // Music files is off: nothing was opened
+  off?: true
 }
 
 // More paths than a person drags at once; such a list is not taken at all.
 // The preload sends at most one more, so main still sees it is too many.
-export const maxDropped = 50
+export const maxDropped = 1000
 
 // What the preload exposes to the page as `window.libraryApi`.
 // Main owns the folder list and the index; the page only asks.
@@ -57,7 +71,8 @@ export interface LibraryApi {
   get(): Promise<Uint8Array>
   // opens the folder picker; resolves once the choice is saved
   addFolder(): Promise<void>
-  // files dropped on the window: the folders among them become music folders
+  // files dropped on the window: the folders among them become music
+  // folders, the songs come back to be queued
   addDropped(files: File[]): Promise<DropResult>
   removeFolder(path: string): void
   rescan(): void
@@ -76,6 +91,16 @@ export interface LibraryApi {
   onChanged(listener: (library: Uint8Array) => void): () => void
   onStatus(listener: (status: ScanStatus) => void): () => void
   onIdsMoved(listener: (moves: IdMoves) => void): () => void
+  // What the system gave Spindle since the last ask ("Open with", the
+  // command line), oldest first; each is given once (ticket 124).
+  takeOpened(): Promise<DropResult[]>
+  // a call when more waits; one that came before the page listened is kept
+  onOpened(listener: () => void): () => void
+  // Songs not in the library, by loose id; `gone` holds those whose files
+  // are gone or were never opened. Rejects when main has no answer now.
+  loose(ids: string[]): Promise<OpenedSongs>
+  // false when it is gone or could not be shown
+  showFile(id: string): Promise<boolean>
 }
 
 // Which API method each of its page-to-main channels carries (see PageChannels).
@@ -92,4 +117,7 @@ export interface FilesChannels {
   [LibraryChannel.showFolder]: LibraryApi['showFolder']
   [LibraryChannel.songInfo]: LibraryApi['songInfo']
   [LibraryChannel.showSongFile]: LibraryApi['showSongFile']
+  [LibraryChannel.takeOpened]: LibraryApi['takeOpened']
+  [LibraryChannel.loose]: LibraryApi['loose']
+  [LibraryChannel.showFile]: LibraryApi['showFile']
 }

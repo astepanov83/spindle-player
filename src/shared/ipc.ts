@@ -222,6 +222,28 @@ export interface AiApi {
   setProvider(id: string): void
 }
 
+export const NotifyChannel = {
+  supported: 'notify:supported',
+  song: 'notify:song'
+} as const
+
+// A notification for the song that starts (ticket 126).
+export interface SongNotice {
+  title: string
+  // "Artist · Album", or the station
+  body: string
+  // a spindle://cover/large/<hash> URL; none: the app icon
+  cover?: string
+}
+
+// What the preload exposes to the page as `window.notifyApi`.
+export interface NotifyApi {
+  // false where the system has no notifications: Settings says so
+  supported(): Promise<boolean>
+  // shown unless the setting is off or the window is in front
+  song(notice: SongNotice): void
+}
+
 // Which API method each page-to-main channel of the core carries. The
 // preload's calls and main's handlers are both typed from this and the
 // plugins' own (PluginChannels), so a change on one side and not the other is
@@ -258,6 +280,8 @@ export interface CoreChannels {
   [LyricsChannel.get]: LyricsApi['get']
   [PositionsChannel.load]: PositionsApi['load']
   [PositionsChannel.set]: PositionsApi['set']
+  [NotifyChannel.supported]: NotifyApi['supported']
+  [NotifyChannel.song]: NotifyApi['song']
 }
 
 export type PageChannels = CoreChannels & PluginChannels

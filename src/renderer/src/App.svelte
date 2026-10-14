@@ -30,6 +30,7 @@
     showStateInMediaSession
   } from './stores/media-session'
   import { playStateOf } from './stores/play-state'
+  import { nowOf, SongNotices } from './stores/song-notice'
   import { itemsVersion, navTabs } from './plugins'
   import { library } from './stores/library.svelte'
   import { lyrics } from './stores/lyrics.svelte'
@@ -137,6 +138,15 @@
   $effect(() => showSeekInMediaSession(queues.active))
   $effect(() => showStateInMediaSession())
   $effect(() => showPositionInMediaSession(player.pos, player.duration))
+
+  // A notification when the song changes (ticket 126); main drops it while
+  // the window is in front.
+  const songNotices = new SongNotices(
+    (n) => window.notifyApi.song(n),
+    () => settings.songNotices,
+    { set: (fn, ms) => setTimeout(fn, ms), clear: (t) => clearTimeout(t as number) }
+  )
+  $effect(() => songNotices.see(nowOf(queues)))
 
   // The tray menu shows what plays and has Play, Next and Previous (ticket 088).
   $effect(() => window.playbackApi.state(playStateOf(queues, player.shuffle, sleep.shown)))

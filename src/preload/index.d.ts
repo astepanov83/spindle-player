@@ -2,6 +2,7 @@ import type {
   AiApi,
   LovedApi,
   LyricsApi,
+  NotifyApi,
   PlaybackApi,
   PlaylistsApi,
   PositionsApi,
@@ -21,5 +22,6 @@ declare global {
     lovedApi: LovedApi
     lyricsApi: LyricsApi
     positionsApi: PositionsApi
+    notifyApi: NotifyApi
   }
 }

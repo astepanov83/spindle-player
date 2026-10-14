@@ -49,6 +49,7 @@ describe('parseStoredSettings', () => {
       lyricsShown: { studio: true, classic: false, focus: false },
       focusHide: true,
       fetchLyrics: false,
+      songNotices: true,
       windowSizes: { focus: { width: 500, height: 700 }, studio: { width: 1300, height: 800 } },
       windowMaximized: { studio: true, focus: false },
       windowPlace: { x: -1200, y: 40 },
@@ -158,6 +159,7 @@ describe('parseStoredSettings with a base', () => {
     lyricsShown: { studio: true, classic: true, focus: false },
     focusHide: true,
     fetchLyrics: false,
+    songNotices: true,
     windowSizes: { focus: { width: 500, height: 700 } },
     windowMaximized: { focus: true },
     windowPlace: { x: 40, y: 60 },
@@ -702,5 +704,15 @@ describe('fetchLyrics (ticket 121)', () => {
     expect(parseStoredSettings({ fetchLyrics: 'no' }).fetchLyrics).toBe(true)
     expect(isKnownSettingsFile({ fetchLyrics: false })).toBe(true)
     expect(isKnownSettingsFile({ fetchLyrics: 0 })).toBe(false)
+  })
+})
+
+describe('songNotices (ticket 126)', () => {
+  it('is off at first; a saved on stays on', () => {
+    expect(parseStoredSettings(undefined).songNotices).toBe(false)
+    expect(pageSettings(parseStoredSettings({ songNotices: true })).songNotices).toBe(true)
+    expect(parseStoredSettings({ songNotices: 'yes' }).songNotices).toBe(false)
+    expect(isKnownSettingsFile({ songNotices: true })).toBe(true)
+    expect(isKnownSettingsFile({ songNotices: 1 })).toBe(false)
   })
 })

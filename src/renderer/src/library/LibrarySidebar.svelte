@@ -117,6 +117,7 @@
       <SearchBox
         placeholder={shown?.searchShort ?? shown?.search ?? 'Search'}
         onenter={() => shown && typedIn(shown.plugin, shown.id, library.query, true)}
+        fields={!!shown?.fields}
       />
     </div>
     <div class="sidehead section-label">Library</div>

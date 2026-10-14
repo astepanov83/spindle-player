@@ -283,6 +283,8 @@ function playlists(): ShownTab {
       : library.openSmart
         ? 'Search this list'
         : 'Search playlists',
+    // a playlist's songs take fields; the list of playlists only names
+    fields: !!(open || library.openSmart),
     plugin: 'core'
   }
 }

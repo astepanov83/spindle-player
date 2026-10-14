@@ -155,4 +155,8 @@ describe('files pages', () => {
     library.openPage('folders', `folder/${files.folders.nodes[2].key}`)
     expect(nav.filesTabs()[4].search).toBe('Search this folder')
   })
+
+  it('all take search by field (ticket 128)', () => {
+    expect(nav.filesTabs().every((t) => t.fields)).toBe(true)
+  })
 })

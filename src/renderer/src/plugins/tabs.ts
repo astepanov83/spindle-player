@@ -3,6 +3,7 @@
 // (where Playlists always was). No plugin on: no tabs, so none of the core's either.
 import type { PluginId } from '../../../shared/plugins'
 import type { NavKind, Tab } from './types'
+import { parseQuery } from '../library/search-query'
 
 export interface ShownTab extends Tab {
   plugin: PluginId | 'core'
@@ -18,9 +19,12 @@ export const tabsIn = (tabs: ShownTab[], kind: NavKind): ShownTab[] =>
   tabs.filter((t) => !t.only || t.only === kind)
 
 // The tabs a search on `shown` can send its text to (ticket 077): the others
-// whose search looks wider, in tab order. None without text.
+// whose search looks wider, in tab order. None without text. A search by
+// field only goes where fields are read (ticket 128): stations have none.
 export function widerSearches(tabs: ShownTab[], shown: string, query: string): ShownTab[] {
-  return query.trim() ? tabs.filter((t) => t.searchWide && t.id !== shown) : []
+  if (!query.trim()) return []
+  const fields = parseQuery(query).terms.length > 0
+  return tabs.filter((t) => t.searchWide && t.id !== shown && (!fields || t.fields))
 }
 
 // 'Search stations for "har"'

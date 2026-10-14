@@ -7,7 +7,10 @@ import { filesDrop } from './drop'
 import { startFiles } from './start'
 import { filesTabOf } from './pages'
 import { filesActSetting, filesCoverLines, filesSettings, filesStatusLine } from './settings'
-import { trackPlayable, trackState } from './tracks'
+import { showFileId, trackPlayable, trackState } from './tracks'
+import { loose } from './loose.svelte'
+import { notice } from '../../stores/notice.svelte'
+import { isLooseId } from '../../../../shared/plugins/files/loose'
 import { findIn, songIndex } from './find-song'
 import type { Album } from '../../../../shared/library'
 
@@ -32,6 +35,14 @@ function songs(): readonly { id: string; added: number }[] {
   return all.list
 }
 
+// The song menu of a song not in the library (ticket 124)
+function actLoose(id: string, actionId: string): void {
+  if (actionId !== showFileId) return
+  void window.libraryApi.showFile(id).then((ok) => {
+    if (!ok) notice.show(`Couldn't show ${loose.find(id)?.track.title ?? 'the file'}`)
+  })
+}
+
 export const filesHalf: PageHalf = {
   info: (id) => trackState(id, complete),
   play: (id) => trackPlayable(id),
@@ -45,10 +56,13 @@ export const filesHalf: PageHalf = {
   search: filesSearch,
   tileOf: filesTile,
   emptyPlaylists: filesEmptyPlaylists,
-  act: filesAct,
+  // a page's blocks, or a song not in the library (its id is a path)
+  act: (id, actionId, value) =>
+    isLooseId(id) ? actLoose(id, actionId) : filesAct(id, actionId, value),
   settings: filesSettings,
   actSetting: filesActSetting,
-  version: () => files.revision,
+  // both only go up
+  version: () => files.revision + loose.version,
   statusLine: filesStatusLine,
   coverLines: filesCoverLines,
   drop: filesDrop,

@@ -6,7 +6,7 @@
 import { canLove } from '../../../shared/loved'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { QueueLink } from '../../../shared/saved-queue'
-import { canOpen, infoOf, openPage } from '../plugins'
+import { actOn, canOpen, infoOf, openPage } from '../plugins'
 import { layout } from '../stores/layout.svelte'
 import { loved } from '../stores/loved.svelte'
 import { menu, type MenuEntry, type MenuItem } from '../stores/menu.svelte'
@@ -67,6 +67,13 @@ function goToPart(keys: ItemKey[]): MenuEntry[] {
     }))
 }
 
+// The song's own entries from its plugin, for one song.
+function itemPart(keys: ItemKey[]): MenuEntry[] {
+  const key = keys[0]
+  const own = keys.length === 1 ? infoOf(key)?.menu : undefined
+  return own?.map((m): MenuItem => ({ label: m.label, run: () => actOn(key, m.id) })) ?? []
+}
+
 // Love when some of the songs are not loved, Unlove when some are: both
 // for a mix. Songs that can't be loved (a station, MFP) are left out.
 function lovePart(keys: ItemKey[]): MenuEntry[] {
@@ -99,6 +106,7 @@ export function songMenu(keys: ItemKey[], o: SongMenuOptions = {}): MenuEntry[] 
   return sections(
     queuePart(keys, o),
     goToPart(keys),
+    itemPart(keys),
     o.actions ?? [],
     lovePart(keys),
     playlistPart(keys, o)

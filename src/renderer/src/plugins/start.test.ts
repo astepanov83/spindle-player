@@ -6,6 +6,7 @@ import type { LibraryData } from '../../../shared/library'
 import { defaultPalettes } from '../../../shared/palette'
 import type { MfpEpisodes } from '../../../shared/plugins/mfp/mfp'
 import type { Station } from '../../../shared/plugins/radio/stations'
+import type { DropResult } from '../../../shared/plugins/files/ipc'
 
 // the queue store's engine plays nothing here
 vi.mock('../audio/engine', () => ({
@@ -51,6 +52,8 @@ let listening: string[]
 // the listeners main's news goes to, by name
 let heard: Record<string, (v: unknown) => void>
 let stationsFail: boolean
+// what main has opened from the system, waiting for the page
+let opened: DropResult[]
 
 function fakeWindow(moves: IdMoves): void {
   const on = (name: string) => (listener: (v: unknown) => void) => {
@@ -70,7 +73,9 @@ function fakeWindow(moves: IdMoves): void {
       },
       onIdsMoved: on('ids'),
       onChanged: on('changed'),
-      onStatus: on('status')
+      onStatus: on('status'),
+      onOpened: on('opened'),
+      takeOpened: async () => opened.splice(0)
     },
     radioApi: {
       stations: async () => {
@@ -102,6 +107,7 @@ beforeEach(async () => {
   listening = []
   heard = {}
   stationsFail = false
+  opened = []
   vi.resetModules()
   fakeWindow({ old: 'new', gone: 'later' })
   p = await import('./index')
@@ -131,7 +137,10 @@ describe('startPlugins', () => {
     const started = await p.startPlugins()
     started.load()
     expect(listening).not.toContain('changed')
-    started.listen(() => {})
+    started.listen(
+      () => {},
+      () => {}
+    )
     expect(listening).toEqual(expect.arrayContaining(['changed', 'status']))
   })
 
@@ -147,11 +156,35 @@ describe('startPlugins', () => {
     const started = await p.startPlugins()
     started.load()
     const idsMoved = vi.fn()
-    started.listen(idsMoved)
+    started.listen(idsMoved, () => {})
     heard.ids({ x: 'y' })
     expect(idsMoved).not.toHaveBeenCalled()
     heard.changed(bytes({ ...library, epoch: 'e', n: 2 }))
     // with the one that waited for a library that has its new id
     expect(idsMoved).toHaveBeenCalledWith('files', { gone: 'later', x: 'y' })
+  })
+
+  it('gives the core the songs main opened, as its own keys, once it listens', async () => {
+    const song = { ...library.tracks[0], id: '/x/a.flac', folder: -1 }
+    opened.push({
+      added: [],
+      known: 0,
+      other: 0,
+      songs: { ids: ['/x/a.flac', 'new'], loose: [{ track: song, file: 'f1' }] }
+    })
+    const started = await p.startPlugins()
+    started.load()
+    const open = vi.fn()
+    started.listen(() => {}, open)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(open).toHaveBeenCalledWith(['files:/x/a.flac', 'files:new'], 'play')
+    // the song not in the library is there to draw
+    const { loose } = await import('./files/loose.svelte')
+    expect(loose.find('/x/a.flac')?.file).toBe('f1')
+    // more opened later: main says so, and the page takes it
+    opened.push({ added: [], known: 0, other: 0, songs: { ids: ['new'], loose: [] } })
+    heard.opened(null)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(open).toHaveBeenLastCalledWith(['files:new'], 'play')
   })
 })

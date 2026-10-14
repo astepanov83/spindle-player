@@ -283,8 +283,21 @@ describe('dropText', () => {
     expect(dropText(r({ known: 1, other: 1 }))).toBe('That folder is a music folder already')
   })
 
-  it('says only folders are taken when no folder came', () => {
-    expect(dropText(r({ other: 3 }))).toBe('Drop a folder to add it to music folders')
+  it('says when nothing could be taken', () => {
+    expect(dropText(r({ other: 1 }))).toBe('Not a song or a folder, or it is gone')
+    expect(dropText(r({ other: 3 }))).toBe('3 files are not songs or folders, or are gone')
+  })
+
+  it('leaves songs to the queue, saying only what came of the folders', () => {
+    const songs = { ids: ['/m/a.flac'], loose: [] }
+    expect(dropText(r({ songs, other: 2 }))).toBeUndefined()
+    expect(dropText(r({ songs, added: ['/music/Jazz'] }))).toBe('Added Jazz to music folders')
+  })
+
+  it('says Music files is off', () => {
+    expect(dropText(r({ off: true }))).toBe(
+      'Music files are off: turn them on in Settings to play songs'
+    )
   })
 
   it('says settings could not be read, as Settings does', () => {

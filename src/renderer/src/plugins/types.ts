@@ -545,6 +545,9 @@ export interface ItemInfo {
   groupTo?: PageAddress
   // the song menu's "Go to ..." items
   links?: { label: string; to: PageAddress }[]
+  // its own entries in the song menu, for it alone: act(its id, the entry's id)
+  // ("Show in file manager" for a song not in the library, ticket 124)
+  menu?: { id: string; label: string }[]
   // the system's media controls' artist, when it is not the subtitle (a
   // station's name, also before its first song title)
   mediaArtist?: string
@@ -714,11 +717,17 @@ export interface PageHalf {
 // are in, before the playlists and the queue: it gives the ids that moved
 // (see id-moves.ts), renamed in them before they load. `listen` runs once the
 // queue is back, for main's news after that; ids that move later go to
-// `idsMoved`, which renames them in the queue and the playlists.
+// `idsMoved`, which renames them in the queue and the playlists. Songs the
+// system gave the app go to `open` (ticket 124).
 export interface PluginStart {
   load(): IdMoves | undefined
-  listen?(idsMoved: (moves: IdMoves) => void): void
+  listen?(idsMoved: (moves: IdMoves) => void, open: OpenSongs): void
 }
+
+// Songs given from outside the app, as this plugin's ids. 'play': they
+// replace the queue and play ("Open with"). 'add': to the end of the queue,
+// playing at once when nothing plays (a drop).
+export type OpenSongs = (ids: string[], how: 'play' | 'add') => void
 
 // A song heard on a live item, for the Queue part's list (newest last).
 export interface HistoryEntry {

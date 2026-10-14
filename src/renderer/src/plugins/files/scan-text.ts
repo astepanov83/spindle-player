@@ -181,13 +181,18 @@ function folderName(path: string): string {
   return folderParts(path).name || path
 }
 
-// The notice after folders were dropped on the window (ticket 047).
+// The notice after files and folders were dropped on the window or opened
+// from the system (tickets 047 and 124). Songs say where they went themselves
+// (the queue's notice), so a drop that had songs says nothing of other files.
 export function dropText(r: DropResult): string | undefined {
+  if (r.off) return 'Music files are off: turn them on in Settings to play songs'
   if (r.unreadable) return settingsText
   if (r.added.length === 1) return `Added ${rootName(r.added[0])} to music folders`
   if (r.added.length) return `Added ${n(r.added.length)} music folders`
   if (r.known === 1) return 'That folder is a music folder already'
   if (r.known) return 'Those folders are music folders already'
-  if (r.other) return 'Drop a folder to add it to music folders'
+  if (r.songs) return undefined
+  if (r.other === 1) return 'Not a song or a folder, or it is gone'
+  if (r.other) return `${n(r.other)} files are not songs or folders, or are gone`
   return undefined
 }

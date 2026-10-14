@@ -228,6 +228,7 @@
           no={al.numbers[row.at]}
           index={row.song}
           second={al.artist ? 'Artist' : undefined}
+          year={!!al.years}
           selected={sel.has(key)}
           top={v.offset(item)}
           onpointerdown={(e) => songDrag.press(e, () => dragOf(key))}

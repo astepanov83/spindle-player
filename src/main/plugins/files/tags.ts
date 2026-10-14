@@ -73,7 +73,8 @@ export function normalizeTags(raw: RawTags, ext = ''): Tags {
     track: positive(c.track?.no),
     disc: positive(c.disk?.no),
     year: yearOf(c.year, c.date),
-    genre: genres.length ? [...new Set(genres)].join(', ') : undefined,
+    // as written: group.ts splits them, so a new rule needs no new read
+    genre: genres.length ? [...new Set(genres)] : undefined,
     duration:
       typeof f.duration === 'number' && Number.isFinite(f.duration) && f.duration > 0
         ? Math.round(f.duration * 100) / 100

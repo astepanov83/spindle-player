@@ -3,9 +3,9 @@
      artist's albums with their songs (ticket 100) draw it. -->
 <script module lang="ts">
   // The columns, for the row and the heads over it. A guessed start can
-  // pass an hour: "1:02:40".
-  export function songCols(second: boolean, starts: boolean): string {
-    const end = starts ? '64px' : '56px'
+  // pass an hour: "1:02:40". `year`: a compilation's Year column (ticket 122).
+  export function songCols(second: boolean, starts: boolean, year = false): string {
+    const end = (year ? '52px ' : '') + (starts ? '64px' : '56px')
     return second ? `32px minmax(0, 2fr) minmax(0, 1.3fr) ${end}` : `32px minmax(0, 1fr) ${end}`
   }
 </script>
@@ -25,6 +25,7 @@
     index,
     top,
     second,
+    year = false,
     start,
     selected,
     other = false,
@@ -42,6 +43,8 @@
     top?: number
     // the second column: the Artist, or on an artist's top songs the Album
     second?: 'Artist' | 'Album'
+    // a Year column: the song's own year, else its album's
+    year?: boolean
     // where it starts in its file, in place of its length (MFP)
     start?: { text: string; hint: string }
     selected: boolean
@@ -70,7 +73,7 @@
   data-index={index}
   class:placed={top !== undefined}
   style:transform={top === undefined ? undefined : `translateY(${top}px)`}
-  style:grid-template-columns={songCols(!!second, !!start)}
+  style:grid-template-columns={songCols(!!second, !!start, year)}
   aria-current={cur ? 'true' : undefined}
   {onpointerdown}
   {onclick}
@@ -90,6 +93,7 @@
     >{:else if second}<span class="ar" class:away title={away ?? t?.subtitle}
       >{away ?? t?.subtitle ?? ''}</span
     >{/if}
+  {#if year}<span class="y">{t?.year ?? ''}</span>{/if}
   {#if start}
     <span class="d" title={start.hint}>{start.text}</span>
   {:else}
@@ -116,6 +120,7 @@
     height: 54px;
   }
   .n,
+  .y,
   .d {
     color: var(--ink-3);
     font-variant-numeric: tabular-nums;

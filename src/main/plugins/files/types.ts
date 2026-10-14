@@ -26,7 +26,10 @@ export interface FileEntry {
   track?: number
   disc?: number
   year?: number
-  genre?: string
+  // The genre tag's values as written, each once (ticket 122). group.ts
+  // splits "Rock; Metal" and maps ID3 numbers. An older reader kept one
+  // string with the values joined by ", " (see readAgain in merge.ts).
+  genre?: string[]
   // seconds, 0 when unknown
   duration: number
   codec?: string
@@ -97,12 +100,15 @@ export const indexVersion = 1
 // 3: MusicBrainz release ids are kept (ticket 014).
 // 4: ReplayGain tags (ticket 090) and every file's sample rate (ticket 091)
 // are kept.
-// Every file an older reader read is read again once.
-export const readerVersion = 4
+// 5: genre values are kept apart, not joined by ", " (ticket 122). Only the
+// files whose genre has a ", " are read again (see readAgain in merge.ts).
+// Files an older reader read are read again once.
+export const readerVersion = 5
 // 2: a non-UTF-8 sheet may be cp1252, not only cp1251 (ticket 011).
 // 3: REM REPLAYGAIN_* lines are kept (ticket 090).
+// 4: a track's own REM GENRE and REM DATE are kept (ticket 122).
 // Every sheet from an older reader is read again once.
-export const cueReaderVersion = 3
+export const cueReaderVersion = 4
 
 export interface WorkerStart {
   indexPath: string

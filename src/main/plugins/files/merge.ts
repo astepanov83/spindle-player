@@ -45,7 +45,6 @@ function parseEntry(v: unknown): FileEntry | undefined {
     'artist',
     'albumArtist',
     'album',
-    'genre',
     'codec',
     'container',
     'cover',
@@ -58,9 +57,17 @@ function parseEntry(v: unknown): FileEntry | undefined {
     if (num(v[k]) && v[k] > 0) e[k] = v[k]
   if (num(v.duration) && v.duration > 0) e.duration = v.duration
   if (num(v.added) && v.added > 0) e.added = v.added
+  const genre = parseGenre(v.genre)
+  if (genre) e.genre = genre
   const gain = parseReplayGain(v.gain)
   if (gain) e.gain = gain
   return e
+}
+
+// A list of values; an older reader's one string of them (see readAgain).
+function parseGenre(v: unknown): string[] | undefined {
+  const list = (Array.isArray(v) ? v : [v]).filter((g): g is string => str(g) && !!g)
+  return list.length ? list : undefined
 }
 
 function parseCueTrack(v: unknown, files: number): CueTrack | undefined {
@@ -69,6 +76,8 @@ function parseCueTrack(v: unknown, files: number): CueTrack | undefined {
   const t: CueTrack = { no: v.no, file: v.file, start: v.start }
   if (str(v.title)) t.title = v.title
   if (str(v.performer)) t.performer = v.performer
+  if (str(v.genre)) t.genre = v.genre
+  if (num(v.year)) t.year = v.year
   const gain = parseReplayGain(v.gain)
   if (gain) t.gain = gain
   return t
@@ -208,10 +217,16 @@ export function planReads(
 
 // Files an older tag reader read are read again once: reader 2 added ffprobe
 // for files music-metadata can't read, reader 3 the MusicBrainz ids, reader 4
-// the ReplayGain tags.
+// the ReplayGain tags. Reader 5 keeps genre values apart (ticket 122): an
+// older one joined them with ", ", so only a genre with a ", " can be several
+// values and is read again. A library of 50k songs on a NAS reads a few, not all.
 export function readAgain(reader: number): ((e: FileEntry) => boolean) | undefined {
-  return reader < readerVersion ? () => true : undefined
+  if (reader < 4) return () => true
+  if (reader < readerVersion) return joinedGenre
+  return undefined
 }
+
+const joinedGenre = (e: FileEntry): boolean => e.genre?.length === 1 && e.genre[0].includes(', ')
 
 // The cue sheets a scan has to read: new and changed ones, ones an older cue
 // reader made, and on a manual Rescan ones that gave no sheet (a fixed

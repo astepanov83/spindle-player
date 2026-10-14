@@ -75,6 +75,8 @@
     ['t', 'Title'],
     ['a', 'Artist'],
     ['al', 'Album'],
+    ['g', 'Genre'],
+    ['y', 'Year'],
     ['p', 'Plays'],
     ['lp', 'Last played'],
     ['d', 'Time']
@@ -220,7 +222,7 @@
     <span></span>
     {#each cols as [k, label] (k)}
       {@const on = sort?.k === k}
-      <span class="h-{k}" class:end={k === 'd' || k === 'p' || k === 'lp'}>
+      <span class="h-{k}" class:end={k === 'd' || k === 'y' || k === 'p' || k === 'lp'}>
         <button
           class:on
           aria-pressed={on}
@@ -283,6 +285,8 @@
               >{away ?? t.subtitle ?? ''}</span
             >{/if}
           <span class="o al" title={t.group}>{t.group ?? ''}</span>
+          <span class="o g" title={t.genre}>{t.genre ?? ''}</span>
+          <span class="y">{t.year ?? ''}</span>
           {#if plays}
             {@const p = playCounts.of(key)}
             <span class="pl">{p ? p.n.toLocaleString() : ''}</span>
@@ -296,6 +300,8 @@
           </span>
           {#if artist}<span class="o ar"></span>{/if}
           <span class="o al"></span>
+          <span class="o g"></span>
+          <span class="y"></span>
           {#if plays}<span class="pl"></span><span class="lp"></span>{/if}
           <span class="d"></span>
         {/if}
@@ -318,7 +324,7 @@
   .th,
   .tr {
     /* 44px, not 36: row numbers reach five digits in a big library */
-    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 56px;
+    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1fr) 52px 56px;
     display: grid;
     grid-template-columns: var(--cols);
     gap: 16px;
@@ -372,6 +378,7 @@
   }
   .n,
   .d,
+  .y,
   .pl,
   .lp {
     color: var(--ink-3);
@@ -422,10 +429,54 @@
     color: var(--warn);
   }
 
-  /* Classic's Songs: Plays and Last played before Time, dropped first when narrow */
+  /* Classic's Songs: Plays and Last played before Time */
   .plays .th,
   .plays .tr {
-    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 68px 112px 56px;
+    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 1fr) 52px 68px 112px
+      56px;
+  }
+  /* every song has the page's artist: the title and album get its room */
+  .noartist .th,
+  .noartist .tr {
+    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1fr) 52px 56px;
+  }
+
+  /* A narrow table drops Genre, then Year (ticket 122), then Plays and Last
+     played, then Album, then Artist, which moves under the title. Sorting
+     by a dropped column stays; its header comes back when wider. */
+  @container (max-width: 1040px) {
+    .plays .th,
+    .plays .tr {
+      --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 52px 68px 112px 56px;
+    }
+    .plays .g,
+    .plays .h-g {
+      display: none;
+    }
+  }
+  @container (max-width: 880px) {
+    .plays .th,
+    .plays .tr {
+      --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 68px 112px 56px;
+    }
+    .plays .y,
+    .plays .h-y {
+      display: none;
+    }
+  }
+  @container (max-width: 800px) {
+    .th,
+    .tr {
+      --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 52px 56px;
+    }
+    .noartist .th,
+    .noartist .tr {
+      --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) 52px 56px;
+    }
+    .g,
+    .h-g {
+      display: none;
+    }
   }
   @container (max-width: 760px) {
     .plays .th,
@@ -439,15 +490,30 @@
       display: none;
     }
   }
-
-  /* A narrow table drops Album, then Artist, which moves under the title.
-     Sorting by a dropped column stays; its header comes back when wider. */
+  @container (max-width: 640px) {
+    .th,
+    .tr {
+      --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) 56px;
+    }
+    .noartist .th,
+    .noartist .tr {
+      --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) 56px;
+    }
+    .y,
+    .h-y {
+      display: none;
+    }
+  }
   @container (max-width: 520px) {
     .th,
     .tr,
     .plays .th,
     .plays .tr {
       --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) 56px;
+    }
+    .noartist .th,
+    .noartist .tr {
+      --cols: 44px minmax(0, 1fr) 56px;
     }
     .al,
     .h-al {
@@ -468,17 +534,6 @@
     }
     .sub {
       display: block;
-    }
-  }
-  /* every song has the page's artist: the title and album get its room */
-  .noartist .th,
-  .noartist .tr {
-    --cols: 44px minmax(0, 2fr) minmax(0, 1.3fr) 56px;
-  }
-  @container (max-width: 520px) {
-    .noartist .th,
-    .noartist .tr {
-      --cols: 44px minmax(0, 1fr) 56px;
     }
   }
   .o {

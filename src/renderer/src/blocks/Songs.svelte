@@ -93,11 +93,12 @@
       class="shead song-head"
       data-sticky-top
       aria-hidden="true"
-      style:grid-template-columns={songCols(!!second, !!b.starts)}
+      style:grid-template-columns={songCols(!!second, !!b.starts, !!b.years)}
     >
       <span></span>
       <span>Title</span>
       {#if second}<span>{second}</span>{/if}
+      {#if b.years}<span class="end">Year</span>{/if}
       {#if b.starts}
         <span class="end" title={b.starts.hint}>Starts</span>
       {:else}
@@ -114,6 +115,7 @@
             key={line.key}
             no={line.no}
             {second}
+            year={!!b.years}
             start={b.starts && {
               text: fmtClock(b.starts.at[line.at] ?? 0),
               hint: b.starts.hint

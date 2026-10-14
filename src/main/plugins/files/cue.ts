@@ -14,6 +14,9 @@ export interface CueTrack {
   start: number
   // REM REPLAYGAIN_TRACK_GAIN and _PEAK under the track
   gain?: ReplayGain
+  // REM GENRE and REM DATE under the track (a compilation's), over the sheet's
+  genre?: string
+  year?: number
 }
 
 export interface CueSheet {
@@ -226,18 +229,15 @@ export function parseCue(textIn: string): CueSheet | undefined {
         if (!v) break
         // a data track's lines are neither the album's nor a track's
         if (seenTrack && !track) break
+        // a line under a track is that track's
+        const into = track ?? sheet
         const g = cueGainLine(key, v, seenTrack)
-        if (g) {
-          const into = track ?? sheet
-          into.gain = { ...into.gain, [g.field]: g.value }
-          break
-        }
-        if (seenTrack) break
-        if (key === 'GENRE') sheet.genre = v
+        if (g) into.gain = { ...into.gain, [g.field]: g.value }
+        else if (key === 'GENRE') into.genre = v
         else if (key === 'DATE') {
           const y = Number(/^(\d{4})/.exec(v)?.[1])
-          if (y >= 1000 && y <= 9999) sheet.year = y
-        } else if (key === 'DISCNUMBER') {
+          if (y >= 1000 && y <= 9999) into.year = y
+        } else if (key === 'DISCNUMBER' && !track) {
           const d = Number(/^(\d+)/.exec(v)?.[1])
           if (d >= 1) sheet.disc = d
         }
@@ -256,6 +256,8 @@ export function parseCue(textIn: string): CueSheet | undefined {
     const out: CueTrack = { no: t.no, file: t.file, start: t.start }
     if (t.title) out.title = t.title
     if (t.performer) out.performer = t.performer
+    if (t.genre) out.genre = t.genre
+    if (t.year) out.year = t.year
     if (t.gain) out.gain = t.gain
     sheet.tracks.push(out)
   }

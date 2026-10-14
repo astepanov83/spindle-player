@@ -307,6 +307,9 @@ export interface AlbumSongs extends Tile {
   groups: { at: number; label: string }[]
   // the Artist column; off where every song has the album's artist
   artist: boolean
+  // a Year column, where a song's own year differs from the album's (a
+  // compilation's, ticket 122)
+  years?: boolean
 }
 
 // An artist over their albums: picture, name, count, play; the name opens
@@ -350,6 +353,9 @@ export interface SongsBlock {
   // a column head was clicked: act(id, 'sort', its key). May be a getter, so
   // a sort click only sorts and doesn't build the page's list again.
   sort?: Sort | null
+  // an album's list: a Year column, where a song's own year differs from
+  // the album's (a compilation's, ticket 122)
+  years?: boolean
   // an album's list: each song's number (0: none), and "Disc 2" before a song
   numbers?: number[]
   groups?: { at: number; label: string }[]
@@ -538,6 +544,10 @@ export interface ItemInfo {
   groupArtist?: string
   // seconds; none for live
   length?: number
+  // the song table's Genre and Year columns (ticket 122): "Rock, Metal";
+  // none when unknown
+  genre?: string
+  year?: number
   art?: Art
   // Now Playing's links: the title, each name in the subtitle, the group
   titleTo?: PageAddress

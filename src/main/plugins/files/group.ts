@@ -10,6 +10,7 @@ import {
   type Track,
   type TrackPart
 } from '../../../shared/library'
+import { commonGenres, genreSpellings, genresOf } from '../../../shared/genres'
 import { defaultPalettes, fallbackPalettes, type ThemePalettes } from '../../../shared/palette'
 import { checksPerArtist, lookUpArtist, type ArtistCheck, type ArtistQuery } from './artist-photo'
 import { cleanAlbum, cleanArtist } from '../../../shared/clean-names'
@@ -66,6 +67,8 @@ interface Item {
   part?: TrackPart
   // the folder the Folders view lists it in
   dir: string
+  // split from the tag (shared/genres.ts), before the library's spelling
+  genres: string[]
 }
 
 interface Group {
@@ -222,6 +225,15 @@ export function buildLibrary(
 ): BuiltLibrary {
   const groups = new Map<string, Group>()
   const paths = new Map<string, string>()
+  // a library has a few hundred genre tags for 50k songs: split each once
+  const split = new Map<string, string[]>()
+  const genres = (values: string[] | undefined): string[] => {
+    if (!values) return []
+    const k = values.join('\0')
+    let out = split.get(k)
+    if (!out) split.set(k, (out = genresOf(values)))
+    return out
+  }
   const add = (e: FileEntry, id: string, part?: TrackPart, dir = dirOf(e.path)): void => {
     const key = albumKey(e)
     let g = groups.get(key)
@@ -236,7 +248,8 @@ export function buildLibrary(
       no: e.track ?? fromName?.no ?? 0,
       fromName: fromName?.title ?? '',
       part,
-      dir
+      dir,
+      genres: genres(e.genre)
     })
   }
   // a disc image with a cue sheet is served by its own id, but listed as the sheet's tracks
@@ -247,6 +260,9 @@ export function buildLibrary(
     if (!cues.images.has(e.path)) add(e, id)
   }
   for (const c of cues.items) add(c.entry, c.id, c.part, c.dir)
+  const spelling = genreSpellings(
+    [...groups.values()].flatMap((g) => g.items.map((it) => it.genres))
+  )
 
   const albums: (Album & { tracks: Track[] })[] = []
   const queries: CoverQuery[] = []
@@ -257,6 +273,7 @@ export function buildLibrary(
     const id = shortHash(g.key)
     const title = first.album ?? basename(albumFolder(dirOf(first.path)))
     const artist = albumArtistOf(entries)
+    const year = yearOf(entries)
     const local = coverOf(entries, ix, hasCover)
     const key = first.album ? searchKey(artist, first.album) : ''
     // a picture found online comes last, so local ones always win
@@ -266,7 +283,7 @@ export function buildLibrary(
         albumId: id,
         artist,
         album: first.album,
-        year: yearOf(entries),
+        year,
         tracks: g.items.length,
         compilation: artist === variousArtists,
         noArtist: artist === unknownArtist,
@@ -274,7 +291,7 @@ export function buildLibrary(
         ...mbIds(entries)
       })
     const fallbackArtist = artist === variousArtists ? unknownArtist : artist
-    const tracks = g.items.map(({ e, id: trackId, disc, no, fromName, part }): Track => {
+    const tracks = g.items.map(({ e, id: trackId, disc, no, fromName, part, genres }): Track => {
       const t: Track = {
         id: trackId,
         title: e.title ?? fromName,
@@ -289,17 +306,22 @@ export function buildLibrary(
         folder: -1
       }
       if (part) t.part = part
+      if (genres.length) t.genre = genres.map(spelling)
+      // a compilation's songs keep their own year
+      if (e.year && e.year !== year) t.year = e.year
       if (e.gain) t.gain = e.gain
       if (e.sampleRate) t.rate = e.sampleRate
       if (e.cover && e.cover !== cover && hasCover(e.cover))
         t.art = { palette: paletteOf(ix, e.cover, id), ...coverUrls(e.cover) }
       return t
     })
+    const albumGenres = commonGenres(tracks.map((t) => t.genre))
     albums.push({
       id,
       title,
       ...creditOf(artist, names),
-      year: yearOf(entries),
+      year,
+      ...(albumGenres.length ? { genres: albumGenres } : {}),
       added: addedOf(entries),
       palette: paletteOf(ix, cover, id),
       ...(cover ? coverUrls(cover) : { cover: '', coverLarge: '' }),

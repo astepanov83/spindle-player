@@ -97,8 +97,9 @@ function imageTracks(
       album: sheet.title ?? image.album,
       track: t.no,
       disc: sheet.disc ?? image.disc,
-      year: sheet.year ?? image.year,
-      genre: sheet.genre ?? image.genre,
+      year: t.year ?? sheet.year ?? image.year,
+      // a track's own REM GENRE wins, then the sheet's, then the image's tag
+      genre: t.genre ? [t.genre] : sheet.genre ? [sheet.genre] : image.genre,
       duration: length > 0 ? Math.round(length * 100) / 100 : 0,
       codec: image.codec,
       container: image.container,

@@ -28,11 +28,18 @@ export function albumLines(tracks: Track[]): AlbumLine[] {
   return lines
 }
 
-// "Album · 2021", or "Compilation" for a various artists credit. The tag
-// counts, so a renamed credit still says Compilation.
-export function albumLabel(al: Pick<Album, 'artist' | 'artistTag' | 'year'>): string {
+// An album's head names this many of its genres at most, the most common:
+// a compilation can have a genre per song.
+const shownGenres = 3
+
+// "Album · 2021 · Rock, Metal", or "Compilation" for a various artists
+// credit. The tag counts, so a renamed credit still says Compilation.
+export function albumLabel(al: Pick<Album, 'artist' | 'artistTag' | 'year' | 'genres'>): string {
   const kind = isVarious(al.artistTag ?? al.artist) ? 'Compilation' : 'Album'
-  return al.year ? `${kind} · ${al.year}` : kind
+  const parts = [kind]
+  if (al.year) parts.push(String(al.year))
+  if (al.genres?.length) parts.push(al.genres.slice(0, shownGenres).join(', '))
+  return parts.join(' · ')
 }
 
 // The page of an album's songs, for the queue (its Play button pauses it).

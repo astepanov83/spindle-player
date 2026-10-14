@@ -18,7 +18,8 @@ import {
   filterSongs,
   filterPlaylists,
   filterItems,
-  sortItems
+  sortItems,
+  genreText
 } from './views'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { ItemInfo } from '../plugins/types'
@@ -354,6 +355,72 @@ describe('playlist views', () => {
     )
     expect(r.rows).toEqual(['files:b/0', 'mfp:off'])
     expect(r.missing).toBe(2)
+  })
+})
+
+describe('genre and year sorts (ticket 122)', () => {
+  const infos = new Map<string, ItemInfo>([
+    ['files:1', { title: 'A', genre: 'Rock', year: 1999 }],
+    ['files:2', { title: 'B' }],
+    ['files:3', { title: 'C', genre: 'Ambient, Drone', year: 2004 }],
+    ['files:4', { title: 'D', genre: 'Rock', year: 1983 }]
+  ])
+  const info = (k: ItemKey): ItemInfo | undefined => infos.get(k)
+  const keys: ItemKey[] = ['files:1', 'files:2', 'mfp:off', 'files:3', 'files:4']
+
+  it('sorts by genre and year, songs with none last both ways', () => {
+    expect(sortItems(keys, { k: 'g', dir: 1 }, info)).toEqual([
+      'files:3',
+      'files:1',
+      'files:4',
+      'files:2',
+      'mfp:off'
+    ])
+    expect(sortItems(keys, { k: 'g', dir: -1 }, info)).toEqual([
+      'files:1',
+      'files:4',
+      'files:3',
+      'files:2',
+      'mfp:off'
+    ])
+    expect(sortItems(keys, { k: 'y', dir: 1 }, info)).toEqual([
+      'files:4',
+      'files:1',
+      'files:3',
+      'files:2',
+      'mfp:off'
+    ])
+    expect(sortItems(keys, { k: 'y', dir: -1 }, info)).toEqual([
+      'files:3',
+      'files:1',
+      'files:4',
+      'files:2',
+      'mfp:off'
+    ])
+  })
+
+  it('sorts songs the same way, a song with no year of its own by its album', () => {
+    const { tracks } = lib()
+    const all = [...tracks.values()]
+    const order = (t: Track): number => all.indexOf(t)
+    const rows = [
+      { ...all[0], genre: ['Rock'] },
+      { ...all[1], year: 1990 },
+      { ...all[2], genre: ['Ambient'] }
+    ]
+    const albumYear = (t: Track): number => t.year ?? 2020
+    expect(sortRows(rows, { k: 'y', dir: 1 }, order, albumYear).map((t) => t.id)).toEqual([
+      'a/1',
+      'a/0',
+      'b/0'
+    ])
+    expect(sortRows(rows, { k: 'g', dir: -1 }, order).map((t) => t.id)).toEqual([
+      'a/0',
+      'b/0',
+      'a/1'
+    ])
+    expect(genreText({ genre: ['Rock', 'Metal'] })).toBe('Rock, Metal')
+    expect(genreText({})).toBe('')
   })
 })
 

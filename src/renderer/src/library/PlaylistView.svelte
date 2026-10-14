@@ -4,6 +4,8 @@
   import SearchButtons from '../blocks/SearchButtons.svelte'
   import Icon from '../ui/Icon.svelte'
   import { openSongMenu } from './song-menu'
+  import { listFields } from './item-fields'
+  import { parseQuery } from './search-query'
   import { filterItems, playlistRows, sortItems } from './views'
   import { infoOf, itemInfo, widerTabs } from '../plugins'
   import type { NavKind } from '../plugins/types'
@@ -25,7 +27,7 @@
     p ? playlistRows(p.items, (k) => itemInfo(k).state === 'missing') : { rows: [], missing: 0 }
   )
   // the search box filters the rows; Play takes what is shown
-  const shown = $derived(filterItems(view.rows, library.query, infoOf))
+  const shown = $derived(filterItems(view.rows, library.query, infoOf, listFields))
   // the other tabs to search, while there is text (ticket 077)
   const wider = $derived(widerTabs(playlistsTab, nav))
   let confirmDelete = $state(false)
@@ -151,7 +153,11 @@
       Empty for now. Right-click a song to add it, or use "Add to playlist" on an album page.
     </p>
   {:else if view.rows.length && !shown.length}
-    <p class="hint">No song in this playlist has that in its title, artist or album.</p>
+    <p class="hint">
+      {parseQuery(library.query).terms.length
+        ? 'No song in this playlist has all of that.'
+        : 'No song in this playlist has that in its title, artist or album.'}
+    </p>
   {/if}
   {#if p.items.length && wider.length}
     <div class="wider" class:found={shown.length > 0}><SearchButtons tabs={wider} /></div>

@@ -1,8 +1,20 @@
 // Search, sort and grid math for the library views. No DOM.
-import type { Album, Track } from '../../../shared/library'
+import { songYear, type Album, type Track } from '../../../shared/library'
 import type { Play } from '../../../shared/plays'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { ItemInfo } from '../plugins/types'
+import {
+  fold,
+  hasQuery,
+  hasText,
+  parseQuery,
+  songTest,
+  type Query,
+  type SongFields,
+  type TextField
+} from './search-query'
+
+export { fold }
 
 // title, artist, album, time; plays and last played (ticket 085); genre
 // and year (ticket 122)
@@ -10,18 +22,6 @@ export type SortKey = 't' | 'a' | 'al' | 'd' | 'p' | 'lp' | 'g' | 'y'
 export interface Sort {
   k: SortKey
   dir: 1 | -1
-}
-
-// For search: lower case, and letters without their accents, so "bjork"
-// finds Björk and "cafe" Café. Only the accents of U+0300-U+036F go: the
-// Japanese voicing marks (が) are other marks and stay. Cyrillic й and ё
-// lose theirs too, so и and е find them.
-export function fold(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .normalize('NFC')
-    .toLowerCase()
 }
 
 // The search text of each song, album and artist, folded once: folding 50k
@@ -44,57 +44,114 @@ const albumText = foldedBy((a: Album) => a.title + ' ' + a.artist)
 // an artist's or a folder's name
 export const foldedName = foldedBy((x: { name: string }) => x.name)
 
+// each field apart, for search by field (ticket 128)
+const trackText: Record<TextField, (t: Track) => string> = {
+  title: foldedBy((t: Track) => t.title),
+  artist: foldedBy((t: Track) => t.artist),
+  album: songAlbum,
+  genre: foldedBy((t: Track) => t.genre?.join('\n') ?? ''),
+  codec: foldedBy((t: Track) => t.codec)
+}
+
+// What a field search reads of a library song beyond the song itself: the
+// files plugin gives its stores (plugins/files/query.ts).
+export interface TrackLookups {
+  album?(t: Track): Album | undefined
+  played?(t: Track): Play | undefined
+  loved?(t: Track): boolean
+}
+
+export function trackFields(look: TrackLookups = {}): SongFields<Track> {
+  return {
+    text: (t, f) => trackText[f](t),
+    num(t, f) {
+      if (f === 'year') return songYear(t, look.album?.(t))
+      if (f === 'added') return look.album?.(t)?.added
+      const p = look.played?.(t)
+      return f === 'plays' ? (p?.n ?? 0) : p?.last
+    },
+    loved: (t) => look.loved?.(t) ?? false
+  }
+}
+
+// The query's song test, or null when it has no fields.
+function fieldTest<T>(q: Query, of: SongFields<T>): ((t: T) => boolean) | null {
+  return q.terms.length ? songTest(q.terms, of) : null
+}
+
 // A song, with its album too: Folders and playlists match that way.
-// `s` is folded (foldQuery).
-export const songOrAlbumHas = (t: Track, s: string): boolean =>
-  songText(t).includes(s) || songAlbum(t).includes(s)
+export const songOrAlbumHas = (t: Track, q: Query): boolean => hasText(q, songText(t), songAlbum(t))
 
 export const foldQuery = (q: string): string => fold(q.trim())
 
-// A song by its own title or artist. Not by its album: the search results
-// have a group for albums.
-export function songMatches(t: Track, q: string): boolean {
-  const s = foldQuery(q)
-  return !s || songText(t).includes(s)
+// A song by its own title or artist, and its fields. Not by its album: the
+// search results have a group for albums.
+export function songMatches(t: Track, q: string, of = trackFields()): boolean {
+  const p = parseQuery(q)
+  return hasText(p, songText(t)) && (fieldTest(p, of)?.(t) ?? true)
 }
 
-export function filterAlbums(albums: Album[], q: string): Album[] {
-  const s = foldQuery(q)
-  return s ? albums.filter((a) => albumText(a).includes(s)) : albums
+// By title or album artist; by field when one of its songs has it (an album
+// matches year:1994 by its songs' year).
+export function filterAlbums(
+  albums: Album[],
+  q: string,
+  track?: (id: string) => Track,
+  of = trackFields()
+): Album[] {
+  const p = parseQuery(q)
+  if (!hasQuery(p)) return albums
+  const song = fieldTest(p, of)
+  return albums.filter(
+    (a) =>
+      hasText(p, albumText(a)) && (!song || (!!track && a.trackIds.some((id) => song(track(id)))))
+  )
 }
 
 // The Songs table: every song of a matching album, plus songs whose title
-// or artist matches.
-export function songRows(albums: Album[], track: (id: string) => Track, q: string): Track[] {
-  const s = foldQuery(q)
-  const out: Track[] = []
-  for (const al of albums) {
-    const whole = !s || albumText(al).includes(s)
-    for (const id of al.trackIds) {
-      const t = track(id)
-      if (whole || songText(t).includes(s)) out.push(t)
-    }
-  }
-  return out
-}
-
-// The search results' songs, in library order. None for an empty search.
-export function searchSongs(albums: Album[], track: (id: string) => Track, q: string): Track[] {
-  const s = foldQuery(q)
-  if (!s) return []
+// or artist matches; with fields, only the songs that have them.
+export function songRows(
+  albums: Album[],
+  track: (id: string) => Track,
+  q: string,
+  of = trackFields()
+): Track[] {
+  const p = parseQuery(q)
+  const song = fieldTest(p, of)
   const out: Track[] = []
   for (const al of albums)
     for (const id of al.trackIds) {
       const t = track(id)
-      if (songText(t).includes(s)) out.push(t)
+      if (hasText(p, albumText(al), songText(t)) && (!song || song(t))) out.push(t)
+    }
+  return out
+}
+
+// The search results' songs, in library order. None for an empty search.
+export function searchSongs(
+  albums: Album[],
+  track: (id: string) => Track,
+  q: string,
+  of = trackFields()
+): Track[] {
+  const p = parseQuery(q)
+  if (!hasQuery(p)) return []
+  const song = fieldTest(p, of)
+  const out: Track[] = []
+  for (const al of albums)
+    for (const id of al.trackIds) {
+      const t = track(id)
+      if (hasText(p, songText(t)) && (!song || song(t))) out.push(t)
     }
   return out
 }
 
 // A playlist's rows by title, artist or album, as in Folders.
-export function filterSongs(rows: Track[], q: string): Track[] {
-  const s = foldQuery(q)
-  return s ? rows.filter((t) => songOrAlbumHas(t, s)) : rows
+export function filterSongs(rows: Track[], q: string, of = trackFields()): Track[] {
+  const p = parseQuery(q)
+  if (!hasQuery(p)) return rows
+  const song = fieldTest(p, of)
+  return rows.filter((t) => songOrAlbumHas(t, p) && (!song || song(t)))
 }
 
 export function filterPlaylists<T extends { name: string }>(list: T[], q: string): T[] {
@@ -189,13 +246,52 @@ type InfoOf = (key: ItemKey) => ItemInfo | undefined
 
 const itemText = foldedBy((i: ItemInfo) => `${i.title}\n${i.subtitle ?? ''}\n${i.group ?? ''}`)
 
-// A playlist's rows by title, artist or album, as in Folders.
-export function filterItems(keys: ItemKey[], q: string, info: InfoOf): ItemKey[] {
-  const s = foldQuery(q)
-  if (!s) return keys
+const itemTextOf: Record<TextField, (i: ItemInfo) => string> = {
+  title: foldedBy((i: ItemInfo) => i.title),
+  artist: foldedBy((i: ItemInfo) => i.subtitle ?? ''),
+  album: foldedBy((i: ItemInfo) => i.group ?? ''),
+  // "Rock, Metal": a value with a comma in it can't be told apart, but a
+  // search for a part of one still finds it
+  genre: foldedBy((i: ItemInfo) => i.genre ?? ''),
+  codec: foldedBy((i: ItemInfo) => i.codec ?? '')
+}
+
+// How a field search reads an item of a playlist or smart list: what its
+// plugin says, and the core's plays and hearts.
+export function itemFields(
+  info: InfoOf,
+  played: PlayOf,
+  loved: (key: ItemKey) => boolean
+): SongFields<ItemKey> {
+  return {
+    text(k, f) {
+      const i = info(k)
+      return i ? itemTextOf[f](i) : ''
+    },
+    num(k, f) {
+      if (f === 'year') return info(k)?.year
+      if (f === 'added') return info(k)?.added
+      const p = played(k)
+      return f === 'plays' ? (p?.n ?? 0) : p?.last
+    },
+    loved
+  }
+}
+
+// A playlist's rows by title, artist or album, as in Folders, and by field
+// with `of`.
+export function filterItems(
+  keys: ItemKey[],
+  q: string,
+  info: InfoOf,
+  of?: SongFields<ItemKey>
+): ItemKey[] {
+  const p = parseQuery(q)
+  if (!hasQuery(p)) return keys
+  const song = of ? fieldTest(p, of) : null
   return keys.filter((k) => {
     const i = info(k)
-    return !!i && itemText(i).includes(s)
+    return !!i && hasText(p, itemText(i)) && (!song || song(k))
   })
 }
 

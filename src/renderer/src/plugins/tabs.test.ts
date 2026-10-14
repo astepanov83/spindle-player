@@ -59,6 +59,14 @@ describe('searching another tab (ticket 077)', () => {
     expect(ids(widerSearches(all, 'radio', 'har'))).toEqual(['albums'])
   })
 
+  it('sends a search by field only to tabs that read fields (ticket 128)', () => {
+    const withFields = all.map((t) => (t.id === 'albums' ? { ...t, fields: true } : t))
+    expect(ids(widerSearches(withFields, 'artists', 'genre:rock'))).toEqual(['albums'])
+    expect(ids(widerSearches(withFields, 'albums', 'genre:rock'))).toEqual([])
+    // a typo is words, which stations take
+    expect(ids(widerSearches(withFields, 'artists', 'genr:rock'))).toEqual(['albums', 'radio'])
+  })
+
   it('offers nothing without text', () => {
     expect(widerSearches(all, 'artists', '  ')).toEqual([])
   })

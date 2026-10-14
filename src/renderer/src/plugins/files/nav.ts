@@ -20,7 +20,14 @@ const isAlbum = (id: string): boolean => !!files.findAlbum(id)
 
 export function filesTabs(): Tab[] {
   return [
-    { id: 'songs', label: 'Songs', icon: 'note', search: 'Search songs', only: 'sidebar' },
+    {
+      id: 'songs',
+      label: 'Songs',
+      icon: 'note',
+      search: 'Search songs',
+      only: 'sidebar',
+      fields: true
+    },
     {
       id: 'albums',
       label: 'Albums',
@@ -28,15 +35,17 @@ export function filesTabs(): Tab[] {
       search: 'Search your library',
       searchShort: 'Search library',
       // its results page finds songs, albums and artists
-      searchWide: true
+      searchWide: true,
+      fields: true
     },
-    { id: 'artists', label: 'Artists', icon: 'person', search: 'Search artists' },
-    { id: 'genres', label: 'Genres', icon: 'genre', search: 'Search genres' },
+    { id: 'artists', label: 'Artists', icon: 'person', search: 'Search artists', fields: true },
+    { id: 'genres', label: 'Genres', icon: 'genre', search: 'Search genres', fields: true },
     {
       id: 'folders',
       label: 'Folders',
       icon: 'folder',
-      search: folderSearchText(files.folders, openFolderKey())
+      search: folderSearchText(files.folders, openFolderKey()),
+      fields: true
     }
   ]
 }

@@ -135,6 +135,49 @@ describe('search (tickets 039, 059)', () => {
       songs: ['files:a1', 'files:a2', 'files:a3']
     })
   })
+
+  it('finds by field, with the plays and hearts of the stores (ticket 128)', async () => {
+    const { plays } = await import('../../stores/plays.svelte')
+    const { loved } = await import('../../stores/loved.svelte')
+    files.load({
+      ...lib(),
+      tracks: lib().tracks.map((t) =>
+        t.id === 'b1' ? { ...t, genre: ['Doom Metal'], codec: 'FLAC' } : t
+      )
+    })
+    plays.load({ 'files:a1': { n: 3, last: 1 } })
+    loved.load({ 'files:a2': 1 })
+    const ids = (q: string): string[][] =>
+      page
+        .filesSearch(q)
+        .map((g) =>
+          'songs' in g
+            ? g.songs
+            : 'tiles' in g
+              ? g.tiles.items.map(
+                  (x) => (x as { id?: string; key?: string }).id ?? (x as { key: string }).key
+                )
+              : []
+        )
+    expect(ids('genre:doom')).toEqual([['files:b1'], ['b'], ['junopark'], ['doommetal']])
+    expect(ids('plays:>2')).toEqual([['files:a1'], ['a'], ['marinavale'], []])
+    expect(ids('is:loved')[0]).toEqual(['files:a2'])
+    expect(ids('-is:loved plays:0')[0]).toEqual(['files:a3', 'files:b1'])
+    expect(ids('codec:flac marina')).toEqual([[], [], [], []])
+  })
+
+  it('says why nothing was found', () => {
+    expect(page.filesPage('albums', '', 'year:1900')).toEqual([
+      { kind: 'results', empty: 'No song, album or artist has all of that.' }
+    ])
+    expect(page.filesPage('albums', '', 'genr:rock')).toEqual([
+      {
+        kind: 'results',
+        empty:
+          'No song, album or artist has that in its name. "genr" is no field: the ? in the search box lists them.'
+      }
+    ])
+  })
 })
 
 describe('pages', () => {

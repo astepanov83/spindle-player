@@ -6,6 +6,8 @@
   import SearchButtons from '../blocks/SearchButtons.svelte'
   import Icon from '../ui/Icon.svelte'
   import { openSongMenu } from './song-menu'
+  import { listFields } from './item-fields'
+  import { parseQuery } from './search-query'
   import { filterItems, sortItems } from './views'
   import { heldRows, sameRows, smartList } from './smart-lists'
   import { infoOf, itemInfo, widerTabs } from '../plugins'
@@ -45,7 +47,7 @@
   const changed = $derived(!sameRows(rows, live))
 
   // the search box filters the rows; Play takes what is shown
-  const shown = $derived(filterItems(rows, library.query, infoOf))
+  const shown = $derived(filterItems(rows, library.query, infoOf, listFields))
   // the other tabs to search, while there is text (ticket 077)
   const wider = $derived(widerTabs(playlistsTab, nav))
   // its sort, kept with the playlists' while the app runs
@@ -121,7 +123,11 @@
   {#if !rows.length}
     <p class="hint">{list.empty}</p>
   {:else if !shown.length}
-    <p class="hint">No song in this list has that in its title, artist or album.</p>
+    <p class="hint">
+      {parseQuery(library.query).terms.length
+        ? 'No song in this list has all of that.'
+        : 'No song in this list has that in its title, artist or album.'}
+    </p>
   {/if}
   {#if rows.length && wider.length}
     <div class="wider" class:found={shown.length > 0}><SearchButtons tabs={wider} /></div>

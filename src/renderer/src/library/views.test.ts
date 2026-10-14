@@ -19,7 +19,9 @@ import {
   filterPlaylists,
   filterItems,
   sortItems,
-  genreText
+  genreText,
+  itemFields,
+  trackFields
 } from './views'
 import type { ItemKey } from '../../../shared/plugins/items'
 import type { ItemInfo } from '../plugins/types'
@@ -487,5 +489,210 @@ describe('songs as items (ticket 056)', () => {
     expect(filterItems(keys, 'episode', info)).toEqual(['mfp:2'])
     expect(filterItems(keys, 'kite', info)).toEqual(['files:1', 'files:3'])
     expect(filterItems(keys, '', info)).toBe(keys)
+  })
+})
+
+describe('search by field (ticket 128)', () => {
+  const day = 24 * 60 * 60 * 1000
+  const now = Date.now()
+  const albums: Album[] = []
+  const tracks = new Map<string, Track>()
+  const add = (
+    id: string,
+    title: string,
+    artist: string,
+    year: number,
+    added: number,
+    songs: Partial<Track>[]
+  ): void => {
+    const ids = songs.map((x, i) => {
+      const t: Track = {
+        id: `${id}/${i}`,
+        title: `${title} ${i + 1}`,
+        duration: 200,
+        albumId: id,
+        artist,
+        album: title,
+        no: i + 1,
+        disc: 1,
+        codec: 'FLAC',
+        folder: 0,
+        ...x
+      }
+      tracks.set(t.id, t)
+      return t.id
+    })
+    albums.push({
+      id,
+      title,
+      artist,
+      year,
+      added,
+      palette: defaultPalettes,
+      cover: '',
+      coverLarge: '',
+      trackIds: ids
+    })
+  }
+  // a doom album of the 90s, a newer metal one, and a compilation with a
+  // song of its own year
+  add('d', 'Grey Halls', 'Mourn', 1994, now - 400 * day, [
+    { genre: ['Doom Metal'] },
+    { genre: ['Doom Metal'], title: 'Live at Night' }
+  ])
+  add('m', 'Iron Coast', 'Steelwind', 2012, now - 10 * day, [
+    { genre: ['Heavy Metal'], codec: 'MPEG 1 Layer 3' },
+    { genre: ['Rock'], codec: 'MPEG 1 Layer 3' }
+  ])
+  add('v', 'Summer Mix', 'Various Artists', 2024, now - 2 * day, [
+    { genre: ['Synthpop'], year: 1983, artist: 'Neon Kids' },
+    { genre: ['Rock'], artist: 'Mourn' }
+  ])
+  const track = (id: string): Track => tracks.get(id)!
+  const playCounts: Record<string, { n: number; last: number }> = {
+    'm/0': { n: 12, last: now - 1 * day },
+    'd/0': { n: 2, last: now - 500 * day }
+  }
+  const loved = new Set(['v/0'])
+  const of = trackFields({
+    album: (t) => albums.find((a) => a.id === t.albumId),
+    played: (t) => playCounts[t.id],
+    loved: (t) => loved.has(t.id)
+  })
+  const ids = (list: { id: string }[]): string[] => list.map((x) => x.id)
+  const songs = (q: string): string[] => ids(searchSongs(albums, track, q, of))
+
+  it('finds songs by each field', () => {
+    expect(songs('genre:metal')).toEqual(['d/0', 'd/1', 'm/0'])
+    expect(songs('genre:"doom metal" year:1990-1999 plays:0')).toEqual(['d/1'])
+    expect(songs('year:<1990')).toEqual(['v/0'])
+    expect(songs('year:2024')).toEqual(['v/1'])
+    expect(songs('codec:mp3')).toEqual(['m/0', 'm/1'])
+    expect(songs('plays:>10')).toEqual(['m/0'])
+    expect(songs('played:>1y')).toEqual(['d/0'])
+    expect(songs('added:<30d')).toEqual(['m/0', 'm/1', 'v/0', 'v/1'])
+    expect(songs('is:loved')).toEqual(['v/0'])
+    expect(songs('artist:mourn')).toEqual(['d/0', 'd/1', 'v/1'])
+    expect(songs('album:"grey halls"')).toEqual(['d/0', 'd/1'])
+    expect(songs('title:night')).toEqual(['d/1'])
+  })
+
+  it('mixes fields with words, and leaves out what follows a "-"', () => {
+    // the songs group matches words by title and artist
+    expect(songs('mourn genre:rock')).toEqual(['v/1'])
+    expect(songs('genre:metal -genre:doom')).toEqual(['m/0'])
+    expect(songs('genre:metal -live')).toEqual(['d/0', 'm/0'])
+    expect(songs('-is:loved year:<1990')).toEqual([])
+  })
+
+  it('takes a typo as words, as before', () => {
+    expect(songs('genr:metal')).toEqual([])
+    expect(songs('Grey')).toEqual(['d/0'])
+  })
+
+  it('finds an album when one of its songs has the fields', () => {
+    expect(ids(filterAlbums(albums, 'year:1983', track, of))).toEqual(['v'])
+    expect(ids(filterAlbums(albums, 'year:1994', track, of))).toEqual(['d'])
+    expect(ids(filterAlbums(albums, 'genre:rock', track, of))).toEqual(['m', 'v'])
+    // words still match the album's title and artist
+    expect(ids(filterAlbums(albums, 'summer genre:rock', track, of))).toEqual(['v'])
+    expect(ids(filterAlbums(albums, '-various genre:rock', track, of))).toEqual(['m'])
+    expect(filterAlbums(albums, '', track, of)).toBe(albums)
+  })
+
+  it("filters Classic's Songs: words by album or song, fields by song", () => {
+    expect(ids(songRows(albums, track, 'iron genre:rock', of))).toEqual(['m/1'])
+    expect(ids(songRows(albums, track, 'grey -live', of))).toEqual(['d/0'])
+    expect(ids(songRows(albums, track, 'genre:synthpop', of))).toEqual(['v/0'])
+  })
+
+  it('filters a list of songs by field', () => {
+    const rows = [...tracks.values()]
+    expect(ids(filterSongs(rows, 'grey plays:0', of))).toEqual(['d/1'])
+  })
+
+  it('filters a playlist by what its items say, plays and hearts', () => {
+    const info = (k: ItemKey): ItemInfo | undefined => {
+      const t = tracks.get(k.slice('files:'.length))
+      if (!t) return undefined
+      const al = albums.find((a) => a.id === t.albumId)!
+      return {
+        title: t.title,
+        subtitle: t.artist,
+        group: t.album,
+        genre: genreText(t) || undefined,
+        year: t.year ?? al.year,
+        codec: t.codec,
+        added: al.added
+      }
+    }
+    const keys = [...tracks.keys()].map((id) => `files:${id}` as ItemKey)
+    const fields = itemFields(
+      info,
+      (k) => playCounts[k.slice(6)],
+      (k) => loved.has(k.slice(6))
+    )
+    const find = (q: string): string[] => filterItems(keys, q, info, fields).map((k) => k.slice(6))
+    expect(find('genre:metal year:<2000')).toEqual(['d/0', 'd/1'])
+    expect(find('is:loved')).toEqual(['v/0'])
+    expect(find('plays:>10 codec:mp3')).toEqual(['m/0'])
+    expect(find('added:<1w')).toEqual(['v/0', 'v/1'])
+    expect(find('played:<1w')).toEqual(['m/0'])
+    expect(find('iron -genre:rock')).toEqual(['m/0'])
+    // with no way to read fields, words still work
+    expect(filterItems(keys, 'iron', info).length).toBe(2)
+  })
+
+  it('stays fast on 50,000 songs', () => {
+    const big: Album[] = []
+    const bigTracks: Track[] = []
+    for (let a = 0; a < 5000; a++) {
+      const trackIds: string[] = []
+      for (let i = 0; i < 10; i++) {
+        const t: Track = {
+          id: `${a}/${i}`,
+          title: `Song ${a} ${i}`,
+          duration: 200,
+          albumId: `${a}`,
+          artist: `Artist ${a % 700}`,
+          album: `Album ${a}`,
+          no: i + 1,
+          disc: 1,
+          codec: a % 3 ? 'FLAC' : 'MPEG 1 Layer 3',
+          folder: 0,
+          genre: [['Doom Metal', 'Rock', 'Jazz', 'Synthpop'][(a + i) % 4]]
+        }
+        bigTracks.push(t)
+        trackIds.push(t.id)
+      }
+      big.push({
+        id: `${a}`,
+        title: `Album ${a}`,
+        artist: `Artist ${a % 700}`,
+        year: 1960 + (a % 60),
+        added: now - (a % 900) * day,
+        palette: defaultPalettes,
+        cover: '',
+        coverLarge: '',
+        trackIds
+      })
+    }
+    const byId = new Map(bigTracks.map((t) => [t.id, t]))
+    const albumOf = new Map(big.map((a) => [a.id, a]))
+    const bigOf = trackFields({ album: (t) => albumOf.get(t.albumId), played: () => undefined })
+    const get = (id: string): Track => byId.get(id)!
+    const q = 'genre:"doom metal" year:1990-1999 plays:0 -codec:mp3'
+    // the first search folds each field once, as the first key typed does
+    let start = performance.now()
+    searchSongs(big, get, q, bigOf)
+    const first = performance.now() - start
+    // then each key: the songs and the albums, as the results page
+    start = performance.now()
+    const found = searchSongs(big, get, q + ' ', bigOf)
+    filterAlbums(big, q + ' ', get, bigOf)
+    const next = performance.now() - start
+    expect(found.length).toBeGreaterThan(0)
+    expect(first).toBeLessThan(400)
+    expect(next).toBeLessThan(100)
   })
 })

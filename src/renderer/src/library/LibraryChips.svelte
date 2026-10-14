@@ -60,6 +60,7 @@
       <SearchBox
         placeholder={shown?.search ?? 'Search'}
         onenter={() => shown && typedIn(shown.plugin, shown.id, library.query, true)}
+        fields={!!shown?.fields}
       />
     </div>
     <!-- the scan line takes the row's spare room, so the grid never moves -->

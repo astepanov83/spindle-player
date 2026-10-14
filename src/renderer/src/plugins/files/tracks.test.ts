@@ -131,6 +131,22 @@ describe('a song’s genre and year (ticket 122)', () => {
   })
 })
 
+describe('a song’s codec and added, for search by field (ticket 128)', () => {
+  it('has its codec and its album’s added time', () => {
+    files.load({
+      ...lib,
+      albums: [{ ...album('far', ['far']), added: 1700 }, album('near', ['near'])],
+      tracks: [{ ...track('far', 1), codec: 'FLAC' }, track('near', 2)]
+    })
+    const info = (id: string): { codec?: string; added?: number } | undefined => {
+      const s = tracks.trackState(id, () => true)
+      return s.state === 'ok' ? { codec: s.info.codec, added: s.info.added } : undefined
+    }
+    expect(info('far')).toEqual({ codec: 'FLAC', added: 1700 })
+    expect(info('near')).toEqual({ codec: '', added: undefined })
+  })
+})
+
 describe('a song’s Go to genre links (ticket 123)', () => {
   const links = (id: string): { label: string; page: string }[] => {
     const s = tracks.trackState(id, () => true)

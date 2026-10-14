@@ -3,7 +3,7 @@
 // their buttons do comes back through filesAct.
 import { artistKey, namesOf, type Artist } from '../../../../shared/plugins/files/artists'
 import { cleanNames, editArtist, maxNameLength } from '../../../../shared/plugins/files/artist-edit'
-import { pictureOf, songYear, type Album, type Art } from '../../../../shared/library'
+import { pictureOf, songYear, type Album, type Art, type Track } from '../../../../shared/library'
 import type { ItemKey } from '../../../../shared/plugins/items'
 import { queueLink } from '../../../../shared/saved-queue'
 import { fmtCount, fmtLength } from '../../format'
@@ -15,7 +15,8 @@ import {
   artistSongs,
   albumArtists,
   filterArtists,
-  shownArtists
+  shownArtists,
+  type SongLookup
 } from './artists'
 import {
   commonFolder,
@@ -81,6 +82,8 @@ import { fixCount, keepSeparate, nameFixes, tagNote, type NameFix } from './name
 import { ai } from '../../ai.svelte'
 import { artistGroupsTask } from '../../../../shared/plugins/files/artists-file'
 import { trackKey, trackKeys, trackOf } from './tracks'
+import { libraryFields } from './query'
+import { parseQuery, unknownField } from '../../library/search-query'
 import { artistParts, newest, theirSongs, topSongs, type ArtistParts } from './artist-parts'
 
 const at = (page: string): PageAddress => ({ plugin: 'files', page })
@@ -160,7 +163,7 @@ const listHead = (id: string, title: string, count: string): HeadBlock => ({
 // Classic's Songs: every song, in the library's sort. The sort is read when
 // drawn, so a sort click doesn't build the 50k list again.
 function songsPage(query: string): Block[] {
-  const items = songRows(files.albums, (id) => files.track(id), query).map(trackKey)
+  const items = songRows(files.albums, (id) => files.track(id), query, libraryFields).map(trackKey)
   const table: Block = {
     kind: 'songs',
     id: songsTarget,
@@ -175,13 +178,31 @@ function songsPage(query: string): Block[] {
   }
   return items.length || !query.trim()
     ? [table]
-    : [table, noMatches('No song has that in its title, artist or album.')]
+    : [
+        table,
+        noMatches(
+          noneText(
+            query,
+            'No song has all of that.',
+            'No song has that in its title, artist or album.'
+          )
+        )
+      ]
 }
 
 function albumsPage(page: string, query: string): Block[] {
   // every plugin's results show over the grid or the open album (ticket 039)
   if (query.trim())
-    return [{ kind: 'results', empty: 'No song, album or artist has that in its name.' }]
+    return [
+      {
+        kind: 'results',
+        empty: noneText(
+          query,
+          'No song, album or artist has all of that.',
+          'No song, album or artist has that in its name.'
+        )
+      }
+    ]
   const p = parsePage(page)
   if (p?.kind === 'album' && files.findAlbum(p.id))
     return albumBlocks(files.album(p.id), { label: 'All albums', to: at('') })
@@ -491,7 +512,7 @@ function artistsPage(page: string, query: string): Block[] {
   }
   if (!query.trim() && artist) return artistBlocks(artist)
   if (!query.trim() && p?.kind === 'fixes') return fixesBlocks()
-  const shown = shownArtists(files.artists, settings.artistsShown, query)
+  const shown = shownArtists(files.artists, settings.artistsShown, query, songLookup)
   const fixes = fixCount(nameFixes(files.artists))
   const head = listHead(artistsView, 'Artists', fmtCount(shown.length, 'artist', 'artists'))
   head.looks = lookSwitch('artists')
@@ -512,7 +533,13 @@ function artistsPage(page: string, query: string): Block[] {
   const look = viewLook('artists')
   return [
     head,
-    ...(shown.length ? [] : [noMatches('No artist has that in their name.')]),
+    ...(shown.length
+      ? []
+      : [
+          noMatches(
+            noneText(query, 'No artist has all of that.', 'No artist has that in their name.')
+          )
+        ]),
     look === 'list'
       ? artistRows(shown, groups)
       : look === 'shelves'
@@ -540,7 +567,7 @@ function genresPage(page: string, query: string): Block[] {
     )
   if (!query.trim() && genre) return genreBlocks(genre)
   const by = parseGenreSort(viewSort(genresView))
-  const shown = filterGenres(sortGenres(files.genres, by), query)
+  const shown = filterGenres(sortGenres(files.genres, by), query, songLookup)
   const head: HeadBlock = {
     ...listHead(genresView, 'Genres', fmtCount(shown.length, 'genre', 'genres')),
     looks: lookSwitch('genres'),
@@ -566,7 +593,11 @@ function genresPage(page: string, query: string): Block[] {
     query.trim() || by !== 'name' ? undefined : { grouping: artistGrouping, strip: true }
   return [
     head,
-    ...(shown.length ? [] : [noMatches('No genre has that in its name.')]),
+    ...(shown.length
+      ? []
+      : [
+          noMatches(noneText(query, 'No genre has all of that.', 'No genre has that in its name.'))
+        ]),
     viewLook('genres') === 'list'
       ? genreRows(shown, groups)
       : // smaller than an album's, as the Artists grid, so more fit in a row
@@ -1241,7 +1272,8 @@ function folderPlayIds(tree: FolderTree, shown: number | null): ItemKey[] {
     library.query,
     files.folderSort,
     (t) => files.order(t),
-    (t) => songYear(t, files.findAlbum(t.albumId))
+    (t) => songYear(t, files.findAlbum(t.albumId)),
+    libraryFields
   ).map(trackKey)
 }
 
@@ -1253,7 +1285,7 @@ function foldersPage(page: string, query: string): Block[] {
   const id = node ? folderPage(node.key) : foldersTarget
   const title = node?.name ?? 'Folders'
   const path = shown === null ? [] : crumbs(tree, shown)
-  const view = filterFolder(tree, shown, query)
+  const view = filterFolder(tree, shown, query, libraryFields)
   const total = node ? node.count : tree.roots.reduce((s, r) => s + tree.nodes[r].count, 0)
   const subfolders = node ? node.children.length : tree.roots.length
   // the top list of music folders has no key to open again
@@ -1317,7 +1349,11 @@ function foldersPage(page: string, query: string): Block[] {
   if (query.trim() && !view.folders.length && !view.songs.length)
     blocks.push(
       noMatches(
-        'Nothing in this folder or below it matches. Search looks at folder names and at song titles, artists and albums.'
+        noneText(
+          query,
+          'Nothing in this folder or below it has all of that.',
+          'Nothing in this folder or below it matches. Search looks at folder names and at song titles, artists and albums.'
+        )
       )
     )
   blocks.push(
@@ -1357,18 +1393,50 @@ function foldersPage(page: string, query: string): Block[] {
   return blocks
 }
 
+const track = (id: string): Track => files.track(id)
+
+// What "No matches" says: with fields (ticket 128) it doesn't speak of
+// names, and a word like "genr:rock" was searched as words, so say why.
+function noneText(query: string, byField: string, byName: string): string {
+  const typo = unknownField(query)
+  return (
+    (parseQuery(query).terms.length ? byField : byName) +
+    (typo ? ` "${typo}" is no field: the ? in the search box lists them.` : '')
+  )
+}
+
+// How a search reads the songs of an artist or genre (ticket 128).
+const songLookup: SongLookup = {
+  album: (id) => files.findAlbum(id),
+  track,
+  fields: libraryFields
+}
+
 // What the search box finds in the music folders (ticket 039): songs by
-// title or their own artist, albums, artists, genres (ticket 123).
+// title or their own artist, albums, artists, genres (ticket 123). Fields
+// too (ticket 128): an album, artist or genre has them when a song of it has.
 export function filesSearch(query: string): SearchGroup[] {
   return [
     {
       id: 'songs',
       title: 'Songs',
-      songs: searchSongs(files.albums, (id) => files.track(id), query).map(trackKey)
+      songs: searchSongs(files.albums, track, query, libraryFields).map(trackKey)
     },
-    { id: 'albums', title: 'Albums', tiles: albumTiles(filterAlbums(files.albums, query)) },
-    { id: 'artists', title: 'Artists', tiles: artistTiles(filterArtists(files.artists, query)) },
-    { id: 'genres', title: 'Genres', tiles: genreTiles(filterGenres(files.genres, query)) }
+    {
+      id: 'albums',
+      title: 'Albums',
+      tiles: albumTiles(filterAlbums(files.albums, query, track, libraryFields))
+    },
+    {
+      id: 'artists',
+      title: 'Artists',
+      tiles: artistTiles(filterArtists(files.artists, query, songLookup))
+    },
+    {
+      id: 'genres',
+      title: 'Genres',
+      tiles: genreTiles(filterGenres(files.genres, query, songLookup))
+    }
   ]
 }
 

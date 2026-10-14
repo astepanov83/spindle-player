@@ -51,6 +51,7 @@ class TrackInfo implements ItemInfo {
   readonly group: string
   readonly length: number
   readonly genre: string | undefined
+  readonly codec: string
   readonly #t: Track
 
   constructor(t: Track) {
@@ -60,6 +61,11 @@ class TrackInfo implements ItemInfo {
     this.group = t.album
     this.length = t.duration
     this.genre = genreText(t) || undefined
+    this.codec = t.codec
+  }
+
+  get added(): number | undefined {
+    return files.findAlbum(this.#t.albumId)?.added || undefined
   }
 
   // read when asked: the album's year can change under the same song
@@ -131,6 +137,7 @@ class LooseInfo implements ItemInfo {
   readonly subtitle: string
   readonly group: string
   readonly length: number
+  readonly codec: string
   readonly art: Art | undefined
   readonly names: { name: string }[]
   readonly menu = [{ id: showFileId, label: 'Show in file manager' }]
@@ -140,6 +147,7 @@ class LooseInfo implements ItemInfo {
     this.subtitle = t.artist
     this.group = t.album
     this.length = t.duration
+    this.codec = t.codec
     this.art = t.art
     this.names = artistLinks(t, () => false).map(({ name }) => ({ name }))
   }

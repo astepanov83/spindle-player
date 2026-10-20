@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { mergeStreams } from '../../../shared/plugins/radio/stations'
 import { checkedFetch } from './checked-fetch'
 import { codecOf, findStreams } from './find-streams'
+import { StreamAgents } from './stream-agents'
 
 const read = (name: string): string => readFileSync(join(__dirname, 'fixtures', name), 'utf8')
 const pls = read('metal-only.pls')
@@ -19,6 +20,8 @@ interface Reply {
   redirect?: string
   // the body never ends (a stream, or a Shoutcast v1 server's answer to HEAD)
   endless?: boolean
+  // a Shoutcast v1 server: a browser's User-Agent gets its HTML page
+  pageForBrowsers?: boolean
 }
 
 // What the app does: checkedFetch over a stand-in for net.request, which
@@ -33,8 +36,11 @@ function fakeFetch(
   const request = (o: ClientRequestConstructorOptions): ClientRequest => {
     const req = new EventEmitter() as EventEmitter & Record<string, unknown>
     let url = o.url!
+    let agent = ''
     req.setHeader = (k: string, v: string) => {
-      if (k.toLowerCase() === 'user-agent') agents.push(v)
+      if (k.toLowerCase() !== 'user-agent') return
+      agents.push(v)
+      agent = v
     }
     req.abort = () => aborted.push(url)
     const next = (): void => {
@@ -45,9 +51,10 @@ function fakeFetch(
         url = r.redirect
         return void req.emit('redirect', 302, o.method, r.redirect, {})
       }
+      const page = r.pageForBrowsers && agent.startsWith('Mozilla/')
       const res = Object.assign(new EventEmitter(), {
         statusCode: r.status ?? 200,
-        headers: r.headers ?? {}
+        headers: page ? { 'content-type': 'text/html' } : (r.headers ?? {})
       })
       req.emit('response', res)
       queueMicrotask(() => {
@@ -93,14 +100,26 @@ describe('findStreams', () => {
     )
   })
 
-  it('asks as Spindle/<version>', async () => {
+  it("asks as a browser, since some servers refuse players they don't know", async () => {
     const f = fakeFetch({ [plsUrl]: { body: pls }, ...entry, [statusUrl]: { body: status } })
-    await findStreams(
-      { pls: [plsUrl], streams: [] },
-      { fetch: f, log: vi.fn(), userAgent: 'Spindle/1.2.3' }
-    )
+    const agents = new StreamAgents('Mozilla/5.0 Chrome', 'Spindle/1.2.3')
+    await findStreams({ pls: [plsUrl], streams: [] }, { fetch: f, log: vi.fn(), agents })
     expect(f.agents).toHaveLength(3)
-    expect(new Set(f.agents)).toEqual(new Set(['Spindle/1.2.3']))
+    expect(new Set(f.agents)).toEqual(new Set(['Mozilla/5.0 Chrome']))
+  })
+
+  it('probes again as Spindle when a Shoutcast v1 server sends a browser its page', async () => {
+    const v1 = 'http://v1.example:8000/'
+    const f = fakeFetch({
+      [v1]: { headers: { 'icy-br': '128', 'content-type': 'audio/mpeg' }, pageForBrowsers: true }
+    })
+    const agents = new StreamAgents('Mozilla/5.0 Chrome', 'Spindle/1.2.3')
+    const saved = [{ url: v1 }]
+    const found = await findStreams({ streams: saved }, { fetch: f, log: vi.fn(), agents })
+    expect(found).toEqual([{ url: v1, bitrate: 128, codec: 'mp3' }])
+    expect(f.agents.slice(0, 2)).toEqual(['Mozilla/5.0 Chrome', 'Spindle/1.2.3'])
+    // that server gets Spindle's first from now on
+    expect(agents.forUrl(v1)).toEqual(['Spindle/1.2.3', 'Mozilla/5.0 Chrome'])
   })
 
   it('refuses a playlist or status page too big to be one', async () => {

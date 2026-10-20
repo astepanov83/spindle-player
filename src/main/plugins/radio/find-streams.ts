@@ -5,14 +5,15 @@ import { RefusedAddress } from './checked-fetch'
 import { refusedAddress } from './logo-fetch'
 import { readCapped } from '../../read-capped'
 import { parsePls } from './pls'
+import { isWebPage, StreamAgents } from './stream-agents'
 
 export interface FindOptions {
   // checkedFetch in the app: each redirect is checked, and the answer says
   // where it ended up (net.fetch leaves that empty). A fake in tests.
   fetch?: typeof fetch
   log?: (text: string) => void
-  // Spindle/<version>
-  userAgent?: string
+  // which User-Agent each server gets (stream-agents.ts)
+  agents?: StreamAgents
   // local network addresses too: only for a station that is on one itself
   privateOk?: boolean
 }
@@ -24,7 +25,7 @@ const maxText = 1024 * 1024
 
 interface Asker {
   f: typeof fetch
-  userAgent: string
+  agents: StreamAgents
   privateOk: boolean
 }
 
@@ -54,13 +55,19 @@ async function probe(url: string, a: Asker, log: (t: string) => void): Promise<S
   try {
     const refused = refusedAddress(url, a.privateOk)
     if (refused) throw new RefusedAddress(refused)
-    const res = await a.f(url, {
-      method: 'HEAD',
-      headers: { 'user-agent': a.userAgent },
-      signal: AbortSignal.timeout(probeTimeoutMs)
-    })
-    // a Shoutcast v1 server sends its stream even for HEAD
-    void res.body?.cancel().catch(() => {})
+    const signal = AbortSignal.timeout(probeTimeoutMs)
+    const agents = a.agents.forUrl(url)
+    let res!: Response
+    for (const [i, agent] of agents.entries()) {
+      res = await a.f(url, { method: 'HEAD', headers: { 'user-agent': agent }, signal })
+      // a Shoutcast v1 server sends its stream even for HEAD
+      void res.body?.cancel().catch(() => {})
+      // its page for browsers: ask again as a player
+      if (!res.ok || !isWebPage(res.headers.get('content-type')) || i === agents.length - 1) {
+        if (res.ok) a.agents.worked(url, agent)
+        break
+      }
+    }
     const final = withoutQuery(res.ok && res.url ? res.url : url)
     const stream: Stream = { url: final }
     const br = parseInt(res.headers.get('icy-br') ?? '', 10)
@@ -77,8 +84,9 @@ async function probe(url: string, a: Asker, log: (t: string) => void): Promise<S
 async function getText(url: string, a: Asker): Promise<string> {
   const refused = refusedAddress(url, a.privateOk)
   if (refused) throw new Error(refused)
+  // a playlist or status page, not a stream: no player's User-Agent needed
   const res = await a.f(url, {
-    headers: { 'user-agent': a.userAgent },
+    headers: { 'user-agent': a.agents.browser },
     signal: AbortSignal.timeout(textTimeoutMs)
   })
   if (!res.ok) {
@@ -123,7 +131,7 @@ export async function findStreams(
 ): Promise<Stream[]> {
   const a: Asker = {
     f: opts.fetch ?? fetch,
-    userAgent: opts.userAgent ?? 'Spindle',
+    agents: opts.agents ?? new StreamAgents('Mozilla/5.0', 'Spindle'),
     privateOk: opts.privateOk ?? false
   }
   const log = opts.log ?? ((t) => console.warn(t))

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Station } from '../../../shared/plugins/radio/stations'
 import { RadioStreams, radioStream, type RadioOptions } from './stream'
+import { StreamAgents } from './stream-agents'
 
 const station: Station = {
   id: 'metal-only',
@@ -58,7 +59,7 @@ function setup(answer: (url: string, init: RequestInit) => Promise<Response>): {
     }) as typeof fetch,
     onTitle: (id, title) => titles.push(`${id}: ${title}`),
     log: (t) => logs.push(t),
-    userAgent: 'Spindle/1.0'
+    agents: new StreamAgents('Mozilla/5.0 Chrome', 'Spindle/1.0')
   }
   return { o, titles, logs, calls }
 }
@@ -100,7 +101,32 @@ describe('radioStream', () => {
     expect(calls[0].url).toBe('http://a.example/320')
     const h = new Headers(calls[0].init.headers)
     expect(h.get('icy-metadata')).toBe('1')
-    expect(h.get('user-agent')).toBe('Spindle/1.0')
+    expect(h.get('user-agent')).toBe('Mozilla/5.0 Chrome')
+  })
+
+  it('asks again as Spindle when a Shoutcast v1 server sends a browser its page', async () => {
+    const { o, calls } = setup(async (_url, init) =>
+      new Headers(init.headers).get('user-agent')?.startsWith('Mozilla/')
+        ? new Response('<HTML>', { headers: { 'content-type': 'text/html' } })
+        : new Response(body([bytes('abc')]).stream, { headers: { 'content-type': 'audio/mpeg' } })
+    )
+    const res = await radioStream('metal-only', '0', o)
+    expect(res.status).toBe(200)
+    expect(await readAll(res)).toBe('abc')
+    const agentsUsed = calls.map((c) => new Headers(c.init.headers).get('user-agent'))
+    expect(agentsUsed).toEqual(['Mozilla/5.0 Chrome', 'Spindle/1.0'])
+    // the next play asks that server as Spindle at once
+    await readAll(await radioStream('metal-only', '1', o))
+    expect(new Headers(calls[2].init.headers).get('user-agent')).toBe('Spindle/1.0')
+  })
+
+  it("asks once when the browser's User-Agent gets a stream", async () => {
+    const { o, calls } = setup(
+      async () =>
+        new Response(body([bytes('abc')]).stream, { headers: { 'content-type': 'audio/aac' } })
+    )
+    await readAll(await radioStream('metal-only', '0', o))
+    expect(calls).toHaveLength(1)
   })
 
   it('sends a title again only when it changes', async () => {

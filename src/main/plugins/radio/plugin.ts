@@ -39,6 +39,7 @@ import { HeardStore } from './heard-file'
 import { foundHashes, openSongCovers, SongCovers } from './song-covers'
 import { RadioHistoryStore, StationsStore } from './stations-store'
 import { RadioStreams, radioStream } from './stream'
+import { browserAgent, StreamAgents } from './stream-agents'
 
 // Everything below is made in start, once the page's services are there.
 interface Parts {
@@ -91,6 +92,11 @@ export class RadioPlugin implements MainPlugin {
 
   start(ctx: PluginContext): void {
     const { page, toPage, covers, settings, log, userAgent } = ctx
+    // station servers get a browser's User-Agent, Radio Browser gets Spindle's
+    const agents = new StreamAgents(
+      browserAgent(process.versions.chrome ?? '', process.platform),
+      userAgent
+    )
     const { stations, history, heard } = this
     const radioFetch = ctx.fetch
     // logos, homepages and finding streams: each redirect checked, local
@@ -124,7 +130,7 @@ export class RadioPlugin implements MainPlugin {
         return findStreams(station, {
           fetch: logoFetch(privateOk),
           log,
-          userAgent,
+          agents,
           privateOk
         })
       },
@@ -195,7 +201,7 @@ export class RadioPlugin implements MainPlugin {
         },
         log,
         streams,
-        userAgent,
+        agents,
         // the first stream to answer with audio after a play counts a Radio Browser click
         opened: (stationId, url) => void radioBrowser.opened(stationId, url)
       })

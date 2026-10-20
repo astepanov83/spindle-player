@@ -5,6 +5,7 @@
 import type { LastAnswer } from '../../../shared/plugins/radio/ipc'
 import type { Station } from '../../../shared/plugins/radio/stations'
 import { IcySplitter, readIcyHead } from './icy'
+import { isWebPage, type StreamAgents } from './stream-agents'
 
 export interface RadioOptions {
   // a saved station, or one the page just played from search
@@ -14,8 +15,9 @@ export interface RadioOptions {
   // each new title of the stream
   onTitle: (stationId: string, title: string) => void
   log: (text: string) => void
-  // a browser's User-Agent gets Shoutcast v1's HTML page, not the stream
-  userAgent: string
+  // which User-Agent each server gets: a browser's, or Spindle's own for a
+  // Shoutcast v1 server that sends a browser its HTML page
+  agents: StreamAgents
   timeoutMs?: number
   streams?: RadioStreams
   // the stream answered with audio (a Radio Browser click counts then)
@@ -88,10 +90,18 @@ interface Opened {
 }
 
 async function open(url: string, o: RadioOptions, signal: AbortSignal): Promise<Opened> {
-  const res = await o.fetch(url, {
-    headers: { 'Icy-MetaData': '1', 'User-Agent': o.userAgent },
-    signal
-  })
+  const agents = o.agents.forUrl(url)
+  let res: Response | undefined
+  for (const [i, agent] of agents.entries()) {
+    res = await o.fetch(url, { headers: { 'Icy-MetaData': '1', 'User-Agent': agent }, signal })
+    // its page for browsers: ask again as a player
+    if (!res.ok || !isWebPage(res.headers.get('content-type')) || i === agents.length - 1) {
+      if (res.ok) o.agents.worked(url, agent)
+      break
+    }
+    void res.body?.cancel().catch(() => {})
+  }
+  if (!res) throw new Error('was not asked')
   if (!res.ok) throw new Error(`answered ${res.status}`)
   if (!res.body) throw new Error('answered with no body')
   const reader = res.body.getReader()

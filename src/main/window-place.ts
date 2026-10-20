@@ -1,6 +1,6 @@
 // Window sizes and positions, with no Electron calls so Vitest can check them.
 import type { Template } from '../shared/layout'
-import type { Size, StoredSettings } from '../shared/settings'
+import type { Size, StoredSettings, WindowPlace } from '../shared/settings'
 
 export interface Rect {
   x: number
@@ -44,16 +44,72 @@ export function placeSaved(
   template: Template
 ): Rect | undefined {
   const want = { x: place.x, y: place.y, width: size.width, height: size.height }
+  const best = mostOn(want, areas)
+  return best && placeCentered(want, size, best, template)
+}
+
+// Where the window opens. A maximized one opens on the screen it was
+// maximized on (`maxOn`), even when its normal place is on another: moving a
+// maximized window to another screen leaves the normal place behind.
+export function placeStart(
+  place: WindowPlace | null,
+  size: Size,
+  areas: Rect[],
+  primary: Rect,
+  template: Template,
+  maximized: boolean
+): Rect {
+  const saved = place ? placeSaved(place, size, areas, template) : undefined
+  const normal = saved ?? placeCentered(primary, size, primary, template)
+  const maxArea = maximized && place?.maxOn ? areaAt(place.maxOn, areas) : undefined
+  return maxArea ? normalOn(normal, maxArea, areas, template) : normal
+}
+
+// The normal bounds kept on `area`: as they are when they are mostly on it,
+// else centered on it at their size.
+export function normalOn(normal: Rect, area: Rect, areas: Rect[], template: Template): Rect {
+  return mostOn(normal, areas) === area ? normal : placeCentered(area, normal, area, template)
+}
+
+// What to save as the place. The corner is of the normal bounds, which main
+// keeps itself: Electron's getNormalBounds() makes one up for a window
+// maximized before it was shown. A maximized window also saves the center of
+// its screen. None while minimized or full screen: the last place stays.
+export function placeToSave(w: {
+  maximized: boolean
+  minimized: boolean
+  fullScreen: boolean
+  bounds: Rect
+  normal: Rect
+}): WindowPlace | undefined {
+  if (w.minimized || w.fullScreen) return undefined
+  if (!w.maximized) return { x: w.bounds.x, y: w.bounds.y }
+  const b = w.bounds
+  const maxOn = { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) }
+  return { x: w.normal.x, y: w.normal.y, maxOn }
+}
+
+// The work area a point is in.
+export function areaAt(p: { x: number; y: number }, areas: Rect[]): Rect | undefined {
+  return areas.find((a) => pointOver(p, a))
+}
+
+// The area a window overlaps most; none when it is on no screen.
+export function mostOn(r: Rect, areas: Rect[]): Rect | undefined {
   let best: Rect | undefined
   let bestOverlap = 0
   for (const area of areas) {
-    const overlap = overlapArea(want, area)
+    const overlap = overlapArea(r, area)
     if (overlap > bestOverlap) {
       best = area
       bestOverlap = overlap
     }
   }
-  return best && placeCentered(want, size, best, template)
+  return best
+}
+
+function pointOver(p: { x: number; y: number }, r: Rect): boolean {
+  return p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height
 }
 
 function overlapArea(a: Rect, b: Rect): number {
@@ -123,5 +179,5 @@ export function applyWindowKind(win: KindWindow, template: Template, miniOnTop: 
 // The pointer is over the window. Mini asks this, since its whole bar drags
 // the window and a drag area gets no hover in the page.
 export function pointerOver(p: { x: number; y: number }, r: Rect): boolean {
-  return p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height
+  return pointOver(p, r)
 }

@@ -72,6 +72,9 @@ export interface Size {
 export interface WindowPlace {
   x: number
   y: number
+  // while maximized: the center of the screen it is maximized on, which may
+  // not be the one its normal place is on
+  maxOn?: { x: number; y: number }
 }
 
 // The AI service's choices (spec "AI models"). Main's own: the page gets
@@ -199,7 +202,12 @@ export function parseWindowPlace(v: unknown): WindowPlace | null {
   if (maximized !== undefined && typeof maximized !== 'boolean') return null
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null
   const clamp = (n: number): number => Math.min(maxPos, Math.max(-maxPos, Math.round(n)))
-  return { x: clamp(x), y: clamp(y) }
+  const place: WindowPlace = { x: clamp(x), y: clamp(y) }
+  // a broken maxOn is let go alone: the place is still good
+  const m = v.maxOn
+  if (isObject(m) && typeof m.x === 'number' && typeof m.y === 'number')
+    if (Number.isFinite(m.x) && Number.isFinite(m.y)) place.maxOn = { x: clamp(m.x), y: clamp(m.y) }
+  return place
 }
 
 function parseMaximized(v: unknown): StoredSettings['windowMaximized'] {
@@ -451,12 +459,19 @@ function isKnownSizes(v: unknown): boolean {
 // `maximized` is fine, as it is read into windowMaximized.
 function isKnownPlace(v: unknown): boolean {
   const parsed = parseWindowPlace(v)
+  if (!parsed || !isObject(v)) return false
+  const m = v.maxOn
+  const knownMax =
+    m === undefined ||
+    (isObject(m) &&
+      Object.keys(m).length === 2 &&
+      parsed.maxOn?.x === m.x &&
+      parsed.maxOn?.y === m.y)
   return (
-    !!parsed &&
-    isObject(v) &&
-    Object.keys(v).every((k) => ['x', 'y', 'maximized'].includes(k)) &&
+    Object.keys(v).every((k) => ['x', 'y', 'maximized', 'maxOn'].includes(k)) &&
     parsed.x === v.x &&
-    parsed.y === v.y
+    parsed.y === v.y &&
+    knownMax
   )
 }
 

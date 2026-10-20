@@ -278,6 +278,23 @@ describe('window place', () => {
       expect(place(bad)).toBeNull()
   })
 
+  it('keeps the screen it was maximized on, and drops a broken one alone', () => {
+    const place = (windowPlace: unknown): unknown =>
+      parseStoredSettings({ windowPlace }).windowPlace
+    expect(place({ x: 1, y: 2, maxOn: { x: 5760.4, y: 1060 } })).toEqual({
+      x: 1,
+      y: 2,
+      maxOn: { x: 5760, y: 1060 }
+    })
+    for (const maxOn of [null, 'x', { x: 1 }, { x: NaN, y: 2 }])
+      expect(place({ x: 1, y: 2, maxOn })).toEqual({ x: 1, y: 2 })
+    expect(isKnownSettingsFile({ windowPlace: { x: 1, y: 2, maxOn: { x: 5760, y: 1060 } } })).toBe(
+      true
+    )
+    for (const maxOn of [{ x: 1.5, y: 2 }, { x: 1 }, { x: 1, y: 2, z: 3 }, null])
+      expect(isKnownSettingsFile({ windowPlace: { x: 1, y: 2, maxOn } })).toBe(false)
+  })
+
   it('checks the place in the file', () => {
     expect(isKnownSettingsFile({ windowPlace: null })).toBe(true)
     expect(isKnownSettingsFile({ windowPlace: { x: -5, y: 30 } })).toBe(true)

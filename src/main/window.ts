@@ -15,11 +15,15 @@ import {
   AppliedSize,
   anyWidth,
   applyWindowKind,
+  mostOn,
+  normalOn,
   placeCentered,
-  placeSaved,
+  placeStart,
+  placeToSave,
   pointerOver,
   settleMs,
-  sizeFor
+  sizeFor,
+  type Rect
 } from './window-place'
 
 export function currentBackground(): string {
@@ -63,6 +67,10 @@ export class MainWindow {
   #askTimer: ReturnType<typeof setTimeout> | undefined
   // the pointer was on the bar at the last look (Mini)
   #pointerIn = false
+  // The last bounds of the window while neither maximized, minimized nor full
+  // screen. Kept here, as getNormalBounds() makes one up for a window that
+  // was maximized before it was first shown (the start).
+  #normal: Rect
 
   constructor(readonly store: SettingsStore) {
     const s = store.get()
@@ -71,11 +79,12 @@ export class MainWindow {
     const areas = screen.getAllDisplays().map((d) => d.workArea)
     const area = screen.getPrimaryDisplay().workArea
     // Where it was last time, at the size this template had; the first time,
-    // or when that screen is gone, centered on the main screen.
-    const bounds =
-      (s.windowPlace && placeSaved(s.windowPlace, size, areas, t)) ??
-      placeCentered(area, size, area, t)
+    // or when that screen is gone, centered on the main screen. A window
+    // maximized at start opens on the screen it was maximized on.
+    const maximized = !!s.windowMaximized[s.template] && !t.window.maxHeight
+    const bounds = placeStart(s.windowPlace, size, areas, area, t, maximized)
     this.#applied.set(bounds, Date.now())
+    this.#normal = bounds
 
     this.win = new BrowserWindow({
       ...bounds,
@@ -138,7 +147,10 @@ export class MainWindow {
       this.#rememberPlace()
     })
     win.on('unmaximize', () => {
-      if (this.#isBar()) return
+      // Linux sends this when a maximized window is minimized (or hidden to
+      // the tray), though it comes back maximized. Saving it would open the
+      // app not maximized after a quit from the tray.
+      if (this.#isBar() || win.isMinimized()) return
       win.webContents.send(WinChannel.maximized, false)
       this.#rememberMaximized(false)
       this.#rememberPlace()
@@ -294,9 +306,17 @@ export class MainWindow {
   #rememberPlace(): void {
     clearTimeout(this.#moveTimer)
     const win = this.win
-    if (win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return
-    const { x, y } = win.isMaximized() ? win.getNormalBounds() : win.getBounds()
-    this.store.setWindowPlace({ x, y })
+    if (win.isDestroyed()) return
+    const w = {
+      maximized: win.isMaximized(),
+      minimized: win.isMinimized(),
+      fullScreen: win.isFullScreen(),
+      bounds: win.getBounds(),
+      normal: this.#normal
+    }
+    if (!w.maximized && !w.minimized && !w.fullScreen) this.#normal = w.bounds
+    const place = placeToSave(w)
+    if (place) this.store.setWindowPlace(place)
   }
 
   // Saves the size and maximized state of the template we leave, then moves
@@ -311,8 +331,12 @@ export class MainWindow {
     // is never maximized
     if (!this.#switching() && !templates[from].window.maxHeight)
       this.store.setWindowMaximized(from, maximized)
-    // setBounds is ignored while maximized, so go back to the normal size first.
-    const old = maximized ? win.getNormalBounds() : win.getBounds()
+    // setBounds is ignored while maximized, so go back to the normal size
+    // first. The normal bounds stay on the screen it is maximized on.
+    const areas = screen.getAllDisplays().map((d) => d.workArea)
+    const now = win.getBounds()
+    const maxArea = maximized ? mostOn(now, areas) : undefined
+    const old = maxArea ? normalOn(this.#normal, maxArea, areas, t) : maximized ? this.#normal : now
     if (maximized) win.unmaximize()
     const area = screen.getDisplayMatching(old).workArea
     const bounds = placeCentered(old, sizeFor(t, this.store.get().windowSizes), area, t)
@@ -320,6 +344,7 @@ export class MainWindow {
     // Limits first, or an old minimum blocks shrinking and Mini's most height growing.
     applyWindowKind(win, t, this.store.live().miniOnTop)
     win.setBounds(bounds)
+    this.#normal = bounds
     this.#switchedUntil = Date.now() + settleMs
     // after setBounds, so un-maximizing goes back to this template's size
     if (this.store.get().windowMaximized[to] && !t.window.maxHeight) win.maximize()

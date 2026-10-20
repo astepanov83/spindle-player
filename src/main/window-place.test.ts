@@ -3,8 +3,11 @@ import { templates } from '../shared/templates'
 import {
   AppliedSize,
   applyWindowKind,
+  normalOn,
   placeCentered,
   placeSaved,
+  placeStart,
+  placeToSave,
   pointerOver,
   settleMs,
   sizeFor,
@@ -223,5 +226,83 @@ describe('pointerOver', () => {
     expect(pointerOver({ x: 200, y: 122 }, bar)).toBe(false)
     expect(pointerOver({ x: 99, y: 80 }, bar)).toBe(false)
     expect(pointerOver({ x: 200, y: 49 }, bar)).toBe(false)
+  })
+})
+
+// Two screens side by side, like the user's: left is the main one.
+describe('maximized on another screen', () => {
+  const left = { x: 0, y: 0, width: 3840, height: 2120 }
+  const right = { x: 3840, y: 0, width: 3840, height: 2120 }
+  const areas = [left, right]
+  const size = { width: 1100, height: 680 }
+  const onRight = { x: 5760, y: 1060 }
+
+  it('opens where it was when not maximized, even with an old maxOn', () => {
+    const place = { x: 1552, y: 10, maxOn: onRight }
+    expect(placeStart(place, size, areas, left, templates.studio, false)).toEqual({
+      x: 1552,
+      y: 10,
+      ...size
+    })
+  })
+
+  it('opens on the screen it was maximized on', () => {
+    const place = { x: 1552, y: 10, maxOn: onRight }
+    const b = placeStart(place, size, areas, left, templates.studio, true)
+    expect(b).toEqual({ x: 3840 + (3840 - 1100) / 2, y: (2120 - 680) / 2, ...size })
+  })
+
+  it('keeps the normal place when it is on that screen already', () => {
+    const place = { x: 4000, y: 100, maxOn: onRight }
+    expect(placeStart(place, size, areas, left, templates.studio, true)).toEqual({
+      x: 4000,
+      y: 100,
+      ...size
+    })
+  })
+
+  it('opens at the normal place when the maximized screen is gone', () => {
+    const place = { x: 1552, y: 10, maxOn: onRight }
+    expect(placeStart(place, size, [left], left, templates.studio, true)).toEqual({
+      x: 1552,
+      y: 10,
+      ...size
+    })
+  })
+
+  it('centers on the main screen the first time', () => {
+    const b = placeStart(null, size, areas, left, templates.studio, true)
+    expect(b).toEqual({ x: (3840 - 1100) / 2, y: (2120 - 680) / 2, ...size })
+  })
+
+  it('moves normal bounds onto a screen only when they are not on it', () => {
+    const n = { x: 100, y: 100, ...size }
+    expect(normalOn(n, left, areas, templates.studio)).toBe(n)
+    expect(normalOn(n, right, areas, templates.studio).x).toBe(3840 + (3840 - 1100) / 2)
+  })
+})
+
+describe('placeToSave', () => {
+  const normal = { x: 300, y: 120, width: 1100, height: 680 }
+  const full = { x: 3840, y: 0, width: 3840, height: 2120 }
+  const w = { maximized: false, minimized: false, fullScreen: false, bounds: normal, normal }
+
+  it('saves the corner of a normal window', () => {
+    expect(placeToSave({ ...w, bounds: { ...normal, x: 310 } })).toEqual({ x: 310, y: 120 })
+  })
+
+  it('saves the kept normal corner and the screen of a maximized one', () => {
+    // never the window's own made-up normal bounds (ticket: maximized before shown)
+    expect(placeToSave({ ...w, maximized: true, bounds: full })).toEqual({
+      x: 300,
+      y: 120,
+      maxOn: { x: 5760, y: 1060 }
+    })
+  })
+
+  it('saves nothing while minimized or full screen', () => {
+    expect(placeToSave({ ...w, minimized: true })).toBeUndefined()
+    expect(placeToSave({ ...w, maximized: true, minimized: true, bounds: full })).toBeUndefined()
+    expect(placeToSave({ ...w, fullScreen: true })).toBeUndefined()
   })
 })
